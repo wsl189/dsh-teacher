@@ -1,0 +1,64 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - text: Agent 预设 对此后新建的会话生效。运行中的会话保持它开始时的预设。
+  - button "标准模式":
+    - text: 标准模式
+    - img
+  - text: 权限 选择新会话的默认权限模式
+  - button "Workspace Write":
+    - text: Workspace Write
+    - img
+  - text: 语言
+  - button "中文":
+    - text: 中文
+    - img
+  - text: 外观
+  - button "浅色":
+    - img
+    - text: 浅色
+  - button "深色":
+    - img
+    - text: 深色
+  - button "跟随系统" [pressed]:
+    - img
+    - text: 跟随系统
+  - text: 繁忙时 Enter 键行为 仅在智能体运行时生效；Cmd/Ctrl+Enter 使用另一行为
+  - button "排队发送":
+    - text: 排队发送
+    - img
+  - text: 教师工作台 教师信息、日常管理和成绩分析参数 教师姓名
+  - textbox "教师姓名"
+  - text: 学校名称
+  - textbox "学校名称"
+  - text: 默认学科
+  - textbox "默认学科"
+  - text: 天气地点
+  - textbox "天气地点"
+  - text: 语音识别语言
+  - combobox "语音识别语言":
+    - option "简体中文（中国大陆）" [selected]
+    - option "繁體中文（台灣）"
+    - option "English (United States)"
+  - text: 满分
+  - spinbutton "满分": "100"
+  - text: 优秀线
+  - spinbutton "优秀线": "85"
+  - text: 及格线
+  - spinbutton "及格线": "60"

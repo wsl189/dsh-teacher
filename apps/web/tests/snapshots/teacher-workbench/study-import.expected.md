@@ -1,0 +1,178 @@
+- dialog "上传并识别课程表":
+  - heading "上传并识别课程表" [level=2]
+  - button "关闭工作台":
+    - img
+  - strong: 早读安排.jpg
+  - text: 识别到 8 节，请确认班级、星期和节次后导入
+  - checkbox "全选" [checked]
+  - text: 全选
+  - checkbox "选择“早读”" [checked]
+  - combobox "班级名称": 高二1班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习" [selected]
+    - option "晚自习"
+  - combobox "星期":
+    - option "周一" [selected]
+    - option "周二"
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 早读
+  - textbox "任课教师": 王俊茹
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“早读”" [checked]
+  - combobox "班级名称": 高二2班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习" [selected]
+    - option "晚自习"
+  - combobox "星期":
+    - option "周一" [selected]
+    - option "周二"
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 早读
+  - textbox "任课教师": 蔡晓瑜
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“英语”" [checked]
+  - combobox "班级名称": 高二1班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习" [selected]
+    - option "晚自习"
+  - combobox "星期":
+    - option "周一"
+    - option "周二" [selected]
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 英语
+  - textbox "任课教师": 江海莲
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“英语”" [checked]
+  - combobox "班级名称": 高二2班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习" [selected]
+    - option "晚自习"
+  - combobox "星期":
+    - option "周一"
+    - option "周二" [selected]
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 英语
+  - textbox "任课教师": 王勇
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“晚自习”" [checked]
+  - combobox "班级名称": 高二1班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习"
+    - option "晚自习" [selected]
+  - combobox "星期":
+    - option "周一" [selected]
+    - option "周二"
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 晚自习
+  - textbox "任课教师": 江海莲
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“晚自习”" [checked]
+  - combobox "班级名称": 高二2班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习"
+    - option "晚自习" [selected]
+  - combobox "星期":
+    - option "周一" [selected]
+    - option "周二"
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 晚自习
+  - textbox "任课教师": 蔡晓瑜
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“晚自习”" [checked]
+  - combobox "班级名称": 高二1班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习"
+    - option "晚自习" [selected]
+  - combobox "星期":
+    - option "周一"
+    - option "周二" [selected]
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 晚自习
+  - textbox "任课教师": 王俊茹
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - checkbox "选择“晚自习”" [checked]
+  - combobox "班级名称": 高二2班
+  - textbox "年级": 高二
+  - combobox "类型":
+    - option "课程"
+    - option "早自习"
+    - option "晚自习" [selected]
+  - combobox "星期":
+    - option "周一"
+    - option "周二" [selected]
+    - option "周三"
+    - option "周四"
+    - option "周五"
+    - option "周六"
+    - option "周日"
+  - spinbutton "节次": "1"
+  - textbox "课程": 晚自习
+  - textbox "任课教师": 王勇
+  - textbox "地点"
+  - textbox "开始时间"
+  - textbox "结束时间"
+  - button "取消"
+  - button "导入 8 节"

@@ -1,0 +1,14 @@
+- tablist "课程表":
+  - tab "今日课表"
+  - tab "本周课表" [selected]
+  - tab "年级课表"
+  - tab "早晚自习"
+- button "选择班级": 高一（1）班
+- button "添加班级"
+- button "删除班级":
+  - img
+- checkbox "仅显示"
+- text: 仅显示
+- textbox "筛选教师姓名":
+  - /placeholder: 姓名
+- button "识别课程表"

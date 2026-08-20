@@ -1,0 +1,10 @@
+- textbox "描述你想要构建的内容": "<document name=\"lesson-plan.docx\"> # 教学计划 第一章：函数与图像 </document>"
+- button "添加图片或文档":
+  - img
+- button "命令":
+  - img
+- button "访问模式，当前：Workspace Write": Workspace Write
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "发送消息"
