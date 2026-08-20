@@ -37,6 +37,12 @@
       "path": "../../host/plugin-inventory"
     },
     {
+      "path": "../../host/teacher-workbench"
+    },
+    {
+      "path": "../../ocr/ocr"
+    },
+    {
       "path": "../../interaction/commands"
     },
     {

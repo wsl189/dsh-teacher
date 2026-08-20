@@ -36,3 +36,7 @@
         - 'button "展开设置: 网页搜索"':
           - text: 网页搜索 DeepSeek 搜索提供方。
           - img
+      - listitem:
+        - 'button "展开设置: 文档识别"':
+          - text: 文档识别 用于文档和校历识别的 MinerU 提供方。
+          - img

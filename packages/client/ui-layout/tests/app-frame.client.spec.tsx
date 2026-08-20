@@ -61,6 +61,7 @@ function mountFrame() {
     if (key === 'sidebar') return <div data-testid="sidebar-content" />
     if (key === 'conversation') return <div data-testid="center-content" />
     if (key === 'details') return <div data-testid="details-content" />
+    if (key === 'shell.main') return <div data-testid="main-surface-content" />
     if (key === 'conversation.empty') return <div data-testid="empty-content" />
     return <div data-testid="other-content" />
   }) as AppFrameProps['renderSlot']
@@ -152,6 +153,13 @@ describe('AppFrame', () => {
     expect(keys).not.toContain('conversation.empty')
     expect(slotCalls.find(c => c.key === 'conversation')!.props).toEqual({})
     expect(slotCalls.find(c => c.key === 'details')!.props).toEqual({})
+  })
+
+  it('renders the main-surface seat inside the center column', () => {
+    const { slotCalls, getByTestId } = mountFrame()
+    const surface = getByTestId('main-surface-content')
+    expect(surface.parentElement?.hasAttribute('data-shell-main')).toBe(true)
+    expect(slotCalls.find(c => c.key === 'shell.main')!.props).toEqual({})
   })
 
   it('keeps the conversation slot mounted while no session is current', () => {

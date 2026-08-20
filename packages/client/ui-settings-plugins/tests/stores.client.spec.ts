@@ -8,6 +8,7 @@ import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-clie
 import { CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
+import { MinerUCardController, type MinerUSettings } from '../src/client/mineru-card-controller.ts'
 import { ConfigurablePluginsTabController } from '../src/client/tab-store.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
 
@@ -377,6 +378,61 @@ describe('AgentLoopCardController', () => {
     host.publish({ status: 'ready', writable: false, value: { maxParallelToolCalls: 10 } })
 
     expect(controller.inject().hooks.agentLoopCard.getSnapshot().writable).toBe(false)
+  })
+})
+
+describe('MinerUCardController', () => {
+  it('projects and saves the provider endpoint and resource limits', async () => {
+    const host = stubSettingsScope<MinerUSettings>()
+    acceptWrites(host)
+    const controller = new MinerUCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: {
+        endpoint: 'http://127.0.0.1:8000/file_parse',
+        backend: 'pipeline',
+        effort: 'high',
+        language: 'ch',
+        timeoutMs: 300_000,
+        maxFileBytes: 20_971_520,
+        maxOutputCharacters: 500_000,
+        maxResponseBytes: 8_388_608,
+      },
+      base: {
+        endpoint: 'http://127.0.0.1:8000/file_parse',
+        backend: 'pipeline',
+        effort: 'high',
+        language: 'ch',
+        timeoutMs: 300_000,
+        maxFileBytes: 20_971_520,
+        maxOutputCharacters: 500_000,
+        maxResponseBytes: 8_388_608,
+      },
+      user: {},
+    })
+    const face = controller.inject()
+
+    expect(face.hooks.minerUCard.getSnapshot()).toMatchObject({
+      endpoint: { text: 'http://127.0.0.1:8000/file_parse', overridden: false },
+      backend: { text: 'pipeline', overridden: false },
+      effort: { text: 'high', overridden: false },
+      language: { text: 'ch', overridden: false },
+      timeoutMs: { text: '300000', overridden: false },
+      maxFileBytes: { text: '20971520', overridden: false },
+      maxOutputCharacters: { text: '500000', overridden: false },
+      maxResponseBytes: { text: '8388608', overridden: false },
+    })
+
+    face.edit('endpoint', 'http://mineru.test/file_parse')
+    face.edit('timeoutMs', '120000')
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
+
+    expect(host.set.mock.calls).toEqual([
+      ['endpoint', 'http://mineru.test/file_parse'],
+      ['timeoutMs', 120_000],
+    ])
   })
 })
 

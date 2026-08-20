@@ -23,6 +23,8 @@ import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import { AgentLoopCard } from './AgentLoopCard.tsx'
 import { BashCard } from './BashCard.tsx'
 import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
+import { MinerUCard } from './MinerUCard.tsx'
+import { TeacherWorkbenchCard } from './TeacherWorkbenchCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
@@ -31,6 +33,8 @@ import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { en, zh } from './locales.ts'
+import { MINERU_NS, MinerUCardController } from './mineru-card-controller.ts'
+import { TEACHER_WORKBENCH_NS, TeacherWorkbenchCardController } from './teacher-workbench-card-controller.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
 export type { ConfigurablePluginsTabProps } from './ConfigurablePluginsTab.tsx'
@@ -43,7 +47,9 @@ export type {
 } from './card-form.ts'
 export type { AgentLoopCardFace, AgentLoopCardState } from './agent-loop-card-controller.ts'
 export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
+export type { MinerUCardFace, MinerUCardState } from './mineru-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
+export type { TeacherWorkbenchCardFace, TeacherWorkbenchCardState } from './teacher-workbench-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
@@ -63,6 +69,8 @@ export function apply(ctx: ClientContext): void {
   const bash = new BashCardController(ctx.settingsScope.bind({ namespace: SHELL_NS }))
   const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
   const webSearch = new WebSearchCardController(ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), api)
+  const mineru = new MinerUCardController(ctx.settingsScope.bind({ namespace: MINERU_NS }))
+  const teacherWorkbench = new TeacherWorkbenchCardController(ctx.settingsScope.bind({ namespace: TEACHER_WORKBENCH_NS }))
 
   // The credential a card reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
@@ -141,7 +149,7 @@ export function apply(ctx: ClientContext): void {
   }, PluginsSettingsSection))
 
   // The existing configuration page is one ordinary tab. It keeps ownership
-  // of the card slot and the three shipped card contributions below.
+  // of the card slot and the shipped card contributions below.
   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
     name: 'settings.plugins.tab',
     id: 'configurable',
@@ -171,5 +179,17 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => webSearch.inject(),
     }, WebSearchCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: MINERU_NS,
+      locale: NS,
+      inject: () => mineru.inject(),
+    }, MinerUCard)
+    yield ctx.slots.register({
+      name: 'settings.plugin.item',
+      key: TEACHER_WORKBENCH_NS,
+      locale: NS,
+      inject: () => teacherWorkbench.inject(),
+    }, TeacherWorkbenchCard)
   })
 }

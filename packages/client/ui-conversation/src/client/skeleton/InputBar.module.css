@@ -314,6 +314,34 @@
   gap: 16px;
 }
 
+.fileInput {
+  display: none;
+}
+
+.documentStatus {
+  display: flex;
+  min-height: 28px;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 12px 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.documentSpinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid var(--dsw-alias-border-l2);
+  border-top-color: var(--dsw-alias-brand-primary);
+  border-radius: 50%;
+  animation: document-spin 0.8s linear infinite;
+}
+
+@keyframes document-spin {
+  to { transform: rotate(360deg); }
+}
+
 .modes {
   gap: 12px;
 }

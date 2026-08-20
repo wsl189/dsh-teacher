@@ -43,3 +43,22 @@
   - button "排队发送":
     - text: 排队发送
     - img
+  - text: 教师工作台 教师信息、日常管理和成绩分析参数 教师姓名
+  - textbox "教师姓名"
+  - text: 学校名称
+  - textbox "学校名称"
+  - text: 默认学科
+  - textbox "默认学科"
+  - text: 天气地点
+  - textbox "天气地点"
+  - text: 语音识别语言
+  - combobox "语音识别语言":
+    - option "简体中文（中国大陆）" [selected]
+    - option "繁體中文（台灣）"
+    - option "English (United States)"
+  - text: 满分
+  - spinbutton "满分": "100"
+  - text: 优秀线
+  - spinbutton "优秀线": "85"
+  - text: 及格线
+  - spinbutton "及格线": "60"

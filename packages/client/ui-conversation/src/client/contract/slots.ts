@@ -12,6 +12,7 @@ import type {
 } from '@deepseek-ai/dsh-client-runtime/client'
 import type { MarkdownFileMentions } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { MessageId } from '@deepseek-ai/dsh-client-connection/client'
+import type { OcrExtractResult } from '@deepseek-ai/dsh-api-remotes/client'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ComposerBlock } from '../input/blocks.ts'
 import type {
@@ -495,6 +496,8 @@ export interface ComposerBarInjected {
   keyboard: ComposerKeyboard | undefined
   /** Create previews and append image ids to the session input. */
   addImages: ((files: readonly File[]) => string | null) | undefined
+  /** Extract uploaded documents to Markdown through the Host OCR Remote. */
+  extractDocuments?: ((files: readonly File[]) => Promise<readonly OcrExtractResult[]>) | undefined
   /** Release one preview and remove its id from session input. */
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   /** Resolve ordered input ids to browser-owned draft images. */

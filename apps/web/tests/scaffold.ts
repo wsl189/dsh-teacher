@@ -191,6 +191,8 @@ export interface LaunchOptions {
    * ordering.
    */
   extraOverlayPath?: string
+  /** Deterministic MinerU endpoint for document-extraction browser scenarios. */
+  ocrEndpoint?: string
   /**
    * Replay fixture (session.jsonl) served by the inserted dsh-llm-replay row
    * in replay/refresh modes; ignored in record mode (the real adapter
@@ -485,6 +487,9 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
           baseURL: options.deepSeekSearch.baseURL,
         },
       }],
+    ...options.ocrEndpoint === undefined
+      ? []
+      : [{ id: 'ocr-mineru', config: { endpoint: options.ocrEndpoint } }],
     ...mode === 'record' || options.deepSeekMissingCredential === true
       ? []
       : [{ id: 'llm-deepseek', disabled: true }],

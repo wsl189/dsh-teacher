@@ -165,6 +165,14 @@ declare module '@deepseek-ai/cordis' {
      * @mode emit
      */
     'connection/reset'(): void
+    /**
+     * Explicit primary-session navigation completed. Reselecting the current
+     * Session emits again so temporary main surfaces can close for the user's
+     * navigation command.
+     * @mode emit
+     * @param sessionId - selected Session, or undefined for the New Session view.
+     */
+    'sessions/navigate'(sessionId: SessionId | undefined): void
   }
   interface Context {
     slots: import('./slots.ts').SlotRegistry

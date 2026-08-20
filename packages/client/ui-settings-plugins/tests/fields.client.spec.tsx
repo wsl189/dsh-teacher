@@ -6,7 +6,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SecretField, ValueField } from '../src/client/fields.tsx'
+import { SecretField, SelectField, ValueField } from '../src/client/fields.tsx'
 
 afterEach(cleanup)
 
@@ -80,6 +80,72 @@ describe('ValueField', () => {
 
   it('disables the control and its reset while the document is read-only', () => {
     render(<ValueField {...frame} disabled overridden text="9000" onEdit={vi.fn()} onReset={vi.fn()} />)
+
+    expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
+    expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('SelectField', () => {
+  const options = [
+    { value: 'pipeline', label: 'General OCR · pipeline' },
+    { value: 'hybrid-engine', label: 'Hybrid · hybrid-engine' },
+  ]
+
+  it('renders the staged choice and reports a new selection', () => {
+    const onEdit = vi.fn()
+    render(
+      <SelectField
+        {...frame}
+        text="pipeline"
+        options={options}
+        onEdit={onEdit}
+        onReset={vi.fn()}
+      />,
+    )
+    const select = screen.getByLabelText('Command timeout')
+
+    expect(select).toHaveProperty('value', 'pipeline')
+    expect(screen.getByRole('option', { name: 'Hybrid · hybrid-engine' })).toBeTruthy()
+    fireEvent.change(select, { target: { value: 'hybrid-engine' } })
+
+    expect(onEdit).toHaveBeenCalledWith('hybrid-engine')
+  })
+
+  it('keeps an unknown invalid draft visible and lets an override reset', () => {
+    const onReset = vi.fn()
+    render(
+      <SelectField
+        {...frame}
+        overridden
+        invalid
+        text="legacy-engine"
+        options={options}
+        onEdit={vi.fn()}
+        onReset={onReset}
+      />,
+    )
+
+    expect(screen.getByLabelText('Command timeout')).toHaveProperty('value', 'legacy-engine')
+    expect(screen.getByRole('option', { name: 'legacy-engine' })).toBeTruthy()
+    expect(screen.getByText('Enter a number.')).toBeTruthy()
+    expect(screen.getByLabelText('Command timeout').getAttribute('aria-invalid')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: 'Reset to default' }))
+    expect(onReset).toHaveBeenCalledOnce()
+  })
+
+  it('disables both the select and reset for a read-only document', () => {
+    render(
+      <SelectField
+        {...frame}
+        disabled
+        overridden
+        text="pipeline"
+        options={options}
+        onEdit={vi.fn()}
+        onReset={vi.fn()}
+      />,
+    )
 
     expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)

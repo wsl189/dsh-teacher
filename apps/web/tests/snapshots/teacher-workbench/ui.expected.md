@@ -1,0 +1,41 @@
+- region "工作台":
+  - main:
+    - heading "学生名册" [level=1]
+    - combobox "选择班级":
+      - option "高一（1）班" [selected]
+    - button "新建班级":
+      - img
+      - text: 新建班级
+    - button "编辑班级":
+      - img
+    - button "删除":
+      - img
+    - button "批量导入"
+    - button "添加学生":
+      - img
+      - text: 添加学生
+    - heading "高一（1）班" [level=3]
+    - text: 1 名学生
+    - img
+    - textbox "搜索姓名、学号或监护人"
+    - table:
+      - rowgroup:
+        - row "学号 姓名 性别 监护人 电话 编辑":
+          - columnheader "学号"
+          - columnheader "姓名"
+          - columnheader "性别"
+          - columnheader "监护人"
+          - columnheader "电话"
+          - columnheader "编辑"
+      - rowgroup:
+        - row "001 张同学 — 张女士 — 编辑 删除":
+          - cell "001"
+          - cell "张同学"
+          - cell "—"
+          - cell "张女士"
+          - cell "—"
+          - cell "编辑 删除":
+            - button "编辑":
+              - img
+            - button "删除":
+              - img

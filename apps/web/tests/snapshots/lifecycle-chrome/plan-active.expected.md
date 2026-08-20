@@ -4,6 +4,10 @@
 - button "New session":
   - img
   - text: New Session
+- button "Open workbench":
+  - img
+  - text: Workbench
+  - img
 - text: Workspaces
 - button "Search sessions":
   - img

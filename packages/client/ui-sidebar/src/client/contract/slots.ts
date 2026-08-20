@@ -2,8 +2,9 @@
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
  * owns column geometry (fold state machine, brand row, New Session);
- * everything between the section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
+ * `sidebar.workbench` seat sits directly below New Session, everything after
+ * it through the list bottom is the `sidebar.workspaces` registrant's
+ * (ui-workspace), and the foot is the
  * `sidebar.settings` registrant's (ui-settings), followed by optional footer
  * actions in `sidebar.footer.action`.
  */
@@ -15,6 +16,12 @@ import type { WorkspaceId } from '@deepseek-ai/dsh-client-runtime/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
+    /**
+     * Product workbench entry between New Session and workspace browsing.
+     * The occupant owns its disclosure and feature navigation; the shell
+     * supplies only column state and a rail-to-wide expansion request.
+     */
+    'sidebar.workbench': { kind: 'single'; scope: 'root'; owner: SidebarWorkbenchOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -34,6 +41,14 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.footer.action': { kind: 'list'; scope: 'root'; owner: SidebarFooterActionOwnerProps }
   }
+}
+
+/** Owner share of the workbench seat below New Session. */
+export interface SidebarWorkbenchOwnerProps {
+  /** Whether the sidebar currently renders wide content. */
+  wide: boolean
+  /** Expand the sidebar when the rail entry is activated. */
+  expandSidebar: () => void
 }
 
 /**
@@ -85,5 +100,5 @@ export type SidebarRootInjected = {
  */
 export type SidebarRootComponentProps =
   PropsRuntime<'sidebar'>
-  & PropsRenderSlots<'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
+  & PropsRenderSlots<'sidebar.workbench' | 'sidebar.workspaces' | 'sidebar.settings' | 'sidebar.footer.action'>
   & SidebarRootInjected & PropsLocale<'sidebar'>

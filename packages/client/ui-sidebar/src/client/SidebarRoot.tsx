@@ -169,6 +169,13 @@ export function SidebarRoot({
         </button>
       </Tooltip>
 
+      <div className={css.workbenchArea}>
+        {renderSlot('sidebar.workbench', {
+          wide,
+          expandSidebar: () => { if (collapsed) toggleSidebar() },
+        })}
+      </div>
+
       {/* The browsing region fills the column between the controls and the
           foot in both states; its rail icon column rides the same slot. */}
       <div className={css.regionArea}>

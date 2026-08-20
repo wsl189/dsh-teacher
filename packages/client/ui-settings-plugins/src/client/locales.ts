@@ -11,6 +11,20 @@ export type PluginsSettingsLocaleKey =
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
   | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'mineruTitle' | 'mineruDescription' | 'mineruEndpoint' | 'mineruEndpointHint'
+  | 'mineruBackend' | 'mineruBackendHint' | 'mineruEffort' | 'mineruEffortHint' | 'mineruLanguage' | 'mineruLanguageHint'
+  | 'mineruBackendPipeline' | 'mineruBackendVlm' | 'mineruBackendHybrid'
+  | 'mineruEffortMedium' | 'mineruEffortHigh'
+  | 'mineruLanguageChinese' | 'mineruLanguageChineseServer' | 'mineruLanguageKorean'
+  | 'mineruLanguageTamil' | 'mineruLanguageTelugu' | 'mineruLanguageKannada'
+  | 'mineruLanguageThai' | 'mineruLanguageGreek' | 'mineruLanguageArabic'
+  | 'mineruLanguageEastSlavic' | 'mineruLanguageCyrillic' | 'mineruLanguageDevanagari'
+  | 'mineruTimeoutMs' | 'mineruTimeoutMsHint' | 'mineruMaxFileBytes' | 'mineruMaxFileBytesHint'
+  | 'mineruMaxOutputCharacters' | 'mineruMaxOutputCharactersHint'
+  | 'mineruMaxResponseBytes' | 'mineruMaxResponseBytesHint'
+  | 'teacherWorkbenchTitle' | 'teacherWorkbenchDescription'
+  | 'teacherSegmentsRoot' | 'teacherSegmentsRootHint' | 'teacherStudentsRoot' | 'teacherStudentsRootHint'
+  | 'teacherImageLimit' | 'teacherImageLimitHint' | 'teacherBatchLimit' | 'teacherBatchLimitHint'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -51,6 +65,51 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: 'Leave blank to use the provider default.',
   webSearchMaxUses: 'Max searches per request',
   webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  mineruTitle: 'Document extraction',
+  mineruDescription: 'The MinerU provider for documents and school calendars.',
+  mineruEndpoint: 'MinerU endpoint',
+  mineruEndpointHint: 'Full synchronous /file_parse URL.',
+  mineruBackend: 'Backend',
+  mineruBackendHint: 'Choose a local parsing backend installed with MinerU.',
+  mineruBackendPipeline: 'General OCR, multilingual · pipeline',
+  mineruBackendVlm: 'VLM, high accuracy for Chinese and English · vlm-engine',
+  mineruBackendHybrid: 'Hybrid, high accuracy (recommended) · hybrid-engine',
+  mineruEffort: 'Hybrid quality',
+  mineruEffortHint: 'Controls accuracy and image or chart analysis for the hybrid backend.',
+  mineruEffortMedium: 'Balanced speed and accuracy · medium',
+  mineruEffortHigh: 'Best extraction quality · high',
+  mineruLanguage: 'Recognition language',
+  mineruLanguageHint: 'OCR model language used by the pipeline backend.',
+  mineruLanguageChinese: 'Chinese, English, Japanese and Latin · ch',
+  mineruLanguageChineseServer: 'Chinese-family server model · ch_server',
+  mineruLanguageKorean: 'Korean and English · korean',
+  mineruLanguageTamil: 'Tamil and English · ta',
+  mineruLanguageTelugu: 'Telugu and English · te',
+  mineruLanguageKannada: 'Kannada · ka',
+  mineruLanguageThai: 'Thai and English · th',
+  mineruLanguageGreek: 'Greek and English · el',
+  mineruLanguageArabic: 'Arabic-family languages and English · arabic',
+  mineruLanguageEastSlavic: 'Russian, Belarusian and Ukrainian · east_slavic',
+  mineruLanguageCyrillic: 'Cyrillic-script languages · cyrillic',
+  mineruLanguageDevanagari: 'Devanagari-script languages · devanagari',
+  mineruTimeoutMs: 'Document timeout (ms)',
+  mineruTimeoutMsHint: 'Maximum time allowed for one extraction request.',
+  mineruMaxFileBytes: 'Maximum file size (bytes)',
+  mineruMaxFileBytesHint: 'Largest decoded document accepted from the browser.',
+  mineruMaxOutputCharacters: 'Maximum extracted characters',
+  mineruMaxOutputCharactersHint: 'Maximum Markdown characters returned to a DSH consumer.',
+  mineruMaxResponseBytes: 'Maximum response size (bytes)',
+  mineruMaxResponseBytesHint: 'Largest JSON response accepted from MinerU.',
+  teacherWorkbenchTitle: 'Question workspace',
+  teacherWorkbenchDescription: 'Storage policy for cut papers and student question copies.',
+  teacherSegmentsRoot: 'Paper batch directory',
+  teacherSegmentsRootHint: 'Question crops are stored by generated paper and image IDs under this directory.',
+  teacherStudentsRoot: 'Student question directory',
+  teacherStudentsRootHint: 'Assignment copies are organized as grade/class/student beneath this directory.',
+  teacherImageLimit: 'Maximum image size (bytes)',
+  teacherImageLimitHint: 'Largest decoded question raster accepted from the browser.',
+  teacherBatchLimit: 'Maximum paper batch size (bytes)',
+  teacherBatchLimitHint: 'Maximum aggregate decoded bytes accepted in one save.',
 }
 
 /** Simplified Chinese copy. */
@@ -92,4 +151,49 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchBaseUrlHint: '留空则使用提供方默认地址。',
   webSearchMaxUses: '单次请求最多搜索次数',
   webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  mineruTitle: '文档识别',
+  mineruDescription: '用于文档和校历识别的 MinerU 提供方。',
+  mineruEndpoint: 'MinerU 接口地址',
+  mineruEndpointHint: '完整的同步 /file_parse 地址。',
+  mineruBackend: '解析后端',
+  mineruBackendHint: '选择 MinerU 已安装的本地解析后端。',
+  mineruBackendPipeline: '通用 OCR，多语言 · pipeline',
+  mineruBackendVlm: 'VLM，中英文高精度 · vlm-engine',
+  mineruBackendHybrid: '混合解析，高精度（推荐） · hybrid-engine',
+  mineruEffort: '混合解析质量',
+  mineruEffortHint: '控制 hybrid 后端的识别精度以及图片、图表分析。',
+  mineruEffortMedium: '兼顾速度与精度 · medium',
+  mineruEffortHigh: '最高识别质量 · high',
+  mineruLanguage: '识别语言',
+  mineruLanguageHint: 'pipeline 后端使用的 OCR 模型语言。',
+  mineruLanguageChinese: '中文、英文、日文及拉丁文 · ch',
+  mineruLanguageChineseServer: '中文语系服务端模型 · ch_server',
+  mineruLanguageKorean: '韩文及英文 · korean',
+  mineruLanguageTamil: '泰米尔文及英文 · ta',
+  mineruLanguageTelugu: '泰卢固文及英文 · te',
+  mineruLanguageKannada: '卡纳达文 · ka',
+  mineruLanguageThai: '泰文及英文 · th',
+  mineruLanguageGreek: '希腊文及英文 · el',
+  mineruLanguageArabic: '阿拉伯语系及英文 · arabic',
+  mineruLanguageEastSlavic: '俄文、白俄罗斯文及乌克兰文 · east_slavic',
+  mineruLanguageCyrillic: '西里尔字母语系 · cyrillic',
+  mineruLanguageDevanagari: '天城文字母语系 · devanagari',
+  mineruTimeoutMs: '单份文档超时（毫秒）',
+  mineruTimeoutMsHint: '一次文档识别请求允许的最长时间。',
+  mineruMaxFileBytes: '文件大小上限（字节）',
+  mineruMaxFileBytesHint: '浏览器可提交的最大解码后文档大小。',
+  mineruMaxOutputCharacters: '提取文字上限（字符）',
+  mineruMaxOutputCharactersHint: '返回给 DSH 使用方的 Markdown 最大字符数。',
+  mineruMaxResponseBytes: '响应大小上限（字节）',
+  mineruMaxResponseBytesHint: '允许 MinerU 返回的最大 JSON 响应大小。',
+  teacherWorkbenchTitle: '试题切割工作区',
+  teacherWorkbenchDescription: '设置切题试卷和学生试题副本的存储策略。',
+  teacherSegmentsRoot: '试卷批次目录',
+  teacherSegmentsRootHint: '切题图片按系统生成的试卷和图片 ID 存放在此目录。',
+  teacherStudentsRoot: '学生试题目录',
+  teacherStudentsRootHint: '分发副本在此目录下按年级、班级、学生组织。',
+  teacherImageLimit: '单张图片上限（字节）',
+  teacherImageLimitHint: '浏览器可保存的单张解码后试题图片最大大小。',
+  teacherBatchLimit: '单份试卷上限（字节）',
+  teacherBatchLimitHint: '一次保存中所有解码后切题图片的总大小上限。',
 }

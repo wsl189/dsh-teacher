@@ -260,6 +260,12 @@ function clientConfig(id: string, entry: string): UserConfig {
       },
     }],
     outputOptions: {
+      // The Host serves and the lazy-CJS loader registers exactly one artifact
+      // per Client plugin: lib/client.js. A split dynamic import would become a
+      // relative require() whose chunk has no module-table factory at runtime.
+      // Keep lazy imports lazy in execution while inlining their code into the
+      // single registered plugin artifact.
+      codeSplitting: false,
       entryFileNames: 'client.js',
       // The map is served from /plugins/<scoped-package>/client.js.map. The
       // browser resolves its local sources back into URLs that mirror the

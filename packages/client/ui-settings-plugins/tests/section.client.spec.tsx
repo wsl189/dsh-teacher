@@ -15,6 +15,8 @@ import { BashCard } from '../src/client/BashCard.tsx'
 import type { BashCardProps } from '../src/client/BashCard.tsx'
 import { ConfigurablePluginsTab } from '../src/client/ConfigurablePluginsTab.tsx'
 import type { ConfigurablePluginsTabProps } from '../src/client/ConfigurablePluginsTab.tsx'
+import { MinerUCard } from '../src/client/MinerUCard.tsx'
+import type { MinerUCardProps } from '../src/client/MinerUCard.tsx'
 import { PluginsSettingsSection } from '../src/client/PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionProps, PluginsSettingsTabEntry } from '../src/client/PluginsSettingsSection.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
@@ -23,6 +25,7 @@ import type { AgentLoopCardState } from '../src/client/agent-loop-card-controlle
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
+import type { MinerUCardState } from '../src/client/mineru-card-controller.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
@@ -346,6 +349,61 @@ describe('AgentLoopCard', () => {
     fireEvent.click(screen.getByRole('button', { name: en.reset }))
 
     expect(actions.resetField).toHaveBeenCalledWith('maxParallelToolCalls')
+  })
+})
+
+describe('MinerUCard', () => {
+  function renderMinerU(state: Partial<MinerUCardState> = {}) {
+    const store = createSnapshotStore<MinerUCardState>({
+      ...settled,
+      endpoint: field('http://127.0.0.1:8000/file_parse'),
+      backend: field('pipeline'),
+      effort: field('high'),
+      language: field('ch'),
+      timeoutMs: field('300000'),
+      maxFileBytes: field('20971520'),
+      maxOutputCharacters: field('500000'),
+      maxResponseBytes: field('8388608'),
+      ...state,
+    })
+    const actions = cardActions()
+    const props = { ...actions, t, useMinerUCard: bindSnapshotSelector(store) } as unknown as MinerUCardProps
+    render(<MinerUCard {...props} />)
+    return actions
+  }
+
+  it('shows every deployment setting and stages each field independently', () => {
+    const actions = renderMinerU()
+    fireEvent.click(screen.getByText(en.mineruTitle))
+
+    expect(screen.getByLabelText(en.mineruEndpoint)).toHaveProperty('value', 'http://127.0.0.1:8000/file_parse')
+    expect(screen.getByLabelText(en.mineruBackend)).toHaveProperty('value', 'pipeline')
+    expect(screen.getByLabelText(en.mineruEffort)).toHaveProperty('value', 'high')
+    expect(screen.getByLabelText(en.mineruLanguage)).toHaveProperty('value', 'ch')
+    expect(screen.getByLabelText(en.mineruBackend).tagName).toBe('SELECT')
+    expect(screen.getByLabelText(en.mineruEffort).tagName).toBe('SELECT')
+    expect(screen.getByLabelText(en.mineruLanguage).tagName).toBe('SELECT')
+    expect(screen.getByRole('option', { name: en.mineruBackendHybrid })).toBeTruthy()
+    expect(screen.getByRole('option', { name: en.mineruEffortMedium })).toBeTruthy()
+    expect(screen.getByRole('option', { name: en.mineruLanguageKorean })).toBeTruthy()
+    expect(screen.getByLabelText(en.mineruTimeoutMs)).toHaveProperty('value', '300000')
+    expect(screen.getByLabelText(en.mineruMaxFileBytes)).toHaveProperty('value', '20971520')
+    expect(screen.getByLabelText(en.mineruMaxOutputCharacters)).toHaveProperty('value', '500000')
+    expect(screen.getByLabelText(en.mineruMaxResponseBytes)).toHaveProperty('value', '8388608')
+
+    fireEvent.change(screen.getByLabelText(en.mineruEndpoint), { target: { value: 'http://mineru.test/file_parse' } })
+    fireEvent.change(screen.getByLabelText(en.mineruBackend), { target: { value: 'hybrid-engine' } })
+    fireEvent.change(screen.getByLabelText(en.mineruEffort), { target: { value: 'medium' } })
+    fireEvent.change(screen.getByLabelText(en.mineruLanguage), { target: { value: 'korean' } })
+    fireEvent.change(screen.getByLabelText(en.mineruTimeoutMs), { target: { value: '120000' } })
+
+    expect(actions.edit.mock.calls).toEqual([
+      ['endpoint', 'http://mineru.test/file_parse'],
+      ['backend', 'hybrid-engine'],
+      ['effort', 'medium'],
+      ['language', 'korean'],
+      ['timeoutMs', '120000'],
+    ])
   })
 })
 

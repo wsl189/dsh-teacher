@@ -35,12 +35,14 @@ export interface ISessions {
    */
   readonly searchResultLimit: number
   /**
-   * Select a session as current.
+   * Select a session as current and publish `sessions/navigate`, including
+   * when the session is already current.
    * @param id - session id (must exist in the list; unknown ids fail loud).
    */
   open(id: SessionId): void
   /**
-   * Open a healthy catalog child through its exact direct-parent address.
+   * Open a healthy catalog child through its exact direct-parent address and
+   * publish `sessions/navigate`.
    * @param address - catalog-derived parent and child ids.
    */
   openSubagent(address: SubagentAddress): void
@@ -71,7 +73,7 @@ export interface ISessions {
    * @param agentPreset - the preset id the host confirmed.
    */
   noteAgentPreset(sessionId: SessionId, agentPreset: string): void
-  /** Clear the current selection into the no-session view state. */
+  /** Clear the current selection into the New Session view and publish `sessions/navigate`. */
   clear(): void
   /**
    * Search the Host's visible message-content index. Results stay

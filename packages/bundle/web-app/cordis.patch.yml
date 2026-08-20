@@ -66,6 +66,33 @@
       config:
         maxNoteBytes: 8192
 
+    - id: ocr
+      name: '@deepseek-ai/dsh-ocr'
+      config:
+        provider: mineru
+
+    - id: ocr-mineru
+      name: '@deepseek-ai/dsh-ocr-mineru'
+      config:
+        endpoint: http://127.0.0.1:8000/file_parse
+        backend: pipeline
+        effort: high
+        language: ch
+        timeoutMs: 300000
+        maxFileBytes: 20971520
+        maxOutputCharacters: 500000
+        maxResponseBytes: 8388608
+
+    - id: teacher-workbench
+      name: '@deepseek-ai/dsh-host-teacher-workbench'
+      config:
+        geocodingEndpoint: https://nominatim.openstreetmap.org/search
+        geocodingCacheEntries: 256
+        segmentsRoot: !!js dshHomePath('teacher-workbench/segments')
+        studentsRoot: !!js dshHomePath('teacher-workbench/students')
+        maxQuestionImageBytes: 26214400
+        maxQuestionBatchBytes: 314572800
+
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download
       name: '@deepseek-ai/dsh-session-log-export'
@@ -182,6 +209,9 @@
 
     - id: ui-sidebar
       name: '@deepseek-ai/dsh-client-ui-sidebar'
+
+    - id: ui-teacher-workbench
+      name: '@deepseek-ai/dsh-client-ui-teacher-workbench'
 
     - id: ui-settings
       name: '@deepseek-ai/dsh-client-ui-settings'

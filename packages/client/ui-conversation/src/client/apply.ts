@@ -1,5 +1,6 @@
 /** Registers the conversation components, shared store, and service callbacks. */
 import type { Context } from '@deepseek-ai/cordis'
+import type { OcrExtractResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { resolveSlotLabel, type BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
@@ -49,7 +50,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
@@ -290,6 +291,7 @@ export function apply(ctx: Context): void {
         return {
           keyboard: undefined,
           addImages: undefined,
+          extractDocuments: undefined,
           removeImage: undefined,
           draftImages: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
@@ -320,6 +322,30 @@ export function apply(ctx: Context): void {
             }
             return error instanceof Error ? error.message : String(error)
           }
+        },
+        extractDocuments: async (files) => {
+          const results: OcrExtractResult[] = []
+          for (const file of files) {
+            try {
+              const carried = await ctx.remote.ocr.extract({
+                name: file.name,
+                mediaType: file.type,
+                contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+              })
+              results.push(carried.ok
+                ? carried.value
+                : { ok: false, error: { code: 'provider-failure', message: carried.error.message } })
+            } catch (error) {
+              results.push({
+                ok: false,
+                error: {
+                  code: 'provider-failure',
+                  message: error instanceof Error ? error.message : 'document extraction failed',
+                },
+              })
+            }
+          }
+          return results
         },
         removeImage: (id) => {
           conversation.releaseDraftImage(id)
@@ -453,4 +479,13 @@ export function apply(ctx: Context): void {
     }),
   }, DetailsPanel)
 
+}
+
+function bytesToBase64(data: Uint8Array): string {
+  let binary = ''
+  const chunk = 0x8000
+  for (let offset = 0; offset < data.length; offset += chunk) {
+    binary += String.fromCharCode(...data.subarray(offset, offset + chunk))
+  }
+  return btoa(binary)
 }

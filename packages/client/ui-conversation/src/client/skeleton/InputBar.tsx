@@ -10,7 +10,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import type { ChangeEvent, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPaperclipOutline16, IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { AttachmentRail, DropOverlay, ImageLightbox } from '@deepseek-ai/dsh-client-ui-attachment'
 import type { AttachmentRailItem } from '@deepseek-ai/dsh-client-ui-attachment'
@@ -45,7 +45,7 @@ interface ComposerRailItem extends AttachmentRailItem {
 export type InputBarProps = ComposerBarProps
 
 export function InputBar({
-  useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
+  useSession, useInput, inputActions, keyboard, addImages, extractDocuments, removeImage, draftImages,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
@@ -76,6 +76,7 @@ export function InputBar({
   const empty = draft.trim() === '' && attachments.length === 0
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
+  const [extractingDocuments, setExtractingDocuments] = useState(0)
   // Transient error banner (image-intake rejections and prompt failures): the
   // seq keys the Toast so an identical repeated message restarts the
   // hold-then-fade cycle instead of silently reusing the faded one.
@@ -103,6 +104,7 @@ export function InputBar({
       : `${promptError.error.message} (${promptError.error.code})`)
   }, [promptError, showToast, t, imageLimits])
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const dragDepthRef = useRef(0)
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -141,6 +143,7 @@ export function InputBar({
   // be disabled do lock it — there is no session to choose a model for.
   const modelSeatLocked = removed || inert || !live
   const machineBusy = input?.phase === 'adjudicating' || input?.phase === 'submitting'
+  const documentBusy = extractingDocuments > 0
   // The no-workspace textarea remains the resident DOM node but acts as the
   // existing picker trigger. Message controls stay locked until a Session
   // exists; the trigger itself is read-only rather than disabled so pointer
@@ -336,7 +339,7 @@ export function InputBar({
     }
     e.preventDefault()
     if (e.repeat) return // held-down Enter must not machine-gun sends
-    if (locked || machineBusy) return
+    if (locked || machineBusy || documentBusy) return
     const accelerated = e.ctrlKey || e.metaKey
     // Empty-draft accelerated Enter acts on the queue instead of the (empty)
     // draft: the machine rejects empty drafts, so the gesture steers every
@@ -413,7 +416,7 @@ export function InputBar({
       .filter(item => item.kind === 'file')
       .map(item => item.getAsFile())
       .filter((file): file is File => file !== null)
-    if (files.length > 0) intakeImages(files)
+    if (files.length > 0) intakeFiles(files)
     const text = e.clipboardData.getData('text/plain')
     if (text === '') {
       if (files.length > 0) e.preventDefault()
@@ -464,6 +467,40 @@ export function InputBar({
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
 
+  const intakeFiles = useCallback((files: readonly File[]): void => {
+    if (files.length === 0) return
+    if (files.some(file => !isConversationImage(file.type) && !isExtractableDocument(file))) {
+      intakeImages(files)
+      return
+    }
+    const images = files.filter(file => isConversationImage(file.type))
+    const documents = files.filter(file => isExtractableDocument(file))
+    if (images.length > 0) intakeImages(images)
+    if (documents.length === 0) return
+    if (extractDocuments === undefined || keyboard === undefined) {
+      showToast(t('document.unavailable'))
+      return
+    }
+    setExtractingDocuments(count => count + documents.length)
+    void extractDocuments(documents).then((results) => {
+      const extracted = results.filter(result => result.ok)
+      if (extracted.length > 0) {
+        const blocks = extracted.map(result => documentBlock(result.value.name, result.value.markdown, result.value.truncated))
+        const current = keyboard.snapshot.draft
+        const separator = current === '' ? '' : current.endsWith('\n') ? '\n' : '\n\n'
+        const next = `${current}${separator}${blocks.join('\n\n')}`
+        keyboard.setDraft(next)
+        keyboard.track(next, next.length)
+      }
+      const failed = results.find(result => !result.ok)
+      if (failed !== undefined) showToast(t('document.extractFailed', { message: failed.error.message }))
+    }, (error: unknown) => {
+      showToast(t('document.extractFailed', { message: error instanceof Error ? error.message : String(error) }))
+    }).finally(() => {
+      setExtractingDocuments(count => Math.max(0, count - documents.length))
+    })
+  }, [extractDocuments, intakeImages, keyboard, showToast, t])
+
   // Whole-page file-drop intake (DeepSeek Chat behavior): the listeners live
   // on the document so a drop anywhere over the window adds images, not only
   // over the composer card. Safe as document-level state: the composer-bar
@@ -471,7 +508,8 @@ export function InputBar({
   // Text drags carry no 'Files' type and pass through untouched, keeping the
   // native drop-text-into-textarea path. The overlay layer itself is
   // pointer-inert, so it never disturbs the enter/leave count.
-  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
+  const canAcceptDrop = !locked && !machineBusy && !documentBusy
+    && (addImages !== undefined || extractDocuments !== undefined)
   useEffect(() => {
     const hasFiles = (event: globalThis.DragEvent): boolean =>
       event.dataTransfer?.types.includes('Files') ?? false
@@ -505,7 +543,7 @@ export function InputBar({
       event.preventDefault()
       reset()
       if (!canAcceptDrop) return
-      intakeImages([...(event.dataTransfer?.files ?? [])])
+      intakeFiles([...(event.dataTransfer?.files ?? [])])
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)
@@ -519,7 +557,7 @@ export function InputBar({
       document.removeEventListener('drop', onDrop)
       window.removeEventListener('dragend', reset)
     }
-  }, [canAcceptDrop, intakeImages])
+  }, [canAcceptDrop, intakeFiles])
 
   const closePreview = useCallback(() => { setPreview(null) }, [])
 
@@ -567,7 +605,7 @@ export function InputBar({
     }
     if (inputActions === undefined) return // absent machine: the button is disabled
     /* v8 ignore next -- defensive: the primary button is disabled while empty||disabled, so a click cannot reach the false arm. */
-    if (!empty && !disabled && !machineBusy) inputActions.submit()
+    if (!empty && !disabled && !machineBusy && !documentBusy) inputActions.submit()
   }
 
   // The Access seat: the projection-fed permission chip (renders nothing
@@ -702,6 +740,12 @@ export function InputBar({
             />
           </div>
         )}
+        {documentBusy && (
+          <div className={css.documentStatus} role="status">
+            <span className={css.documentSpinner} aria-hidden />
+            {t('document.extracting', { count: extractingDocuments })}
+          </div>
+        )}
         {/* One scrollport, two text layers. The hidden mirror renders draft+'\n' and stretches the
             stack to the draft's FULL height (counting rows by '\n' cannot see soft wraps); the
             absolutely-positioned backdrop and textarea ride that height, and .scroll — capped at 14
@@ -747,6 +791,29 @@ export function InputBar({
         </div>
         <div className={css.row}>
           <div className={css.tools}>
+            <input
+              ref={fileInputRef}
+              className={css.fileInput}
+              type="file"
+              multiple
+              accept="image/png,image/jpeg,image/webp,image/gif,image/bmp,image/tiff,.pdf,.docx,.pptx,.xlsx"
+              onChange={(event) => {
+                intakeFiles([...(event.target.files ?? [])])
+                event.target.value = ''
+              }}
+            />
+            <Tooltip label={t('document.attach')} side="top" delayMs={500}>
+              <button
+                type="button"
+                className={css.add}
+                aria-label={t('document.attach')}
+                disabled={locked || machineBusy || documentBusy}
+                onMouseDown={keepFocus}
+                onClick={() => { fileInputRef.current?.click() }}
+              >
+                <IconPaperclipOutline16 size={14} />
+              </button>
+            </Tooltip>
             <Tooltip label={t('input.commands')} side="top" delayMs={500}>
               <button
                 type="button"
@@ -792,7 +859,7 @@ export function InputBar({
                 type="button"
                 className={css.primary}
                 aria-label={primaryLabel}
-                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy}
+                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy || documentBusy}
                 onMouseDown={keepFocus}
                 onClick={onPrimary}
               >
@@ -821,4 +888,24 @@ export function InputBar({
       {footer}
     </div>
   )
+}
+
+function isConversationImage(mediaType: string): boolean {
+  return mediaType === 'image/png' || mediaType === 'image/jpeg'
+    || mediaType === 'image/webp' || mediaType === 'image/gif'
+}
+
+function isExtractableDocument(file: File): boolean {
+  if (file.type === 'application/pdf'
+    || file.type === 'image/bmp'
+    || file.type === 'image/tiff'
+    || file.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+    || file.type === 'application/vnd.openxmlformats-officedocument.presentationml.presentation'
+    || file.type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return true
+  return /\.(?:pdf|bmp|tif|tiff|docx|pptx|xlsx)$/iu.test(file.name)
+}
+
+function documentBlock(name: string, markdown: string, truncated: boolean): string {
+  const escapedName = name.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
+  return `<document name="${escapedName}">\n${markdown}\n${truncated ? '<document-truncated />\n' : ''}</document>`
 }

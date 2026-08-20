@@ -787,6 +787,32 @@ export interface Config {
 
 来源：[`packages/host/frontend-static/src/index.ts:28`](../packages/host/frontend-static/src/index.ts)
 
+<a id="deepseek-aidsh-host-teacher-workbench"></a>
+
+## `@deepseek-ai/dsh-host-teacher-workbench`
+
+需要：`storageDomain`
+
+```ts config-catalog
+/** Host weather-provider and question-media configuration. */
+export interface Config {
+  /** Nominatim-compatible endpoint used to resolve districts, counties, and cities. */
+  geocodingEndpoint: string
+  /** Maximum number of resolved location queries cached in memory. */
+  geocodingCacheEntries: number
+  /** Root containing immutable paper batches and their cropped images. */
+  segmentsRoot: string
+  /** Root containing grade/class/student assignment copies. */
+  studentsRoot: string
+  /** Maximum decoded bytes accepted for one question image. */
+  maxQuestionImageBytes: number
+  /** Maximum decoded bytes accepted for one complete paper batch. */
+  maxQuestionBatchBytes: number
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/index.ts:91`](../packages/host/teacher-workbench/src/index.ts)
+
 <a id="deepseek-aidsh-host-webserver"></a>
 
 ## `@deepseek-ai/dsh-host-webserver`
@@ -1294,6 +1320,56 @@ export interface Config {
 ```
 
 来源：[`packages/feedback/message-feedback/src/index.ts:49`](../packages/feedback/message-feedback/src/index.ts)
+
+<a id="deepseek-aidsh-ocr"></a>
+
+## `@deepseek-ai/dsh-ocr`
+
+```ts config-catalog
+/** OCR provider-selection configuration. */
+export interface OcrRuntimeConfig {
+  /** Explicit provider id; omitted when exactly one usable provider is registered. */
+  readonly provider?: string
+}
+```
+
+来源：[`packages/ocr/ocr/src/index.ts:39`](../packages/ocr/ocr/src/index.ts)
+
+<a id="deepseek-aidsh-ocr-mineru"></a>
+
+## `@deepseek-ai/dsh-ocr-mineru`
+
+需要：`ocr`
+
+```ts config-catalog
+/** MinerU provider configuration exposed through the DSH plugin settings surface. */
+export interface Config {
+  /** Full self-hosted MinerU synchronous parsing endpoint. */
+  readonly endpoint: string
+  /** Supported local MinerU parsing backend. */
+  readonly backend: MinerUBackend
+  /** MinerU hybrid parsing effort. */
+  readonly effort: MinerUEffort
+  /** Supported MinerU OCR model language. */
+  readonly language: MinerULanguage
+  /** Per-document network deadline in milliseconds. */
+  readonly timeoutMs: number
+  /** Maximum decoded upload size accepted from a browser request. */
+  readonly maxFileBytes: number
+  /** Maximum Markdown characters returned to a DSH consumer. */
+  readonly maxOutputCharacters: number
+  /** Maximum JSON response bytes accepted from MinerU. */
+  readonly maxResponseBytes: number
+}
+
+type MinerUBackend = typeof BACKEND_VALUES[number]
+
+type MinerUEffort = typeof EFFORT_VALUES[number]
+
+type MinerULanguage = typeof LANGUAGE_VALUES[number]
+```
+
+来源：[`packages/ocr/ocr-mineru/src/index.ts:80`](../packages/ocr/ocr-mineru/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 
@@ -3056,6 +3132,7 @@ export interface Config {
 - `@deepseek-ai/dsh-client-ui-sidebar`（[`packages/client/ui-sidebar/src/index.ts`](../packages/client/ui-sidebar/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-skill`（[`packages/client/ui-skill/src/index.ts`](../packages/client/ui-skill/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-subagent`（[`packages/client/ui-subagent/src/index.ts`](../packages/client/ui-subagent/src/index.ts)）
+- `@deepseek-ai/dsh-client-ui-teacher-workbench`（[`packages/client/ui-teacher-workbench/src/index.ts`](../packages/client/ui-teacher-workbench/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-theme`（[`packages/client/ui-theme/src/index.ts`](../packages/client/ui-theme/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-tool`（[`packages/client/ui-tool/src/index.ts`](../packages/client/ui-tool/src/index.ts)）
 - `@deepseek-ai/dsh-client-ui-trajectory`（[`packages/client/ui-trajectory/src/index.ts`](../packages/client/ui-trajectory/src/index.ts)）

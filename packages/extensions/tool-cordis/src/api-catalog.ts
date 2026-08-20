@@ -913,6 +913,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'ocr',
+    summary: 'Provider-selecting document extraction runtime exposed as `ctx.ocr`.',
+    description: 'Provider-selecting document extraction runtime exposed as `ctx.ocr`.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: OcrProvider): () => void',
+        description: 'Register one extraction provider for the calling plugin lifetime.',
+        parameters: [{ name: 'provider', description: 'uniquely identified implementation.' }],
+        returns: 'disposer that unregisters the provider.',
+      },
+      {
+        signature: '@Remote(\'extract\') async extract(request: OcrExtractRequest): Promise<OcrExtractResult>',
+        description: 'Extract one uploaded document through the selected provider.',
+        parameters: [{ name: 'request', description: 'base64 document bytes and source metadata.' }],
+        returns: 'normalized Markdown or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'layout\') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>',
+        description: 'Extract structured page geometry through the selected provider.',
+        parameters: [{ name: 'request', description: 'base64 document bytes and optional inclusive page window.' }],
+        returns: 'normalized pages and coordinates or a stable failure.',
+      },
+    ],
+  },
+  {
     key: 'permissionPresets',
     summary: 'Owns the deployment\'s permission presets and their write path.',
     description: 'Owns the deployment\'s permission presets and their write path. Requires a confining `ctx.shell` executor and `ctx.approval`; unmatched knob values are reported as CUSTOM_PRESET, not an error.',
@@ -1739,6 +1764,97 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Assemble global and scoped providers, detach tool parameters, apply canonical ordering, then run the assembly waterfall. Scoped sections and variables shadow globals. The returned waterfall value is authoritative except that an effective complete section is restored afterwards as the sole prompt section.',
         parameters: [{ name: 'context', description: 'the optional scope and plugin-defined assembly fields.' }],
         returns: 'the post-waterfall assembly with any complete prompt enforced.',
+      },
+    ],
+  },
+  {
+    key: 'teacherWorkbench',
+    summary: 'Host service owning the revisioned workbench document.',
+    description: 'Host service owning the revisioned workbench document.',
+    methods: [
+      {
+        signature: '@Remote(\'read\') read(_request: TeacherWorkbenchReadRequest): Promise<TeacherWorkbenchReadResult>',
+        description: 'Read the current immutable workbench document.',
+        parameters: [{ name: '_request', description: 'Empty request object retained for a uniform Remote signature.' }],
+        returns: 'the current revision and state.',
+      },
+      {
+        signature: '@Remote(\'write\') write(request: TeacherWorkbenchWriteRequest): Promise<TeacherWorkbenchWriteResult>',
+        description: 'Replace the complete state after comparing the observed revision.',
+        parameters: [{ name: 'request', description: 'observed revision and replacement state.' }],
+        returns: 'the committed document or an explicit conflict/validation failure.',
+      },
+      {
+        signature: '@Remote(\'weather\') weather(request: TeacherWeatherRequest): Promise<TeacherWeatherResult>',
+        description: 'Resolve a configured location and fetch validated weather from the Host.',
+        parameters: [{ name: 'request', description: 'district, county, or city selected in dsh settings.' }],
+        returns: 'current conditions, twelve forecast hours, or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'saveQuestionBatch\') saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult>',
+        description: 'Persist a browser-rendered paper batch and commit its metadata.',
+        parameters: [{ name: 'request', description: 'batch metadata and ordered raster payloads.' }],
+        returns: 'the committed document and generated batch id, or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'readQuestionImage\') async readQuestionImage(request: TeacherQuestionImageReadRequest): Promise<TeacherQuestionImageReadResult>',
+        description: 'Read one paper crop or student assignment copy.',
+        parameters: [{ name: 'request', description: 'exact metadata-backed image target.' }],
+        returns: 'validated image bytes or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'replaceQuestionImage\') replaceQuestionImage(request: TeacherQuestionImageReplaceRequest): Promise<TeacherQuestionMutationResult>',
+        description: 'Replace one stored raster after browser-side editing.',
+        parameters: [{ name: 'request', description: 'exact target plus replacement raster payload.' }],
+        returns: 'the committed document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'deleteQuestionImage\') deleteQuestionImage(request: TeacherQuestionImageDeleteRequest): Promise<TeacherQuestionMutationResult>',
+        description: 'Delete one paper crop or independent student copy.',
+        parameters: [{ name: 'request', description: 'exact image target to remove.' }],
+        returns: 'the committed document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'deleteQuestionBatch\') deleteQuestionBatch(request: TeacherQuestionBatchDeleteRequest): Promise<TeacherQuestionMutationResult>',
+        description: 'Delete one complete paper batch and every assignment derived from it.',
+        parameters: [{ name: 'request', description: 'durable batch identity to remove.' }],
+        returns: 'the committed document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'assignQuestions\') assignQuestions(request: TeacherQuestionAssignRequest): Promise<TeacherQuestionMutationResult>',
+        description: 'Copy selected paper crops into one student\'s durable image collection.',
+        parameters: [{ name: 'request', description: 'destination student and ordered source image ids.' }],
+        returns: 'the committed document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'saveTemporaryQuestionSelection\') async saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>',
+        description: 'Snapshot selected student images into temporary Office-generation storage.',
+        parameters: [{ name: 'request', description: 'student identity and ordered assignment ids.' }],
+        returns: 'copied-image count or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'listTemporaryQuestionSelections\') async listTemporaryQuestionSelections( request: TeacherQuestionTemporaryListRequest, ): Promise<TeacherQuestionTemporaryListResult>',
+        description: 'List roster students that currently have temporary Office-generation images.',
+        parameters: [{ name: 'request', description: 'student identities to inspect.' }],
+        returns: 'available student selections or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'generateQuestionDocument\') async generateQuestionDocument(request: TeacherQuestionDocumentRequest): Promise<TeacherQuestionDocumentResult>',
+        description: 'Build one Word or PowerPoint artifact from selected stored images.',
+        parameters: [{ name: 'request', description: 'output family, optional Word metadata, and ordered image targets.' }],
+        returns: 'a downloadable artifact or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'generateUploadedQuestionDocument\') async generateUploadedQuestionDocument( request: TeacherQuestionUploadedDocumentRequest, ): Promise<TeacherQuestionDocumentResult>',
+        description: 'Build one Word or PowerPoint file from a browser-selected image directory.',
+        parameters: [{ name: 'request', description: 'selected directory name, ordered images, and output family.' }],
+        returns: 'a downloadable artifact or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'generateStudentDocuments\') async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult>',
+        description: 'Build one independent Word or PowerPoint file per selected student.',
+        parameters: [{ name: 'request', description: 'output family and independent per-student Word options.' }],
+        returns: 'independent artifacts, skipped students, or a stable failure.',
       },
     ],
   },
@@ -3476,6 +3592,70 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type ObjectJsonSchema = JsonSchemaNode & {\n    type: \'object\';\n};',
   },
   {
+    name: 'OcrBoundingBox',
+    declaration: 'export type OcrBoundingBox = readonly [\n    number,\n    number,\n    number,\n    number\n];',
+  },
+  {
+    name: 'OcrErrorCode',
+    declaration: 'export type OcrErrorCode = \'invalid-request\' | \'unsupported-format\' | \'file-too-large\' | \'provider-unavailable\' | \'provider-failure\' | \'invalid-response\' | \'empty-result\';',
+  },
+  {
+    name: 'OcrExtractedDocument',
+    declaration: 'export interface OcrExtractedDocument {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly markdown: string;\n    readonly provider: string;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'OcrExtractRejected',
+    declaration: 'export interface OcrExtractRejected {\n    readonly ok: false;\n    readonly error: OcrFailure;\n}',
+  },
+  {
+    name: 'OcrExtractRequest',
+    declaration: 'export interface OcrExtractRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'OcrExtractResult',
+    declaration: 'export type OcrExtractResult = OcrExtractSuccess | OcrExtractRejected;',
+  },
+  {
+    name: 'OcrExtractSuccess',
+    declaration: 'export interface OcrExtractSuccess {\n    readonly ok: true;\n    readonly value: OcrExtractedDocument;\n}',
+  },
+  {
+    name: 'OcrFailure',
+    declaration: 'export interface OcrFailure {\n    readonly code: OcrErrorCode;\n    readonly message: string;\n}',
+  },
+  {
+    name: 'OcrLayoutDocument',
+    declaration: 'export interface OcrLayoutDocument {\n    readonly name: string;\n    readonly provider: string;\n    readonly pages: readonly OcrLayoutPage[];\n}',
+  },
+  {
+    name: 'OcrLayoutElement',
+    declaration: 'export interface OcrLayoutElement {\n    readonly type: \'text\' | \'equation\' | \'image\' | \'table\' | \'other\';\n    readonly text: string;\n    readonly bbox: OcrBoundingBox;\n}',
+  },
+  {
+    name: 'OcrLayoutPage',
+    declaration: 'export interface OcrLayoutPage {\n    readonly pageIndex: number;\n    readonly width: number;\n    readonly height: number;\n    readonly elements: readonly OcrLayoutElement[];\n}',
+  },
+  {
+    name: 'OcrLayoutRequest',
+    declaration: 'export interface OcrLayoutRequest extends OcrExtractRequest {\n    readonly pageRange?: OcrPageRange;\n}',
+  },
+  {
+    name: 'OcrLayoutResult',
+    declaration: 'export type OcrLayoutResult = OcrLayoutSuccess | OcrExtractRejected;',
+  },
+  {
+    name: 'OcrLayoutSuccess',
+    declaration: 'export interface OcrLayoutSuccess {\n    readonly ok: true;\n    readonly value: OcrLayoutDocument;\n}',
+  },
+  {
+    name: 'OcrPageRange',
+    declaration: 'export interface OcrPageRange {\n    readonly start: number;\n    readonly end: number;\n}',
+  },
+  {
+    name: 'OcrProvider',
+    declaration: 'export interface OcrProvider {\n    readonly id: string;\n    available(): boolean;\n    extract(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractedDocument>;\n    extractLayout(request: OcrLayoutRequest, signal?: AbortSignal): Promise<OcrLayoutDocument>;\n}',
+  },
+  {
     name: 'OneShotSubagentDescriptorData',
     declaration: 'export interface OneShotSubagentDescriptorData extends SubagentDescriptorBase {\n    readonly mode: \'one-shot\';\n    readonly label?: string;\n}',
   },
@@ -4250,6 +4430,358 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TableValueOf',
     declaration: 'export type TableValueOf<S extends DomainSpec, N extends keyof S[\'tables\']> = S[\'tables\'][N] extends DomainTableSpec<string, infer V> ? V : never;',
+  },
+  {
+    name: 'TeacherCalendarItem',
+    declaration: 'export interface TeacherCalendarItem {\n    readonly id: TeacherCalendarItemId;\n    readonly date: string;\n    readonly time: string;\n    readonly title: string;\n    readonly details: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherCalendarItemId',
+    declaration: 'export type TeacherCalendarItemId = Branded<\'TeacherCalendarItemId\'>;',
+  },
+  {
+    name: 'TeacherClass',
+    declaration: 'export interface TeacherClass {\n    readonly id: TeacherClassId;\n    readonly academicYear?: string;\n    readonly name: string;\n    readonly grade: string;\n    readonly subject: string;\n}',
+  },
+  {
+    name: 'TeacherClassId',
+    declaration: 'export type TeacherClassId = Branded<\'TeacherClassId\'>;',
+  },
+  {
+    name: 'TeacherDailyTodo',
+    declaration: 'export interface TeacherDailyTodo {\n    readonly id: TeacherDailyTodoId;\n    readonly title: string;\n    readonly dueAt: string;\n    readonly completed: boolean;\n    readonly category: TeacherDailyTodoCategory;\n    readonly color: TeacherDailyTodoColor;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherDailyTodoCategory',
+    declaration: 'export type TeacherDailyTodoCategory = \'today\' | \'important\' | \'urgent\';',
+  },
+  {
+    name: 'TeacherDailyTodoColor',
+    declaration: 'export type TeacherDailyTodoColor = \'red\' | \'orange\' | \'amber\' | \'yellow\' | \'green\' | \'teal\' | \'cyan\' | \'blue\' | \'violet\' | \'pink\';',
+  },
+  {
+    name: 'TeacherDailyTodoId',
+    declaration: 'export type TeacherDailyTodoId = Branded<\'TeacherDailyTodoId\'>;',
+  },
+  {
+    name: 'TeacherExam',
+    declaration: 'export interface TeacherExam {\n    readonly id: TeacherExamId;\n    readonly classId: TeacherClassId;\n    readonly name: string;\n    readonly date: string;\n    readonly entries: readonly TeacherExamEntry[];\n}',
+  },
+  {
+    name: 'TeacherExamEntry',
+    declaration: 'export interface TeacherExamEntry {\n    readonly studentId: TeacherStudentId;\n    readonly scores: Readonly<Record<string, number>>;\n}',
+  },
+  {
+    name: 'TeacherExamId',
+    declaration: 'export type TeacherExamId = Branded<\'TeacherExamId\'>;',
+  },
+  {
+    name: 'TeacherLessonResource',
+    declaration: 'export interface TeacherLessonResource {\n    readonly id: TeacherLessonResourceId;\n    readonly category: TeacherLessonResourceCategory;\n    readonly name: string;\n    readonly url: string;\n    readonly description: string;\n}',
+  },
+  {
+    name: 'TeacherLessonResourceCategory',
+    declaration: 'export type TeacherLessonResourceCategory = \'resource\' | \'observation\' | \'publicLesson\';',
+  },
+  {
+    name: 'TeacherLessonResourceId',
+    declaration: 'export type TeacherLessonResourceId = Branded<\'TeacherLessonResourceId\'>;',
+  },
+  {
+    name: 'TeacherQuestionAssignment',
+    declaration: 'export interface TeacherQuestionAssignment {\n    readonly id: TeacherQuestionAssignmentId;\n    readonly studentId: TeacherStudentId;\n    readonly sourceImageId: TeacherQuestionImageId;\n    readonly folderId?: TeacherQuestionFolderId;\n    readonly fileName: string;\n    readonly relativePath: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionAssignmentId',
+    declaration: 'export type TeacherQuestionAssignmentId = Branded<\'TeacherQuestionAssignmentId\'>;',
+  },
+  {
+    name: 'TeacherQuestionAssignRequest',
+    declaration: 'export interface TeacherQuestionAssignRequest {\n    readonly studentId: TeacherStudentId;\n    readonly folderId?: TeacherQuestionFolderId;\n    readonly imageIds: readonly TeacherQuestionImageId[];\n}',
+  },
+  {
+    name: 'TeacherQuestionBatch',
+    declaration: 'export interface TeacherQuestionBatch {\n    readonly id: TeacherQuestionBatchId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly createdAt: number;\n    readonly images: readonly TeacherQuestionImage[];\n}',
+  },
+  {
+    name: 'TeacherQuestionBatchDeleteRequest',
+    declaration: 'export interface TeacherQuestionBatchDeleteRequest {\n    readonly batchId: TeacherQuestionBatchId;\n}',
+  },
+  {
+    name: 'TeacherQuestionBatchDocumentRequest',
+    declaration: 'export interface TeacherQuestionBatchDocumentRequest {\n    readonly kind: \'word\' | \'ppt\';\n    readonly source?: \'assigned\' | \'temporary\';\n    readonly students: readonly TeacherQuestionStudentDocumentOptions[];\n}',
+  },
+  {
+    name: 'TeacherQuestionBatchDocumentResult',
+    declaration: 'export type TeacherQuestionBatchDocumentResult = TeacherQuestionBatchDocumentSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionBatchDocumentSuccess',
+    declaration: 'export interface TeacherQuestionBatchDocumentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly artifacts: readonly TeacherQuestionDocumentPayload[];\n        readonly skipped: readonly TeacherQuestionDocumentSkipped[];\n    };\n}',
+  },
+  {
+    name: 'TeacherQuestionBatchId',
+    declaration: 'export type TeacherQuestionBatchId = Branded<\'TeacherQuestionBatchId\'>;',
+  },
+  {
+    name: 'TeacherQuestionBatchSaveRequest',
+    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentImageUpload',
+    declaration: 'export interface TeacherQuestionDocumentImageUpload {\n    readonly fileName: string;\n    readonly relativePath: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentPayload',
+    declaration: 'export interface TeacherQuestionDocumentPayload {\n    readonly fileName: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentRequest',
+    declaration: 'export interface TeacherQuestionDocumentRequest {\n    readonly kind: \'word\' | \'ppt\';\n    readonly title: string;\n    readonly targets: readonly TeacherQuestionImageTarget[];\n    readonly studentName: string;\n    readonly includeDate: boolean;\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentResult',
+    declaration: 'export type TeacherQuestionDocumentResult = TeacherQuestionDocumentSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionDocumentSkipped',
+    declaration: 'export interface TeacherQuestionDocumentSkipped {\n    readonly studentId: TeacherStudentId;\n    readonly name: string;\n    readonly reason: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentSuccess',
+    declaration: 'export interface TeacherQuestionDocumentSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionDocumentPayload;\n}',
+  },
+  {
+    name: 'TeacherQuestionFailure',
+    declaration: 'export interface TeacherQuestionFailure {\n    readonly code: \'invalid-request\' | \'not-found\' | \'file-too-large\' | \'storage-failure\' | \'generation-failure\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionFolder',
+    declaration: 'export interface TeacherQuestionFolder {\n    readonly id: TeacherQuestionFolderId;\n    readonly studentId: TeacherStudentId;\n    readonly parentId?: TeacherQuestionFolderId;\n    readonly name: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionFolderId',
+    declaration: 'export type TeacherQuestionFolderId = Branded<\'TeacherQuestionFolderId\'>;',
+  },
+  {
+    name: 'TeacherQuestionImage',
+    declaration: 'export interface TeacherQuestionImage {\n    readonly id: TeacherQuestionImageId;\n    readonly questionNo: number;\n    readonly fileName: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageDeleteRequest',
+    declaration: 'export interface TeacherQuestionImageDeleteRequest {\n    readonly target: TeacherQuestionImageTarget;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageId',
+    declaration: 'export type TeacherQuestionImageId = Branded<\'TeacherQuestionImageId\'>;',
+  },
+  {
+    name: 'TeacherQuestionImageMediaType',
+    declaration: 'export type TeacherQuestionImageMediaType = \'image/png\' | \'image/jpeg\' | \'image/webp\';',
+  },
+  {
+    name: 'TeacherQuestionImagePayload',
+    declaration: 'export interface TeacherQuestionImagePayload {\n    readonly fileName: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageReadRequest',
+    declaration: 'export interface TeacherQuestionImageReadRequest {\n    readonly target: TeacherQuestionImageTarget;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageReadResult',
+    declaration: 'export type TeacherQuestionImageReadResult = TeacherQuestionImageReadSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionImageReadSuccess',
+    declaration: 'export interface TeacherQuestionImageReadSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionImagePayload;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageReplaceRequest',
+    declaration: 'export interface TeacherQuestionImageReplaceRequest extends TeacherQuestionImagePayload {\n    readonly target: TeacherQuestionImageTarget;\n}',
+  },
+  {
+    name: 'TeacherQuestionImageTarget',
+    declaration: 'export type TeacherQuestionImageTarget = {\n    readonly kind: \'batch\';\n    readonly id: TeacherQuestionImageId;\n} | {\n    readonly kind: \'assignment\';\n    readonly id: TeacherQuestionAssignmentId;\n};',
+  },
+  {
+    name: 'TeacherQuestionImageUpload',
+    declaration: 'export interface TeacherQuestionImageUpload {\n    readonly questionNo: number;\n    readonly fileName: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionMutationResult',
+    declaration: 'export type TeacherQuestionMutationResult = TeacherQuestionMutationSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionMutationSuccess',
+    declaration: 'export interface TeacherQuestionMutationSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly document: TeacherWorkbenchDocument;\n        readonly batchId?: TeacherQuestionBatchId;\n    };\n}',
+  },
+  {
+    name: 'TeacherQuestionRejected',
+    declaration: 'export interface TeacherQuestionRejected {\n    readonly ok: false;\n    readonly error: TeacherQuestionFailure;\n}',
+  },
+  {
+    name: 'TeacherQuestionStudentDocumentOptions',
+    declaration: 'export interface TeacherQuestionStudentDocumentOptions {\n    readonly studentId: TeacherStudentId;\n    readonly title: string;\n    readonly includeName: boolean;\n    readonly includeDate: boolean;\n}',
+  },
+  {
+    name: 'TeacherQuestionTemporaryListRequest',
+    declaration: 'export interface TeacherQuestionTemporaryListRequest {\n    readonly studentIds: readonly TeacherStudentId[];\n}',
+  },
+  {
+    name: 'TeacherQuestionTemporaryListResult',
+    declaration: 'export type TeacherQuestionTemporaryListResult = TeacherQuestionTemporaryListSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionTemporaryListSuccess',
+    declaration: 'export interface TeacherQuestionTemporaryListSuccess {\n    readonly ok: true;\n    readonly value: readonly TeacherQuestionTemporarySelection[];\n}',
+  },
+  {
+    name: 'TeacherQuestionTemporarySaveRequest',
+    declaration: 'export interface TeacherQuestionTemporarySaveRequest {\n    readonly studentId: TeacherStudentId;\n    readonly assignmentIds: readonly TeacherQuestionAssignmentId[];\n}',
+  },
+  {
+    name: 'TeacherQuestionTemporarySaveResult',
+    declaration: 'export type TeacherQuestionTemporarySaveResult = TeacherQuestionTemporarySaveSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionTemporarySaveSuccess',
+    declaration: 'export interface TeacherQuestionTemporarySaveSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionTemporarySelection;\n}',
+  },
+  {
+    name: 'TeacherQuestionTemporarySelection',
+    declaration: 'export interface TeacherQuestionTemporarySelection {\n    readonly studentId: TeacherStudentId;\n    readonly imageCount: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionUploadedDocumentRequest',
+    declaration: 'export interface TeacherQuestionUploadedDocumentRequest {\n    readonly kind: \'word\' | \'ppt\';\n    readonly folderName: string;\n    readonly images: readonly TeacherQuestionDocumentImageUpload[];\n}',
+  },
+  {
+    name: 'TeacherQuickNote',
+    declaration: 'export interface TeacherQuickNote {\n    readonly id: TeacherQuickNoteId;\n    readonly content: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherQuickNoteId',
+    declaration: 'export type TeacherQuickNoteId = Branded<\'TeacherQuickNoteId\'>;',
+  },
+  {
+    name: 'TeacherRecord',
+    declaration: 'export interface TeacherRecord {\n    readonly id: TeacherRecordId;\n    readonly templateId: TeacherRecordTemplateId;\n    readonly title: string;\n    readonly dueDate: string;\n    readonly status: TeacherRecordStatus;\n    readonly values: Readonly<Record<string, string>>;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherRecordId',
+    declaration: 'export type TeacherRecordId = Branded<\'TeacherRecordId\'>;',
+  },
+  {
+    name: 'TeacherRecordStatus',
+    declaration: 'export type TeacherRecordStatus = \'active\' | \'done\';',
+  },
+  {
+    name: 'TeacherRecordTemplate',
+    declaration: 'export interface TeacherRecordTemplate {\n    readonly id: TeacherRecordTemplateId;\n    readonly kind: TeacherRecordTemplateKind;\n    readonly name: string;\n    readonly scene: string;\n    readonly fields: readonly string[];\n}',
+  },
+  {
+    name: 'TeacherRecordTemplateId',
+    declaration: 'export type TeacherRecordTemplateId = Branded<\'TeacherRecordTemplateId\'>;',
+  },
+  {
+    name: 'TeacherRecordTemplateKind',
+    declaration: 'export type TeacherRecordTemplateKind = \'observation\' | \'teaching\';',
+  },
+  {
+    name: 'TeacherStudent',
+    declaration: 'export interface TeacherStudent {\n    readonly id: TeacherStudentId;\n    readonly classId: TeacherClassId;\n    readonly name: string;\n    readonly studentNumber: string;\n    readonly gender: string;\n    readonly guardian: string;\n    readonly relation: string;\n    readonly phone: string;\n    readonly address: string;\n    readonly extras: Readonly<Record<string, string>>;\n}',
+  },
+  {
+    name: 'TeacherStudentId',
+    declaration: 'export type TeacherStudentId = Branded<\'TeacherStudentId\'>;',
+  },
+  {
+    name: 'TeacherTimetableEntry',
+    declaration: 'export interface TeacherTimetableEntry {\n    readonly id: TeacherTimetableEntryId;\n    readonly classId: TeacherClassId;\n    readonly kind: TeacherTimetableEntryKind;\n    readonly weekday: TeacherWeekday;\n    readonly period: number;\n    readonly startTime: string;\n    readonly endTime: string;\n    readonly subject: string;\n    readonly teacherName: string;\n    readonly location: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherTimetableEntryId',
+    declaration: 'export type TeacherTimetableEntryId = Branded<\'TeacherTimetableEntryId\'>;',
+  },
+  {
+    name: 'TeacherTimetableEntryKind',
+    declaration: 'export type TeacherTimetableEntryKind = \'lesson\' | \'morningStudy\' | \'eveningStudy\';',
+  },
+  {
+    name: 'TeacherWeatherErrorCode',
+    declaration: 'export type TeacherWeatherErrorCode = \'location-not-found\' | \'provider-unavailable\' | \'invalid-response\';',
+  },
+  {
+    name: 'TeacherWeatherFailure',
+    declaration: 'export interface TeacherWeatherFailure {\n    readonly code: TeacherWeatherErrorCode;\n    readonly message: string;\n}',
+  },
+  {
+    name: 'TeacherWeatherForecast',
+    declaration: 'export interface TeacherWeatherForecast {\n    readonly location: string;\n    readonly timezone: string;\n    readonly observedAt: string;\n    readonly temperature: number;\n    readonly apparentTemperature: number;\n    readonly humidity: number;\n    readonly precipitation: number;\n    readonly weatherCode: number;\n    readonly windSpeed: number;\n    readonly maximumTemperature: number;\n    readonly minimumTemperature: number;\n    readonly precipitationProbability: number;\n    readonly sunrise: string;\n    readonly sunset: string;\n    readonly hours: readonly TeacherWeatherHour[];\n}',
+  },
+  {
+    name: 'TeacherWeatherHour',
+    declaration: 'export interface TeacherWeatherHour {\n    readonly time: string;\n    readonly temperature: number;\n    readonly weatherCode: number;\n    readonly precipitationProbability: number;\n}',
+  },
+  {
+    name: 'TeacherWeatherRejected',
+    declaration: 'export interface TeacherWeatherRejected {\n    readonly ok: false;\n    readonly error: TeacherWeatherFailure;\n}',
+  },
+  {
+    name: 'TeacherWeatherRequest',
+    declaration: 'export interface TeacherWeatherRequest {\n    readonly location: string;\n}',
+  },
+  {
+    name: 'TeacherWeatherResult',
+    declaration: 'export type TeacherWeatherResult = TeacherWeatherSuccess | TeacherWeatherRejected;',
+  },
+  {
+    name: 'TeacherWeatherSuccess',
+    declaration: 'export interface TeacherWeatherSuccess {\n    readonly ok: true;\n    readonly value: TeacherWeatherForecast;\n}',
+  },
+  {
+    name: 'TeacherWeekday',
+    declaration: 'export type TeacherWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7;',
+  },
+  {
+    name: 'TeacherWorkbenchDocument',
+    declaration: 'export interface TeacherWorkbenchDocument {\n    readonly revision: number;\n    readonly state: TeacherWorkbenchState;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchInvalidState',
+    declaration: 'export interface TeacherWorkbenchInvalidState {\n    readonly code: \'invalid-state\';\n    readonly message: string;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchReadRequest',
+    declaration: 'export type TeacherWorkbenchReadRequest = Record<never, never>;',
+  },
+  {
+    name: 'TeacherWorkbenchReadResult',
+    declaration: 'export type TeacherWorkbenchReadResult = TeacherWorkbenchSuccess;',
+  },
+  {
+    name: 'TeacherWorkbenchRejected',
+    declaration: 'export interface TeacherWorkbenchRejected {\n    readonly ok: false;\n    readonly error: TeacherWorkbenchRevisionConflict | TeacherWorkbenchInvalidState;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchRevisionConflict',
+    declaration: 'export interface TeacherWorkbenchRevisionConflict {\n    readonly code: \'revision-conflict\';\n    readonly current: TeacherWorkbenchDocument;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchState',
+    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
+  },
+  {
+    name: 'TeacherWorkbenchSuccess',
+    declaration: 'export interface TeacherWorkbenchSuccess {\n    readonly ok: true;\n    readonly value: TeacherWorkbenchDocument;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchWriteRequest',
+    declaration: 'export interface TeacherWorkbenchWriteRequest {\n    readonly expectedRevision: number;\n    readonly state: TeacherWorkbenchState;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchWriteResult',
+    declaration: 'export type TeacherWorkbenchWriteResult = TeacherWorkbenchSuccess | TeacherWorkbenchRejected;',
   },
   {
     name: 'TerminalBackend',

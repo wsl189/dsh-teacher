@@ -22,8 +22,9 @@ const CHILD = 'child-1' as SessionId
 async function bench() {
   const runtime = await SlotTestRuntime.create()
   runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
-  // The plugin injects both; these specs exercise no settings path.
+  // These specs exercise neither settings nor OCR calls.
   runtime.provide('remote', { $on: () => () => {} })
+  runtime.provide('remote.ocr', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await runtime.sessions.add({ id: ROOT, summary: { title: 'R', displayTitle: 'R' } }, { current: false })
   await runtime.sessions.add(

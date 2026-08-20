@@ -5,7 +5,9 @@ import commandsRemote from '@deepseek-ai/dsh-commands/remote'
 import goalsRemote from '@deepseek-ai/dsh-goal/remote'
 import dynamicRemote from '@deepseek-ai/dsh-cordis-host-runner/remote'
 import pluginInventoryRemote from '@deepseek-ai/dsh-host-plugin-inventory/remote'
+import teacherWorkbenchRemote from '@deepseek-ai/dsh-host-teacher-workbench/remote'
 import messageFeedbackRemote from '@deepseek-ai/dsh-message-feedback/remote'
+import ocrRemote from '@deepseek-ai/dsh-ocr/remote'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 
 export type { TypertClientRemote as ClientRemote } from '@deepseek-ai/dsh-typert-protocol'
@@ -13,7 +15,9 @@ export type { PluginInventorySnapshot } from '@deepseek-ai/dsh-host-plugin-inven
 export type {} from '@deepseek-ai/dsh-commands/remote'
 export type {} from '@deepseek-ai/dsh-goal/remote'
 export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
+export type {} from '@deepseek-ai/dsh-host-teacher-workbench/remote'
 export type {} from '@deepseek-ai/dsh-message-feedback/remote'
+export type {} from '@deepseek-ai/dsh-ocr/remote'
 // The forwarded-event allowlist's selection seat: without it in the consumer's
 // compilation face `TypertRemoteEvent` is `never` and every `$on` call fails.
 export type { ApiRemoteForwardedEvent } from '../types.ts'
@@ -86,6 +90,111 @@ export type {
 // reason: a Client contribution names what it sends without importing a Host
 // package, and this assembly is where both planes legitimately meet.
 export type { JsonValue } from '@deepseek-ai/dsh-session/types'
+export type {
+  OcrErrorCode,
+  OcrExtractRejected,
+  OcrExtractRequest,
+  OcrExtractResult,
+  OcrExtractSuccess,
+  OcrExtractedDocument,
+  OcrFailure,
+  OcrBoundingBox,
+  OcrLayoutDocument,
+  OcrLayoutElement,
+  OcrLayoutPage,
+  OcrLayoutRequest,
+  OcrLayoutResult,
+  OcrLayoutSuccess,
+  OcrPageRange,
+} from '@deepseek-ai/dsh-ocr/types'
+export type {
+  TeacherCalendarItem,
+  TeacherCalendarItemId,
+  TeacherClass,
+  TeacherClassId,
+  TeacherClassUsage,
+  TeacherDailyTodo,
+  TeacherDailyTodoCategory,
+  TeacherDailyTodoColor,
+  TeacherDailyTodoId,
+  TeacherExam,
+  TeacherExamEntry,
+  TeacherExamId,
+  TeacherLessonResource,
+  TeacherLessonResourceCategory,
+  TeacherLessonResourceId,
+  TeacherRecord,
+  TeacherRecordId,
+  TeacherRecordStatus,
+  TeacherRecordTemplate,
+  TeacherRecordTemplateId,
+  TeacherRecordTemplateKind,
+  TeacherQuickNote,
+  TeacherQuickNoteId,
+  TeacherQuestionAssignment,
+  TeacherQuestionAssignmentId,
+  TeacherQuestionAssignRequest,
+  TeacherQuestionBatch,
+  TeacherQuestionBatchDeleteRequest,
+  TeacherQuestionBatchDocumentRequest,
+  TeacherQuestionBatchDocumentResult,
+  TeacherQuestionBatchDocumentSuccess,
+  TeacherQuestionBatchId,
+  TeacherQuestionBatchSaveRequest,
+  TeacherQuestionDocumentImageUpload,
+  TeacherQuestionDocumentPayload,
+  TeacherQuestionDocumentRequest,
+  TeacherQuestionDocumentResult,
+  TeacherQuestionDocumentSkipped,
+  TeacherQuestionDocumentSuccess,
+  TeacherQuestionFailure,
+  TeacherQuestionFolder,
+  TeacherQuestionFolderId,
+  TeacherQuestionImage,
+  TeacherQuestionImageDeleteRequest,
+  TeacherQuestionImageId,
+  TeacherQuestionImageMediaType,
+  TeacherQuestionImagePayload,
+  TeacherQuestionImageReadRequest,
+  TeacherQuestionImageReadResult,
+  TeacherQuestionImageReadSuccess,
+  TeacherQuestionImageReplaceRequest,
+  TeacherQuestionImageTarget,
+  TeacherQuestionImageUpload,
+  TeacherQuestionMutationResult,
+  TeacherQuestionMutationSuccess,
+  TeacherQuestionRejected,
+  TeacherQuestionStudentDocumentOptions,
+  TeacherQuestionTemporaryListRequest,
+  TeacherQuestionTemporaryListResult,
+  TeacherQuestionTemporaryListSuccess,
+  TeacherQuestionTemporarySaveRequest,
+  TeacherQuestionTemporarySaveResult,
+  TeacherQuestionTemporarySaveSuccess,
+  TeacherQuestionTemporarySelection,
+  TeacherQuestionUploadedDocumentRequest,
+  TeacherStudent,
+  TeacherStudentId,
+  TeacherTimetableEntry,
+  TeacherTimetableEntryId,
+  TeacherTimetableEntryKind,
+  TeacherTimetableClassUsage,
+  TeacherWeekday,
+  TeacherWeatherErrorCode,
+  TeacherWeatherFailure,
+  TeacherWeatherForecast,
+  TeacherWeatherHour,
+  TeacherWeatherRejected,
+  TeacherWeatherRequest,
+  TeacherWeatherResult,
+  TeacherWeatherSuccess,
+  TeacherWorkbenchDocument,
+  TeacherWorkbenchReadRequest,
+  TeacherWorkbenchReadResult,
+  TeacherWorkbenchState,
+  TeacherWorkbenchWriteRequest,
+  TeacherWorkbenchWriteResult,
+} from '@deepseek-ai/dsh-host-teacher-workbench/types'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -107,6 +216,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
   try {
     for (const contribution of [
       commandsRemote, goalsRemote, dynamicRemote, pluginInventoryRemote, messageFeedbackRemote,
+      ocrRemote, teacherWorkbenchRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }

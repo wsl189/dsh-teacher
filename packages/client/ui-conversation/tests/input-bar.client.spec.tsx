@@ -5,7 +5,7 @@
 // decoration backdrop, error/notice strips, and the focus-keeping mousedown.
 
 import { afterEach, describe, expect, it, onTestFinished, vi } from 'vitest'
-import { act, cleanup, fireEvent, render } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
 import {
   createSnapshotStore, EMPTY_CHAT_SNAPSHOT, EMPTY_CONVERSATION_VIEWS,
@@ -86,6 +86,7 @@ interface BenchOptions {
   rightItems?: React.ReactNode
   attachments?: readonly ComposerAttachment[]
   addImages?: (files: readonly File[]) => string | null
+  extractDocuments?: InputBarProps['extractDocuments']
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
@@ -161,6 +162,7 @@ function bench(over?: BenchOptions) {
     inputActions: shell.actions,
     keyboard: shell,
     addImages: over?.addImages ?? (() => null),
+    extractDocuments: over?.extractDocuments,
     removeImage,
     draftImages: ids => ids.flatMap((id) => {
       const attachment = over?.attachments?.find(candidate => candidate.id === id)
@@ -229,12 +231,36 @@ describe('image draft rail', () => {
     const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
     // The drag never touches the composer card: the listeners are page-wide.
     expect(fireEvent.dragEnter(document.body, { dataTransfer })).toBe(false)
-    expect(view.getByRole('status').textContent).toContain('图片拖动到此处即可添加')
+    expect(view.getByRole('status').textContent).toContain('将图片或文档拖到此处即可添加')
     expect(fireEvent.dragOver(document.body, { dataTransfer })).toBe(false)
     expect(dataTransfer.dropEffect).toBe('copy')
     expect(fireEvent.drop(document.body, { dataTransfer })).toBe(false)
     expect(addImages).toHaveBeenCalledWith([image])
     expect(view.queryByRole('status')).toBeNull()
+  })
+
+  it('extracts an uploaded document into the visible draft before sending', async () => {
+    const extractDocuments = vi.fn(async () => [{
+      ok: true,
+      value: {
+        name: '校历.docx',
+        mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        markdown: '# 五月校历',
+        provider: 'mineru',
+        truncated: false,
+      },
+    }] as const)
+    const { view, shell } = bench({ draft: '请分析', extractDocuments })
+    const input = view.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const file = new File(['document'], '校历.docx', {
+      type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    })
+    fireEvent.change(input, { target: { files: [file] } })
+    await waitFor(() => {
+      expect(shell.snapshot.draft).toContain('<document name="校历.docx">\n# 五月校历\n</document>')
+    })
+    expect(shell.snapshot.draft.startsWith('请分析\n\n')).toBe(true)
+    expect(extractDocuments).toHaveBeenCalledWith([file])
   })
 
   it('keeps text drags native and hides the overlay when the drag leaves or ends', () => {
@@ -311,8 +337,8 @@ describe('image draft rail', () => {
     })
     // Oversized AND over-count AND wrong type: the format rejection wins.
     const files = [
-      new File([new ArrayBuffer(64)], 'a.pdf', { type: 'application/pdf' }),
-      new File([new ArrayBuffer(64)], 'b.pdf', { type: 'application/pdf' }),
+      new File([new ArrayBuffer(64)], 'a.txt', { type: 'text/plain' }),
+      new File([new ArrayBuffer(64)], 'b.txt', { type: 'text/plain' }),
     ]
     fireEvent.drop(document.body, { dataTransfer: { types: ['Files'], files, dropEffect: 'none' } })
     expect(addImages).toHaveBeenCalledWith(files)
@@ -357,7 +383,7 @@ describe('image draft rail', () => {
     const image = new File([Uint8Array.of(1)], 'dropped.png', { type: 'image/png' })
     const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'copy' }
     fireEvent.dragEnter(document.body, { dataTransfer })
-    expect(view.getByRole('status').textContent).toContain('当前无法添加图片')
+    expect(view.getByRole('status').textContent).toContain('当前无法添加文件')
     fireEvent.dragOver(document.body, { dataTransfer })
     expect(dataTransfer.dropEffect).toBe('none')
     fireEvent.drop(document.body, { dataTransfer })

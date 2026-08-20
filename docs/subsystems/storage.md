@@ -203,6 +203,114 @@ async closeAll(): Promise<void>
 
 Source: [`packages/storage/storage-domain/src/index.ts:69`](../../packages/storage/storage-domain/src/index.ts)
 
+<a id="ctxteacherworkbench--teacherworkbenchservice"></a>
+
+### `ctx.teacherWorkbench` — `TeacherWorkbenchService`
+
+Host service owning the revisioned workbench document.
+
+```ts cordis-catalog
+/**
+ * Read the current immutable workbench document.
+ * @param _request - Empty request object retained for a uniform Remote signature.
+ * @returns the current revision and state.
+ */
+@Remote('read') read(_request: TeacherWorkbenchReadRequest): Promise<TeacherWorkbenchReadResult>
+
+/**
+ * Replace the complete state after comparing the observed revision.
+ * @param request - observed revision and replacement state.
+ * @returns the committed document or an explicit conflict/validation failure.
+ */
+@Remote('write') write(request: TeacherWorkbenchWriteRequest): Promise<TeacherWorkbenchWriteResult>
+
+/**
+ * Resolve a configured location and fetch validated weather from the Host.
+ * @param request - district, county, or city selected in dsh settings.
+ * @returns current conditions, twelve forecast hours, or a stable failure.
+ */
+@Remote('weather') weather(request: TeacherWeatherRequest): Promise<TeacherWeatherResult>
+
+/**
+ * Persist a browser-rendered paper batch and commit its metadata.
+ * @param request - batch metadata and ordered raster payloads.
+ * @returns the committed document and generated batch id, or a stable failure.
+ */
+@Remote('saveQuestionBatch') saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Read one paper crop or student assignment copy.
+ * @param request - exact metadata-backed image target.
+ * @returns validated image bytes or a stable failure.
+ */
+@Remote('readQuestionImage') async readQuestionImage(request: TeacherQuestionImageReadRequest): Promise<TeacherQuestionImageReadResult>
+
+/**
+ * Replace one stored raster after browser-side editing.
+ * @param request - exact target plus replacement raster payload.
+ * @returns the committed document or a stable failure.
+ */
+@Remote('replaceQuestionImage') replaceQuestionImage(request: TeacherQuestionImageReplaceRequest): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Delete one paper crop or independent student copy.
+ * @param request - exact image target to remove.
+ * @returns the committed document or a stable failure.
+ */
+@Remote('deleteQuestionImage') deleteQuestionImage(request: TeacherQuestionImageDeleteRequest): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Delete one complete paper batch and every assignment derived from it.
+ * @param request - durable batch identity to remove.
+ * @returns the committed document or a stable failure.
+ */
+@Remote('deleteQuestionBatch') deleteQuestionBatch(request: TeacherQuestionBatchDeleteRequest): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Copy selected paper crops into one student's durable image collection.
+ * @param request - destination student and ordered source image ids.
+ * @returns the committed document or a stable failure.
+ */
+@Remote('assignQuestions') assignQuestions(request: TeacherQuestionAssignRequest): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Snapshot selected student images into temporary Office-generation storage.
+ * @param request - student identity and ordered assignment ids.
+ * @returns copied-image count or a stable failure.
+ */
+@Remote('saveTemporaryQuestionSelection') async saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>
+
+/**
+ * List roster students that currently have temporary Office-generation images.
+ * @param request - student identities to inspect.
+ * @returns available student selections or a stable failure.
+ */
+@Remote('listTemporaryQuestionSelections') async listTemporaryQuestionSelections( request: TeacherQuestionTemporaryListRequest, ): Promise<TeacherQuestionTemporaryListResult>
+
+/**
+ * Build one Word or PowerPoint artifact from selected stored images.
+ * @param request - output family, optional Word metadata, and ordered image targets.
+ * @returns a downloadable artifact or a stable failure.
+ */
+@Remote('generateQuestionDocument') async generateQuestionDocument(request: TeacherQuestionDocumentRequest): Promise<TeacherQuestionDocumentResult>
+
+/**
+ * Build one Word or PowerPoint file from a browser-selected image directory.
+ * @param request - selected directory name, ordered images, and output family.
+ * @returns a downloadable artifact or a stable failure.
+ */
+@Remote('generateUploadedQuestionDocument') async generateUploadedQuestionDocument( request: TeacherQuestionUploadedDocumentRequest, ): Promise<TeacherQuestionDocumentResult>
+
+/**
+ * Build one independent Word or PowerPoint file per selected student.
+ * @param request - output family and independent per-student Word options.
+ * @returns independent artifacts, skipped students, or a stable failure.
+ */
+@Remote('generateStudentDocuments') async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult>
+```
+
+Source: [`packages/host/teacher-workbench/src/index.ts:116`](../../packages/host/teacher-workbench/src/index.ts)
+
 <a id="domain-events"></a>
 
 ### `domain/*` events

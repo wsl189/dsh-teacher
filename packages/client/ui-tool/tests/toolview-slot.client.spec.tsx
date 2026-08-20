@@ -67,6 +67,7 @@ async function bench(nodes: ToolResultNode[]) {
   runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
   // ui-theme's Appearance row binds a durable scope through these two.
   runtime.provide('remote', { $on: () => () => {} })
+  runtime.provide('remote.ocr', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   runtime.provide('layout', layout)
@@ -206,6 +207,7 @@ describe('registrant declaration injection', () => {
     runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
     // ui-theme's Appearance row binds a durable scope through these two.
     runtime.provide('remote', { $on: () => () => {} })
+    runtime.provide('remote.ocr', {})
     runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     const locale = new LocaleRuntime(runtime.ctx)

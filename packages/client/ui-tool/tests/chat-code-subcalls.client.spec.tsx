@@ -161,6 +161,7 @@ async function bench(snapshot: ConversationSnapshot) {
   ctx.provide('connection', { api: { settings: {} }, isLoopback: false } as never)
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('remote.ocr', {} as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
