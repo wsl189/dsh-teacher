@@ -1,0 +1,8 @@
+- textbox "描述你想要构建的内容"
+- button "命令":
+  - img
+- button "访问模式，当前：Workspace Write": Workspace Write
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "发送消息" [disabled]

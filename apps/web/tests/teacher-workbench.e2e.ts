@@ -30,6 +30,8 @@ const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-dele
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
 const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
 const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
+const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
+const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
 const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const MODE = webSnapshotMode()
@@ -221,6 +223,19 @@ describe('web e2e: durable teacher workbench', () => {
     await page.locator('[data-composer-card]').waitFor({ timeout: 10_000 })
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('returns to the conversation when the current Session is reselected', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-conversation-return'))
+    await openModule('日常管理')
+    await showConversation()
+    await page.locator('[data-composer-card]').waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      CONVERSATION_RETURN_EXPECTED,
+      await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd),
+      MODE,
+    )
+    expect(tripwire.pageErrors).toEqual([])
+  })
 
   it('announces a denied microphone request from every voice command', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-voice-error'))
@@ -685,6 +700,32 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('lays out teacher settings in full-width groups', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-settings-layout'))
+    await showConversation()
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const settings = page.getByRole('dialog', { name: '设置' })
+    await settings.waitFor({ timeout: 10_000 })
+    const settingsGroup = settings.locator('[class*="settingsGroup"]').filter({ hasText: '教师工作台' })
+    const [groupBox, headBox, sectionsBox] = await Promise.all([
+      settingsGroup.boundingBox(),
+      settingsGroup.locator('[class*="settingsHead"]').boundingBox(),
+      settingsGroup.locator('[class*="settingsSections"]').boundingBox(),
+    ])
+    if (groupBox === null || headBox === null || sectionsBox === null) throw new Error('teacher settings layout has no box')
+    expect(headBox.y + headBox.height).toBeLessThanOrEqual(sectionsBox.y)
+    expect(Math.abs(groupBox.x - sectionsBox.x)).toBeLessThan(1)
+    expect(Math.abs(groupBox.width - sectionsBox.width)).toBeLessThan(1)
+    await compareOrRefreshGolden(
+      SETTINGS_EXPECTED,
+      await captureStableAria(page, '[class*="settingsGroup"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await settings.getByRole('button', { name: '关闭' }).click()
+    await settings.waitFor({ state: 'hidden', timeout: 10_000 })
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('stores workbench parameters through General settings', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-settings'))
     await showConversation()
@@ -700,6 +741,8 @@ describe('web e2e: durable teacher workbench', () => {
       ['满分', '150'],
       ['优秀线', '120'],
       ['及格线', '90'],
+      ['切题清晰度倍率', '2.5'],
+      ['切题边距', '18'],
     ] as const) {
       const input = settings.getByLabel(label)
       await input.fill(value)
@@ -719,6 +762,8 @@ describe('web e2e: durable teacher workbench', () => {
     expect(document).toContain('scoreFullMark: 150')
     expect(document).toContain('excellentScore: 120')
     expect(document).toContain('passScore: 90')
+    expect(document).toContain('questionRenderScale: 2.5')
+    expect(document).toContain('questionCropPadding: 18')
 
     const originalFetch = globalThis.fetch
     globalThis.fetch = teacherWeatherFetch

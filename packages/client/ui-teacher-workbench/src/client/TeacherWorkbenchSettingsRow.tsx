@@ -81,33 +81,49 @@ export function TeacherWorkbenchSettingsRow({ useTeacherSettings, setSetting, t 
         <div className={css.settingsTitle}>{t('settings.title')}</div>
         <div className={css.settingsDescription}>{t('settings.description')}</div>
       </div>
-      <div className={css.settingsFields}>
-        <label><span>{t('settings.academicYear')}</span><input disabled={disabled} value={draft.academicYear} onChange={(event) => { setText('academicYear', event.target.value) }} onBlur={(event) => { persistText('academicYear', event.currentTarget.value) }} placeholder="2026" /></label>
-        <label><span>{t('settings.teacherName')}</span><input disabled={disabled} value={draft.teacherName} onChange={(event) => { setText('teacherName', event.target.value) }} onBlur={(event) => { persistText('teacherName', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.schoolName')}</span><input disabled={disabled} value={draft.schoolName} onChange={(event) => { setText('schoolName', event.target.value) }} onBlur={(event) => { persistText('schoolName', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.defaultSubject')}</span><input disabled={disabled} value={draft.defaultSubject} onChange={(event) => { setText('defaultSubject', event.target.value) }} onBlur={(event) => { persistText('defaultSubject', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.weatherLocation')}</span><input disabled={disabled} maxLength={80} value={draft.weatherLocation} onChange={(event) => { setText('weatherLocation', event.target.value) }} onBlur={(event) => { persistText('weatherLocation', event.currentTarget.value) }} /></label>
-        <label>
-          <span>{t('settings.speechLanguage')}</span>
-          <select
-            disabled={disabled}
-            value={draft.speechLanguage}
-            onChange={(event) => {
-              const value = event.target.value
-              setText('speechLanguage', value)
-              persist('speechLanguage', value)
-            }}
-          >
-            <option value="zh-CN">简体中文（中国大陆）</option>
-            <option value="zh-TW">繁體中文（台灣）</option>
-            <option value="en-US">English (United States)</option>
-          </select>
-        </label>
-        <label><span>{t('settings.fullMark')}</span><input type="number" min="1" max="1000" disabled={disabled} value={draft.scoreFullMark} onChange={(event) => { setNumber('scoreFullMark', event.target.value) }} onBlur={(event) => { persistNumber('scoreFullMark', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.excellent')}</span><input type="number" min="0" max={draft.scoreFullMark} disabled={disabled} value={draft.excellentScore} onChange={(event) => { setNumber('excellentScore', event.target.value) }} onBlur={(event) => { persistNumber('excellentScore', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.pass')}</span><input type="number" min="0" max={draft.excellentScore} disabled={disabled} value={draft.passScore} onChange={(event) => { setNumber('passScore', event.target.value) }} onBlur={(event) => { persistNumber('passScore', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.questionRenderScale')}</span><input type="number" min="1" max="4" step="0.25" disabled={disabled} value={draft.questionRenderScale} onChange={(event) => { setNumber('questionRenderScale', event.target.value) }} onBlur={(event) => { persistNumber('questionRenderScale', event.currentTarget.value) }} /></label>
-        <label><span>{t('settings.questionCropPadding')}</span><input type="number" min="0" max="100" step="1" disabled={disabled} value={draft.questionCropPadding} onChange={(event) => { setNumber('questionCropPadding', event.target.value) }} onBlur={(event) => { persistNumber('questionCropPadding', event.currentTarget.value) }} /></label>
+      <div className={css.settingsSections}>
+        <section className={css.settingsSection} aria-label={t('settings.identityGroup')}>
+          <h3 className={css.settingsSectionTitle}>{t('settings.identityGroup')}</h3>
+          <div className={css.settingsFields}>
+            <label><span>{t('settings.academicYear')}</span><input disabled={disabled} value={draft.academicYear} onChange={(event) => { setText('academicYear', event.target.value) }} onBlur={(event) => { persistText('academicYear', event.currentTarget.value) }} placeholder="2026" /></label>
+            <label><span>{t('settings.teacherName')}</span><input disabled={disabled} value={draft.teacherName} onChange={(event) => { setText('teacherName', event.target.value) }} onBlur={(event) => { persistText('teacherName', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.schoolName')}</span><input disabled={disabled} value={draft.schoolName} onChange={(event) => { setText('schoolName', event.target.value) }} onBlur={(event) => { persistText('schoolName', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.defaultSubject')}</span><input disabled={disabled} value={draft.defaultSubject} onChange={(event) => { setText('defaultSubject', event.target.value) }} onBlur={(event) => { persistText('defaultSubject', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.weatherLocation')}</span><input disabled={disabled} maxLength={80} value={draft.weatherLocation} onChange={(event) => { setText('weatherLocation', event.target.value) }} onBlur={(event) => { persistText('weatherLocation', event.currentTarget.value) }} /></label>
+            <label>
+              <span>{t('settings.speechLanguage')}</span>
+              <select
+                disabled={disabled}
+                value={draft.speechLanguage}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setText('speechLanguage', value)
+                  persist('speechLanguage', value)
+                }}
+              >
+                <option value="zh-CN">简体中文（中国大陆）</option>
+                <option value="zh-TW">繁體中文（台灣）</option>
+                <option value="en-US">English (United States)</option>
+              </select>
+            </label>
+          </div>
+        </section>
+        <section className={css.settingsSection} aria-label={t('settings.scoreGroup')}>
+          <h3 className={css.settingsSectionTitle}>{t('settings.scoreGroup')}</h3>
+          <div className={css.settingsFields}>
+            <label><span>{t('settings.fullMark')}</span><input type="number" min="1" max="1000" disabled={disabled} value={draft.scoreFullMark} onChange={(event) => { setNumber('scoreFullMark', event.target.value) }} onBlur={(event) => { persistNumber('scoreFullMark', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.excellent')}</span><input type="number" min="0" max={draft.scoreFullMark} disabled={disabled} value={draft.excellentScore} onChange={(event) => { setNumber('excellentScore', event.target.value) }} onBlur={(event) => { persistNumber('excellentScore', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.pass')}</span><input type="number" min="0" max={draft.excellentScore} disabled={disabled} value={draft.passScore} onChange={(event) => { setNumber('passScore', event.target.value) }} onBlur={(event) => { persistNumber('passScore', event.currentTarget.value) }} /></label>
+          </div>
+        </section>
+        <section className={css.settingsSection} aria-label={t('settings.questionCuttingGroup')}>
+          <h3 className={css.settingsSectionTitle}>{t('settings.questionCuttingGroup')}</h3>
+          <p className={css.settingsSectionDescription}>{t('settings.questionCuttingDescription')}</p>
+          <div className={css.settingsFields}>
+            <label><span>{t('settings.questionRenderScale')}</span><input type="number" min="1" max="4" step="0.25" disabled={disabled} value={draft.questionRenderScale} onChange={(event) => { setNumber('questionRenderScale', event.target.value) }} onBlur={(event) => { persistNumber('questionRenderScale', event.currentTarget.value) }} /></label>
+            <label><span>{t('settings.questionCropPadding')}</span><input type="number" min="0" max="100" step="1" disabled={disabled} value={draft.questionCropPadding} onChange={(event) => { setNumber('questionCropPadding', event.target.value) }} onBlur={(event) => { persistNumber('questionCropPadding', event.currentTarget.value) }} /></label>
+          </div>
+        </section>
       </div>
     </div>
   )

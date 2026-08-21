@@ -22,7 +22,7 @@ Status: implemented
 
 [`@deepseek-ai/dsh-host-teacher-workbench`](../../../../packages/host/teacher-workbench) 拥有媒体持久化与文档生成。版本 6 在带修订号的 domain 文档中包含试卷批次、嵌套学生目录与分发元数据，并要求其学生属于名册班级；PNG、JPEG 与 WebP 字节则位于已配置文件系统根目录下。目录图拒绝未知所有者、跨学生父目录、循环与同级重名。批次写入使用生成的不透明 id、路径包含关系检查、解码字节上限、临时兄弟目录与原子重命名。分发内容是在经过清理的学年、组合年级/班级、学生和所选嵌套目录名下创建的独立副本。目录删除会级联移除后代与其中的分发副本；移除班级和学生也会删除从属目录与分发记录。专用 Remote 负责读取或替换一张经过校验的图片、保存或删除批次、分发所选图片、从已存目标生成、直接从临时目录上传生成，以及返回带跳过列表的逐学生独立 Word 或 PowerPoint 产物。Word 使用四边 2 厘米的 A4 页面、可选居中 16 磅加粗标题、可选右对齐 9 磅姓名/日期和居中图片段落。PowerPoint 使用 13.333×7.5 英寸页面，每页一张不放大的图片，并保持参考系统左侧 0.5 厘米、顶部和右侧 1 厘米的边距，不添加标题或说明文字。
 
-`ui-teacher-workbench` 设置命名空间增加当前学年、PDF 渲染倍率与切题边距。`TeacherClass` 可选地保留学年目录，使参考应用的多年份层级能够持久化；在该字段出现前写入的文档会回退到已配置的当前学年。Host 注册 `teacher-workbench` 设置区段，包含批次根目录、学生根目录、每图字节数和每批次字节数；[`@deepseek-ai/dsh-client-ui-settings-plugins`](../../../../packages/client/ui-settings-plugins) 在普通插件配置页中开放这些字段。Web 组合默认把存储位置设为 `~/.dsh/teacher-workbench/segments` 与 `~/.dsh/teacher-workbench/students`。本功能有意不包含试题搜索、错题分析或 LLM 二次筛选，也不增加任何模型可见提示词、工具或会话事件。
+`ui-teacher-workbench` 设置命名空间增加当前学年、PDF 渲染倍率与切题边距。常规设置行在说明下方使用全宽的“基础信息”“成绩标准”和“试题切割”分组。渲染倍率提供给 PDF.js，用于超限页面的 OCR 栅格化和最终切题图片分辨率；切题边距以 MinerU 版面单位扩展已接受的边界，相邻元素会限制扩展范围。`TeacherClass` 可选地保留学年目录，使参考应用的多年份层级能够持久化；在该字段出现前写入的文档会回退到已配置的当前学年。Host 注册 `teacher-workbench` 设置区段，包含批次根目录、学生根目录、每图字节数和每批次字节数；[`@deepseek-ai/dsh-client-ui-settings-plugins`](../../../../packages/client/ui-settings-plugins) 在普通插件配置页中开放这些字段。Web 组合默认把存储位置设为 `~/.dsh/teacher-workbench/segments` 与 `~/.dsh/teacher-workbench/students`。本功能有意不包含试题搜索、错题分析或 LLM 二次筛选，也不增加任何模型可见提示词、工具或会话事件。
 
 ## 已考虑的替代方案
 

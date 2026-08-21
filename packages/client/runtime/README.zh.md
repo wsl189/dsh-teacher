@@ -28,6 +28,8 @@ Workspace 和 Session 列表各自具有单调的 `pending` → `ready` 基线�
 
 SlotRegistry 分别为 renderer 提供 `useSessions` 与 `useWorkspaces` 的裸 observable；ui-renderer 创建钩子。Workspace 业务状态不会进入 `SessionListState` 或条目 store。
 
+每次成功执行显式 `SessionRuntime.open`、`openSubagent` 或 `clear` 命令，都会在更新 selection 后发出 `sessions/navigate`。再次选择当前 Session 也会发出该事件，因此，即使 `SessionListState.current` 没有变化，临时主界面仍可在明确的会话行或新会话导航发生时关闭。
+
 `abbreviateHomePath` 是 Web Workspace 悬停卡片与 Tool 摘要使用的仅展示 POSIX 家目录缩写；Windows 盘符或 UNC 路径保持原样，缺失、空或文件系统根的 home 不改写路径。
 
 `indexSubagentDescendants()` 从保留的列表镜像中派生每个 parent 的后代总数与运行中后代数。它只沿不间断的 `origin: 'subagent'` 祖先链追踪，因此普通 fork 会开启独立的归属子树；遇到环时，追踪会停止但不会抛出异常，缺失的 parent 则会保留为无害的键，直至其摘要到达。

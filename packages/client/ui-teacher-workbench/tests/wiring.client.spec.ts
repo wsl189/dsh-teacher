@@ -12,6 +12,11 @@ import * as invariant from '../src/invariant.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { createTeacherWorkbenchViewStore } from '../src/client/view-store.ts'
 
+const pdfMocks = vi.hoisted(() => ({ workerHandler: { setup: vi.fn() } }))
+
+vi.mock('pdfjs-dist', () => ({ getDocument: vi.fn() }))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: pdfMocks.workerHandler }))
+
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
@@ -129,13 +134,6 @@ describe('teacher-workbench browser wiring', () => {
       sessions: {
         list: {
           getSnapshot: () => ({ current: currentSession }),
-          subscribe: (listener: () => void) => {
-            navigationListeners.push(listener)
-            return () => {
-              const index = navigationListeners.indexOf(listener)
-              if (index !== -1) navigationListeners.splice(index, 1)
-            }
-          },
         },
       },
       settingsScope: { bind: vi.fn(() => scope) },
@@ -145,8 +143,9 @@ describe('teacher-workbench browser wiring', () => {
       }),
       on: vi.fn((event: string, listener: () => void) => {
         if (event === 'connection/reset') resetListeners.push(listener)
+        if (event === 'sessions/navigate') navigationListeners.push(listener)
         return () => {
-          const list = resetListeners
+          const list = event === 'connection/reset' ? resetListeners : navigationListeners
           const index = list.indexOf(listener)
           if (index !== -1) list.splice(index, 1)
         }

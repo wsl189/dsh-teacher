@@ -178,12 +178,17 @@ describe('current selection (migrated from ui-layout, arbitrated into the list s
 
   it('open() writes list.current; unknown ids fail loud', async () => {
     const b = bench()
+    const navigated: Array<SessionId | undefined> = []
+    b.ctx.on('sessions/navigate', (sessionId) => { navigated.push(sessionId) })
     await feedList(b, [{ id: 's1' }])
     expect(b.svc.list.getSnapshot().current).toBeUndefined()
     b.svc.open(sid('s1'))
+    b.svc.open(sid('s1'))
     expect(b.svc.list.getSnapshot().current).toBe('s1')
+    expect(navigated).toEqual(['s1', 's1'])
     expect(() => { b.svc.open(sid('ghost')) }).toThrow(/unknown session ghost/)
     expect(b.svc.list.getSnapshot().current).toBe('s1') // failed open leaves the selection alone
+    expect(navigated).toEqual(['s1', 's1'])
   })
 
   it('clear() blanks list.current and the persisted selection', async () => {
@@ -200,6 +205,10 @@ describe('current selection (migrated from ui-layout, arbitrated into the list s
     expect(storage.get('dsh.sessions.current')).toContain('s1')
     b.svc.clear()
     expect(b.svc.list.getSnapshot().current).toBeUndefined()
+    const navigated: Array<SessionId | undefined> = []
+    b.ctx.on('sessions/navigate', (sessionId) => { navigated.push(sessionId) })
+    b.svc.clear()
+    expect(navigated).toEqual([undefined])
     // Persisted wipe: a fresh service with the same storage stays on empty.
     const again = bench()
     await feedList(again, [{ id: 's1' }])
@@ -381,6 +390,8 @@ describe('slot-store scope prune hook', () => {
 describe('catalog-addressed navigation', () => {
   it('uses catalog labels for a listed addressed route', async () => {
     const b = bench()
+    const navigated: Array<SessionId | undefined> = []
+    b.ctx.on('sessions/navigate', (sessionId) => { navigated.push(sessionId) })
     b.api.onSubagentList = (payload) => {
       const { parentSessionId } = payload as { parentSessionId: SessionId }
       if (parentSessionId === sid('root')) {
@@ -416,6 +427,7 @@ describe('catalog-addressed navigation', () => {
 
     expect(b.svc.list.getSnapshot().byId[sid('child')]?.displayTitle).toBe('Child')
     expect(b.svc.list.getSnapshot().byId[sid('grandchild')]?.displayTitle).toBe('Grandchild')
+    expect(navigated).toEqual([sid('grandchild')])
   })
 
   it('projects a directly opened descendant route without retaining ancestor scopes or addresses', async () => {

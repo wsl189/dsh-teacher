@@ -26,6 +26,8 @@ Workspace and Session lists have independent monotone `pending` → `ready` base
 
 SlotRegistry gives the renderer separate bare observables for `useSessions` and `useWorkspaces`; ui-renderer creates the hooks. Workspace business state does not enter `SessionListState` or an entry store.
 
+Every successful explicit `SessionRuntime.open`, `openSubagent`, or `clear` command emits `sessions/navigate` after updating selection. Reselecting the current Session emits too, allowing temporary primary surfaces to close for an intentional Session-row or New Session navigation even when `SessionListState.current` does not change.
+
 `abbreviateHomePath` is the display-only POSIX home abbreviation used by Web Workspace hover cards and Tool summaries; a Windows drive or UNC path stays verbatim, and a missing, empty, or filesystem-root home leaves the path unchanged.
 
 `indexSubagentDescendants()` derives per-parent total and running descendant counts from the retained list mirror. It follows only uninterrupted `origin: 'subagent'` ancestry, so an ordinary fork starts a separate ownership subtree; cycles stop without throwing, and a missing parent remains a harmless key until its summary arrives.

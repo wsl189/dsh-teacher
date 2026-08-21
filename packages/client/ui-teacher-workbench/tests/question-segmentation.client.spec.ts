@@ -180,10 +180,14 @@ describe('extractWorkbenchLayout', () => {
     source.addPage([600, 800])
     const file = new File([Uint8Array.from(await source.save())], 'scan.pdf', { type: 'application/pdf' })
     const render = vi.fn(() => ({ promise: Promise.resolve() }))
+    const rasterScales: number[] = []
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve({
         getPage: async () => ({
-          getViewport: ({ scale }: { scale: number }) => ({ width: 10 * scale, height: 10 * scale }),
+          getViewport: ({ scale }: { scale: number }) => {
+            rasterScales.push(scale)
+            return { width: 10 * scale, height: 10 * scale }
+          },
           render,
         }),
       }),
@@ -227,5 +231,6 @@ describe('extractWorkbenchLayout', () => {
       value: { pages: [{ pageIndex: 0 }] },
     })
     expect(render).toHaveBeenCalledTimes(2)
+    expect(rasterScales).toEqual([2, 1])
   })
 })

@@ -88,15 +88,7 @@ export function apply(ctx: ClientContext): void {
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
     hooks: { workbench: controller, teacherSettings: settings },
     ensure: () => controller.ensure(),
-    subscribeSessionNavigation: (listener) => {
-      let current = ctx.sessions.list.getSnapshot().current
-      return ctx.sessions.list.subscribe(() => {
-        const next = ctx.sessions.list.getSnapshot().current
-        if (next === current) return
-        current = next
-        listener()
-      })
-    },
+    subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),
     loadWeather: (location, signal) => fetchTeacherWeather(location, ctx.remote.teacherWorkbench, signal),
