@@ -2,7 +2,7 @@
 
 English | [中文](ocr.zh.md)
 
-The OCR capability separates provider-neutral extraction ([dsh-ocr](../../packages/ocr/ocr)) from the self-hosted MinerU implementation ([dsh-ocr-mineru](../../packages/ocr/ocr-mineru)) and its browser Consumers. `ctx.ocr` selects one provider at execution time and exposes normalized Markdown through the Typert `ocr.extract` Remote or normalized page geometry through `ocr.layout`. Raw uploads and geometry are transient; each Consumer owns any persisted text or source-document crops.
+The OCR capability separates provider-neutral extraction ([dsh-ocr](../../packages/ocr/ocr)) from the self-hosted MinerU implementation ([dsh-ocr-mineru](../../packages/ocr/ocr-mineru)) and its Consumers. `ctx.ocr` selects one provider at execution time and exposes normalized Markdown through the Typert `ocr.extract` Remote or the same-process abortable operation, and normalized page geometry through `ocr.layout`. Browser uploads and geometry are transient; the filesystem `read_document` Consumer logs its rendered Markdown as an ordinary tool result, while each domain Consumer owns any later durable records or source-document crops.
 
 Source: [`packages/ocr/ocr/src/types.ts`](../../packages/ocr/ocr/src/types.ts)
 
@@ -151,9 +151,9 @@ interface OcrLayoutDocument {
 ```
 
 ```ts type-equiv
-/** Provider limits a browser Consumer uses to split source PDFs before upload. */
+/** Provider limits Consumers use to bound extraction and split structured source PDFs. */
 interface OcrLayoutLimits {
-  /** Maximum decoded bytes accepted in one layout request. */
+  /** Maximum decoded bytes accepted in one extraction or layout request. */
   readonly maxFileBytes: number
   /** Maximum pages parsed in one layout request. */
   readonly maxPagesPerRequest: number
@@ -201,7 +201,7 @@ interface OcrProvider {
   readonly id: string
   /** Cheap local usability check that performs no network request. */
   available(): boolean
-  /** @returns current upload and page limits for one structured-layout request. */
+  /** @returns current byte and page limits for extraction requests. */
   layoutLimits(): OcrLayoutLimits
   /**
    * Extract one document.
@@ -252,6 +252,15 @@ registerProvider(provider: OcrProvider): () => void
 @Remote('extract') async extract(request: OcrExtractRequest): Promise<OcrExtractResult>
 
 /**
+ * Extract one document for a same-process Consumer with cooperative cancellation.
+ * Browser Consumers use {@link extract}, whose JSON Remote cannot carry an AbortSignal.
+ * @param request - base64 document bytes and source metadata.
+ * @param signal - aborts provider work when the calling operation is cancelled.
+ * @returns normalized Markdown or a stable failure.
+ */
+async extractAbortable(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractResult>
+
+/**
  * Extract structured page geometry through the selected provider.
  * @param request - base64 document bytes and optional inclusive page window.
  * @returns normalized pages and coordinates or a stable failure.
@@ -259,7 +268,7 @@ registerProvider(provider: OcrProvider): () => void
 @Remote('layout') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>
 
 /**
- * Resolve the selected provider's current structured-layout request limits.
+ * Resolve the selected provider's current extraction request limits.
  * @returns upload and page limits, or a stable provider-selection failure.
  */
 @Remote('layoutLimits') layoutLimits(): OcrLayoutLimitsResult

@@ -26,6 +26,8 @@
   - button "月考"
   - button "从试题库添加": +
   - button "删除"
+  - button "李同学"
+  - button "删除"
 - complementary "试题图片库":
   - heading "试题图片库" [level=2]
   - button "关闭工作台"

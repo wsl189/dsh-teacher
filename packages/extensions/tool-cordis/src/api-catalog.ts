@@ -1101,6 +1101,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'normalized Markdown or a stable failure.',
       },
       {
+        signature: 'async extractAbortable(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractResult>',
+        description: 'Extract one document for a same-process Consumer with cooperative cancellation. Browser Consumers use extract, whose JSON Remote cannot carry an AbortSignal.',
+        parameters: [{ name: 'request', description: 'base64 document bytes and source metadata.' }, { name: 'signal', description: 'aborts provider work when the calling operation is cancelled.' }],
+        returns: 'normalized Markdown or a stable failure.',
+      },
+      {
         signature: '@Remote(\'layout\') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>',
         description: 'Extract structured page geometry through the selected provider.',
         parameters: [{ name: 'request', description: 'base64 document bytes and optional inclusive page window.' }],
@@ -1108,7 +1114,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'layoutLimits\') layoutLimits(): OcrLayoutLimitsResult',
-        description: 'Resolve the selected provider\'s current structured-layout request limits.',
+        description: 'Resolve the selected provider\'s current extraction request limits.',
         parameters: [],
         returns: 'upload and page limits, or a stable provider-selection failure.',
       },
@@ -4902,6 +4908,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherLessonResourceId = Branded<\'TeacherLessonResourceId\'>;',
   },
   {
+    name: 'TeacherNotice',
+    declaration: 'export interface TeacherNotice {\n    readonly id: TeacherNoticeId;\n    readonly title: string;\n    readonly content: string;\n    readonly createdAt: number;\n}',
+  },
+  {
+    name: 'TeacherNoticeId',
+    declaration: 'export type TeacherNoticeId = Branded<\'TeacherNoticeId\'>;',
+  },
+  {
+    name: 'TeacherNoticeTemplate',
+    declaration: 'export interface TeacherNoticeTemplate {\n    readonly id: TeacherNoticeTemplateId;\n    readonly name: string;\n    readonly icon: \'calendar\' | \'safety\' | \'study\' | \'activity\' | \'payment\' | \'meeting\' | \'material\' | \'custom\';\n    readonly hint: string;\n    readonly starter: string;\n    readonly custom: boolean;\n}',
+  },
+  {
+    name: 'TeacherNoticeTemplateId',
+    declaration: 'export type TeacherNoticeTemplateId = Branded<\'TeacherNoticeTemplateId\'>;',
+  },
+  {
     name: 'TeacherQuestionAssignment',
     declaration: 'export interface TeacherQuestionAssignment {\n    readonly id: TeacherQuestionAssignmentId;\n    readonly studentId: TeacherStudentId;\n    readonly sourceImageId: TeacherQuestionImageId;\n    readonly folderId?: TeacherQuestionFolderId;\n    readonly fileName: string;\n    readonly relativePath: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
@@ -5131,7 +5153,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherRecordTemplateKind',
-    declaration: 'export type TeacherRecordTemplateKind = \'observation\' | \'teaching\';',
+    declaration: 'export type TeacherRecordTemplateKind = \'observation\' | \'teaching\' | \'class\' | \'talk\' | \'summary\';',
+  },
+  {
+    name: 'TeacherSeatingLayout',
+    declaration: 'export interface TeacherSeatingLayout {\n    readonly classId: TeacherClassId;\n    readonly rows: number;\n    readonly columns: number;\n    readonly slots: readonly (TeacherStudentId | null)[];\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherSegmentedQuestion',
@@ -5251,7 +5277,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherWorkbenchState',
-    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly ledgerCategories: readonly TeacherLedgerCategory[];\n    readonly ledgerEntries: readonly TeacherLedgerEntry[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
+    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly ledgerCategories: readonly TeacherLedgerCategory[];\n    readonly ledgerEntries: readonly TeacherLedgerEntry[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly noticeTemplates: readonly TeacherNoticeTemplate[];\n    readonly notices: readonly TeacherNotice[];\n    readonly seatingLayouts: readonly TeacherSeatingLayout[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
   },
   {
     name: 'TeacherWorkbenchSuccess',

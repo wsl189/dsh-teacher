@@ -24,7 +24,7 @@ See the generated [configuration catalog](../../../docs/config-catalog.md) for t
 
 ## Model Experience
 
-Indirectly, through Consumers such as `dsh-client-ui-conversation`, which may place extracted Markdown into an ordinary user message while this runtime contributes no prompt or schema itself.
+Indirectly, through `dsh-tool-fs`, which registers the model-facing `read_document` schema while `ctx.ocr` is present, and browser Consumers such as `dsh-client-ui-conversation`, which may place extracted Markdown into an ordinary user message; this runtime contributes no prompt or schema itself.
 
 #### KV Cache effect
 
@@ -34,5 +34,5 @@ No direct invalidation; the Consumer that submits extracted text owns request-pr
 
 - **JSON base64 transport per request** - each request carries one complete file and expands its bytes before provider processing. A Consumer can split a PDF against `layoutLimits`, but streaming and resumable uploads are not exposed.
 - **No extraction cache** - repeated uploads invoke the selected provider again; Consumers that need deduplication must own it together with their retention policy.
-- **No browser cancellation Remote** - provider calls have deployment timeouts, but the current Typert method does not carry a browser abort signal.
+- **No browser cancellation Remote** - same-process Consumers can forward an abort signal through `extractAbortable`, but the Typert method cannot carry a browser abort signal.
 - **Provider-defined layout fidelity** - page coordinates and reading order are normalized, but their recognition quality remains the selected parser's responsibility; domain Consumers must validate or review derived regions.

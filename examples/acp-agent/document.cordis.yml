@@ -1,0 +1,14 @@
+# Document-reader overlay: mount the provider-neutral OCR runtime and a
+# deterministic provider so the assembled filesystem tool can read a PDF.
+- id: base
+  name: '@deepseek-ai/cordis-plugin-include'
+  config:
+    path: ./cordis.yml
+
+- id: ocr
+  name: '@deepseek-ai/dsh-ocr'
+  config:
+    provider: snapshot
+
+- id: snapshot-ocr
+  name: './tests/fixtures/ocr-provider.ts'

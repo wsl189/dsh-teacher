@@ -19,6 +19,15 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
   const updateQueue = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
   const cancel = vi.fn(() => Promise.resolve({ ok: true as const, value: { accepted: true as const } }))
   const loadOlder = vi.fn(() => Promise.resolve())
+  const extract = vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: {
+      ok: true as const,
+      value: {
+        name: 'document.pdf', mediaType: 'application/pdf', markdown: '# OCR', provider: 'mineru', truncated: false,
+      },
+    },
+  }))
   await runtime.sessions.add({
     id: 's1',
     session: { prompt, updateQueue, cancel, loadOlder, ...(readAttachment === undefined ? {} : { readAttachment }) },
@@ -29,12 +38,13 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
   const fiber = runtime.ctx.plugin(ConversationController, {
     input: hub,
     blocks: new ComposerBlockRegistry(),
+    ocr: { extract },
   })
   await fiber.await()
   const root = runtime.ctx.get('conversation') as ConversationController
   const scoped = runtime.sessions.scope('s1')!.get('conversation') as ConversationController
   const shell = hub.shellFor(runtime.sessions.binding('s1')!)
-  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder }
+  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder, extract }
 }
 
 describe('ConversationController', () => {
@@ -115,6 +125,50 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('keeps OCR text out of the draft, gates send until MinerU settles, and clears documents after admission', async () => {
+    const b = await bench()
+    const pending = Promise.withResolvers<Awaited<ReturnType<typeof b.extract>>>()
+    b.extract.mockReturnValueOnce(pending.promise)
+    const sessionId = b.runtime.sessions.behavior('s1').sessionId
+    b.root.addDraftDocuments(sessionId, [new File([Uint8Array.of(1, 2)], 'roster.xlsx', {
+      type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    })])
+    expect(b.root.documentStore(sessionId).getSnapshot()).toEqual([
+      expect.objectContaining({ name: 'roster.xlsx', status: 'extracting' }),
+    ])
+    expect(b.shell.snapshot.draft).toBe('')
+    await expect(b.root.sendSession(b.runtime.sessions.behavior('s1'), '导入学生名册', [], 'queue'))
+      .rejects.toThrow('document OCR is still running')
+    expect(b.prompt).not.toHaveBeenCalled()
+
+    pending.resolve({
+      ok: true,
+      value: {
+        ok: true,
+        value: {
+          name: 'roster.xlsx',
+          mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+          markdown: '| 姓名 |\n| --- |\n| 张三 |',
+          provider: 'mineru',
+          truncated: false,
+        },
+      },
+    })
+    await vi.waitFor(() => {
+      expect(b.root.documentStore(sessionId).getSnapshot()[0]?.status).toBe('ready')
+    })
+    await expect(b.root.sendSession(b.runtime.sessions.behavior('s1'), '导入学生名册', [], 'queue'))
+      .resolves.toEqual({ kind: 'success' })
+    expect(b.prompt).toHaveBeenCalledWith(
+      [{ type: 'text', text: '导入学生名册' }],
+      'queue',
+      undefined,
+      [{ name: 'roster.xlsx', markdown: '| 姓名 |\n| --- |\n| 张三 |', truncated: false }],
+    )
+    expect(b.root.documentStore(sessionId).getSnapshot()).toEqual([])
+    await b.runtime.dispose()
+  })
+
   it('invalidates pending historical image loads when the rendered session is released', async () => {
     const read = Promise.withResolvers<Awaited<ReturnType<SessionFace['readAttachment']>>>()
     const b = await bench(() => read.promise)
@@ -140,6 +194,7 @@ describe('ConversationController', () => {
     await bare.plugin(ConversationController, {
       input: new InputHub(bare, makeTranslate(zh, {})),
       blocks: new ComposerBlockRegistry(),
+      ocr: { extract: vi.fn() },
     }).await()
     const orphan = bare.get('conversation') as ConversationController
     await expect(orphan.send('x')).rejects.toThrow(/sessions service unavailable/)

@@ -1,0 +1,38 @@
+- 'button "上下文注入 mineru-ocr OCR document: lesson-plan.docx"':
+  - img
+  - img
+  - text: "上下文注入 mineru-ocr OCR document: lesson-plan.docx"
+- text: 请总结这份教学计划 {{clock}}
+- button "复制":
+  - img
+- button "上下文注入 @deepseek-ai/dsh-system-prompt":
+  - img
+  - img
+  - text: 上下文注入 @deepseek-ai/dsh-system-prompt
+- button "上下文注入 skill-catalog":
+  - img
+  - img
+  - text: 上下文注入 skill-catalog
+- paragraph: 已收到教学计划。
+- button "复制":
+  - img
+- button "好的回答":
+  - img
+- button "有问题的回答":
+  - img
+- button "在新对话中分支":
+  - img
+- text: {{clock}} 用时 {{duration}} 首 token {{duration}} {{throughput}} tok/s
+- textbox "给智能体发消息"
+- button "命令":
+  - img
+- button "上传文件并用 MinerU OCR 识别"
+- button "Choose File"
+- button "语音输入（也可长按空格）"
+- button "访问模式，当前：Workspace Write": Workspace Write
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "上下文已用 0%"
+- button "发送消息" [disabled]
+- text: 1 轮 · 1 步 LLM {{duration}} 首 token 平均 {{duration}} · {{throughput}} tok/s 缓存命中 0% 输入 24 tok · 输出 8 tok

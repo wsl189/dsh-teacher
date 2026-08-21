@@ -3,7 +3,19 @@
 import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-runtime/client'
 
 /** Daily management, timetable, and the four migrated teaching modules. */
-export type TeacherWorkbenchModule = 'daily' | 'timetable' | 'questions' | 'lesson' | 'students' | 'scores' | 'records'
+export type TeacherWorkbenchModule =
+  | 'daily'
+  | 'timetable'
+  | 'questions'
+  | 'lesson'
+  | 'students'
+  | 'scores'
+  | 'records'
+  | 'family'
+  | 'classRecords'
+  | 'talkRecords'
+  | 'seating'
+  | 'classSummary'
 
 /** Shared state rendered by the sidebar entry and full workbench surface. */
 export interface TeacherWorkbenchViewState {

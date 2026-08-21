@@ -98,10 +98,13 @@ export {
   teacherLessonResourceSchema,
   teacherLedgerCategorySchema,
   teacherLedgerEntrySchema,
+  teacherNoticeSchema,
+  teacherNoticeTemplateSchema,
   teacherQuickNoteSchema,
   teacherQuestionFolderSchema,
   teacherRecordSchema,
   teacherRecordTemplateSchema,
+  teacherSeatingLayoutSchema,
   teacherWorkbenchDocumentSchema,
   teacherWorkbenchDomainSpec,
   teacherWorkbenchStateSchema,
@@ -658,6 +661,12 @@ function snapshotState(state: TeacherWorkbenchState): TeacherWorkbenchState {
     records: Object.freeze(state.records.map(item => Object.freeze({
       ...item,
       values: Object.freeze({ ...item.values }),
+    }))),
+    noticeTemplates: Object.freeze(state.noticeTemplates.map(item => Object.freeze({ ...item }))),
+    notices: Object.freeze(state.notices.map(item => Object.freeze({ ...item }))),
+    seatingLayouts: Object.freeze(state.seatingLayouts.map(item => Object.freeze({
+      ...item,
+      slots: Object.freeze([...item.slots]),
     }))),
     exams: Object.freeze(state.exams.map(item => Object.freeze({
       ...item,

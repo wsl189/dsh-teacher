@@ -29,7 +29,7 @@ const t: WorkbenchSurfaceProps['t'] = (key, params) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [],
+  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 const globalProps: Pick<SidebarWorkbenchProps, 'useSessions' | 'useWorkspaces'> = {
@@ -61,13 +61,14 @@ it('formats fractional metrics to one decimal place', () => {
 })
 
 describe('SidebarWorkbench', () => {
-  it('expands seven functions and opens the selected module', () => {
+  it('expands twelve functions inside one scroll region and opens the selected module', () => {
     const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
     const state = { expanded: true, active: 'lesson' as const, open: true }
     const rendered = render(
       <SidebarWorkbench {...globalProps} wide useStore={selector => selector(state)} actions={actions} t={t} />,
     )
-    expect(screen.getAllByRole('button')).toHaveLength(8)
+    expect(screen.getAllByRole('button')).toHaveLength(13)
+    expect(screen.getByLabelText('教学工作').className).toContain('sidebarModules')
     fireEvent.click(screen.getByRole('button', { name: '学生名册' }))
     expect(actions.openModule).toHaveBeenCalledWith('students')
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
@@ -112,21 +113,27 @@ describe('LessonPreparation', () => {
 })
 
 describe('StudentRoster', () => {
-  it('creates a class, a student, and imports pasted roster rows', async () => {
+  it('creates a class, a student, and imports a recognized roster', async () => {
     const c = commands()
     const state: TeacherWorkbenchState = {
       ...emptyState(),
       classes: [{ id: 'class-a' as TeacherClassId, usage: 'roster', name: '高一（1）班', grade: '高一', subject: '数学' }],
     }
-    render(<StudentRoster state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c.value} t={t} />)
+    const rendered = render(<StudentRoster state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c.value} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '添加学生' }))
     fireEvent.change(screen.getByLabelText('姓名'), { target: { value: '张同学' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => { expect(c.value.saveStudent).toHaveBeenCalledWith(expect.objectContaining({ classId: 'class-a', name: '张同学' })) })
 
-    fireEvent.click(screen.getByRole('button', { name: '批量导入' }))
-    fireEvent.change(screen.getByLabelText('批量导入'), { target: { value: '姓名\t学号\n李同学\t002' } })
-    fireEvent.click(screen.getByRole('button', { name: '导入名册' }))
+    vi.mocked(c.value.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: { name: '名册.xlsx', mediaType: '', markdown: '| 姓名 | 学号 |\n| --- | --- |\n| 李同学 | 002 |', provider: 'mineru', truncated: false },
+    })
+    fireEvent.change(rendered.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['roster'], '名册.xlsx')] },
+    })
+    await screen.findByRole('dialog', { name: '上传并识别学生名册' })
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 名学生' }))
     await waitFor(() => { expect(c.value.importStudents).toHaveBeenCalledWith('class-a', [expect.objectContaining({ name: '李同学', studentNumber: '002' })]) })
   })
 
@@ -142,7 +149,7 @@ describe('StudentRoster', () => {
 })
 
 describe('ScoreAnalysis', () => {
-  it('imports scores and renders all three analysis modes', async () => {
+  it('imports a recognized score sheet and renders all three analysis modes', async () => {
     const c = commands()
     const state: TeacherWorkbenchState = {
       ...emptyState(),
@@ -150,18 +157,23 @@ describe('ScoreAnalysis', () => {
       students: [{ id: 'student-a' as TeacherStudentId, classId: 'class-a' as TeacherClassId, name: '张同学', studentNumber: '001', gender: '', guardian: '', relation: '', phone: '', address: '', extras: {} }],
       exams: [{ id: 'exam-a' as never, classId: 'class-a' as TeacherClassId, name: '期中', date: '2026-08-01', entries: [{ studentId: 'student-a' as TeacherStudentId, scores: { 数学: 90, 语文: 80 } }] }],
     }
-    render(<ScoreAnalysis state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c.value} t={t} />)
+    const rendered = render(<ScoreAnalysis state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c.value} t={t} />)
     expect(screen.getAllByText('170').length).toBeGreaterThan(0)
     fireEvent.click(screen.getByRole('tab', { name: '多次追踪' }))
     expect(screen.getByText(/平均分 170/)).toBeTruthy()
     fireEvent.click(screen.getByRole('tab', { name: '个人成长' }))
     expect(screen.getAllByText('170').length).toBeGreaterThan(0)
 
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
-    fireEvent.change(screen.getByLabelText('考试名称'), { target: { value: '期末' } })
+    vi.mocked(c.value.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: { name: '期末.xlsx', mediaType: '', markdown: '| 姓名 | 数学 |\n| --- | --- |\n| 张同学 | 95 |', provider: 'mineru', truncated: false },
+    })
+    fireEvent.change(rendered.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['scores'], '期末.xlsx')] },
+    })
+    await screen.findByRole('dialog', { name: '上传并识别成绩表' })
     fireEvent.change(screen.getByLabelText('考试日期'), { target: { value: '2026-08-19' } })
-    fireEvent.change(screen.getByLabelText('导入成绩'), { target: { value: '姓名\t数学\n张同学\t95' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 条成绩' }))
     await waitFor(() => { expect(c.value.saveExam).toHaveBeenCalledWith(expect.objectContaining({ name: '期末', date: '2026-08-19', entries: [{ studentId: 'student-a', scores: { 数学: 95 } }] })) })
   })
 })

@@ -31,6 +31,8 @@ import { sessionCwd } from '../src/session-cwd.ts'
 import ApprovalService from '@deepseek-ai/dsh-user-approval'
 import type { SandboxExecutionPolicy, SandboxMode } from '@deepseek-ai/dsh-sandbox'
 import SandboxPolicyService from '@deepseek-ai/dsh-sandbox-policy'
+import OcrRuntime, { OcrError } from '@deepseek-ai/dsh-ocr'
+import type { OcrProvider } from '@deepseek-ai/dsh-ocr'
 
 const testToolSignal = new AbortController().signal
 
@@ -107,6 +109,28 @@ async function setup() {
   await ctx.plugin(ToolFs)
   const fs = ctx.fs as FakeFs
   return { ctx, fs }
+}
+
+function documentProvider(extract: OcrProvider['extract']): OcrProvider {
+  return {
+    id: 'mineru',
+    available: () => true,
+    layoutLimits: () => ({ maxFileBytes: 1024, maxPagesPerRequest: 4 }),
+    extract,
+    extractLayout: () => Promise.reject(new Error('structured extraction is not used by read_document')),
+  }
+}
+
+async function setupDocument(extract: OcrProvider['extract']) {
+  const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(FakeFs)
+  await ctx.plugin(FsPolicy)
+  await ctx.plugin(OcrRuntime, { provider: 'mineru' })
+  ctx.ocr.registerProvider(documentProvider(extract))
+  const fiber = await ctx.plugin(ToolFs)
+  return { ctx, fs: ctx.fs as FakeFs, fiber }
 }
 
 let callCounter = 0
@@ -198,6 +222,79 @@ describe('registration', () => {
     expect(ctx.tools.schemas()).toHaveLength(0)
     // Only the system-prompt plugin's own built-in sections remain.
     expect(sectionNames(await ctx.systemPrompt.assemble())).toEqual(['deployment:persona', 'harness:identity'])
+  })
+
+  it('registers and disposes read_document only while OCR is mounted', async () => {
+    const { ctx, fiber } = await setupDocument(request => Promise.resolve({
+      name: request.name,
+      mediaType: request.mediaType,
+      markdown: '# Document',
+      provider: 'mineru',
+      truncated: false,
+    }))
+    expect(ctx.tools.schemas().map(schema => schema.name).sort()).toEqual(['edit', 'read', 'read_document', 'write'])
+    expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)).toContain('tool:read_document')
+
+    await fiber.dispose()
+    expect(ctx.tools.schemas()).toHaveLength(0)
+    expect((await ctx.systemPrompt.assemble()).sections.map(section => section.name)).not.toContain('tool:read_document')
+  })
+})
+
+describe('read_document tool', () => {
+  it('reads within the provider byte cap and returns MinerU Markdown', async () => {
+    const extract = vi.fn<OcrProvider['extract']>(request => Promise.resolve({
+      name: request.name,
+      mediaType: request.mediaType,
+      markdown: '# Roster\n\n| Name |\n| --- |\n| Lin |',
+      provider: 'mineru',
+      truncated: true,
+    }))
+    const { ctx, fs } = await setupDocument(extract)
+    fs.files.set('key:roster.pdf', '%PDF')
+    const readBytes = vi.spyOn(fs, 'readBytes')
+
+    const result = await call(ctx, 'read_document', { file_path: 'roster.pdf' })
+
+    expect(result.isError).toBe(false)
+    if (result.isError) throw new Error('expected document read success')
+    expect(result.value).toEqual({
+      path: '/abs/roster.pdf',
+      mediaType: 'application/pdf',
+      provider: 'mineru',
+      markdown: '# Roster\n\n| Name |\n| --- |\n| Lin |',
+      truncated: true,
+    })
+    expect(text(result)).toContain('<provider>mineru</provider>\n<truncated>true</truncated>')
+    expect(text(result)).toContain('# Roster')
+    expect(readBytes).toHaveBeenCalledWith(expect.objectContaining({ displayPath: '/abs/roster.pdf' }), testToolSignal, 1024)
+    expect(extract).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'roster.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: Buffer.from('%PDF').toString('base64'),
+    }), testToolSignal)
+  })
+
+  it('rejects unsupported extensions before filesystem access', async () => {
+    const { ctx, fs } = await setupDocument(() => Promise.reject(new Error('unreachable')))
+    const resolveTarget = vi.spyOn(fs, 'resolve')
+
+    const result = await call(ctx, 'read_document', { file_path: 'notes.txt' })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'DocumentReadError', code: 'unsupported-format' } })
+    expect(resolveTarget).not.toHaveBeenCalled()
+  })
+
+  it('preserves provider failures as structured tool errors', async () => {
+    const { ctx, fs } = await setupDocument(() => Promise.reject(new OcrError('MinerU unavailable', 'provider-unavailable')))
+    fs.files.set('key:scan.png', 'png')
+
+    const result = await call(ctx, 'read_document', { file_path: 'scan.png' })
+
+    expect(result.isError).toBe(true)
+    expect(result.error).toMatchObject({ info: { name: 'DocumentReadError', code: 'provider-unavailable' } })
+    expect(text(result)).toContain('MinerU unavailable')
   })
 })
 

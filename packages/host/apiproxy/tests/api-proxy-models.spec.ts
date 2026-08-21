@@ -130,6 +130,42 @@ function registerTextOnly(ctx: Context): void {
 }
 
 describe('Web session model selection', () => {
+  it('injects MinerU document context before the durable human prompt', async () => {
+    const { ctx, agent, sessionId } = await harness()
+    const order: string[] = []
+    const inject = vi.fn((message: UserMessage) => { order.push(`context:${message.source.kind}`) })
+    const followup = vi.fn((message: UserMessage) => { order.push(`prompt:${message.source.kind}`) })
+    Object.assign(agent, { inject, followup })
+    const api = createApiProxy(ctx, {
+      defaultModelSelection: () => ({ provider: 'deepseek-official', model: 'deepseek-chat' }),
+      cwd: '/tmp',
+    })
+
+    const result = await api.sessions.prompt(request({
+      sessionId,
+      mode: 'queue' as const,
+      content: [{ type: 'text' as const, text: '导入学生名册' }],
+      contexts: [{ name: 'roster.xlsx', markdown: '| 姓名 |\n| --- |\n| 张三 |', truncated: false }],
+    }))
+
+    expect(result.result.ok).toBe(true)
+    expect(order).toEqual(['context:plugin', 'prompt:user'])
+    expect(inject).toHaveBeenCalledWith(expect.objectContaining({
+      role: 'user',
+      source: {
+        kind: 'plugin', plugin: 'mineru-ocr', form: 'notice', summary: 'OCR document: roster.xlsx',
+      },
+      content: [{
+        type: 'text',
+        text: 'Uploaded document "roster.xlsx":\n\n| 姓名 |\n| --- |\n| 张三 |',
+      }],
+    }))
+    const followed = followup.mock.calls[0]?.[0]
+    expect(followed?.content).toEqual([{ type: 'text', text: '导入学生名册' }])
+    expect(followed?.source.kind).toBe('user')
+    await ctx.fiber.dispose()
+  })
+
   it('validates an ordered image batch before persisting any member', async () => {
     const { ctx, agent, sessionId } = await harness()
     const validateImage = vi.fn((_input: { data: Uint8Array }) => Promise.resolve())

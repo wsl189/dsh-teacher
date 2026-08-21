@@ -72,6 +72,7 @@ flowchart LR
   pkg_ocr["ocr"]
   svc_ocr["ctx.ocr<br/>Uploaded-document extraction"]
   pkg_ocr_mineru["ocr-mineru"]
+  pkg_tool_fs["tool-fs"]
   svc_workspaceRegistry["ctx.workspaceRegistry<br/>Workspace entity registry"]
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
@@ -87,7 +88,6 @@ flowchart LR
   pkg_system_prompt["system-prompt"]
   svc_systemPrompt["ctx.systemPrompt<br/>System prompt assembly registry"]
   pkg_tools["tools"]
-  pkg_tool_fs["tool-fs"]
   pkg_tool_terminal["tool-terminal"]
   pkg_tool_web["tool-web"]
   svc_tools["ctx.tools<br/>Tool registry and guarded execution pipeline"]
@@ -354,6 +354,7 @@ flowchart LR
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
   svc_ocr --> pkg_api_remotes
+  svc_ocr --> pkg_tool_fs
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -456,7 +457,7 @@ flowchart LR
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback), [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | 等待所有已配置后端就绪，然后将领域形态发布为一个受生命周期约束的服务，用于类型化持久状态。 |
 | `ctx.teacherWorkbench` | `core` | [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | [`api-remotes`](../packages/api/remotes) | - | 持有带修订号的备课、名册、成绩和教学记录文档；GUI 通过生成的一元 Remote 方法访问该文档。 |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | 拥有本地逐 assistant 消息反馈、生命周期与目标校验、逐条目 compare-and-set 及 Host 一元 Remote 契约，且不进入 Session 历史或遥测。 |
-| `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`api-remotes`](../packages/api/remotes) | - | 提供方返回有界、按阅读顺序排列的 Markdown；浏览器消费方通过生成的 OCR Remote 访问选定实现。 |
+| `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`api-remotes`](../packages/api/remotes), [`tool-fs`](../packages/fs/tool-fs) | - | 提供方返回有界、按阅读顺序排列的 Markdown；浏览器消费方使用生成的 OCR Remote，文件系统 agent 使用条件注册的 read_document 工具。 |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | `apiproxy` | - | 通过领域设施拥有带 WorkspaceId 品牌类型的记录；稳定的 sessionIds 账户驱动 Host RPC 与 GUI 投影。 |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | 该接口提供精确读取、过滤和追踪；具体后端还提供全文协调、排序、摘要片段和游标世代，而模型消费方负责工作区权限与不含游标的渲染。 |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | - | - | 该接口通过其一元 Remote 契约返回指定 Agent cwd 内仅含路径的补全候选；提供方负责命名空间访问和排序，但不会读取文件内容。 |

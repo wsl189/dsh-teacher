@@ -30,10 +30,13 @@ import { ReferenceIcon } from '../reference/ReferenceIcon.tsx'
 import { ContextMeter } from './ContextMeter.tsx'
 import { PermissionSelect } from './PermissionSelect.tsx'
 import { isSafariBrowser, repairSafariTextareaLayout } from './safari.ts'
+import { useVoiceInput } from './useVoiceInput.ts'
 import css from './InputBar.module.css'
 
 /** Decoration product of the no-session state (no machine, empty draft). */
 const INERT_DECORATIONS: DraftDecorations = { token: null, chips: [], textRefs: [], hint: null }
+const DOCUMENT_ACCEPT = '.pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.webp,.bmp,.tif,.tiff'
+const HOLD_SPACE_MS = 500
 
 /** The selection and edit family a `beforeinput` recorded, with the draft length it applied to. */
 interface PendingEdit {
@@ -76,10 +79,33 @@ function editRangeOf(pending: PendingEdit | null, prevLength: number, nextLength
 
 export type InputBarProps = ComposerBarProps
 
+type VoiceErrorTranslate = (key:
+  | 'voice.permissionDenied'
+  | 'voice.noMicrophone'
+  | 'voice.noSpeech'
+  | 'voice.networkError'
+  | 'voice.failed') => string
+
+function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
+  switch (code) {
+    case 'not-allowed':
+    case 'service-not-allowed':
+    case 'NotAllowedError':
+    case 'SecurityError': return t('voice.permissionDenied')
+    case 'audio-capture':
+    case 'NotFoundError':
+    case 'NotReadableError': return t('voice.noMicrophone')
+    case 'no-speech': return t('voice.noSpeech')
+    case 'network': return t('voice.networkError')
+    default: return t('voice.failed')
+  }
+}
+
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
+  addDocuments, removeDocument,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
-  renderSlot, useNotices, useLexicon, useMenuLauncher,
+  renderSlot, useNotices, useLexicon, useMenuLauncher, useDocuments,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory, overlay, leftItems, rightItems, footer,
@@ -88,6 +114,7 @@ export function InputBar({
   const notice = useNotices(s => s)
   const lexicon = useLexicon(s => s)
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
+  const documents = useDocuments(rows => rows)
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
   const subagent = useSession(s => s.subagent) ?? null
@@ -105,7 +132,9 @@ export function InputBar({
     () => input === undefined || draftImages === undefined ? [] : draftImages(input.imageIds),
     [draftImages, input?.imageIds],
   )
-  const empty = draft.trim() === '' && attachments.length === 0
+  const empty = draft.trim() === '' && attachments.length === 0 && documents.length === 0
+  const documentsSettling = documents.some(document => document.status === 'extracting')
+  const documentsFailed = documents.some(document => document.status === 'error')
   // Transient error banner (machine notices, image-intake rejections, and
   // prompt failures): the seq keys the Toast so an identical repeated message
   // restarts the hold-then-fade cycle instead of reusing the faded one.
@@ -136,6 +165,7 @@ export function InputBar({
     if (notice?.level === 'error') showToast(notice.text)
   }, [notice, showToast])
   const inputRef = useRef<HTMLTextAreaElement | null>(null)
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
   const cardRef = useRef<HTMLDivElement | null>(null)
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const mirrorRef = useRef<HTMLDivElement | null>(null)
@@ -287,6 +317,58 @@ export function InputBar({
     })
   }
 
+  const appendTranscript = useCallback((transcript: string): void => {
+    if (keyboard === undefined || locked || machineBusy) return
+    const el = inputRef.current
+    const current = keyboard.snapshot.draft
+    const selection = el === null ? { start: current.length, end: current.length } : selectionOf(el)
+    const prefix = current.slice(0, selection.start)
+    const separator = prefix === '' || /\s$/u.test(prefix) ? '' : ' '
+    const inserted = `${separator}${transcript}`
+    keyboard.setDraft(
+      current.slice(0, selection.start) + inserted + current.slice(selection.end),
+      { ...selection, insertedLength: inserted.length },
+    )
+    const caret = selection.start + inserted.length
+    if (el !== null) restoreCaret(el, caret)
+    keyboard.track(keyboard.snapshot.draft, caret)
+  }, [keyboard, locked, machineBusy])
+  const voice = useVoiceInput(appendTranscript, (code) => {
+    showToast(voiceErrorText(code, t))
+  })
+  const spaceHold = useRef<{
+    timer: number
+    activated: boolean
+    selection: { start: number; end: number }
+  } | null>(null)
+  useEffect(() => () => {
+    const hold = spaceHold.current
+    if (hold !== null) window.clearTimeout(hold.timer)
+    spaceHold.current = null
+  }, [])
+
+  const finishSpaceHold = useCallback((el: HTMLTextAreaElement): void => {
+    const hold = spaceHold.current
+    if (hold === null) return
+    window.clearTimeout(hold.timer)
+    spaceHold.current = null
+    if (hold.activated) {
+      voice.stop()
+      return
+    }
+    if (keyboard === undefined || locked || machineBusy) return
+    const current = keyboard.snapshot.draft
+    const start = Math.min(hold.selection.start, current.length)
+    const end = Math.min(Math.max(start, hold.selection.end), current.length)
+    keyboard.setDraft(current.slice(0, start) + ' ' + current.slice(end), {
+      start,
+      end,
+      insertedLength: 1,
+    })
+    restoreCaret(el, start + 1)
+    keyboard.track(keyboard.snapshot.draft, start + 1)
+  }, [keyboard, locked, machineBusy, voice])
+
   // Wheel chaining on the draft scrollport, one lifetime (it is never
   // unmounted — the inert state renders the same element disabled). While the
   // capped box can still move in this direction, keep the native scroll; only
@@ -403,7 +485,23 @@ export function InputBar({
     }
     if (e.key === ' ') {
       if (composing) return
-      if (keyboard.space()) e.preventDefault() // claim token already carries the trailing separator
+      if (keyboard.space()) {
+        e.preventDefault() // claim token already carries the trailing separator
+        return
+      }
+      if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat
+        || locked || machineBusy || !voice.supported) return
+      e.preventDefault()
+      const hold = {
+        timer: 0,
+        activated: false,
+        selection: selectionOf(e.currentTarget),
+      }
+      hold.timer = window.setTimeout(() => {
+        hold.activated = true
+        void voice.start()
+      }, HOLD_SPACE_MS)
+      spaceHold.current = hold
       return
     }
     if (e.key !== 'Enter') return
@@ -418,6 +516,7 @@ export function InputBar({
     e.preventDefault()
     if (e.repeat) return // held-down Enter must not machine-gun sends
     if (locked || machineBusy) return
+    if (documentsSettling || documentsFailed || voice.starting || voice.listening) return
     const accelerated = e.ctrlKey || e.metaKey
     // Empty-draft accelerated Enter acts on the queue instead of the (empty)
     // draft: the machine rejects empty drafts, so the gesture steers every
@@ -433,6 +532,13 @@ export function InputBar({
       accelerated ? 'accelerated' : 'enter',
       subagent === null,
     ))
+  }
+
+  const onKeyUp = (e: KeyboardEvent<HTMLTextAreaElement>): void => {
+    if (e.key === ' ' && spaceHold.current !== null) {
+      e.preventDefault()
+      finishSpaceHold(e.currentTarget)
+    }
   }
 
   const onChange = (e: ChangeEvent<HTMLTextAreaElement>): void => {
@@ -563,6 +669,7 @@ export function InputBar({
   const primaryStops = running && subagent === null
   const interruptible = running && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
+  const sendBlocked = machineBusy || documentsSettling || documentsFailed || voice.starting || voice.listening
   const onPrimary = (): void => {
     if (primaryStops) {
       stop?.()
@@ -570,7 +677,7 @@ export function InputBar({
     }
     if (inputActions === undefined) return // absent machine: the button is disabled
     /* v8 ignore next -- defensive: the primary button is disabled while empty||disabled, so a click cannot reach the false arm. */
-    if (!empty && !disabled && !machineBusy) inputActions.submit()
+    if (!empty && !disabled && !sendBlocked) inputActions.submit()
   }
 
   // The Access seat: the projection-fed permission chip (renders nothing
@@ -707,6 +814,40 @@ export function InputBar({
       >
         {overlay !== undefined && <div className={css.overlayAnchor}>{overlay}</div>}
         {accessory !== undefined && <div className={css.accessory}>{accessory}</div>}
+        {documents.length > 0 && (
+          <div className={css.documentRail} aria-label={t('document.pending')}>
+            {documents.map(document => (
+              <div
+                key={document.id}
+                className={clsx(css.documentChip, document.status === 'error' && css.documentChipError)}
+                data-document-status={document.status}
+                title={document.error}
+              >
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+                  <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                </svg>
+                <span className={css.documentName}>{document.name}</span>
+                <span className={css.documentStatus}>
+                  {document.status === 'extracting'
+                    ? t('document.extracting')
+                    : document.status === 'error'
+                      ? t('document.failed')
+                      : document.truncated === true ? t('document.readyTruncated') : t('document.ready')}
+                </span>
+                <button
+                  type="button"
+                  className={css.documentRemove}
+                  aria-label={t('document.remove', { name: document.name })}
+                  disabled={machineBusy}
+                  onMouseDown={keepFocus}
+                  onClick={() => { removeDocument?.(document.id) }}
+                >
+                  ×
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
         {renderSlot('conversation.input.attachments', {
           attachments,
           canAcceptDrop,
@@ -757,6 +898,14 @@ export function InputBar({
               rows={2}
               onChange={onChange}
               onKeyDown={onKeyDown}
+              onKeyUp={onKeyUp}
+              onBlur={() => {
+                const hold = spaceHold.current
+                if (hold === null) return
+                window.clearTimeout(hold.timer)
+                spaceHold.current = null
+                if (hold.activated) voice.stop()
+              }}
               onSelect={onSelect}
               onCopy={(e) => { onCopyOrCut(e, false) }}
               onCut={(e) => { onCopyOrCut(e, true) }}
@@ -781,6 +930,61 @@ export function InputBar({
                 onClick={onToggleCommandMenu}
               >
                 <IconPlusOutline16 size={14} />
+              </button>
+            </Tooltip>
+            <Tooltip label={subagent === null ? t('document.upload') : t('document.subagentUnsupported')} side="top" delayMs={500}>
+              <button
+                type="button"
+                className={css.add}
+                aria-label={t('document.upload')}
+                disabled={locked || machineBusy || addDocuments === undefined || subagent !== null}
+                onMouseDown={keepFocus}
+                onClick={() => { fileInputRef.current?.click() }}
+              >
+                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+                  <path d="M5.25 8.5 9.7 4.05a2.2 2.2 0 1 1 3.1 3.1l-5.3 5.3a3.25 3.25 0 0 1-4.6-4.6l5.12-5.12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+                </svg>
+              </button>
+            </Tooltip>
+            <input
+              ref={fileInputRef}
+              className={css.fileInput}
+              type="file"
+              accept={DOCUMENT_ACCEPT}
+              multiple
+              tabIndex={-1}
+              onChange={(event) => {
+                const files = Array.from(event.currentTarget.files ?? [])
+                event.currentTarget.value = ''
+                if (files.length > 0) addDocuments?.(files)
+              }}
+            />
+            <Tooltip
+              label={!voice.supported
+                ? t('voice.unsupported')
+                : voice.listening ? t('voice.stop') : t('voice.start')}
+              side="top"
+              delayMs={500}
+            >
+              <button
+                type="button"
+                className={clsx(css.add, voice.listening && css.voiceActive)}
+                aria-label={voice.listening ? t('voice.stop') : t('voice.start')}
+                aria-pressed={voice.listening}
+                disabled={locked || machineBusy || !voice.supported}
+                onMouseDown={keepFocus}
+                onClick={() => { voice.toggle() }}
+              >
+                {voice.listening ? (
+                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
+                    <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+                    <rect x="5.25" y="1.5" width="5.5" height="8.5" rx="2.75" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                    <path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25V15M5.5 15h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                  </svg>
+                )}
               </button>
             </Tooltip>
             <div className={css.modes}>
@@ -814,7 +1018,7 @@ export function InputBar({
                 type="button"
                 className={css.primary}
                 aria-label={primaryLabel}
-                disabled={primaryStops ? stop === undefined : empty || disabled || machineBusy}
+                disabled={primaryStops ? stop === undefined : empty || disabled || sendBlocked}
                 onMouseDown={keepFocus}
                 onClick={onPrimary}
               >

@@ -1,6 +1,7 @@
-/** Class and student roster management with spreadsheet-paste import. */
+/** Class and student roster management with MinerU document import. */
 
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { FileUp } from 'lucide-react'
 import type {
   TeacherClassId,
   TeacherStudent,
@@ -11,10 +12,17 @@ import {
   IconPlusOutline16,
   IconSearchOutline16,
   IconTrashOutline16,
+  Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
-import { parseStudentImport } from './import-data.ts'
+import {
+  DOCUMENT_IMPORT_ACCEPT,
+  documentImportFailureText,
+  shouldEnhanceDocumentImage,
+  type DocumentImportState,
+} from './document-import.ts'
+import { parseStudentImport, type StudentImportRow } from './import-data.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { confirmDelete, EditorModal, FormField, IconAction } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
@@ -33,6 +41,11 @@ export interface StudentRosterProps {
 
 type ClassDraft = { id?: TeacherClassId; name: string; grade: string; subject: string }
 type StudentDraft = Omit<TeacherStudent, 'id' | 'classId'> & { id?: TeacherStudent['id'] }
+type RosterImportReview = {
+  readonly classId: TeacherClassId
+  readonly className: string
+  readonly rows: readonly StudentImportRow[]
+}
 
 const EMPTY_STUDENT: StudentDraft = {
   name: '',
@@ -46,7 +59,7 @@ const EMPTY_STUDENT: StudentDraft = {
 }
 
 /**
- * Render class CRUD, roster CRUD/search, and structured clipboard import.
+ * Render class CRUD, roster CRUD/search, and reviewed MinerU document import.
  * @param props - durable state, settings, commands, and copy.
  * @returns the student-roster interface.
  */
@@ -56,8 +69,8 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
   const [search, setSearch] = useState('')
   const [classDraft, setClassDraft] = useState<ClassDraft | null>(null)
   const [studentDraft, setStudentDraft] = useState<StudentDraft | null>(null)
-  const [importText, setImportText] = useState<string | null>(null)
-  const [importError, setImportError] = useState<string | null>(null)
+  const [importState, setImportState] = useState<DocumentImportState<RosterImportReview> | null>(null)
+  const importInputRef = useRef<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (classId !== '' && classes.some(item => item.id === classId)) return
@@ -82,18 +95,32 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
     if (classId === '') return
     void commands.saveStudent({ ...draft, classId }).then((result) => { if (result.ok) setStudentDraft(null) })
   }
-  const runImport = (source: string): void => {
-    if (classId === '') return
-    const parsed = parseStudentImport(source)
-    if (parsed.error !== null) {
-      setImportError(parsed.error)
+  const recognizeRoster = async (file: File): Promise<void> => {
+    if (classId === '' || selectedClass === undefined) return
+    const targetClassId = classId
+    const targetClassName = selectedClass.name
+    setImportState({ kind: 'extracting', fileName: file.name })
+    const result = await commands.extractDocument(file, {
+      enhanceImageDetail: shouldEnhanceDocumentImage(file),
+    })
+    if (!result.ok) {
+      setImportState({
+        kind: 'error',
+        fileName: file.name,
+        message: documentImportFailureText(result.error.code, result.error.message, t),
+      })
       return
     }
-    void commands.importStudents(classId, parsed.rows).then((result) => {
-      if (result.ok) {
-        setImportText(null)
-        setImportError(null)
-      }
+    const parsed = parseStudentImport(result.value.markdown)
+    if (parsed.error !== null) {
+      setImportState({ kind: 'error', fileName: file.name, message: rosterParseFailureText(parsed.error, t) })
+      return
+    }
+    setImportState({
+      kind: 'review',
+      fileName: file.name,
+      value: { classId: targetClassId, className: targetClassName, rows: parsed.rows },
+      truncated: result.value.truncated,
     })
   }
 
@@ -134,12 +161,24 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
           )}
         </div>
         <div className={css.toolbarActions}>
+          <input
+            ref={importInputRef}
+            className={css.calendarImportInput}
+            type="file"
+            accept={DOCUMENT_IMPORT_ACCEPT}
+            onChange={(event) => {
+              const [file] = [...(event.target.files ?? [])]
+              event.target.value = ''
+              if (file !== undefined) void recognizeRoster(file)
+            }}
+          />
           <button
             type="button"
             className={css.buttonSecondary}
             disabled={classId === ''}
-            onClick={() => { setImportText(''); setImportError(null) }}
+            onClick={() => { importInputRef.current?.click() }}
           >
+            <FileUp size={16} />
             {t('student.import')}
           </button>
           <button
@@ -258,25 +297,94 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
         </EditorModal>
       )}
 
-      {importText !== null && (
-        <EditorModal
-          open
-          title={t('student.importTitle')}
-          closeLabel={t('close')}
-          saveLabel={t('student.importAction')}
-          cancelLabel={t('cancel')}
-          onClose={() => { setImportText(null); setImportError(null) }}
-          onSave={() => { runImport(importText) }}
-          valid={importText.trim() !== ''}
-        >
-          <>
-            <FormField label={t('student.import')} wide>
-              <textarea rows={10} value={importText} onChange={(event) => { setImportText(event.target.value); setImportError(null) }} />
-            </FormField>
-            {importError !== null && <div className={css.formError} role="alert">{importError}</div>}
-          </>
-        </EditorModal>
+      {importState !== null && (
+        <RosterImportModal
+          state={importState}
+          commands={commands}
+          t={t}
+          onClose={() => { setImportState(null) }}
+        />
       )}
     </div>
   )
+}
+
+function RosterImportModal(props: {
+  state: DocumentImportState<RosterImportReview>
+  commands: TeacherWorkbenchCommands
+  t: TeacherWorkbenchTranslate
+  onClose: () => void
+}) {
+  const review = props.state.kind === 'review' ? props.state : null
+  const importRows = async (): Promise<void> => {
+    if (review === null) return
+    const result = await props.commands.importStudents(review.value.classId, review.value.rows)
+    if (result.ok) props.onClose()
+  }
+  return (
+    <Modal
+      open
+      title={props.t('student.importTitle')}
+      closeLabel={props.t('close')}
+      onClose={props.onClose}
+      className={`${css.editorDialog} ${css.calendarImportDialog}`}
+      footer={review === null ? (
+        <button type="button" className={css.buttonPrimary} onClick={props.onClose}>{props.t('close')}</button>
+      ) : (
+        <>
+          <button type="button" className={css.buttonSecondary} onClick={props.onClose}>{props.t('cancel')}</button>
+          <button type="button" className={css.buttonPrimary} onClick={() => { void importRows() }}>
+            {props.t('student.importAction', { count: review.value.rows.length })}
+          </button>
+        </>
+      )}
+    >
+      {props.state.kind === 'extracting' && (
+        <div className={css.calendarImportStatus} role="status">
+          <span className={css.calendarImportSpinner} aria-hidden />
+          <div><strong>{props.t('student.importExtracting')}</strong><span>{props.state.fileName}</span></div>
+        </div>
+      )}
+      {props.state.kind === 'error' && (
+        <div className={css.calendarImportError} role="alert">
+          <strong>{props.t('student.importFailed')}</strong>
+          <span>{props.state.message}</span>
+        </div>
+      )}
+      {review !== null && (
+        <div className={css.calendarImportBody}>
+          <div className={css.calendarImportSummary}>
+            <div>
+              <strong>{review.value.className}</strong>
+              <span>{props.t('student.importFound', { file: review.fileName, count: review.value.rows.length })}</span>
+            </div>
+          </div>
+          {review.truncated && <div className={css.calendarImportWarning}>{props.t('document.importTruncated')}</div>}
+          <div className={css.tableScroller}>
+            <table className={css.dataTable}>
+              <thead><tr><th>{props.t('student.number')}</th><th>{props.t('student.name')}</th><th>{props.t('student.gender')}</th><th>{props.t('student.guardian')}</th><th>{props.t('student.phone')}</th></tr></thead>
+              <tbody>{review.value.rows.map((row, index) => (
+                <tr key={`${row.studentNumber}\u0000${row.name}\u0000${String(index)}`}>
+                  <td>{row.studentNumber || '—'}</td>
+                  <td className={css.primaryCell}>{row.name}</td>
+                  <td>{row.gender || '—'}</td>
+                  <td>{row.guardian || '—'}</td>
+                  <td>{row.phone || '—'}</td>
+                </tr>
+              ))}</tbody>
+            </table>
+          </div>
+        </div>
+      )}
+    </Modal>
+  )
+}
+
+function rosterParseFailureText(error: string, t: TeacherWorkbenchTranslate): string {
+  switch (error) {
+    case '名册至少需要表头和一行学生数据': return t('student.importMissingTable')
+    case '未找到姓名列': return t('student.importMissingName')
+    case '没有可导入的学生行': return t('student.importNoRows')
+    default: return error
+  }
 }

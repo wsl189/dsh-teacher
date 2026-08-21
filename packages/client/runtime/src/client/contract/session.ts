@@ -26,6 +26,13 @@ export interface ProjectionsFace {
   faceOf(key: string): ObservableSnapshot<unknown>
 }
 
+/** OCR-extracted document injected ahead of one human prompt. */
+export interface PromptDocumentContext {
+  readonly name: string
+  readonly markdown: string
+  readonly truncated: boolean
+}
+
 /** Identity plus the behavior verbs features may invoke on a session. */
 export interface ISession {
   /** The session's host identity (agent id — same axis). */
@@ -36,12 +43,15 @@ export interface ISession {
    * Send a prompt into the session.
    * @param content - text plus browser-owned temporary image uploads.
    * @param mode - 'queue' appends a turn; 'steer' interrupts the running one.
+   * @param signal - optional transport cancellation.
+   * @param contexts - OCR-extracted documents injected before this prompt.
    * @returns acceptance, or the business error (also mirrored into snapshot.promptError).
    */
   prompt(
     content: PromptContentPart[],
     mode: 'queue' | 'steer',
     signal?: AbortSignal,
+    contexts?: PromptDocumentContext[],
   ): Promise<RpcResult<{ accepted: true }>>
   /**
    * Resolve one durable image referenced by this session.

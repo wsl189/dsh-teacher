@@ -1,0 +1,7 @@
+{
+  "steps": [
+    { "op": "initialize" },
+    { "op": "newSession" },
+    { "op": "prompt", "text": "Use read_document to read roster.pdf in the current directory, then reply with exactly the single word DONE." }
+  ]
+}

@@ -19,6 +19,7 @@ import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import type { DraftAttachmentId } from '../src/client/input/contract.ts'
+import type { DraftDocument } from '../src/client/service.ts'
 import { InputBar } from '../src/client/skeleton/InputBar.tsx'
 import type { InputBarProps } from '../src/client/skeleton/InputBar.tsx'
 import { zh } from '../src/client/locales.ts'
@@ -90,6 +91,8 @@ interface BenchOptions {
   rightItems?: React.ReactNode
   attachments?: readonly ComposerAttachment[]
   addImages?: (files: readonly File[]) => string | null
+  documents?: readonly DraftDocument[]
+  addDocuments?: (files: readonly File[]) => void
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
@@ -143,6 +146,8 @@ function bench(over?: BenchOptions) {
   if (over?.attachments !== undefined) shell.addImages(over.attachments.map(attachment => attachment.id))
   const stop = vi.fn()
   const removeImage = vi.fn((id: DraftAttachmentId) => { shell.removeImage(id) })
+  const documents = createSnapshotStore<readonly DraftDocument[]>(over?.documents ?? [])
+  const removeDocument = vi.fn()
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const slotCalls: { key: string; owner: unknown }[] = []
   const renderSlot = ((key: string, owner: object) => {
@@ -176,6 +181,8 @@ function bench(over?: BenchOptions) {
       const attachment = over?.attachments?.find(candidate => candidate.id === id)
       return attachment === undefined ? [] : [attachment]
     }),
+    addDocuments: over?.addDocuments ?? vi.fn(),
+    removeDocument,
     resolveSubmitMode: (running, gesture, steeringAvailable) => {
       if (!running || !steeringAvailable) return 'queue'
       const preferred = over?.busyEnter ?? 'queue'
@@ -185,6 +192,7 @@ function bench(over?: BenchOptions) {
     useNotices: bindSnapshotSelector(shell.notices),
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(menuLauncher),
+    useDocuments: bindSnapshotSelector(documents),
     stop,
     command: over?.command ?? (() => Promise.resolve(true)),
     // Mirrors the real lookup chain (conversation namespace, then common).
@@ -208,7 +216,8 @@ function bench(over?: BenchOptions) {
   )!
   const interruptButton = view.container.querySelector<HTMLButtonElement>('button[aria-label="停止生成"]')
   return {
-    view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage, slotCalls,
+    view, textarea, button, interruptButton, props, sink, shell, wiring: shell, session, stop, removeImage,
+    removeDocument, documents, slotCalls,
     menuLauncher,
     steerQueue: over?.steerQueue,
   }
@@ -374,6 +383,108 @@ describe('image draft rail', () => {
     await vi.waitFor(() => {
       expect(attachmentOwner(result.slotCalls).attachments).toEqual([])
     })
+  })
+
+  it('uploads documents without copying OCR text into the textarea and gates send until extraction completes', () => {
+    const addDocuments = vi.fn()
+    const pending: DraftDocument = {
+      id: 'document-1' as never,
+      name: 'roster.xlsx',
+      status: 'extracting',
+    }
+    const result = bench({ draft: '导入学生名册', documents: [pending], addDocuments })
+    expect(result.textarea.value).toBe('导入学生名册')
+    expect(result.view.getByText('MinerU 识别中…')).toBeTruthy()
+    expect(result.button.disabled).toBe(true)
+
+    const fileInput = result.view.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    const file = new File([Uint8Array.of(1)], 'scores.pdf', { type: 'application/pdf' })
+    fireEvent.change(fileInput, { target: { files: [file] } })
+    expect(addDocuments).toHaveBeenCalledWith([file])
+
+    act(() => {
+      result.documents.set([{ ...pending, status: 'ready' }])
+    })
+    expect(result.view.getByText('已识别')).toBeTruthy()
+    expect(result.textarea.value).toBe('导入学生名册')
+    expect(result.button.disabled).toBe(false)
+    fireEvent.click(result.view.getByRole('button', { name: '移除文件 roster.xlsx' }))
+    expect(result.removeDocument).toHaveBeenCalledWith('document-1')
+  })
+
+  it('keeps send disabled after OCR failure so the file must be removed or retried', () => {
+    const result = bench({
+      draft: '分析成绩',
+      documents: [{ id: 'document-1' as never, name: 'scores.pdf', status: 'error', error: 'MinerU offline' }],
+    })
+    expect(result.view.getByText('识别失败')).toBeTruthy()
+    expect(result.button.disabled).toBe(true)
+    expect(result.view.getByText('scores.pdf').closest('[data-document-status]')?.getAttribute('title')).toBe('MinerU offline')
+  })
+
+  it('supports the microphone button and distinguishes tapped Space from held Space', async () => {
+    const speechDescriptor = Object.getOwnPropertyDescriptor(window, 'SpeechRecognition')
+    const mediaDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')
+    const instances: Array<{
+      onresult: ((event: unknown) => void) | null
+      onerror: ((event: unknown) => void) | null
+      onend: (() => void) | null
+      start: ReturnType<typeof vi.fn>
+      stop: ReturnType<typeof vi.fn>
+      abort: ReturnType<typeof vi.fn>
+    }> = []
+    class FakeRecognition {
+      lang = ''
+      continuous = false
+      interimResults = false
+      maxAlternatives = 1
+      onresult: ((event: unknown) => void) | null = null
+      onerror: ((event: unknown) => void) | null = null
+      onend: (() => void) | null = null
+      start = vi.fn()
+      stop = vi.fn()
+      abort = vi.fn()
+      constructor() { instances.push(this) }
+    }
+    Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition })
+    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined })
+    try {
+      const pointer = bench({ draft: '请记录' })
+      pointer.textarea.setSelectionRange(3, 3)
+      fireEvent.click(pointer.view.getByRole('button', { name: '语音输入（也可长按空格）' }))
+      await vi.waitFor(() => { expect(instances).toHaveLength(1) })
+      act(() => {
+        instances[0]?.onresult?.({
+          resultIndex: 0,
+          results: Object.assign([{ isFinal: true, 0: { transcript: '明天交作业' } }], { length: 1 }),
+        })
+      })
+      expect(pointer.textarea.value).toBe('请记录 明天交作业')
+      cleanup()
+
+      vi.useFakeTimers()
+      const keyboard = bench({ draft: 'A' })
+      keyboard.textarea.setSelectionRange(1, 1)
+      fireEvent.keyDown(keyboard.textarea, { key: ' ' })
+      act(() => { vi.advanceTimersByTime(200) })
+      fireEvent.keyUp(keyboard.textarea, { key: ' ' })
+      expect(keyboard.textarea.value).toBe('A ')
+
+      keyboard.textarea.setSelectionRange(2, 2)
+      fireEvent.keyDown(keyboard.textarea, { key: ' ' })
+      act(() => { vi.advanceTimersByTime(500) })
+      expect(instances).toHaveLength(2)
+      expect(instances[1]?.start).toHaveBeenCalledOnce()
+      fireEvent.keyUp(keyboard.textarea, { key: ' ' })
+      expect(instances[1]?.stop).toHaveBeenCalledOnce()
+      expect(keyboard.textarea.value).toBe('A ')
+    } finally {
+      vi.useRealTimers()
+      if (speechDescriptor === undefined) Reflect.deleteProperty(window, 'SpeechRecognition')
+      else Object.defineProperty(window, 'SpeechRecognition', speechDescriptor)
+      if (mediaDescriptor === undefined) Reflect.deleteProperty(navigator, 'mediaDevices')
+      else Object.defineProperty(navigator, 'mediaDevices', mediaDescriptor)
+    }
   })
 
   it('announces an image-intake rejection as a fading toast, repeatable for the same reason', () => {

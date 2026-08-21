@@ -9,4 +9,4 @@
 | [`ocr/`](ocr/README.zh.md) | 定义提供方注册、选择、归一化结果与浏览器 Remote | `ctx.ocr` |
 | [`ocr-mineru/`](ocr-mineru/README.zh.md) | 经自托管 MinerU 同步 API 提取文档 | 注册到 `ctx.ocr` |
 
-当前消费方包括对话文档导入与教师工作台的校历识别。[OCR 子系统参考](../../docs/subsystems/ocr.zh.md)记录共享请求、结果、错误与提供方约定。
+当前消费方包括面向模型的文件系统 `read_document` 工具、对话文档导入与教师工作台文档识别。[OCR 子系统参考](../../docs/subsystems/ocr.zh.md)记录共享请求、结果、错误与提供方约定。

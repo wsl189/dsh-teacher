@@ -33,6 +33,8 @@ interface ConversationAttachmentFace {
   ): Promise<SubmitOutcome>
   serializeDraftImages(imageIds: readonly DraftAttachmentId[]): Promise<readonly SubmitImageAttachment[]>
   releaseDraftImage(id: DraftAttachmentId): void
+  hasDraftDocuments(sessionId: SessionId): boolean
+  releaseSessionDocuments(sessionId: SessionId): void
 }
 
 /** Session-addressed input facade registry (SessionInputResolver face + composer-layer extras). */
@@ -78,6 +80,7 @@ export class InputHub implements SessionInputResolver {
       popup: () => this.popup(actx),
       queue: queueReadFaceOf(session),
       defaultSink: (text, imageIds, mode, signal) => this.sink(session, text, imageIds, mode, signal),
+      hasDefaultPayload: () => this.conversation().hasDraftDocuments(id),
       steerQueue: () => { void this.steerQueue(session, shell) },
       commandImages: {
         serialize: ids => this.conversation().serializeDraftImages(ids),
@@ -115,6 +118,7 @@ export class InputHub implements SessionInputResolver {
         this.shells.delete(id)
         const conversation = this.rootCtx.get('conversation') as ConversationAttachmentFace | undefined
         for (const imageId of drafts) conversation?.releaseDraftImage(imageId)
+        conversation?.releaseSessionDocuments(id)
       }
     }, 'conversation.input: session shell')
     return shell
@@ -169,7 +173,9 @@ export class InputHub implements SessionInputResolver {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome> {
-    if (text === '' && imageIds.length === 0) return Promise.resolve({ kind: 'success' })
+    if (text === '' && imageIds.length === 0 && !this.conversation().hasDraftDocuments(session.sessionId)) {
+      return Promise.resolve({ kind: 'success' })
+    }
     return this.conversation().sendSession(session, text, imageIds, mode, signal)
   }
 

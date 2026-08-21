@@ -99,9 +99,20 @@ export class OcrRuntime extends TypertRemoteService {
    */
   @Remote('extract')
   async extract(request: OcrExtractRequest): Promise<OcrExtractResult> {
+    return this.extractAbortable(request)
+  }
+
+  /**
+   * Extract one document for a same-process Consumer with cooperative cancellation.
+   * Browser Consumers use {@link extract}, whose JSON Remote cannot carry an AbortSignal.
+   * @param request - base64 document bytes and source metadata.
+   * @param signal - aborts provider work when the calling operation is cancelled.
+   * @returns normalized Markdown or a stable failure.
+   */
+  async extractAbortable(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractResult> {
     try {
       const provider = this.resolveProvider()
-      return success(await provider.extract(request))
+      return success(await provider.extract(request, signal))
     } catch (error) {
       const failure = error instanceof OcrError
         ? { code: error.code, message: error.message }
@@ -129,7 +140,7 @@ export class OcrRuntime extends TypertRemoteService {
   }
 
   /**
-   * Resolve the selected provider's current structured-layout request limits.
+   * Resolve the selected provider's current extraction request limits.
    * @returns upload and page limits, or a stable provider-selection failure.
    */
   @Remote('layoutLimits')

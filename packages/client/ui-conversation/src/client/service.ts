@@ -12,7 +12,11 @@ import type { Context } from '@deepseek-ai/cordis'
 // Type-only imports: a plugin-to-plugin value import is a bundle purity
 // error, so scope resolution goes through the sessions service (scopeOf
 // method) instead of the standalone helper.
-import type { ISessions, SessionFace, SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ISessions, SessionFace, SessionId, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { OcrExtractResult } from '@deepseek-ai/dsh-api-remotes/client'
+import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
+import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { SubmitImageAttachment, SubmitOutcome } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { ComposerAttachment } from './contract/slots.ts'
@@ -75,6 +79,40 @@ interface ImageUrlEntry {
   readonly pending: Promise<string>
 }
 
+/** Runtime-only identity of one document attached to the unsent composer. */
+export type DraftDocumentId = Branded<'DraftDocumentId'>
+
+/** Public document row rendered above the conversation textarea. */
+export interface DraftDocument {
+  readonly id: DraftDocumentId
+  readonly name: string
+  readonly status: 'extracting' | 'ready' | 'error'
+  readonly truncated?: boolean
+  readonly error?: string
+}
+
+interface DraftDocumentEntry {
+  sessionId: SessionId
+  readonly file: File
+  public: DraftDocument
+  context?: PromptDocumentContext
+}
+
+interface PromptDocumentContext {
+  readonly name: string
+  readonly markdown: string
+  readonly truncated: boolean
+}
+
+/** Generated OCR Remote subset consumed by conversation uploads. */
+export interface ConversationOcrRemote {
+  extract(request: {
+    name: string
+    mediaType: string
+    contentBase64: string
+  }): Promise<RemoteResult<OcrExtractResult>>
+}
+
 /** Unsupported browser-declared image type, localized by the UI boundary. */
 export class UnsupportedImageMediaTypeError extends Error {
   /** Browser-declared MIME value, possibly empty. */
@@ -98,6 +136,8 @@ export class ConversationController extends Service implements IConversation {
   private readonly imageUrls = new Map<string, ImageUrlEntry>()
   private readonly imageGenerations = new Map<SessionId, number>()
   private readonly createdImageUrls = new Set<string>()
+  private readonly draftDocuments = new Map<DraftDocumentId, DraftDocumentEntry>()
+  private readonly documentStores = new Map<SessionId, SnapshotStore<readonly DraftDocument[]>>()
   private disposed = false
 
   /**
@@ -107,7 +147,11 @@ export class ConversationController extends Service implements IConversation {
    * constructed by the plugin apply (the same instances the slot inject
    * factories close over).
    */
-  constructor(ctx: Context, config: { input: SessionInputResolver; blocks: ComposerBlocks }) {
+  constructor(ctx: Context, private readonly config: {
+    input: SessionInputResolver
+    blocks: ComposerBlocks
+    ocr: ConversationOcrRemote
+  }) {
     super(ctx, 'conversation')
     this.input = config.input
     this.blocks = config.blocks
@@ -118,6 +162,8 @@ export class ConversationController extends Service implements IConversation {
       this.draftAttachments.clear()
       this.imageUrls.clear()
       this.imageGenerations.clear()
+      this.draftDocuments.clear()
+      this.documentStores.clear()
     }, 'conversation attachment URL cache')
   }
 
@@ -154,11 +200,107 @@ export class ConversationController extends Service implements IConversation {
       throw new Error('conversation.sendSession: one or more draft images are no longer available')
     }
     const uploaded = await this.serializeImages(attachments.map(attachment => attachment.file))
-    const content = [...uploaded, ...(text === '' ? [] : [{ type: 'text' as const, text }])]
-    const result = await session.prompt(content, mode, signal)
+    const documents = this.documentEntries(session.sessionId)
+    const unavailable = documents.find(document => document.public.status !== 'ready' || document.context === undefined)
+    if (unavailable !== undefined) {
+      throw new Error(unavailable.public.status === 'error'
+        ? unavailable.public.error ?? 'document OCR failed'
+        : 'document OCR is still running')
+    }
+    const contexts = documents.map(document => document.context as PromptDocumentContext)
+    const fallback = text === '' && uploaded.length === 0 && contexts.length > 0
+      ? `Uploaded documents: ${contexts.map(context => context.name).join(', ')}`
+      : text
+    const content = [...uploaded, ...(fallback === '' ? [] : [{ type: 'text' as const, text: fallback }])]
+    const result = await session.prompt(content, mode, signal, contexts)
     if (!result.ok) return { kind: 'error' }
     this.releaseDraftImages(attachments)
+    this.releaseSessionDocuments(session.sessionId)
     return { kind: 'success' }
+  }
+
+  /**
+   * Observable document rows for one session composer.
+   * @param sessionId - session whose unsent document rows are observed.
+   * @returns stable store updated as OCR requests settle or rows are removed.
+   */
+  documentStore(sessionId: SessionId): SnapshotStore<readonly DraftDocument[]> {
+    let store = this.documentStores.get(sessionId)
+    if (store === undefined) {
+      store = createSnapshotStore<readonly DraftDocument[]>(
+        this.documentEntries(sessionId).map(entry => entry.public),
+      )
+      this.documentStores.set(sessionId, store)
+    }
+    return store
+  }
+
+  /**
+   * Whether a session has at least one unsent OCR document.
+   * @param sessionId - session to inspect.
+   * @returns true while any document row belongs to the session.
+   */
+  hasDraftDocuments(sessionId: SessionId): boolean {
+    return this.documentEntries(sessionId).length > 0
+  }
+
+  /**
+   * Register files immediately, then extract them through the configured MinerU OCR Remote.
+   * @param sessionId - session that owns the unsent documents.
+   * @param files - browser files to extract in selection order.
+   */
+  addDraftDocuments(sessionId: SessionId, files: readonly File[]): void {
+    for (const file of files) {
+      const id = crypto.randomUUID() as DraftDocumentId
+      const entry: DraftDocumentEntry = {
+        sessionId,
+        file,
+        public: { id, name: file.name || 'document', status: 'extracting' },
+      }
+      this.draftDocuments.set(id, entry)
+      void this.extractDocument(id, entry)
+    }
+    this.publishDocuments(sessionId)
+  }
+
+  /**
+   * Remove one unsent document; a late OCR settlement is ignored.
+   * @param id - draft document identity to remove.
+   */
+  removeDraftDocument(id: DraftDocumentId): void {
+    const entry = this.draftDocuments.get(id)
+    if (entry === undefined) return
+    this.draftDocuments.delete(id)
+    this.publishDocuments(entry.sessionId)
+  }
+
+  /**
+   * Move unsent documents with their draft when the user switches workspace.
+   * @param from - source session.
+   * @param to - destination session when it has no document rows of its own.
+   */
+  moveDraftDocuments(from: SessionId, to: SessionId): void {
+    if (from === to || this.hasDraftDocuments(to)) return
+    let changed = false
+    for (const entry of this.draftDocuments.values()) {
+      if (entry.sessionId !== from) continue
+      entry.sessionId = to
+      changed = true
+    }
+    if (!changed) return
+    this.publishDocuments(from)
+    this.publishDocuments(to)
+  }
+
+  /**
+   * Drop every unsent document owned by one session.
+   * @param sessionId - session whose runtime-only files and rows are released.
+   */
+  releaseSessionDocuments(sessionId: SessionId): void {
+    for (const [id, entry] of this.draftDocuments) {
+      if (entry.sessionId === sessionId) this.draftDocuments.delete(id)
+    }
+    this.publishDocuments(sessionId)
   }
 
   /**
@@ -344,6 +486,44 @@ export class ConversationController extends Service implements IConversation {
       data: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
       ...(file.name === '' ? {} : { name: file.name }),
     }
+  }
+
+  private documentEntries(sessionId: SessionId): DraftDocumentEntry[] {
+    return [...this.draftDocuments.values()].filter(entry => entry.sessionId === sessionId)
+  }
+
+  private publishDocuments(sessionId: SessionId): void {
+    const store = this.documentStores.get(sessionId)
+    if (store !== undefined) store.set(this.documentEntries(sessionId).map(entry => entry.public))
+  }
+
+  private async extractDocument(id: DraftDocumentId, entry: DraftDocumentEntry): Promise<void> {
+    try {
+      const carried = await this.config.ocr.extract({
+        name: entry.file.name,
+        mediaType: entry.file.type,
+        contentBase64: bytesToBase64(new Uint8Array(await entry.file.arrayBuffer())),
+      })
+      const result = carried.ok
+        ? carried.value
+        : { ok: false as const, error: { message: carried.error.message } }
+      if (!this.draftDocuments.has(id)) return
+      if (!result.ok) {
+        entry.public = { ...entry.public, status: 'error', error: result.error.message }
+      } else {
+        const { name, markdown, truncated } = result.value
+        entry.context = { name, markdown, truncated }
+        entry.public = { ...entry.public, name, status: 'ready', truncated }
+      }
+    } catch (error) {
+      if (!this.draftDocuments.has(id)) return
+      entry.public = {
+        ...entry.public,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'document OCR failed',
+      }
+    }
+    this.publishDocuments(entry.sessionId)
   }
 }
 

@@ -246,8 +246,8 @@ const SERVICE_ROLES: ServiceRole[] = [
     title: 'Uploaded-document extraction',
     mode: 'seam',
     implementations: ['ocr-mineru'],
-    consumers: ['api-remotes'],
-    note: 'Providers return bounded reading-order Markdown; browser consumers reach the selected implementation through the generated OCR Remote.',
+    consumers: ['api-remotes', 'tool-fs'],
+    note: 'Providers return bounded reading-order Markdown; browser consumers use the generated OCR Remote and filesystem agents use the conditional read_document tool.',
   },
   {
     key: 'workspaceRegistry',

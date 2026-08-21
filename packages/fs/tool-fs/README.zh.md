@@ -2,19 +2,22 @@
 
 [English](README.md) | 中文
 
-**面向模型的文件系统工具**（`read`、`read_image`、`write`、`edit`）及其**执行器**。这是文件系统栈的消费方层：拥有工具名称、JSON Schema、参数校验、提示词段、**读取窗口逻辑**和结果格式化。它**直接**通过 `ctx.fs` 提供方约定（[`@deepseek-ai/dsh-fs`](../fs)）读取、写入和编辑。新鲜度与观察策略由独立插件（[`@deepseek-ai/dsh-fs-observation-policy`](../fs-observation-policy)）通过 `fs/*` 事件门禁贡献；工具不与其方法耦合。使用施加沙箱限制的提供方时，逐会话执行需要共享沙箱策略服务，工具还会为文件系统变更提供升权路径。
+**面向模型的文件系统工具**（`read`、`read_document`、`read_image`、`write`、`edit`）及其**执行器**。这是文件系统栈的消费方层：拥有工具名称、JSON Schema、参数校验、提示词段、**读取窗口逻辑**和结果格式化。它**直接**通过 `ctx.fs` 提供方约定（[`@deepseek-ai/dsh-fs`](../fs)）读取、写入和编辑。新鲜度与观察策略由独立插件（[`@deepseek-ai/dsh-fs-observation-policy`](../fs-observation-policy)）通过 `fs/*` 事件门禁贡献；工具不与其方法耦合。使用施加沙箱限制的提供方时，逐会话执行需要共享沙箱策略服务，工具还会为文件系统变更提供升权路径。
 
 ```ts ignore-check
 // Default deployment: a ctx.fs provider, the policy plugin, then the tools.
 await ctx.plugin(LocalFileSystem, { cwd: process.cwd() }) // @deepseek-ai/dsh-fs-local
 await ctx.plugin(FsPolicy)                             // @deepseek-ai/dsh-fs-observation-policy (policy gate)
 await ctx.plugin(LocalAttachmentStore, { dshHome })       // optional — enables durable read_image results
-await ctx.plugin(ToolFs)                                  // this package — read/write/edit, plus read_image with attachments
+await ctx.plugin(OcrRuntime)                              // optional — enables read_document through the selected OCR provider
+await ctx.plugin(ToolFs)                                  // this package — text, document, image, and mutation tools
 ```
 
 `@deepseek-ai/dsh-fs-observation-policy` 是**可选的**：省略时，工具直接使用裸提供方（无条件写入/覆盖/编辑，无已观察状态）。加载这些工具的部署也应加载该插件，从而提供写入/编辑前读取行为。
 
 `read_image` 只在持久 `ctx.attachments` 服务已挂载时注册。执行时还要求确切路由的模型声明 `image` 输入，通过 `ctx.llm.resolveModelInfo` 依次从会话最新请求 header 和 agent 选项解析。
+
+`read_document` 只在 `ctx.ocr` 已挂载时注册。它通过 `ctx.fs` 解析工作区路径，在所选提供方公布的文件上限内读取，并把规范 base64 发送给 `ctx.ocr`；提供方身份和可用性仍在执行时决定。
 
 ## 配置
 
@@ -32,19 +35,21 @@ await ctx.plugin(ToolFs)                                  // this package — re
 | 工具 | 参数 | 行为 |
 |---|---|---|
 | `read` | `file_path`、`offset?`、`limit?` | 带行号的 UTF-8 内容和分页 footer。`offset` 从 1 开始；`limit` 默认为配置的 `readLimit`（2000），上限也为该值。 |
+| `read_document` | `file_path` | 通过所选 `ctx.ocr` 提供方，从 PDF、DOCX、PPTX、XLSX、PNG、JPEG、WebP、BMP 或 TIFF 提取有界的阅读顺序 Markdown。 |
 | `read_image` | `file_path` | 通过有界字节 seam 读取 PNG/JPEG/WebP/GIF 文件，经 `ctx.attachments.saveImage` 持久保存，并在小型元数据信封旁返回图像块。Harness 会在下一次模型请求前校验并缩小受支持的大图，因此模型可以直接读取源文件，无需先创建缩略图。只有确切路由的模型声明图像输入时才会成功。 |
 | `write` | `file_path`、`content` | 创建文件或完整替换文件。有策略插件时：覆盖现有文件要求先在未变版本上执行 `read`；创建新文件不需要。没有插件时：无条件执行。 |
 | `edit` | `file_path`、非空 `old_string`、`new_string`、`replace_all?` | 字面量替换；除非 `replace_all` 为 true，否则要求唯一匹配。有策略插件时：要求先执行 `read`（任何窗口），且文件此后未变。没有插件时：无条件执行。 |
 
 字段名使用 snake_case，与 Claude Code 和现有 harness 工具 schema 一致。
 
-结构化成功值分别为：`read` → `{ path, offset, lines: [{ number, text }], totalLines }`，`read_image` → `{ path, image: { attachmentId, mediaType, bytes, width, height, name?, originalDimensions?: { width, height } } }`，`write` → `{ path, operation: 'create' | 'update', before: string | null, after }`，`edit` → `{ path, before, after }`。`originalDimensions` 只在规范化过程缩小提交光栅时出现，并记录应用方向后的输入尺寸。原生渲染器会保留下方带行号的读取结果和变更确认。`write` 和 `edit` 从这些值派生可回放的 diff 卡片元数据，`read` 派生可回放的读取卡片窗口 `{ path, offset, lines, totalLines, lang? }`；仅用于执行的结构化值不会添加到 `tool/result`，图片渲染器则会发出由结果记录的持久图片块。
+结构化成功值分别为：`read` → `{ path, offset, lines: [{ number, text }], totalLines }`，`read_document` → `{ path, mediaType, provider, markdown, truncated }`，`read_image` → `{ path, image: { attachmentId, mediaType, bytes, width, height, name?, originalDimensions?: { width, height } } }`，`write` → `{ path, operation: 'create' | 'update', before: string | null, after }`，`edit` → `{ path, before, after }`。`originalDimensions` 只在规范化过程缩小提交光栅时出现，并记录应用方向后的输入尺寸。原生渲染器会保留下方带行号的读取结果和变更确认。`write` 和 `edit` 从这些值派生可回放的 diff 卡片元数据，`read` 派生可回放的读取卡片窗口 `{ path, offset, lines, totalLines, lang? }`；仅用于执行的结构化值不会添加到 `tool/result`，图片渲染器则会发出由结果记录的持久图片块。
 
 ## 工具就是执行器；策略是事件门禁
 
 工具**不**注入策略服务，也不检查任何缓存。每个工具通过 `ctx.fs.resolve(path, { cwd, signal })` 解析路径；它会传入调用 agent（智能体）的会话 cwd（`exec.agent.session.header.cwd`），使相对路径以会话工作区为基准解析并与 `dsh-tool-bash` 一致，同时把工具取消转发到解析过程（见[每会话 cwd Agent Note](../../../.agents/notes/implemented/architecture/2026-07-02-fs-per-session-cwd.zh.md)）。随后执行：
 
 - **read**：一次 `ctx.fs.stat`（用于类型、大小路由和版本），随后调用 `readText`/`streamText`，构建行窗口，再发出 `fs/observed`，使用普通 `ctx.emit`。（1 次 stat。）
+- **read_document**：在 I/O 前校验扩展名；随后一次 `ctx.fs.stat`，通过 `ctx.ocr.layoutLimits` 解析提供方文件上限，执行一次有界 `ctx.fs.readBytes`，以 `exec.signal` 调用 `ctx.ocr.extractAbortable`，并只在提取成功后发出 `fs/observed`。（1 次 stat。）
 - **read_image**：在任何 I/O 之前校验参数、扩展名、附件可用性、部署接受的媒体类型和图像路由；随后一次 `ctx.fs.stat`（目标缺失时与 `read` 一样记录 `absent` 观察）、以 `imageLimits.maxImageBytes` 与 `imageLimits.maxMessageImageBytes` 中较小者为上限的有界 `ctx.fs.readBytes`（结果是携带一张图像的一条消息）、`attachments.saveImage`（内容寻址，因此在 `tool/result` 事件追加时图像块引用的对象已持久提交），最后发出 `fs/observed`。（1 次 stat。）
 - **write**：调用 `ctx.waterfall('fs/write-intent', target, exec, () => undefined)` 取得可选防护，然后调用 `ctx.fs.writeText(target, content, intent)`，再发出 `fs/observed`。（0 次 stat。）
 - **edit**：调用 `ctx.waterfall('fs/edit-intent', target, exec, () => undefined)` 取得可选防护，然后调用 `ctx.fs.editText(target, edit, intent)`，再发出 `fs/observed`。（0 次 stat。）
@@ -55,11 +60,11 @@ await ctx.plugin(ToolFs)                                  // this package — re
 
 ## `fs/observed` 发后即忘
 
-`fs/observed` 在 read/read_image/write/edit 已经成功之后，通过普通 `ctx.emit` 发出。监听器的约定是同步且只有副作用的记录器（`@deepseek-ai/dsh-fs-observation-policy` 使用 `WeakMap.set`）；工具不保护这次发出，因此监听器抛出会作为工具的 `isError` 结果出现。异步或可能失败的观察不属于该事件。
+`fs/observed` 在 read/read_document/read_image/write/edit 已经成功之后，通过普通 `ctx.emit` 发出。监听器的约定是同步且只有副作用的记录器（`@deepseek-ai/dsh-fs-observation-policy` 使用 `WeakMap.set`）；工具不保护这次发出，因此监听器抛出会作为工具的 `isError` 结果出现。异步或可能失败的观察不属于该事件。
 
-`read` 允许并发调度，因为它唯一会改变状态的操作是同步记录版本。稍后的 `write` 或 `edit` 会在目标锁内重新检查版本，因此即使记录器发生竞态，系统也会安全地拒绝操作；两个变更工具仍保持互斥。见[并行工具调用 Agent Note](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.zh.md)。
+`read`、`read_document` 和 `read_image` 允许并发调度，因为它们的输入彼此独立，唯一共享的变更是同步记录版本。稍后的 `write` 或 `edit` 会在目标锁内重新检查版本，因此即使记录器发生竞态，系统也会安全地拒绝操作；两个变更工具仍保持互斥。见[并行工具调用 Agent Note](../../../.agents/notes/implemented/feature/2026-07-10-parallel-tool-call-execution.zh.md)。
 
-包根目录只导出 Cordis 插件约定（`name`、`inject`、`Config` 和 `apply`）。读取渲染（行窗口与输出格式化）位于 `src/read-render.ts`（不依赖 Cordis，单独进行单元测试）；`src/read.ts`/`read-image.ts`/`write.ts`/`edit.ts` 是工具执行器，`src/index.ts` 负责组合。
+包根目录只导出 Cordis 插件约定（`name`、`inject`、`Config` 和 `apply`）。读取渲染（行窗口与输出格式化）位于 `src/read-render.ts`（不依赖 Cordis，单独进行单元测试）；`src/read.ts`/`read-document.ts`/`read-image.ts`/`write.ts`/`edit.ts` 是工具执行器，`src/index.ts` 负责组合。
 
 ## 模型体验
 
@@ -67,12 +72,18 @@ await ctx.plugin(ToolFs)                                  // this package — re
 
 #### 模型看到的内容
 
-该插件注册作用域内的每个请求都会收到下方独立注册的 read、write 与 edit 指导。作用域工具限制可以隐藏 schema，而不移除这些段。
+该插件注册作用域内的每个请求都会收到下方独立注册的 read、document、write 与 edit 指导。作用域工具限制可以隐藏 schema，而不移除这些段。
 
 ##### Read 指导
 
 ```markdown
 Use the read tool — not shell commands like cat — to inspect text files. Results include line numbers. Use offset and limit to continue reading large files.
+```
+
+##### Document 指导
+
+```markdown
+Use read_document to inspect PDF, DOCX, PPTX, XLSX, or scanned document files through the configured document extractor. Use read for UTF-8 text files and read_image when visual appearance matters.
 ```
 
 ##### Write 指导
@@ -99,7 +110,7 @@ Use the edit tool for targeted changes to existing UTF-8 text files. It replaces
 
 #### 模型看到的内容
 
-模型会看到已生成的 [`read`、`read_image`、`write` 和 `edit` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-fs)，参数使用 snake_case。图片工具只在持久附件存储已挂载时出现；schema 本身与路由无关，严格门禁在执行时拒绝。作用域工具限制可以为某个 agent 移除任一定义。
+模型会看到已生成的 [`read`、`read_document`、`read_image`、`write` 和 `edit` schema](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-fs)，参数使用 snake_case。文档工具只在 `ctx.ocr` 已挂载时出现。图片工具只在持久附件存储已挂载时出现；schema 本身与路由无关，严格门禁在执行时拒绝。作用域工具限制可以为某个 agent 移除任一定义。
 
 #### Token 影响
 
@@ -122,6 +133,20 @@ Use the edit tool for targeted changes to existing UTF-8 text files. It replaces
 #### KV Cache 影响
 
 仅追加；新增可见内容位于可复用请求前缀之后，不会使现有 KV Cache 条目失效。
+
+### 文档读取结果
+
+#### 模型看到的内容
+
+成功的 `read_document` 返回 `<path><displayPath></path>`、`<type>document</type>`、`<media_type><mediaType></media_type>`、`<provider><providerId></provider>`、可选的 `<truncated>true</truncated>`，以及 `<content>` 内的提取 Markdown。提供方 id 表明由哪个已配置后端生成文本；它不是面向模型的参数。
+
+#### Token 影响
+
+提供方按其配置的输出字符上限约束 Markdown；保留的工具调用和结果会反复发送，直到工具结果保留策略或对话压缩缩短它们。
+
+#### KV Cache 影响
+
+仅追加；新提取的内容跟在可复用请求前缀之后，不会使既有 KV 缓存条目失效。
 
 ### 图像读取结果
 
@@ -168,8 +193,9 @@ Use the edit tool for targeted changes to existing UTF-8 text files. It replaces
 ## 已知限制与暂缓事项
 
 - **未交付面向模型的目录列表工具**：`ctx.fs.listDir` 服务于 skill（技能）发现等提供方代码，同级 [`dsh-tool-fs-search`](../tool-fs-search/) 包则提供基于 ripgrep 的 `glob` 与 `grep`，而不是扩展文件系统 seam。
-- **`read` 只处理 UTF-8 文本文件**：图像使用独立的、按扩展名路由的 `read_image` 工具；PDF、音频和视频仍延期处理。目录目标为 `FS_NOT_REGULAR_FILE`。
+- **`read` 只处理 UTF-8 文本文件**：受支持的文档使用 `read_document`，需要视觉检查的图像使用 `read_image`，音频和视频仍延期处理。目录目标为 `FS_NOT_REGULAR_FILE`。
+- **`read_document` 每次提取一个完整本地文件**：它没有页面窗口、URL 下载、持久文档句柄或提取缓存。旧版 DOC/PPT/XLS 文件需要先转换。
 - **媒体类型按扩展名声明**：扩展名选择声明类型，附件存储的魔数校验保持权威；扩展名错误但格式正确的图像会得到改名修复提示，而不是被嗅探接受。
 - **工具结果卡片没有内嵌图像预览**：UI 表面以通用形式渲染图像结果（持久引用而非像素）；内嵌渲染延后到 UI 包处理。
 - **没有附件局部读取工具**：图片具有文件路径时，agent 可以用其他可用工具裁剪。粘贴或拖入但没有路径的图片无法按更高分辨率重新读取。
-- **没有超时接口**：`read`/`write`/`edit` 不接受超时参数，也不声明 `timeout-policy` 预算；取消只通过 `exec.signal` 传递（见[提供方理由](../README.zh.md#no-timeouts-on-file-io)）。
+- **没有工具超时接口**：文件系统工具不接受超时参数，也不声明 `timeout-policy` 预算；取消通过 `exec.signal` 传递，所选 OCR 提供方负责其网络期限（见[提供方理由](../README.zh.md#no-timeouts-on-file-io)）。

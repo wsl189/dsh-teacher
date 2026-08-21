@@ -66,6 +66,40 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
+  it('ships the reference headteacher templates and rejects cross-class seating occupants', () => {
+    expect(INITIAL_TEACHER_WORKBENCH_STATE.noticeTemplates).toHaveLength(8)
+    expect(INITIAL_TEACHER_WORKBENCH_STATE.templates.filter(item => item.kind === 'class')).toHaveLength(3)
+    expect(INITIAL_TEACHER_WORKBENCH_STATE.templates.filter(item => item.kind === 'talk')).toHaveLength(3)
+    expect(INITIAL_TEACHER_WORKBENCH_STATE.templates.filter(item => item.kind === 'summary')).toHaveLength(3)
+    const firstClass = classItem('class-a', '一班')
+    const secondClass = classItem('class-b', '二班')
+    const parsed = teacherWorkbenchStateSchema.safeParse({
+      ...INITIAL_TEACHER_WORKBENCH_STATE,
+      classes: [firstClass, secondClass],
+      students: [{
+        id: 'student-b' as TeacherStudentId,
+        classId: secondClass.id,
+        name: '张同学',
+        studentNumber: '',
+        gender: '',
+        guardian: '',
+        relation: '',
+        phone: '',
+        address: '',
+        extras: {},
+      }],
+      seatingLayouts: [{
+        classId: firstClass.id,
+        rows: 3,
+        columns: 4,
+        slots: ['student-b', ...Array<null>(11).fill(null)],
+        updatedAt: 1,
+      }],
+    })
+    expect(parsed.success).toBe(false)
+    if (!parsed.success) expect(parsed.error.issues.map(issue => issue.message)).toContain('student belongs to another class')
+  })
+
   it('appends bounded save parts to one logical paper batch', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-question-append-'))
     temporaryRoots.push(root)
@@ -307,6 +341,9 @@ describe('TeacherWorkbenchService', () => {
         values: { '问题': '节奏' },
         updatedAt: 1,
       }],
+      noticeTemplates: [],
+      notices: [],
+      seatingLayouts: [],
       exams: [{
         id: 'exam-a' as TeacherExamId,
         classId,
@@ -662,6 +699,9 @@ describe('teacher workbench schema relationships', () => {
       resources: [resource, resource],
       templates: [template, template],
       records: [record, record],
+      noticeTemplates: [],
+      notices: [],
+      seatingLayouts: [],
       exams: [exam, exam],
       questionBatches: [],
       questionFolders: [],

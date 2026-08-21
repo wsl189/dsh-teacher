@@ -108,6 +108,62 @@
   padding: 10px 12px 0;
 }
 
+.documentRail {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 0 12px;
+}
+
+.documentChip {
+  display: flex;
+  align-items: center;
+  flex: none;
+  gap: 6px;
+  max-width: 320px;
+  min-height: 30px;
+  padding: 3px 6px 3px 8px;
+  border: 1px solid var(--dsw-alias-border-l2-darkmode-thin);
+  border-radius: 9px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.documentChipError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.documentName {
+  overflow: hidden;
+  max-width: 160px;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentStatus {
+  white-space: nowrap;
+}
+
+.documentRemove {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: inherit;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.documentRemove:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
 /* Floating overlay anchor (menu / popupSelect shell): entries position
    themselves against the card (bottom: 100% + gap); closed entries render null. */
 .overlayAnchor {
@@ -295,11 +351,12 @@
    Read-only; the chip gap widened to 12 so the pill chips read as separate
    controls. */
 .tools {
-  gap: 16px;
+  gap: 8px;
 }
 
 .modes {
   gap: 12px;
+  margin-left: 8px;
 }
 
 .trailing {
@@ -334,6 +391,21 @@
 .add:disabled {
   opacity: 0.5;
   cursor: default;
+}
+
+.fileInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.voiceActive {
+  background: var(--dsw-alias-state-business-primary);
+  color: #fff;
 }
 
 /* Plan / Read-only / model — native <select>, chip-like closed chrome

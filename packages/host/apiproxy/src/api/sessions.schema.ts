@@ -285,11 +285,19 @@ export const promptContentPartSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('image'), mediaType: imageMediaTypeSchema, data: z.string(), name: z.string().optional() }),
 ])
 
+/** Bounds for browser-supplied OCR context at the JSON wire boundary. */
+export const promptDocumentContextSchema = z.object({
+  name: z.string().min(1).max(256),
+  markdown: z.string().min(1).max(500_000),
+  truncated: z.boolean(),
+})
+
 /** session.prompt request payload, including optional browser-local request provenance. */
 export const sessionPromptRequestSchema = z.object({
   sessionId: sessionIdSchema,
   mode: z.union([z.literal('queue'), z.literal('steer')]),
   content: z.array(promptContentPartSchema),
+  contexts: z.array(promptDocumentContextSchema).max(8).optional(),
   clientTimeZone: z.string().optional(),
 }) as unknown as z.ZodType<RequestPayload<'session.prompt'>>
 

@@ -1,4 +1,4 @@
-/** Structured clipboard import and score-analysis helpers. */
+/** Structured MinerU document import and score-analysis helpers. */
 
 import type {
   TeacherExam,
@@ -88,100 +88,134 @@ const ALIASES = {
 } as const
 
 /**
- * Parse a tab/comma-separated roster copied from a spreadsheet.
- * @param source - clipboard text whose first non-empty row is the header.
+ * Parse roster rows from a MinerU document or delimited text.
+ * @param source - MinerU Markdown, HTML tables, or delimited text.
  * @returns normalized rows or a parse diagnostic.
  */
 export function parseStudentImport(source: string): StudentImportResult {
-  const table = parseTable(source)
-  const headerRow = table[0]
-  if (headerRow === undefined || table.length < 2) {
+  const tables = parseTables(source)
+  if (tables.every(table => table.length < 2)) {
     return { rows: [], error: '名册至少需要表头和一行学生数据' }
   }
-  const headers = headerRow.map(normalizeHeader)
-  const indexes = Object.fromEntries(
-    Object.entries(ALIASES).map(([field, aliases]) => [field, findHeader(headers, aliases)]),
-  ) as Record<keyof typeof ALIASES, number>
-  if (indexes.name < 0) return { rows: [], error: '未找到姓名列' }
-  const known = new Set(Object.values(indexes).filter(index => index >= 0))
-  const rows = table.slice(1).flatMap((cells) => {
-    const name = cell(cells, indexes.name)
-    if (name === '') return []
-    const extras: Record<string, string> = {}
-    cells.forEach((value, index) => {
-      const header = headerRow[index]?.trim() ?? ''
-      if (!known.has(index) && header !== '' && value.trim() !== '') extras[header] = value.trim()
-    })
-    return [{
-      name,
-      studentNumber: cell(cells, indexes.studentNumber),
-      gender: cell(cells, indexes.gender),
-      guardian: cell(cells, indexes.guardian),
-      relation: cell(cells, indexes.relation),
-      phone: cell(cells, indexes.phone),
-      address: cell(cells, indexes.address),
-      extras,
-    }]
-  })
+  const rows: StudentImportRow[] = []
+  const seenRows = new Set<string>()
+  let foundHeader = false
+  for (const table of tables) {
+    const headerIndex = table.findIndex(row => findHeader(row.map(normalizeHeader), ALIASES.name) >= 0)
+    if (headerIndex < 0) continue
+    foundHeader = true
+    const headerRow = table[headerIndex] ?? []
+    const headers = headerRow.map(normalizeHeader)
+    const indexes = Object.fromEntries(
+      Object.entries(ALIASES).map(([field, aliases]) => [field, findHeader(headers, aliases)]),
+    ) as Record<keyof typeof ALIASES, number>
+    const known = new Set(Object.values(indexes).filter(index => index >= 0))
+    for (const cells of table.slice(headerIndex + 1)) {
+      const name = cell(cells, indexes.name)
+      if (name === '' || ALIASES.name.map(normalizeHeader).includes(normalizeHeader(name))) continue
+      const extras: Record<string, string> = {}
+      cells.forEach((value, index) => {
+        const header = headerRow[index]?.trim() ?? ''
+        if (!known.has(index) && header !== '' && value.trim() !== '') extras[header] = value.trim()
+      })
+      const row = {
+        name,
+        studentNumber: cell(cells, indexes.studentNumber),
+        gender: cell(cells, indexes.gender),
+        guardian: cell(cells, indexes.guardian),
+        relation: cell(cells, indexes.relation),
+        phone: cell(cells, indexes.phone),
+        address: cell(cells, indexes.address),
+        extras,
+      }
+      const signature = JSON.stringify(row)
+      if (!seenRows.has(signature)) {
+        seenRows.add(signature)
+        rows.push(row)
+      }
+    }
+  }
+  if (!foundHeader) return { rows: [], error: '未找到姓名列' }
   return rows.length === 0 ? { rows, error: '没有可导入的学生行' } : { rows, error: null }
 }
 
 /**
  * Parse score rows and match them to one class roster by student number first,
  * then by an unambiguous name.
- * @param source - spreadsheet clipboard text.
+ * @param source - MinerU Markdown, HTML tables, or delimited text.
  * @param students - students in the selected class.
  * @returns detected subjects, matched entries, and unmatched-row count.
  */
 export function parseScoreImport(source: string, students: readonly TeacherStudent[]): ScoreImportResult {
-  const table = parseTable(source)
-  const headerRow = table[0]
-  if (headerRow === undefined || table.length < 2) {
+  const tables = parseTables(source)
+  if (tables.every(table => table.length < 2)) {
     return { subjects: [], entries: [], unmatched: 0, error: '成绩表至少需要表头和一行成绩数据' }
   }
-  const originalHeaders = headerRow.map(header => header.trim())
-  const headers = originalHeaders.map(normalizeHeader)
-  const numberIndex = findHeader(headers, ALIASES.studentNumber)
-  const nameIndex = findHeader(headers, ALIASES.name)
-  if (numberIndex < 0 && nameIndex < 0) {
-    return { subjects: [], entries: [], unmatched: 0, error: '未找到姓名或学号列' }
-  }
-  const ignored = new Set([numberIndex, nameIndex, findHeader(headers, ['排名', '名次', 'rank'])])
-  const subjectColumns = originalHeaders
-    .map((name, index) => ({ name, index }))
-    .filter(column => column.name !== '' && !ignored.has(column.index))
   const byNumber = new Map(students.filter(item => item.studentNumber !== '').map(item => [normalizeCell(item.studentNumber), item]))
   const names = new Map<string, TeacherStudent[]>()
   for (const student of students) {
     const key = normalizeCell(student.name)
     names.set(key, [...(names.get(key) ?? []), student])
   }
-  let unmatched = 0
+  const unmatchedRows = new Set<string>()
   const entries: TeacherExamEntry[] = []
-  for (const cells of table.slice(1)) {
-    const number = cell(cells, numberIndex)
-    const name = cell(cells, nameIndex)
-    const named = names.get(normalizeCell(name))
-    const student = (number === '' ? undefined : byNumber.get(normalizeCell(number)))
-      ?? (named?.length === 1 ? named[0] : undefined)
-    if (student === undefined) {
-      unmatched += 1
-      continue
+  const entryIndexes = new Map<TeacherStudentId, number>()
+  const subjects: string[] = []
+  let foundHeader = false
+  for (const table of tables) {
+    const headerIndex = table.findIndex((row) => {
+      const headers = row.map(normalizeHeader)
+      return findHeader(headers, ALIASES.studentNumber) >= 0 || findHeader(headers, ALIASES.name) >= 0
+    })
+    if (headerIndex < 0) continue
+    foundHeader = true
+    const originalHeaders = (table[headerIndex] ?? []).map(header => header.trim())
+    const headers = originalHeaders.map(normalizeHeader)
+    const numberIndex = findHeader(headers, ALIASES.studentNumber)
+    const nameIndex = findHeader(headers, ALIASES.name)
+    const ignored = new Set([numberIndex, nameIndex, findHeader(headers, ['排名', '名次', 'rank'])])
+    const subjectColumns = originalHeaders
+      .map((name, index) => ({ name, index }))
+      .filter(column => column.name !== '' && !ignored.has(column.index))
+    for (const column of subjectColumns) if (!subjects.includes(column.name)) subjects.push(column.name)
+    for (const cells of table.slice(headerIndex + 1)) {
+      const number = cell(cells, numberIndex)
+      const name = cell(cells, nameIndex)
+      if ((numberIndex >= 0 && ALIASES.studentNumber.map(normalizeHeader).includes(normalizeHeader(number)))
+        || (nameIndex >= 0 && ALIASES.name.map(normalizeHeader).includes(normalizeHeader(name)))) continue
+      if (number === '' && name === '') continue
+      const named = names.get(normalizeCell(name))
+      const student = (number === '' ? undefined : byNumber.get(normalizeCell(number)))
+        ?? (named?.length === 1 ? named[0] : undefined)
+      if (student === undefined) {
+        unmatchedRows.add(JSON.stringify(cells.map(normalizeCell)))
+        continue
+      }
+      const scores: Record<string, number> = {}
+      for (const column of subjectColumns) {
+        const raw = cells[column.index]?.trim() ?? ''
+        if (raw === '') continue
+        const value = Number(raw.replace(/，/g, '.'))
+        if (Number.isFinite(value)) scores[column.name] = value
+      }
+      if (Object.keys(scores).length > 0) {
+        const existingIndex = entryIndexes.get(student.id)
+        if (existingIndex === undefined) {
+          entryIndexes.set(student.id, entries.length)
+          entries.push({ studentId: student.id, scores })
+        } else {
+          const existing = entries[existingIndex]
+          if (existing !== undefined) {
+            entries[existingIndex] = { studentId: student.id, scores: { ...scores, ...existing.scores } }
+          }
+        }
+      }
     }
-    const scores: Record<string, number> = {}
-    for (const column of subjectColumns) {
-      const raw = cells[column.index]?.trim() ?? ''
-      if (raw === '') continue
-      const value = Number(raw.replace(/，/g, '.'))
-      if (Number.isFinite(value)) scores[column.name] = value
-    }
-    if (Object.keys(scores).length > 0) entries.push({ studentId: student.id, scores })
   }
-  const subjects = subjectColumns
-    .map(column => column.name)
-    .filter(name => entries.some(entry => entry.scores[name] !== undefined))
+  if (!foundHeader) return { subjects: [], entries: [], unmatched: 0, error: '未找到姓名或学号列' }
+  const importedSubjects = subjects.filter(name => entries.some(entry => entry.scores[name] !== undefined))
   const error = entries.length === 0 ? '没有可导入的成绩行' : null
-  return { subjects, entries, unmatched, error }
+  return { subjects: importedSubjects, entries, unmatched: unmatchedRows.size, error }
 }
 
 /**
@@ -220,10 +254,80 @@ export function summarizeExam(exam: TeacherExam, passScore: number, excellentSco
   }
 }
 
-function parseTable(source: string): string[][] {
-  const lines = source.replace(/\r\n?/g, '\n').split('\n').filter(line => line.trim() !== '')
+function parseTables(source: string): string[][][] {
+  const normalized = source.replace(/\r\n?/g, '\n')
+  const html = [...normalized.matchAll(/<table\b[^>]*>([\s\S]*?)<\/table>/giu)]
+    .map(match => parseHtmlTable(match[1] ?? ''))
+    .filter(table => table.length > 0)
+  if (html.length > 0) return html
+
+  const markdown: string[][][] = []
+  let current: string[][] = []
+  for (const line of normalized.split('\n')) {
+    const row = parseMarkdownRow(line)
+    if (row === null) {
+      if (current.length > 0) markdown.push(current)
+      current = []
+    } else if (!row.every(cell => /^:?-{3,}:?$/u.test(cell.trim()))) {
+      current.push(row)
+    }
+  }
+  if (current.length > 0) markdown.push(current)
+  if (markdown.length > 0) return markdown
+
+  const lines = normalized.split('\n').filter(line => line.trim() !== '')
   const delimiter = lines.some(line => line.includes('\t')) ? '\t' : ','
-  return lines.map(line => delimiter === '\t' ? line.split('\t') : parseCsvLine(line))
+  return [lines.map(line => delimiter === '\t' ? line.split('\t') : parseCsvLine(line))]
+}
+
+function parseHtmlTable(source: string): string[][] {
+  return [...source.matchAll(/<tr\b[^>]*>([\s\S]*?)<\/tr>/giu)].map(row => (
+    [...(row[1] ?? '').matchAll(/<(?:td|th)\b[^>]*>([\s\S]*?)<\/(?:td|th)>/giu)]
+      .map(cell => cleanDocumentCell(cell[1] ?? ''))
+  )).filter(row => row.length > 0)
+}
+
+function parseMarkdownRow(line: string): string[] | null {
+  if (!line.includes('|')) return null
+  const trimmed = line.trim().replace(/^\|/u, '').replace(/\|$/u, '')
+  const cells: string[] = []
+  let value = ''
+  let escaped = false
+  for (const char of trimmed) {
+    if (escaped) {
+      value += char
+      escaped = false
+    } else if (char === '\\') {
+      escaped = true
+    } else if (char === '|') {
+      cells.push(cleanDocumentCell(value))
+      value = ''
+    } else {
+      value += char
+    }
+  }
+  if (escaped) value += '\\'
+  cells.push(cleanDocumentCell(value))
+  return cells.length < 2 ? null : cells
+}
+
+function cleanDocumentCell(value: string): string {
+  return decodeEntities(value)
+    .replace(/<br\s*\/?\s*>/giu, ' ')
+    .replace(/<[^>]+>/gu, ' ')
+    .replace(/[*_`]/gu, '')
+    .replace(/\s+/gu, ' ')
+    .trim()
+}
+
+function decodeEntities(value: string): string {
+  return value
+    .replaceAll('&nbsp;', ' ')
+    .replaceAll('&amp;', '&')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&gt;', '>')
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
 }
 
 function parseCsvLine(line: string): string[] {

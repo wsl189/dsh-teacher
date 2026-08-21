@@ -31,7 +31,7 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [],
+  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 function commands(): TeacherWorkbenchCommands {
@@ -54,6 +54,8 @@ function commands(): TeacherWorkbenchCommands {
     deleteStudent: action(), createQuestionFolder: action(), deleteQuestionFolder: action(),
     saveResource: action(), deleteResource: action(), saveTemplate: action(),
     deleteTemplate: action(), saveRecord: action(), toggleRecord: action(), deleteRecord: action(),
+    saveNoticeTemplate: action(), deleteNoticeTemplate: action(), saveNotice: action(), deleteNotice: action(),
+    saveSeatingLayout: action(),
     saveExam: action(), deleteExam: action(),
     saveQuestionBatch: action(), replaceQuestionImage: action(), deleteQuestionImage: action(),
     deleteQuestionBatch: action(), assignQuestions: action(),

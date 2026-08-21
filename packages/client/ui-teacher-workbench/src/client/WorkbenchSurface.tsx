@@ -14,6 +14,9 @@ import { DailyManagement } from './DailyManagement.tsx'
 import { StudentRoster } from './StudentRoster.tsx'
 import { ScoreAnalysis } from './ScoreAnalysis.tsx'
 import { TeachingRecords } from './TeachingRecords.tsx'
+import { FamilyCommunication } from './FamilyCommunication.tsx'
+import { StructuredRecords } from './StructuredRecords.tsx'
+import { SeatingPlan } from './SeatingPlan.tsx'
 import { Timetable } from './Timetable.tsx'
 import { QuestionWorkbench } from './QuestionWorkbench.tsx'
 import css from './TeacherWorkbench.module.css'
@@ -33,6 +36,11 @@ const MODULE_LABELS: Record<TeacherWorkbenchModule, TeacherWorkbenchKey> = {
   students: 'module.students',
   scores: 'module.scores',
   records: 'module.records',
+  family: 'module.family',
+  classRecords: 'module.classRecords',
+  talkRecords: 'module.talkRecords',
+  seating: 'module.seating',
+  classSummary: 'module.classSummary',
 }
 
 /**
@@ -89,6 +97,11 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     saveRecord: props.saveRecord,
     toggleRecord: props.toggleRecord,
     deleteRecord: props.deleteRecord,
+    saveNoticeTemplate: props.saveNoticeTemplate,
+    deleteNoticeTemplate: props.deleteNoticeTemplate,
+    saveNotice: props.saveNotice,
+    deleteNotice: props.deleteNotice,
+    saveSeatingLayout: props.saveSeatingLayout,
     saveExam: props.saveExam,
     deleteExam: props.deleteExam,
     saveQuestionBatch: props.saveQuestionBatch,
@@ -166,7 +179,17 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                         ? <StudentRoster state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
                         : active === 'scores'
                           ? <ScoreAnalysis state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
-                          : <TeachingRecords state={snapshot.document.state} commands={commands} t={props.t} />
+                          : active === 'records'
+                            ? <TeachingRecords state={snapshot.document.state} commands={commands} t={props.t} />
+                            : active === 'family'
+                              ? <FamilyCommunication state={snapshot.document.state} commands={commands} />
+                              : active === 'seating'
+                                ? <SeatingPlan state={snapshot.document.state} commands={commands} />
+                                : <StructuredRecords
+                                  kind={active === 'classRecords' ? 'class' : active === 'talkRecords' ? 'talk' : 'summary'}
+                                  state={snapshot.document.state}
+                                  commands={commands}
+                                />
             )}
           </main>
         </div>

@@ -19,7 +19,7 @@ import type {
 import type { InputNotice } from './input/contract.ts'
 import { createChatStore } from './stores.ts'
 import { ConversationController, UnsupportedImageMediaTypeError } from './service.ts'
-import type { IConversation } from './service.ts'
+import type { DraftDocument, IConversation } from './service.ts'
 import { ComposerBlockRegistry } from './input/blocks.ts'
 import type { ComposerBlock } from './input/blocks.ts'
 import { InputHub } from './input/hub.ts'
@@ -49,7 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
@@ -72,6 +72,11 @@ const ABSENT_LEXICON = {
 }
 const ABSENT_MENU_LAUNCHER = {
   getSnapshot: (): string | null => null,
+  subscribe: () => () => {},
+}
+const EMPTY_DOCUMENTS: readonly DraftDocument[] = []
+const ABSENT_DOCUMENTS = {
+  getSnapshot: (): readonly DraftDocument[] => EMPTY_DOCUMENTS,
   subscribe: () => () => {},
 }
 
@@ -215,6 +220,7 @@ export function apply(ctx: Context): void {
       selectWorkspace: async (workspaceId) => {
         const nextId = await workspaces.connectWorkspace(workspaceId)
         if (sessionId !== undefined && nextId !== sessionId) {
+          const conversation = concreteConversation(ctx)
           const from = inputHub.shell(sessionId)
           const draft = from.snapshot.draft
           const imageIds = from.snapshot.imageIds
@@ -228,6 +234,7 @@ export function apply(ctx: Context): void {
               for (const id of imageIds) from.removeImage(id)
             }
           }
+          conversation.moveDraftDocuments(sessionId, nextId)
         }
         sessions.open(nextId)
       },
@@ -295,12 +302,19 @@ export function apply(ctx: Context): void {
           addImages: undefined,
           removeImage: undefined,
           draftImages: undefined,
+          addDocuments: undefined,
+          removeDocument: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
             submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
-          hooks: { notices: ABSENT_NOTICES, lexicon: ABSENT_LEXICON, menuLauncher: ABSENT_MENU_LAUNCHER },
+          hooks: {
+            notices: ABSENT_NOTICES,
+            lexicon: ABSENT_LEXICON,
+            menuLauncher: ABSENT_MENU_LAUNCHER,
+            documents: ABSENT_DOCUMENTS,
+          },
         }
       }
       const conversation = concreteConversation(ctx)
@@ -329,6 +343,8 @@ export function apply(ctx: Context): void {
           shell.removeImage(id)
         },
         draftImages: ids => conversation.draftImages(ids),
+        addDocuments: (files) => { conversation.addDraftDocuments(sessionId, files) },
+        removeDocument: (id) => { conversation.removeDraftDocument(id) },
         resolveSubmitMode: (running, gesture, steeringAvailable) =>
           submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
@@ -359,6 +375,7 @@ export function apply(ctx: Context): void {
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
+          documents: conversation.documentStore(sessionId),
         },
       }
     },
@@ -434,7 +451,7 @@ export function apply(ctx: Context): void {
   // registers itself as `conversation` and lives on its own child fiber.
   // Presentation registrants depend directly on their slot declarations;
   // this service remains only where conversation actions are required.
-  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks })
+  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks, ocr: ctx.remote.ocr })
 
   // The plan strip rides the input dock above the queue rows (same posture).
   ctx.plugin(todoDockEntry)

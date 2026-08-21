@@ -16,6 +16,10 @@ export type TeacherLessonResourceId = Branded<'TeacherLessonResourceId'>
 export type TeacherRecordTemplateId = Branded<'TeacherRecordTemplateId'>
 /** Opaque teaching-record identity. */
 export type TeacherRecordId = Branded<'TeacherRecordId'>
+/** Opaque family-notice template identity. */
+export type TeacherNoticeTemplateId = Branded<'TeacherNoticeTemplateId'>
+/** Opaque saved family-notice identity. */
+export type TeacherNoticeId = Branded<'TeacherNoticeId'>
 /** Opaque exam identity. */
 export type TeacherExamId = Branded<'TeacherExamId'>
 /** Opaque daily-todo identity. */
@@ -130,7 +134,7 @@ export interface TeacherLessonResource {
 }
 
 /** Template family for observation forms and teaching records. */
-export type TeacherRecordTemplateKind = 'observation' | 'teaching'
+export type TeacherRecordTemplateKind = 'observation' | 'teaching' | 'class' | 'talk' | 'summary'
 
 /** Reusable field list for one record family. */
 export interface TeacherRecordTemplate {
@@ -164,6 +168,48 @@ export interface TeacherRecord {
   /** Field label to teacher-authored value. */
   readonly values: Readonly<Record<string, string>>
   /** Host-independent last edit time in Unix epoch milliseconds. */
+  readonly updatedAt: number
+}
+
+/** Reusable information structure for one family-notice scenario. */
+export interface TeacherNoticeTemplate {
+  /** Stable identity. */
+  readonly id: TeacherNoticeTemplateId
+  /** Compact scenario name. */
+  readonly name: string
+  /** Stable icon family rendered by the browser. */
+  readonly icon: 'calendar' | 'safety' | 'study' | 'activity' | 'payment' | 'meeting' | 'material' | 'custom'
+  /** Short guidance for choosing this template. */
+  readonly hint: string
+  /** Editable facts inserted before the common notice footer. */
+  readonly starter: string
+  /** Whether the teacher may delete this template. */
+  readonly custom: boolean
+}
+
+/** One teacher-reviewed family-notice draft retained for reuse. */
+export interface TeacherNotice {
+  /** Stable identity. */
+  readonly id: TeacherNoticeId
+  /** Scenario label shown in saved notices. */
+  readonly title: string
+  /** Complete editable message. */
+  readonly content: string
+  /** Save time in Unix epoch milliseconds. */
+  readonly createdAt: number
+}
+
+/** One class-specific seating arrangement. */
+export interface TeacherSeatingLayout {
+  /** Roster class that owns the arrangement. */
+  readonly classId: TeacherClassId
+  /** Row count, where row one is nearest the teacher. */
+  readonly rows: number
+  /** Column count. */
+  readonly columns: number
+  /** Row-major roster identities or explicit empty seats. */
+  readonly slots: readonly (TeacherStudentId | null)[]
+  /** Last arrangement change in Unix epoch milliseconds. */
   readonly updatedAt: number
 }
 
@@ -400,6 +446,12 @@ export interface TeacherWorkbenchState {
   readonly templates: readonly TeacherRecordTemplate[]
   /** Authored observation and teaching records. */
   readonly records: readonly TeacherRecord[]
+  /** Built-in and teacher-authored family-notice templates. */
+  readonly noticeTemplates: readonly TeacherNoticeTemplate[]
+  /** Teacher-reviewed family-notice drafts. */
+  readonly notices: readonly TeacherNotice[]
+  /** Class-specific seating arrangements. */
+  readonly seatingLayouts: readonly TeacherSeatingLayout[]
   /** Imported exams in creation order. */
   readonly exams: readonly TeacherExam[]
   /** Persisted paper batches available for browsing and assignment. */

@@ -10,7 +10,7 @@ import type {
 // Value import from the inline-safe wire layer (not the connection plugin):
 // plugin-to-plugin value imports are a bundle purity error.
 import { transportError } from '@deepseek-ai/dsh-host-apiproxy/api'
-import type { SessionFace } from '../contract/session.ts'
+import type { PromptDocumentContext, SessionFace } from '../contract/session.ts'
 import { ConversationNodeAssembler } from './conversation-assembler.ts'
 import type { ConversationRuntime } from './conversation-assembler.ts'
 import type { ConversationEventInput, ConversationPublication } from '../contract/conversation.ts'
@@ -191,6 +191,7 @@ export class Session implements SessionFace {
     content: PromptContentPart[],
     mode: 'queue' | 'steer',
     signal?: AbortSignal,
+    contexts?: PromptDocumentContext[],
   ): Promise<RpcResult<{ accepted: true }>> {
     this.promptError = null
     this.lastAgentError = null
@@ -207,6 +208,7 @@ export class Session implements SessionFace {
           sessionId: this.sessionId,
           mode,
           content,
+          ...(contexts === undefined || contexts.length === 0 ? {} : { contexts }),
           clientTimeZone: resolvedClientTimeZone(),
         }, signal)).result
       } else if (this.address.mode === 'one-shot') {
@@ -219,13 +221,15 @@ export class Session implements SessionFace {
           },
         }
       } else {
-        if (content.some(part => part.type === 'image')) {
+        if (content.some(part => part.type === 'image') || (contexts?.length ?? 0) > 0) {
           result = {
             ok: false,
             error: {
               code: 'attachment-error',
-              message: 'Image input is unavailable for subagent continuations.',
-              details: { reason: 'SUBAGENT_IMAGE_UNSUPPORTED' },
+              message: 'File input is unavailable for subagent continuations.',
+              details: { reason: content.some(part => part.type === 'image')
+                ? 'SUBAGENT_IMAGE_UNSUPPORTED'
+                : 'SUBAGENT_DOCUMENT_UNSUPPORTED' },
             },
           }
         } else {

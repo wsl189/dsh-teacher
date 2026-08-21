@@ -92,6 +92,16 @@ export type PromptContentPart =
   | { type: 'text'; text: string }
   | { type: 'image'; mediaType: ImageMediaType; data: string; name?: string }
 
+/** Browser-extracted document text injected ahead of one human prompt. */
+export interface PromptDocumentContext {
+  /** Original browser filename shown in the durable context disclosure. */
+  name: string
+  /** Reading-order Markdown returned by the configured OCR provider. */
+  markdown: string
+  /** Whether the OCR provider removed trailing content at its output limit. */
+  truncated: boolean
+}
+
 /** Complete model selection for one session. */
 export interface ModelSelection {
   /** Registered provider route. */
@@ -352,6 +362,8 @@ export interface SessionsApi {
     sessionId: SessionId
     mode: 'queue' | 'steer'
     content: PromptContentPart[]
+    /** OCR results injected as hidden, durable model context before the human message. */
+    contexts?: PromptDocumentContext[]
     clientTimeZone?: string
   }>):
   Promise<RpcResponse<{ accepted: true; command?: { kind: 'success'; text?: string } }>>

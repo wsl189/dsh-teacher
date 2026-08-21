@@ -25,12 +25,17 @@ import type {
   TeacherLedgerCategoryId,
   TeacherLedgerEntry,
   TeacherLedgerEntryId,
+  TeacherNotice,
+  TeacherNoticeId,
+  TeacherNoticeTemplate,
+  TeacherNoticeTemplateId,
   TeacherRecord,
   TeacherRecordId,
   TeacherRecordStatus,
   TeacherRecordTemplate,
   TeacherRecordTemplateId,
   TeacherRecordTemplateKind,
+  TeacherSeatingLayout,
   TeacherQuickNote,
   TeacherQuickNoteId,
   TeacherQuestionAssignRequest,
@@ -229,7 +234,45 @@ export interface TeacherRecordInput {
   values: Record<string, string>
 }
 
-/** Exam form data after clipboard rows are matched to a roster. */
+/** Family-notice template data. */
+export interface TeacherNoticeTemplateInput {
+  /** Existing identity when editing. */
+  id?: TeacherNoticeTemplateId
+  /** Compact scenario name. */
+  name: string
+  /** Stable icon family. */
+  icon: TeacherNoticeTemplate['icon']
+  /** Template-selection guidance. */
+  hint: string
+  /** Editable information structure. */
+  starter: string
+  /** Whether the teacher may delete this template. */
+  custom: boolean
+}
+
+/** Saved family-notice data. */
+export interface TeacherNoticeInput {
+  /** Existing identity when replacing a draft. */
+  id?: TeacherNoticeId
+  /** Scenario label. */
+  title: string
+  /** Complete reviewed message. */
+  content: string
+}
+
+/** Class seating-layout data. */
+export interface TeacherSeatingLayoutInput {
+  /** Roster class that owns the arrangement. */
+  classId: TeacherClassId
+  /** Number of rows. */
+  rows: number
+  /** Number of columns. */
+  columns: number
+  /** Row-major roster identities or empty seats. */
+  slots: readonly (TeacherStudentId | null)[]
+}
+
+/** Exam form data after recognized rows are matched to a roster. */
 export interface TeacherExamInput {
   /** Existing identity when editing. */
   id?: TeacherExamId
@@ -765,6 +808,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
           .map(item => ({ ...item, entries: item.entries.filter(entry => !removedStudents.has(entry.studentId)) })),
         questionFolders: state.questionFolders.filter(item => !removedStudents.has(item.studentId)),
         questionAssignments: state.questionAssignments.filter(item => !removedStudents.has(item.studentId)),
+        seatingLayouts: state.seatingLayouts.filter(item => item.classId !== id),
       }
     })
   }
@@ -795,7 +839,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   /**
    * Merge imported roster rows into one class by student number, then name.
    * @param classId - destination class identity.
-   * @param rows - normalized spreadsheet rows.
+   * @param rows - normalized recognized rows.
    * @returns the settled persistence result.
    */
   importStudents(classId: TeacherClassId, rows: readonly StudentImportRow[]): Promise<TeacherWorkbenchActionResult> {
@@ -835,6 +879,10 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
       })),
       questionFolders: state.questionFolders.filter(item => item.studentId !== id),
       questionAssignments: state.questionAssignments.filter(item => item.studentId !== id),
+      seatingLayouts: state.seatingLayouts.map(item => ({
+        ...item,
+        slots: item.slots.map(studentId => studentId === id ? null : studentId),
+      })),
     }))
   }
 
@@ -939,6 +987,82 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
    */
   deleteRecord(id: TeacherRecordId): Promise<TeacherWorkbenchActionResult> {
     return this.mutate(state => ({ ...state, records: state.records.filter(item => item.id !== id) }))
+  }
+
+  /**
+   * Save one built-in or teacher-authored family-notice template.
+   * @param input - template fields and optional identity.
+   * @returns the settled persistence result.
+   */
+  saveNoticeTemplate(input: TeacherNoticeTemplateInput): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const item: TeacherNoticeTemplate = {
+        id: input.id ?? this.id() as TeacherNoticeTemplateId,
+        name: input.name.trim(),
+        icon: input.icon,
+        hint: input.hint.trim(),
+        starter: input.starter.trim(),
+        custom: input.custom,
+      }
+      return { ...state, noticeTemplates: upsert(state.noticeTemplates, item) }
+    })
+  }
+
+  /**
+   * Delete one teacher-authored family-notice template.
+   * @param id - template identity.
+   * @returns the settled persistence result.
+   */
+  deleteNoticeTemplate(id: TeacherNoticeTemplateId): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate(state => ({
+      ...state,
+      noticeTemplates: state.noticeTemplates.filter(item => item.id !== id || !item.custom),
+    }))
+  }
+
+  /**
+   * Save one reviewed family-notice draft.
+   * @param input - scenario label and complete message.
+   * @returns the settled persistence result.
+   */
+  saveNotice(input: TeacherNoticeInput): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const item: TeacherNotice = {
+        id: input.id ?? this.id() as TeacherNoticeId,
+        title: input.title.trim(),
+        content: input.content.trim(),
+        createdAt: this.now(),
+      }
+      return { ...state, notices: upsert(state.notices, item) }
+    })
+  }
+
+  /**
+   * Delete one saved family-notice draft.
+   * @param id - saved-notice identity.
+   * @returns the settled persistence result.
+   */
+  deleteNotice(id: TeacherNoticeId): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate(state => ({ ...state, notices: state.notices.filter(item => item.id !== id) }))
+  }
+
+  /**
+   * Replace one class's seating arrangement.
+   * @param input - complete grid and row-major occupants.
+   * @returns the settled persistence result.
+   */
+  saveSeatingLayout(input: TeacherSeatingLayoutInput): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const item: TeacherSeatingLayout = {
+        ...input,
+        slots: [...input.slots],
+        updatedAt: this.now(),
+      }
+      return {
+        ...state,
+        seatingLayouts: upsertBy(state.seatingLayouts, item, layout => layout.classId),
+      }
+    })
   }
 
   /**
@@ -1272,6 +1396,15 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
 
 function upsert<T extends { id: string }>(items: readonly T[], item: T): T[] {
   const index = items.findIndex(candidate => candidate.id === item.id)
+  if (index < 0) return [...items, item]
+  const next = [...items]
+  next[index] = item
+  return next
+}
+
+function upsertBy<T>(items: readonly T[], item: T, key: (value: T) => unknown): T[] {
+  const itemKey = key(item)
+  const index = items.findIndex(candidate => key(candidate) === itemKey)
   if (index < 0) return [...items, item]
   const next = [...items]
   next[index] = item

@@ -2,7 +2,7 @@
 
 [English](ocr.md) | 中文
 
-OCR 能力把提供方无关提取（[dsh-ocr](../../packages/ocr/ocr)）与自托管 MinerU 实现（[dsh-ocr-mineru](../../packages/ocr/ocr-mineru)）及浏览器消费方分离。`ctx.ocr` 在执行时选择一个提供方，并经 Typert `ocr.extract` Remote 开放归一化 Markdown，或经 `ocr.layout` 开放归一化页面几何信息。原始上传与几何信息都是瞬时数据；各消费方拥有对文本或源文档切图的后续持久化。
+OCR 能力把提供方无关提取（[dsh-ocr](../../packages/ocr/ocr)）与自托管 MinerU 实现（[dsh-ocr-mineru](../../packages/ocr/ocr-mineru)）及其消费方分离。`ctx.ocr` 在执行时选择一个提供方，并经 Typert `ocr.extract` Remote 或同进程可取消操作开放归一化 Markdown，再经 `ocr.layout` 开放归一化页面几何信息。浏览器上传与几何信息都是瞬时数据；文件系统 `read_document` 消费方把渲染后的 Markdown 记录为普通工具结果，各领域消费方则拥有后续持久记录或源文档切图。
 
 源码：[`packages/ocr/ocr/src/types.ts`](../../packages/ocr/ocr/src/types.ts)
 
@@ -151,9 +151,9 @@ interface OcrLayoutDocument {
 ```
 
 ```ts type-equiv
-/** Provider limits a browser Consumer uses to split source PDFs before upload. */
+/** Provider limits Consumers use to bound extraction and split structured source PDFs. */
 interface OcrLayoutLimits {
-  /** Maximum decoded bytes accepted in one layout request. */
+  /** Maximum decoded bytes accepted in one extraction or layout request. */
   readonly maxFileBytes: number
   /** Maximum pages parsed in one layout request. */
   readonly maxPagesPerRequest: number
@@ -201,7 +201,7 @@ interface OcrProvider {
   readonly id: string
   /** Cheap local usability check that performs no network request. */
   available(): boolean
-  /** @returns current upload and page limits for one structured-layout request. */
+  /** @returns current byte and page limits for extraction requests. */
   layoutLimits(): OcrLayoutLimits
   /**
    * Extract one document.
@@ -252,6 +252,15 @@ registerProvider(provider: OcrProvider): () => void
 @Remote('extract') async extract(request: OcrExtractRequest): Promise<OcrExtractResult>
 
 /**
+ * Extract one document for a same-process Consumer with cooperative cancellation.
+ * Browser Consumers use {@link extract}, whose JSON Remote cannot carry an AbortSignal.
+ * @param request - base64 document bytes and source metadata.
+ * @param signal - aborts provider work when the calling operation is cancelled.
+ * @returns normalized Markdown or a stable failure.
+ */
+async extractAbortable(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractResult>
+
+/**
  * Extract structured page geometry through the selected provider.
  * @param request - base64 document bytes and optional inclusive page window.
  * @returns normalized pages and coordinates or a stable failure.
@@ -259,7 +268,7 @@ registerProvider(provider: OcrProvider): () => void
 @Remote('layout') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>
 
 /**
- * Resolve the selected provider's current structured-layout request limits.
+ * Resolve the selected provider's current extraction request limits.
  * @returns upload and page limits, or a stable provider-selection failure.
  */
 @Remote('layoutLimits') layoutLimits(): OcrLayoutLimitsResult

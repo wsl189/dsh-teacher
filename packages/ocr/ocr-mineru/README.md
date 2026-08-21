@@ -34,7 +34,7 @@ The configured endpoint receives each complete uploaded request file. A Consumer
 
 ## Model Experience
 
-Indirectly, through `dsh-ocr` Consumers that decide whether extracted Markdown enters a model request; this provider contributes no prompt or schema itself.
+Indirectly, through `dsh-ocr` Consumers: the filesystem Consumer exposes MinerU output directly to the model as `read_document`, while browser Consumers decide whether uploaded-document Markdown enters a model request; this provider contributes no prompt or schema itself.
 
 #### KV Cache effect
 

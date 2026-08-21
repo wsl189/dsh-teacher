@@ -1,0 +1,23 @@
+- dialog "上传并识别学生名册":
+  - heading "上传并识别学生名册" [level=2]
+  - button "关闭工作台":
+    - img
+  - strong: 高一（1）班
+  - text: 高一一班名册.xlsx · 识别到 1 名学生，请确认后导入
+  - table:
+    - rowgroup:
+      - row "学号 姓名 性别 监护人 电话":
+        - columnheader "学号"
+        - columnheader "姓名"
+        - columnheader "性别"
+        - columnheader "监护人"
+        - columnheader "电话"
+    - rowgroup:
+      - row "002 李同学 女 李女士 13800000000":
+        - cell "002"
+        - cell "李同学"
+        - cell "女"
+        - cell "李女士"
+        - cell "13800000000"
+  - button "取消"
+  - button "导入 1 名学生"

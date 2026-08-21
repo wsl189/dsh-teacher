@@ -1,0 +1,129 @@
+- heading "可视化排座位" [level=2]
+- combobox "选择班级":
+  - option "高一（1）班" [selected]
+- button "导入名单"
+- button "随机分配"
+- button "导出图片"
+- text: 已恢复适合当前班级人数的 5 排 × 6 列布局
+- complementary:
+  - heading "待安排 0人" [level=3]
+  - textbox:
+    - /placeholder: 搜索学生
+  - paragraph: 全部学生已安排
+- text: 教室后方
+- strong: 5 排 × 6 列 · 30 个座位
+- button "5排 · 1列 空位":
+  - text: 5排 · 1列
+  - strong: 空位
+- button "5排 · 2列 空位":
+  - text: 5排 · 2列
+  - strong: 空位
+- button "5排 · 3列 空位":
+  - text: 5排 · 3列
+  - strong: 空位
+- button "5排 · 4列 空位":
+  - text: 5排 · 4列
+  - strong: 空位
+- button "5排 · 5列 空位":
+  - text: 5排 · 5列
+  - strong: 空位
+- button "5排 · 6列 空位":
+  - text: 5排 · 6列
+  - strong: 空位
+- button "4排 · 1列 空位":
+  - text: 4排 · 1列
+  - strong: 空位
+- button "4排 · 2列 空位":
+  - text: 4排 · 2列
+  - strong: 空位
+- button "4排 · 3列 空位":
+  - text: 4排 · 3列
+  - strong: 空位
+- button "4排 · 4列 空位":
+  - text: 4排 · 4列
+  - strong: 空位
+- button "4排 · 5列 空位":
+  - text: 4排 · 5列
+  - strong: 空位
+- button "4排 · 6列 空位":
+  - text: 4排 · 6列
+  - strong: 空位
+- button "3排 · 1列 空位":
+  - text: 3排 · 1列
+  - strong: 空位
+- button "3排 · 2列 空位":
+  - text: 3排 · 2列
+  - strong: 空位
+- button "3排 · 3列 空位":
+  - text: 3排 · 3列
+  - strong: 空位
+- button "3排 · 4列 空位":
+  - text: 3排 · 4列
+  - strong: 空位
+- button "3排 · 5列 空位":
+  - text: 3排 · 5列
+  - strong: 空位
+- button "3排 · 6列 空位":
+  - text: 3排 · 6列
+  - strong: 空位
+- button "2排 · 1列 空位":
+  - text: 2排 · 1列
+  - strong: 空位
+- button "2排 · 2列 空位":
+  - text: 2排 · 2列
+  - strong: 空位
+- button "2排 · 3列 空位":
+  - text: 2排 · 3列
+  - strong: 空位
+- button "2排 · 4列 空位":
+  - text: 2排 · 4列
+  - strong: 空位
+- button "2排 · 5列 空位":
+  - text: 2排 · 5列
+  - strong: 空位
+- button "2排 · 6列 空位":
+  - text: 2排 · 6列
+  - strong: 空位
+- button "1排 · 1列 张同学":
+  - text: 1排 · 1列
+  - strong: 张同学
+- button "1排 · 2列 空位":
+  - text: 1排 · 2列
+  - strong: 空位
+- button "1排 · 3列 空位":
+  - text: 1排 · 3列
+  - strong: 空位
+- button "1排 · 4列 空位":
+  - text: 1排 · 4列
+  - strong: 空位
+- button "1排 · 5列 空位":
+  - text: 1排 · 5列
+  - strong: 空位
+- button "1排 · 6列 空位":
+  - text: 1排 · 6列
+  - strong: 空位
+- text: 讲台 · 教师视角 黑 板 在教师身后
+- complementary:
+  - heading "排座规则" [level=3]
+  - button "重置"
+  - text: 排数
+  - combobox "排数":
+    - option "3 排"
+    - option "4 排"
+    - option "5 排" [selected]
+    - option "6 排"
+    - option "7 排"
+    - option "8 排"
+  - text: 列数
+  - combobox "列数":
+    - option "4 列"
+    - option "5 列"
+    - option "6 列" [selected]
+    - option "7 列"
+    - option "8 列"
+    - option "9 列"
+    - option "10 列"
+  - strong: 50人班级可完整呈现
+  - paragraph: 默认会根据人数扩展到最多 10 列。先随机分配，再把任意学生拖到空位或座位；第 1 排离讲台最近。
+  - button "随机分配后手动调整"
+  - paragraph: 不根据成绩、性格等信息自动评价学生，最终选择权留给老师。

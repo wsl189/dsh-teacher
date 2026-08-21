@@ -70,6 +70,7 @@ flowchart LR
   pkg_ocr["ocr"]
   svc_ocr["ctx.ocr<br/>Uploaded-document extraction"]
   pkg_ocr_mineru["ocr-mineru"]
+  pkg_tool_fs["tool-fs"]
   svc_workspaceRegistry["ctx.workspaceRegistry<br/>Workspace entity registry"]
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
@@ -85,7 +86,6 @@ flowchart LR
   pkg_system_prompt["system-prompt"]
   svc_systemPrompt["ctx.systemPrompt<br/>System prompt assembly registry"]
   pkg_tools["tools"]
-  pkg_tool_fs["tool-fs"]
   pkg_tool_terminal["tool-terminal"]
   pkg_tool_web["tool-web"]
   svc_tools["ctx.tools<br/>Tool registry and guarded execution pipeline"]
@@ -352,6 +352,7 @@ flowchart LR
   svc_llm --> pkg_compaction_basic
   svc_lsp --> pkg_tool_lsp
   svc_ocr --> pkg_api_remotes
+  svc_ocr --> pkg_tool_fs
   svc_sandbox --> pkg_bash_sandbox
   svc_sandbox --> pkg_terminal_bash
   svc_sandboxPolicy --> pkg_bash_sandbox
@@ -454,7 +455,7 @@ flowchart LR
 | `ctx.storageDomain` | `core` | [`storage-domain`](../packages/storage/storage-domain) | - | [`workspace`](../packages/workspace/workspace), [`message-feedback`](../packages/feedback/message-feedback), [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | Waits for every configured backend, then publishes the domain form as one lifecycle-bound service for typed durable state. |
 | `ctx.teacherWorkbench` | `core` | [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | [`api-remotes`](../packages/api/remotes) | - | Owns the revisioned lesson, roster, score, and teaching-record document; the GUI reaches it through generated unary Remote methods. |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry. |
-| `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`api-remotes`](../packages/api/remotes) | - | Providers return bounded reading-order Markdown; browser consumers reach the selected implementation through the generated OCR Remote. |
+| `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`api-remotes`](../packages/api/remotes), [`tool-fs`](../packages/fs/tool-fs) | - | Providers return bounded reading-order Markdown; browser consumers use the generated OCR Remote and filesystem agents use the conditional read_document tool. |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | `apiproxy` | - | Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections. |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering. |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | - | - | The interface returns path-only completion candidates within the addressed Agent cwd through its unary Remote contract; providers own namespace access and ranking without reading file contents. |

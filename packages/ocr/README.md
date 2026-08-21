@@ -9,4 +9,4 @@ This family extracts reading-order Markdown from uploaded documents without bind
 | [`ocr/`](ocr/README.md) | Defines provider registration, selection, normalized results, and the browser Remote | `ctx.ocr` |
 | [`ocr-mineru/`](ocr-mineru/README.md) | Extracts documents through a self-hosted MinerU synchronous API | registers on `ctx.ocr` |
 
-The current Consumers are conversation document intake and school-calendar recognition in the teacher workbench. The [OCR subsystem reference](../../docs/subsystems/ocr.md) owns the shared request, result, error, and provider contracts.
+The current Consumers are the model-facing `read_document` filesystem tool, conversation document intake, and teacher-workbench document recognition. The [OCR subsystem reference](../../docs/subsystems/ocr.md) owns the shared request, result, error, and provider contracts.

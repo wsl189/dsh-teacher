@@ -51,6 +51,8 @@ export interface SessionInputDeps {
     mode: InputSubmitMode,
     signal: AbortSignal,
   ): Promise<SubmitOutcome>
+  /** Whether the default sink owns non-text payload not represented by image ids. */
+  hasDefaultPayload?: (() => boolean) | undefined
   /** Command-plane image plumbing (the hub owns the conversation face and the copy). */
   commandImages: {
     /** Resolve ordered draft ids to wire payloads without sending them; rejects when an id no longer resolves. */
@@ -100,8 +102,8 @@ export class SessionInputShell implements SessionInput {
   private noticeSeq = 0
   private lastMirroredDraft = ''
   private imageIds: readonly DraftAttachmentId[] = []
-  /** One image-only send at a time: Enter during the Host round-trip is a no-op. */
-  private imageSendInFlight = false
+  /** One attachment-only send at a time: Enter during the Host round-trip is a no-op. */
+  private attachmentSendInFlight = false
   private disposed = false
   /** Draft persistence mirror (chat store write; receives the clipboard projection, never display-only ranges). */
   private mirrorFn: ((text: string) => void) | undefined
@@ -207,17 +209,17 @@ export class SessionInputShell implements SessionInput {
    * dismisses and the menu tracks frozen.
    */
   submit(mode: InputSubmitMode = 'queue'): void {
-    if (this.snapshot.draft.trim() === '' && this.imageIds.length > 0) {
-      if (this.snapshot.phase === 'plain' && !this.imageSendInFlight) {
+    if (this.snapshot.draft.trim() === '' && (this.imageIds.length > 0 || this.deps.hasDefaultPayload?.() === true)) {
+      if (this.snapshot.phase === 'plain' && !this.attachmentSendInFlight) {
         const imageIds = [...this.imageIds]
-        this.imageSendInFlight = true
+        this.attachmentSendInFlight = true
         void this.deps.defaultSink('', imageIds, mode, new AbortController().signal).then((outcome) => {
-          this.imageSendInFlight = false
+          this.attachmentSendInFlight = false
           if (this.disposed) return
           if (outcome.kind === 'success') this.commitSend(imageIds)
           else if (outcome.text !== undefined) this.notify('error', outcome.text)
         }, (error: unknown) => {
-          this.imageSendInFlight = false
+          this.attachmentSendInFlight = false
           if (!this.disposed) this.notify('error', error instanceof Error ? error.message : String(error))
         })
       }

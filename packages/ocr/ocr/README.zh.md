@@ -24,7 +24,7 @@ Typert 命名空间为 `ocr`，通过 `extract`、`layout` 与 `layoutLimits` �
 
 ## 模型体验
 
-间接影响：例如 `dsh-client-ui-conversation` 等消费方可把提取的 Markdown 放入普通用户消息，本运行时自身不添加提示词或 schema。
+间接影响：`ctx.ocr` 存在时，`dsh-tool-fs` 会注册面向模型的 `read_document` schema；`dsh-client-ui-conversation` 等浏览器消费方也可把提取的 Markdown 放入普通用户消息。本运行时自身不添加提示词或 schema。
 
 #### KV Cache 影响
 
@@ -34,5 +34,5 @@ Typert 命名空间为 `ocr`，通过 `extract`、`layout` 与 `layoutLimits` �
 
 - **单次请求使用 JSON base64 传输**：每个请求携带一个完整文件，并在提供方处理前扩大字节占用。消费方可按 `layoutLimits` 拆分 PDF，但尚未开放流式与断点续传。
 - **无提取缓存**：重复上传会再次调用所选提供方；需要去重的消费方必须连同保留策略一起拥有它。
-- **浏览器 Remote 无取消信号**：提供方调用有部署超时，但当前 Typert 方法不携带浏览器中止信号。
+- **浏览器 Remote 无取消信号**：同进程消费方可通过 `extractAbortable` 转发中止信号，但 Typert 方法不能携带浏览器中止信号。
 - **版面精度由提供方决定**：页面坐标与阅读顺序会被归一化，但识别质量仍由所选解析器负责；领域消费方必须校验或复核派生区域。

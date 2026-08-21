@@ -25,6 +25,11 @@ const VOICE_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'voice-error.expected.md')
 const WEATHER_COMPACT_EXPECTED = join(SNAPSHOT_DIR, 'weather-compact.expected.md')
 const WEATHER_EXPECTED = join(SNAPSHOT_DIR, 'weather.expected.md')
 const CALENDAR_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'calendar-import.expected.md')
+const ROSTER_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'roster-import.expected.md')
+const SCORE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'score-import.expected.md')
+const HEADTEACHER_FAMILY_EXPECTED = join(SNAPSHOT_DIR, 'headteacher-family.expected.md')
+const HEADTEACHER_RECORD_EXPECTED = join(SNAPSHOT_DIR, 'headteacher-record.expected.md')
+const HEADTEACHER_SEATING_EXPECTED = join(SNAPSHOT_DIR, 'headteacher-seating.expected.md')
 const TIMETABLE_EXPECTED = join(SNAPSHOT_DIR, 'timetable.expected.md')
 const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-delete.expected.md')
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
@@ -34,6 +39,8 @@ const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
 const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
+const DOCUMENT_CONTEXT_EXPECTED = join(SNAPSHOT_DIR, 'document-context.expected.md')
+const DOCUMENT_CONTEXT_FIXTURE = join(SNAPSHOT_DIR, 'document-context.session.jsonl')
 const MODE = webSnapshotMode()
 
 describe('web e2e: durable teacher workbench', () => {
@@ -315,9 +322,33 @@ describe('web e2e: durable teacher workbench', () => {
     await studentEditor.getByRole('button', { name: '保存' }).click()
     await studentEditor.waitFor({ state: 'hidden', timeout: 10_000 })
 
+    minerUMarkdown = `
+| 姓名 | 学号 | 性别 | 监护人 | 电话 |
+| --- | --- | --- | --- | --- |
+| 李同学 | 002 | 女 | 李女士 | 13800000000 |
+`
+    await workbench.locator('input[type="file"]').setInputFiles({
+      name: '高一一班名册.xlsx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      buffer: Buffer.from('workbook-fixture'),
+    })
+    const rosterReview = page.getByRole('dialog', { name: '上传并识别学生名册' })
+    await rosterReview.getByText('高一一班名册.xlsx · 识别到 1 名学生，请确认后导入').waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      ROSTER_IMPORT_EXPECTED,
+      await captureStableAria(page, '[class*="calendarImportDialog"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await rosterReview.getByRole('button', { name: '导入 1 名学生' }).click()
+    await rosterReview.waitFor({ state: 'hidden', timeout: 10_000 })
+    await workbench.getByText('李同学', { exact: true }).waitFor({ timeout: 10_000 })
+
     const saved = await scaffold.ctx.teacherWorkbench.read({})
     expect(saved.value.state.classes).toMatchObject([{ name: '高一（1）班', subject: '数学' }])
-    expect(saved.value.state.students).toMatchObject([{ name: '张同学', studentNumber: '001' }])
+    expect(saved.value.state.students).toMatchObject([
+      { name: '张同学', studentNumber: '001' },
+      { name: '李同学', studentNumber: '002' },
+    ])
     await compareOrRefreshGolden(
       WORKBENCH_EXPECTED,
       await captureStableAria(page, '[data-workbench-surface]', scaffold.workspaceCwd),
@@ -329,6 +360,148 @@ describe('web e2e: durable teacher workbench', () => {
     await openModule('学生名册')
     await page.getByRole('heading', { name: '高一（1）班' }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('张同学', { exact: true }).count()).toBe(1)
+    expect(await page.getByText('李同学', { exact: true }).count()).toBe(1)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('persists the five headteacher workspaces through the real Web transport', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-headteacher'))
+    const workbench = page.getByRole('region', { name: '工作台', exact: true })
+    const moduleList = page.locator('[class*="sidebarModules"]')
+    const workbenchTrigger = page.getByRole('button', { name: '打开工作台', exact: true })
+    if (await workbenchTrigger.getAttribute('aria-expanded') !== 'true') await workbenchTrigger.click()
+    const moduleListLayout = await moduleList.evaluate((element) => {
+      const viewport = element.getBoundingClientRect()
+      const fullyVisible = [...element.querySelectorAll('button')].filter((button) => {
+        const item = button.getBoundingClientRect()
+        return item.top >= viewport.top && item.bottom <= viewport.bottom
+      }).length
+      return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, fullyVisible }
+    })
+    expect(moduleListLayout).toMatchObject({ clientHeight: 180, fullyVisible: 5 })
+    expect(moduleListLayout.scrollHeight).toBeGreaterThan(moduleListLayout.clientHeight)
+    const current = await scaffold.ctx.teacherWorkbench.read({})
+    const rosterClass = current.value.state.classes.find(item => item.usage === 'roster')
+    if (rosterClass === undefined) {
+      await openModule('学生名册')
+      await workbench.getByRole('button', { name: '新建班级' }).click()
+      const classEditor = page.getByRole('dialog', { name: '新建班级' })
+      await classEditor.getByLabel('班级名称').fill('高一（1）班')
+      await classEditor.getByLabel('年级').fill('高一')
+      await classEditor.getByLabel('学科').fill('数学')
+      await classEditor.getByRole('button', { name: '保存' }).click()
+      await classEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+    }
+    if (rosterClass === undefined || current.value.state.students.every(student => student.classId !== rosterClass.id)) {
+      await openModule('学生名册')
+      await workbench.getByRole('button', { name: '添加学生' }).click()
+      const studentEditor = page.getByRole('dialog', { name: '添加学生' })
+      await studentEditor.getByLabel('姓名').fill('张同学')
+      await studentEditor.getByLabel('学号').fill('001')
+      await studentEditor.getByRole('button', { name: '保存' }).click()
+      await studentEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+    }
+
+    await openModule('家校沟通')
+    await workbench.getByLabel('重点时间（可选）').fill('9月1日 8:00')
+    await workbench.getByRole('button', { name: '生成可编辑初稿' }).click()
+    await workbench.getByRole('button', { name: '保存', exact: true }).click()
+    await workbench.locator('[class*="savedNotices"]').getByText('放假通知', { exact: true }).waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      HEADTEACHER_FAMILY_EXPECTED,
+      await captureStableAria(page, '[class*="communicationView"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    for (const [moduleName, title] of [
+      ['班级记录', '班级日常巡查'],
+      ['谈话记录', '学生谈心谈话'],
+      ['班级总结', '第一周班级总结'],
+    ] as const) {
+      await openModule(moduleName)
+      await workbench.getByRole('button', { name: '新建记录' }).click()
+      const editor = page.getByRole('dialog', { name: '新建记录' })
+      await editor.getByLabel('标题').fill(title)
+      await editor.getByRole('button', { name: '保存记录' }).click()
+      await editor.waitFor({ state: 'hidden', timeout: 10_000 })
+      await workbench.getByText(title, { exact: true }).waitFor({ timeout: 10_000 })
+      if (moduleName === '班级记录') {
+        await compareOrRefreshGolden(
+          HEADTEACHER_RECORD_EXPECTED,
+          await captureStableAria(page, '[class*="structuredRecords"]', scaffold.workspaceCwd),
+          MODE,
+        )
+      }
+    }
+
+    await openModule('排座位')
+    await workbench.getByRole('button', { name: '随机分配', exact: true }).click()
+    await workbench.getByText('已随机分配；空位保留，可继续任意拖拽调整', { exact: true }).waitFor({ timeout: 10_000 })
+    await workbench.getByRole('button', { name: '重置', exact: true }).click()
+    await workbench.getByText('已恢复适合当前班级人数的 5 排 × 6 列布局', { exact: true }).waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      HEADTEACHER_SEATING_EXPECTED,
+      await captureStableAria(page, '[class*="seatingView"]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await expect.poll(async () => {
+      const snapshot = await scaffold.ctx.teacherWorkbench.read({})
+      return {
+        notices: snapshot.value.state.notices.length,
+        records: snapshot.value.state.records.filter((record) => {
+          const template = snapshot.value.state.templates.find(candidate => candidate.id === record.templateId)
+          return template?.kind === 'class' || template?.kind === 'talk' || template?.kind === 'summary'
+        }).length,
+        seatingLayouts: snapshot.value.state.seatingLayouts.length,
+      }
+    }, { timeout: 10_000 }).toEqual({ notices: 1, records: 3, seatingLayouts: 1 })
+
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openModule('班级总结')
+    await page.getByText('第一周班级总结', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('recognizes and imports a roster-matched score sheet', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-score-import'))
+    await openModule('成绩分析')
+    const workbench = page.getByRole('region', { name: '工作台', exact: true })
+    minerUMarkdown = `
+<table>
+  <tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr>
+  <tr><td>张同学</td><td>001</td><td>88</td><td>95</td></tr>
+  <tr><td>李同学</td><td>002</td><td>92</td><td>90</td></tr>
+</table>
+`
+    await workbench.locator('input[type="file"]').setInputFiles({
+      name: '期中成绩.jpg',
+      mimeType: 'image/jpeg',
+      buffer: await readFile(RASTER_FIXTURE),
+    })
+    const scoreReview = page.getByRole('dialog', { name: '上传并识别成绩表' })
+    await scoreReview.getByText('期中成绩.jpg · 匹配到 2 名学生，请确认后导入').waitFor({ timeout: 10_000 })
+    await scoreReview.getByLabel('考试日期').fill('2026-08-22')
+    await compareOrRefreshGolden(
+      SCORE_IMPORT_EXPECTED,
+      await captureStableAria(page, '[class*="calendarImportDialog"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await scoreReview.getByRole('button', { name: '导入 2 条成绩' }).click()
+    await scoreReview.waitFor({ state: 'hidden', timeout: 10_000 })
+    await workbench.getByRole('strong').filter({ hasText: /^183$/u }).waitFor({ timeout: 10_000 })
+    await expect.poll(async () => {
+      const snapshot = await scaffold.ctx.teacherWorkbench.read({})
+      return snapshot.value.state.exams.map(exam => ({ name: exam.name, date: exam.date, entries: exam.entries }))
+    }, { timeout: 10_000 }).toMatchObject([{
+      name: '期中成绩',
+      date: '2026-08-22',
+      entries: [
+        { scores: { 语文: 88, 数学: 95 } },
+        { scores: { 语文: 92, 数学: 90 } },
+      ],
+    }])
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -639,7 +812,10 @@ describe('web e2e: durable teacher workbench', () => {
         }).length,
       }
     }, { timeout: 10_000 }).toEqual({ normalClasses: 0, orphanedEntries: 0 })
-    expect(await workbench.getByRole('button', { name: '选择班级' }).isDisabled()).toBe(true)
+    await expect.poll(
+      () => workbench.getByRole('button', { name: '选择班级' }).isDisabled(),
+      { timeout: 10_000 },
+    ).toBe(true)
     expect(await workbench.getByRole('button', { name: '删除班级' }).count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
@@ -794,25 +970,100 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('extracts an uploaded document into the ordinary conversation draft', async () => {
+  it('keeps extracted document text out of the ordinary conversation draft', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-conversation-document-draft'))
     await showConversation()
     minerUMarkdown = '# 教学计划\n\n第一章：函数与图像'
     const composer = page.locator('[data-composer-card]')
-    await composer.getByRole('button', { name: '添加图片或文档' }).waitFor({ timeout: 10_000 })
-    await composer.locator('input[type="file"]').setInputFiles({
+    const uploadButton = composer.getByRole('button', { name: '上传文件并用 MinerU OCR 识别' })
+    await uploadButton.waitFor({ timeout: 10_000 })
+    const documentInput = composer.locator('input[type="file"][accept*=".docx"]')
+    await documentInput.setInputFiles({
       name: 'lesson-plan.docx',
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       buffer: Buffer.from('keyless document fixture'),
     })
     const input = composer.locator('textarea')
-    await expect.poll(() => input.inputValue(), { timeout: 10_000 }).toContain('<document name="lesson-plan.docx">')
-    expect(await input.inputValue()).toContain('# 教学计划\n\n第一章：函数与图像')
+    await composer.getByText('已识别', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await input.inputValue()).toBe('')
+    await input.fill('请总结这份教学计划')
     await compareOrRefreshGolden(
       DOCUMENT_DRAFT_EXPECTED,
       await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd),
       MODE,
     )
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+})
+
+describe('web e2e: hidden MinerU conversation context', () => {
+  let scaffold: WebScaffold
+  let browser: Browser
+  let page: Page
+  let tripwire: ReturnType<typeof watchConsole>
+  let minerUServer: Server
+
+  beforeAll(async () => {
+    minerUServer = createServer((request, response) => {
+      const chunks: Uint8Array[] = []
+      request.on('data', (chunk: Uint8Array) => { chunks.push(chunk) })
+      request.on('end', () => {
+        const upload = Buffer.concat(chunks).toString('latin1')
+        if (request.method !== 'POST' || request.url !== '/file_parse' || !upload.includes('return_md')) {
+          response.writeHead(400).end()
+          return
+        }
+        response.setHeader('content-type', 'application/json')
+        response.end(JSON.stringify({
+          results: { document: { md_content: '# 教学计划\n\n第一章：函数与图像' } },
+        }))
+      })
+    })
+    await new Promise<void>((resolve) => { minerUServer.listen(0, '127.0.0.1', resolve) })
+    const address = minerUServer.address() as AddressInfo
+    scaffold = await launchWebScaffold({
+      ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse`,
+      ...(MODE === 'record' ? {} : { replayFixture: DOCUMENT_CONTEXT_FIXTURE }),
+    })
+    browser = await chromium.launch()
+    page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE })
+    tripwire = watchConsole(page)
+    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'document-context')
+  }, 120_000)
+
+  afterAll(async () => {
+    await browser?.close()
+    await scaffold?.close()
+    await new Promise<void>((resolve) => { minerUServer?.close(() => { resolve() }) })
+  })
+
+  it('injects one uploaded document before the visible prompt', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-conversation-document-context'))
+    const composer = page.locator('[data-composer-card]')
+    await composer.locator('input[type="file"][accept*=".docx"]').setInputFiles({
+      name: 'lesson-plan.docx',
+      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      buffer: Buffer.from('keyless document fixture'),
+    })
+    await composer.getByText('已识别', { exact: true }).waitFor({ timeout: 10_000 })
+    const input = composer.locator('textarea')
+    expect(await input.inputValue()).toBe('')
+    await input.fill('请总结这份教学计划')
+    const settled = scaffold.whenTurnSettled()
+    await composer.getByRole('button', { name: '发送消息' }).click()
+    await settled
+    const conversationScroll = page.locator('[data-conversation-scroll]')
+    await conversationScroll.getByText('mineru-ocr', { exact: true }).waitFor({ timeout: 10_000 })
+    await conversationScroll.getByText('请总结这份教学计划', { exact: true }).waitFor({ timeout: 10_000 })
+    await conversationScroll.getByText('已收到教学计划。', { exact: true }).waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      DOCUMENT_CONTEXT_EXPECTED,
+      await captureStableAria(page, '[data-conversation-scroll]', scaffold.workspaceCwd),
+      MODE,
+    )
+    expect(tripwire.warnings).toEqual([])
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 })

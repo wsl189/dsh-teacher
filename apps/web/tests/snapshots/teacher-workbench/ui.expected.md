@@ -10,12 +10,12 @@
       - img
     - button "删除":
       - img
-    - button "批量导入"
+    - button "导入名册"
     - button "添加学生":
       - img
       - text: 添加学生
     - heading "高一（1）班" [level=3]
-    - text: 1 名学生
+    - text: 2 名学生
     - img
     - textbox "搜索姓名、学号或监护人"
     - table:
@@ -34,6 +34,17 @@
           - cell "—"
           - cell "张女士"
           - cell "—"
+          - cell "编辑 删除":
+            - button "编辑":
+              - img
+            - button "删除":
+              - img
+        - row "002 李同学 女 李女士 13800000000 编辑 删除":
+          - cell "002"
+          - cell "李同学"
+          - cell "女"
+          - cell "李女士"
+          - cell "13800000000"
           - cell "编辑 删除":
             - button "编辑":
               - img

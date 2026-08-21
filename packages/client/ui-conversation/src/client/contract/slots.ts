@@ -17,6 +17,7 @@ import type { ComposerBlock } from '../input/blocks.ts'
 import type {
   ComposerKeyboard, DraftAttachmentId, EditSelection, InputActions, InputNotice, InputState,
 } from '../input/contract.ts'
+import type { DraftDocument, DraftDocumentId } from '../service.ts'
 import type { createChatStore } from '../stores.ts'
 import type { ComposerSubmitGesture, InputSubmitMode } from './composer-submission.ts'
 import type { ChatNode, ChatNodeKind } from './chat-nodes.ts'
@@ -559,6 +560,10 @@ export interface ComposerBarInjected {
   removeImage: ((id: DraftAttachmentId) => void) | undefined
   /** Resolve ordered input ids to browser-owned draft images. */
   draftImages: ((ids: readonly DraftAttachmentId[]) => readonly ComposerAttachment[]) | undefined
+  /** Register files for background MinerU OCR in this session composer. */
+  addDocuments: ((files: readonly File[]) => void) | undefined
+  /** Remove one background-OCR document from this session composer. */
+  removeDocument: ((id: DraftDocumentId) => void) | undefined
   /** Resolve one keyboard submission gesture against the current running state and persisted preference. */
   resolveSubmitMode: (
     running: boolean,
@@ -589,6 +594,8 @@ export interface ComposerBarInjected {
     lexicon: ObservableSnapshot<ReadonlyMap<'/' | '@', readonly string[]>>
     /** Source name opened by the programmatic menu launcher, or null. */
     menuLauncher: ObservableSnapshot<string | null>
+    /** Runtime-only OCR document rows for this session composer. */
+    documents: ObservableSnapshot<readonly DraftDocument[]>
   }
 }
 

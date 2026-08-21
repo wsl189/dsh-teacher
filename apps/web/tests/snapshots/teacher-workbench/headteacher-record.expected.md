@@ -1,0 +1,12 @@
+- heading "班级记录" [level=2]
+- paragraph: 记录班级事项，不伪装成学校学生管理系统。
+- button "新建记录"
+- button "使用模板"
+- button "我的记录 1"
+- button "模板库 3"
+- text: 标题 模板 跟进日期 状态 操作
+- button "班级日常巡查"
+- text: 班级日常巡查记录 2026-08-21
+- button "进行中"
+- button "编辑 班级日常巡查"
+- button "删除 班级日常巡查"

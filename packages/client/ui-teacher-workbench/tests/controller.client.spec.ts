@@ -15,7 +15,7 @@ import {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [],
+  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 type FakeOptions = {
@@ -47,6 +47,24 @@ function fakeRemote(options: FakeOptions = {}) {
 }
 
 describe('TeacherWorkbenchController', () => {
+  it('persists family notices, headteacher templates, and one seating layout per class', async () => {
+    const fake = fakeRemote()
+    const ids = ['class-a', 'student-a', 'notice-template-a', 'notice-a']
+    const controller = new TeacherWorkbenchController(fake.remote, { id: () => ids.shift() ?? 'extra', now: () => 42 })
+    await controller.saveClass({ usage: 'roster', name: '一班', grade: '高一', subject: '语文' })
+    const classId = controller.getSnapshot().document!.state.classes[0]!.id
+    await controller.saveStudent({ classId, name: '张同学', studentNumber: '1', gender: '', guardian: '', relation: '', phone: '', address: '' })
+    const studentId = controller.getSnapshot().document!.state.students[0]!.id
+    await controller.saveNoticeTemplate({ name: '考试提醒', icon: 'custom', hint: '考试前使用', starter: '考试时间：【填写】', custom: true })
+    await controller.saveNotice({ title: '考试提醒', content: '请准备考试用品。' })
+    await controller.saveSeatingLayout({ classId, rows: 3, columns: 4, slots: [studentId, ...Array<null>(11).fill(null)] })
+    expect(controller.getSnapshot().document!.state).toMatchObject({
+      noticeTemplates: [{ name: '考试提醒', custom: true }],
+      notices: [{ title: '考试提醒', createdAt: 42 }],
+      seatingLayouts: [{ classId, rows: 3, columns: 4, updatedAt: 42 }],
+    })
+  })
+
   it('returns the Host batch id so later save parts append to the same paper', async () => {
     const fake = fakeRemote()
     const batchId = 'batch-a' as TeacherQuestionBatchId

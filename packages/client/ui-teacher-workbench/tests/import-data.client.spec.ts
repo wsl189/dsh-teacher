@@ -19,7 +19,7 @@ const student = (id: string, name: string, studentNumber: string): TeacherStuden
   extras: {},
 })
 
-describe('teacher-workbench clipboard import', () => {
+describe('teacher-workbench document import', () => {
   it('normalizes spreadsheet headers and preserves unknown roster columns', () => {
     const result = parseStudentImport([
       '学生姓名\t学号\t性别\t家长姓名\t手机号\t特长',
@@ -74,6 +74,61 @@ describe('teacher-workbench clipboard import', () => {
     ])
     expect(result.unmatched).toBe(1)
     expect(result.error).toBeNull()
+  })
+
+  it('parses MinerU Markdown and HTML tables with surrounding document text', () => {
+    expect(parseStudentImport(`
+# 高一（1）班学生名册
+
+| 学生姓名 | 学号 | 性别 | 家长姓名 | 手机号 |
+| --- | --- | --- | --- | --- |
+| 张同学 | 001 | 女 | 张女士 | 13800000000 |
+`)).toMatchObject({
+      error: null,
+      rows: [{ name: '张同学', studentNumber: '001', gender: '女', guardian: '张女士' }],
+    })
+
+    const students = [student('s1', '张同学', '001'), student('s2', '李同学', '002')]
+    expect(parseScoreImport(`
+<p>期中考试成绩</p>
+<table>
+  <tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr>
+  <tr><td>张同学</td><td>001</td><td>88</td><td>91</td></tr>
+</table>
+<table>
+  <tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr>
+  <tr><td>李同学</td><td>002</td><td>79</td><td>84</td></tr>
+</table>
+`, students)).toMatchObject({
+      subjects: ['语文', '数学'],
+      entries: [
+        { studentId: 's1', scores: { 语文: 88, 数学: 91 } },
+        { studentId: 's2', scores: { 语文: 79, 数学: 84 } },
+      ],
+      unmatched: 0,
+      error: null,
+    })
+  })
+
+  it('coalesces repeated MinerU image fragments', () => {
+    const rosterTable = '<table><tr><th>姓名</th><th>学号</th></tr><tr><td>张同学</td><td>001</td></tr></table>'
+    expect(parseStudentImport(`${rosterTable}\n${rosterTable}`)).toMatchObject({
+      rows: [{ name: '张同学', studentNumber: '001' }],
+      error: null,
+    })
+
+    const students = [student('s1', '张同学', '001')]
+    expect(parseScoreImport(`
+<table><tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr><tr><td>张同学</td><td>001</td><td>88</td><td></td></tr></table>
+<table><tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr><tr><td>张同学</td><td>001</td><td>87</td><td>91</td></tr></table>
+<table><tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr><tr><td>未知</td><td>999</td><td>70</td><td>80</td></tr></table>
+<table><tr><th>姓名</th><th>学号</th><th>语文</th><th>数学</th></tr><tr><td>未知</td><td>999</td><td>70</td><td>80</td></tr></table>
+`, students)).toMatchObject({
+      subjects: ['语文', '数学'],
+      entries: [{ studentId: 's1', scores: { 语文: 88, 数学: 91 } }],
+      unmatched: 1,
+      error: null,
+    })
   })
 
   it('rejects score input without an identity column or matched numeric rows', () => {

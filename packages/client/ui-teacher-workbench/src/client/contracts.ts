@@ -13,6 +13,8 @@ import type {
   TeacherLessonResourceId,
   TeacherLedgerCategoryId,
   TeacherLedgerEntryId,
+  TeacherNoticeId,
+  TeacherNoticeTemplateId,
   TeacherRecordId,
   TeacherRecordTemplateId,
   TeacherQuickNoteId,
@@ -50,9 +52,12 @@ import type {
   TeacherLessonResourceInput,
   TeacherLedgerCategoryInput,
   TeacherLedgerEntryInput,
+  TeacherNoticeInput,
+  TeacherNoticeTemplateInput,
   TeacherRecordInput,
   TeacherRecordTemplateInput,
   TeacherQuickNoteInput,
+  TeacherSeatingLayoutInput,
   TeacherQuestionFolderInput,
   TeacherStudentInput,
   TeacherTimetableEntryInput,
@@ -136,6 +141,16 @@ export interface TeacherWorkbenchCommands {
   toggleRecord: (id: TeacherRecordId) => Promise<TeacherWorkbenchActionResult>
   /** Delete a teaching record. */
   deleteRecord: (id: TeacherRecordId) => Promise<TeacherWorkbenchActionResult>
+  /** Save a family-notice template. */
+  saveNoticeTemplate: (input: TeacherNoticeTemplateInput) => Promise<TeacherWorkbenchActionResult>
+  /** Delete a teacher-authored family-notice template. */
+  deleteNoticeTemplate: (id: TeacherNoticeTemplateId) => Promise<TeacherWorkbenchActionResult>
+  /** Save a reviewed family-notice draft. */
+  saveNotice: (input: TeacherNoticeInput) => Promise<TeacherWorkbenchActionResult>
+  /** Delete a saved family-notice draft. */
+  deleteNotice: (id: TeacherNoticeId) => Promise<TeacherWorkbenchActionResult>
+  /** Replace one class seating arrangement. */
+  saveSeatingLayout: (input: TeacherSeatingLayoutInput) => Promise<TeacherWorkbenchActionResult>
   /** Save an imported exam. */
   saveExam: (input: TeacherExamInput) => Promise<TeacherWorkbenchActionResult>
   /** Delete an exam. */

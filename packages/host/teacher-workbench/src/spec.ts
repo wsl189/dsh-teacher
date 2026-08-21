@@ -16,6 +16,8 @@ import type {
   TeacherLessonResourceId,
   TeacherLedgerCategoryId,
   TeacherLedgerEntryId,
+  TeacherNoticeId,
+  TeacherNoticeTemplateId,
   TeacherQuickNoteId,
   TeacherQuestionAssignmentId,
   TeacherQuestionBatchId,
@@ -121,7 +123,13 @@ export const teacherLessonResourceSchema = z.object({
 /** Runtime schema for a workbench record template. */
 export const teacherRecordTemplateSchema = z.object({
   id: identity<TeacherRecordTemplateId>(),
-  kind: z.union([z.literal('observation'), z.literal('teaching')]),
+  kind: z.union([
+    z.literal('observation'),
+    z.literal('teaching'),
+    z.literal('class'),
+    z.literal('talk'),
+    z.literal('summary'),
+  ]),
   name: text.trim().min(1),
   scene: text,
   fields: z.array(text.trim().min(1)).min(1),
@@ -136,6 +144,42 @@ export const teacherRecordSchema = z.object({
   status: z.union([z.literal('active'), z.literal('done')]),
   values: stringRecord,
   updatedAt: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+})
+
+/** Runtime schema for one reusable family-notice template. */
+export const teacherNoticeTemplateSchema = z.object({
+  id: identity<TeacherNoticeTemplateId>(),
+  name: text.trim().min(1).max(10),
+  icon: z.union([
+    z.literal('calendar'),
+    z.literal('safety'),
+    z.literal('study'),
+    z.literal('activity'),
+    z.literal('payment'),
+    z.literal('meeting'),
+    z.literal('material'),
+    z.literal('custom'),
+  ]),
+  hint: text.max(200),
+  starter: text.trim().min(1).max(10_000),
+  custom: z.boolean(),
+})
+
+/** Runtime schema for one saved family-notice draft. */
+export const teacherNoticeSchema = z.object({
+  id: identity<TeacherNoticeId>(),
+  title: text.trim().min(1).max(100),
+  content: text.trim().min(1).max(20_000),
+  createdAt: epochMilliseconds,
+})
+
+/** Runtime schema for one class-specific seating arrangement. */
+export const teacherSeatingLayoutSchema = z.object({
+  classId: identity<TeacherClassId>(),
+  rows: z.number().int().min(3).max(8),
+  columns: z.number().int().min(4).max(10),
+  slots: z.array(identity<TeacherStudentId>().nullable()),
+  updatedAt: epochMilliseconds,
 })
 
 /** Runtime schema for one exam. */
@@ -275,6 +319,9 @@ export const teacherWorkbenchStateSchema = z.object({
   resources: z.array(teacherLessonResourceSchema),
   templates: z.array(teacherRecordTemplateSchema),
   records: z.array(teacherRecordSchema),
+  noticeTemplates: z.array(teacherNoticeTemplateSchema),
+  notices: z.array(teacherNoticeSchema),
+  seatingLayouts: z.array(teacherSeatingLayoutSchema),
   exams: z.array(teacherExamSchema),
   questionBatches: z.array(teacherQuestionBatchSchema),
   questionFolders: z.array(teacherQuestionFolderSchema).default([]),
@@ -292,6 +339,8 @@ export const teacherWorkbenchStateSchema = z.object({
   uniqueIds(state.resources, 'resources', ctx)
   const templateIds = uniqueIds(state.templates, 'templates', ctx)
   uniqueIds(state.records, 'records', ctx)
+  uniqueIds(state.noticeTemplates, 'noticeTemplates', ctx)
+  uniqueIds(state.notices, 'notices', ctx)
   uniqueIds(state.exams, 'exams', ctx)
   uniqueIds(state.questionBatches, 'questionBatches', ctx)
   uniqueIds(state.questionFolders, 'questionFolders', ctx)
@@ -332,6 +381,29 @@ export const teacherWorkbenchStateSchema = z.object({
   })
   state.records.forEach((record, index) => {
     if (!templateIds.has(record.templateId)) issue(ctx, ['records', index, 'templateId'], 'unknown template')
+  })
+  const seatingClassIds = new Set<string>()
+  state.seatingLayouts.forEach((layout, index) => {
+    const owner = classesById.get(layout.classId)
+    if (owner === undefined) issue(ctx, ['seatingLayouts', index, 'classId'], 'unknown class')
+    else if (owner.usage !== 'roster') issue(ctx, ['seatingLayouts', index, 'classId'], 'seating class must belong to the roster')
+    if (seatingClassIds.has(layout.classId)) issue(ctx, ['seatingLayouts', index, 'classId'], 'duplicate seating class')
+    seatingClassIds.add(layout.classId)
+    if (layout.slots.length !== layout.rows * layout.columns) {
+      issue(ctx, ['seatingLayouts', index, 'slots'], 'seating slots must fill the configured grid')
+    }
+    const seated = new Set<string>()
+    layout.slots.forEach((studentId, slotIndex) => {
+      if (studentId === null) return
+      const student = state.students.find(candidate => candidate.id === studentId)
+      if (student === undefined || !studentIds.has(studentId)) {
+        issue(ctx, ['seatingLayouts', index, 'slots', slotIndex], 'unknown student')
+      } else if (student.classId !== layout.classId) {
+        issue(ctx, ['seatingLayouts', index, 'slots', slotIndex], 'student belongs to another class')
+      }
+      if (seated.has(studentId)) issue(ctx, ['seatingLayouts', index, 'slots', slotIndex], 'duplicate seated student')
+      seated.add(studentId)
+    })
   })
   state.exams.forEach((exam, examIndex) => {
     const owner = classesById.get(exam.classId)
@@ -418,8 +490,29 @@ export const INITIAL_TEACHER_WORKBENCH_STATE: TeacherWorkbenchState = Object.fre
     template('builtin-adjustment', 'teaching', '课堂观察与即时调整', '记录课堂中的观察与调整', ['观察时点', '学生表现', '即时判断', '调整动作', '调整结果']),
     template('builtin-homework', 'teaching', '作业批改与讲评记录', '整理作业问题与讲评计划', ['作业主题', '共性问题', '典型错例', '讲评重点', '后续练习']),
     template('builtin-unit-review', 'teaching', '单元教学复盘', '完成单元后的整体复盘', ['单元主题', '目标达成', '学情变化', '有效策略', '遗留问题', '下轮改进']),
+    template('builtin-class-routine', 'class', '班级日常巡查记录', '用于早读、午休、卫生、两操、自习等日常巡查，记录事实和改进闭环。', ['日期、时段与场景', '当时班级整体情况', '做得较好的具体表现', '需要改进的具体事实', '涉及学生及本人说明', '现场处理与班级提醒', '复查时间与结果']),
+    template('builtin-class-incident', 'class', '特殊事项处置记录', '用于冲突、安全、物品损坏、突发身体不适等事项，强调时间线和客观事实。', ['时间、地点与信息来源', '涉及人员', '客观经过与时间线', '学生分别陈述', '现场处置及安全确认', '已联系人员与沟通要点', '学校要求或材料留存', '后续跟进与复查结论']),
+    template('builtin-class-activity', 'class', '班级活动过程记录', '班会、劳动、运动会、研学等活动结束后，沉淀过程材料和育人证据。', ['活动主题与育人目标', '时间地点与参加人员', '学生分工', '关键过程事实', '学生亮点与成长证据', '安全及突发情况', '照片或材料位置', '复盘与后续延伸']),
+    template('builtin-talk-learning', 'talk', '学习支持谈话', '用于成绩波动、作业困难、学习动力不足等情况，先理解原因，再约定小行动。', ['学生、时间与地点', '触发谈话的事实证据', '学生对现状的解释', '学习困难及可能原因', '已有优势和可用支持', '师生共同确定的小目标', '具体行动、频次与完成标准', '复查时间与结果']),
+    template('builtin-talk-relationship', 'talk', '情绪与同伴支持谈话', '用于情绪波动、同伴矛盾或适应问题，只记录必要事实和支持措施。', ['学生、时间与谈话环境', '观察到的事实变化', '学生主要表达和感受', '涉及的关系与情境', '当前安全状态确认', '教师提供的支持', '需要协同的人员及边界', '后续观察点与跟进时间']),
+    template('builtin-talk-rule', 'talk', '规则行为跟进谈话', '用于迟到、课堂纪律、作业拖欠等可观察行为，避免贴标签，形成可检查的约定。', ['学生、时间与谈话缘由', '已发生的客观行为', '学生说明', '规则及影响的共同确认', '可替代行为', '学生承诺与所需支持', '家校沟通要点（如需要）', '复查节点与实际变化']),
+    template('builtin-summary-weekly', 'summary', '班主任周小结', '每周五用事实快速复盘班级运行，明确下周只抓哪几件事。', ['周次与日期范围', '本周班级整体状态', '学习与常规数据或事实', '值得肯定的学生与具体表现', '本周关键事项及处理结果', '仍需跟进的学生或问题', '下周三项重点行动', '需要家长或任课教师协同事项']),
+    template('builtin-summary-stage', 'summary', '班级阶段成长报告', '月度或学段结束时，综合学习、常规、活动和学生发展证据形成阶段总结。', ['总结周期与资料范围', '班级整体变化', '学习表现及成绩证据', '常规、卫生与出勤事实', '班级活动与学生参与', '学生成长案例', '主要问题及原因判断', '下一阶段目标和行动', '家校协同建议']),
+    template('builtin-summary-term', 'summary', '学期班级工作总结', '学期末基于已有记录形成可核实的班级总结，不罗列空话。', ['班级基本情况与总结口径', '学期重点目标回顾', '班风学风建设事实', '学生发展与典型案例', '家校沟通及协同情况', '活动与集体成长', '未解决问题和客观限制', '下学期改进方向', '相关材料索引']),
   ]),
   records: Object.freeze([]),
+  noticeTemplates: Object.freeze([
+    noticeTemplate('builtin-notice-holiday', '放假通知', 'calendar', '适合法定节假日、寒暑假和临时放假。', '📅 放假时间：【填写起止时间】\n🏫 返校时间：【填写到校日期、时间】\n📚 学习安排：【作业、阅读或实践要求】\n🛡️ 安全提醒：【交通、居家、网络等重点】\n🎒 返校准备：【需携带物品或材料】'),
+    noticeTemplate('builtin-notice-safety', '安全提醒', 'safety', '适合防溺水、交通、消防、极端天气等安全教育。', '⚠️ 提醒主题：【例如防溺水】\n📍 重点风险：【结合学校通知填写】\n👨‍👩‍👧 家长配合：【监护、去向管理等】\n✅ 学生要求：【明确不能做和需要做的事】\n📝 回执要求：【如无可删除】'),
+    noticeTemplate('builtin-notice-schedule', '调课通知', 'study', '说清原安排、新安排和学生需要准备的物品。', '📚 原课程安排：【日期、节次、课程】\n🔄 调整后安排：【新日期、节次、课程】\n🏫 上课地点：【如有变化请写明】\n🎒 学生准备：【课本、学具或着装】\n📌 其他说明：【放学时间是否变化】'),
+    noticeTemplate('builtin-notice-activity', '活动研学', 'activity', '适合运动会、研学、社会实践和班级活动。', '🎯 活动名称与目的：【填写】\n⏰ 集合及结束时间：【填写】\n📍 地点与交通：【填写】\n🎒 携带物品及着装：【填写】\n🛡️ 安全和健康说明：【填写】\n📝 报名/回执截止：【填写】'),
+    noticeTemplate('builtin-notice-payment', '缴费回执', 'payment', '只整理学校已经明确的项目，不替学校新增收费事项。', '🧾 项目名称：【填写学校通知中的全称】\n💰 金额及依据：【填写】\n📱 缴费方式：【平台、二维码或线下】\n⏰ 截止时间：【填写】\n📝 回执或凭证要求：【填写】\n☎️ 疑问咨询：【联系人或渠道】'),
+    noticeTemplate('builtin-notice-study', '学习提醒', 'study', '适合作业补交、考试准备、阅读打卡和学习材料提醒。', '📚 学习事项：【填写】\n👥 适用对象：【全班或具体范围】\n⏰ 完成时间：【填写】\n✅ 完成标准：【提交形式、页码或质量要求】\n🎒 需要准备：【资料、文具或设备】\n💬 有困难时：【联系或反馈方式】'),
+    noticeTemplate('builtin-notice-meeting', '家长会', 'meeting', '适合家长会、家长开放日和个别预约。', '👨‍👩‍👧 会议主题：【填写】\n⏰ 签到与开始时间：【填写】\n📍 地点/线上入口：【填写】\n🗂️ 主要议程：【填写】\n📝 需要准备：【材料、问题或回执】\n🚗 入校与停车提醒：【如无可删除】'),
+    noticeTemplate('builtin-notice-material', '材料收集', 'material', '适合回执、照片、健康材料和信息核对。', '📄 材料名称：【填写】\n👥 提交对象：【填写】\n⏰ 截止时间：【填写】\n📥 提交方式：【纸质、群文件或平台】\n✅ 格式要求：【命名、份数、签字等】\n🔒 隐私提醒：【敏感材料请勿直接发群】'),
+  ]),
+  notices: Object.freeze([]),
+  seatingLayouts: Object.freeze([]),
   exams: Object.freeze([]),
   questionBatches: Object.freeze([]),
   questionFolders: Object.freeze([]),
@@ -435,7 +528,7 @@ export const INITIAL_TEACHER_WORKBENCH_DOCUMENT: TeacherWorkbenchDocument = Obje
 /** Durable singleton owned by the workbench service. */
 export const teacherWorkbenchDomainSpec = defineDomain({
   name: 'teacher_workbench',
-  version: 7,
+  version: 8,
   global: {
     schema: teacherWorkbenchDocumentSchema,
     initial: INITIAL_TEACHER_WORKBENCH_DOCUMENT,
@@ -459,7 +552,7 @@ function resource(
 
 function template(
   id: string,
-  kind: 'observation' | 'teaching',
+  kind: 'observation' | 'teaching' | 'class' | 'talk' | 'summary',
   name: string,
   scene: string,
   fields: readonly string[],
@@ -471,6 +564,16 @@ function template(
     scene,
     fields: Object.freeze([...fields]),
   })
+}
+
+function noticeTemplate(
+  id: string,
+  name: string,
+  icon: 'calendar' | 'safety' | 'study' | 'activity' | 'payment' | 'meeting' | 'material' | 'custom',
+  hint: string,
+  starter: string,
+) {
+  return Object.freeze({ id: id as TeacherNoticeTemplateId, name, icon, hint, starter, custom: false })
 }
 
 function uniqueIds(

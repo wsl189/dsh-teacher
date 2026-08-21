@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import OcrRuntime, { OcrError, type OcrProvider } from '../src/index.ts'
 
@@ -100,6 +100,22 @@ describe('OcrRuntime', () => {
       ok: false,
       error: { code: 'provider-failure', message: 'document extraction failed' },
     })
+  })
+
+  it('forwards same-process cancellation to the selected provider', async () => {
+    const { ocr } = await harness({ provider: 'mineru' })
+    const extract = vi.fn<OcrProvider['extract']>((request, _signal) => Promise.resolve({
+      name: request.name,
+      mediaType: request.mediaType,
+      markdown: 'content:mineru',
+      provider: 'mineru',
+      truncated: false,
+    }))
+    ocr.registerProvider({ ...provider('mineru'), extract })
+    const signal = new AbortController().signal
+
+    await expect(ocr.extractAbortable(request, signal)).resolves.toMatchObject({ ok: true })
+    expect(extract).toHaveBeenCalledWith(request, signal)
   })
 
   it('rejects duplicate provider ids and unregisters through the disposer', async () => {

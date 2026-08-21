@@ -30,7 +30,7 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [],
+  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 function commands(): TeacherWorkbenchCommands {
@@ -69,6 +69,8 @@ function commands(): TeacherWorkbenchCommands {
     saveRecord: action(),
     toggleRecord: action(),
     deleteRecord: action(),
+    saveNoticeTemplate: action(), deleteNoticeTemplate: action(), saveNotice: action(), deleteNotice: action(),
+    saveSeatingLayout: action(),
     saveExam: action(),
     deleteExam: action(),
     saveQuestionBatch: action(), replaceQuestionImage: action(), deleteQuestionImage: action(),
@@ -277,32 +279,40 @@ describe('StudentRoster actions', () => {
     await waitFor(() => { expect(screen.getByLabelText<HTMLSelectElement>('选择班级').value).toBe('class-a') })
   })
 
-  it('reports import failures, retries writes, and handles a class removed mid-editor', async () => {
+  it('reports recognition failures, retries reviewed imports, and keeps the captured class', async () => {
     const c = commands()
     const rendered = render(
       <StudentRoster state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '批量导入' }))
-    fireEvent.change(screen.getByLabelText('批量导入'), { target: { value: '学号\n1' } })
-    fireEvent.click(screen.getByRole('button', { name: '导入名册' }))
-    expect(screen.getByRole('alert').textContent).toContain('未找到姓名列')
-    fireEvent.change(screen.getByLabelText('批量导入'), { target: { value: '姓名\t学号\n新生\t003' } })
-    expect(screen.queryByRole('alert')).toBeNull()
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    vi.mocked(c.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: { name: '错误.xlsx', mediaType: '', markdown: '| 学号 |\n| --- |\n| 1 |', provider: 'mineru', truncated: false },
+    })
+    fireEvent.change(input, { target: { files: [new File(['bad'], '错误.xlsx')] } })
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('没有识别到姓名列') })
+    fireEvent.click(screen.getAllByRole('button', { name: '关闭工作台' }).at(-1)!)
+
+    vi.mocked(c.extractDocument).mockResolvedValue({
+      ok: true,
+      value: { name: '名册.xlsx', mediaType: '', markdown: '| 姓名 | 学号 |\n| --- | --- |\n| 新生 | 003 |', provider: 'mineru', truncated: false },
+    })
+    fireEvent.change(input, { target: { files: [new File(['roster'], '名册.xlsx')] } })
+    await screen.findByRole('dialog', { name: '上传并识别学生名册' })
+    expect(screen.getByText('名册.xlsx · 识别到 1 名学生，请确认后导入')).toBeTruthy()
     vi.mocked(c.importStudents).mockResolvedValueOnce(failure)
-    fireEvent.click(screen.getByRole('button', { name: '导入名册' }))
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 名学生' }))
     await waitFor(() => { expect(c.importStudents).toHaveBeenCalled() })
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
 
-    fireEvent.click(screen.getByRole('button', { name: '批量导入' }))
-    fireEvent.change(screen.getByLabelText('批量导入'), { target: { value: '姓名\t学号\n新生\t003' } })
+    fireEvent.change(input, { target: { files: [new File(['roster'], '名册.xlsx')] } })
+    await screen.findByRole('dialog', { name: '上传并识别学生名册' })
     rendered.rerender(
       <StudentRoster state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
     )
     await waitFor(() => { expect(screen.getByLabelText<HTMLSelectElement>('选择班级').value).toBe('') })
-    const importCalls = vi.mocked(c.importStudents).mock.calls.length
-    fireEvent.click(screen.getByRole('button', { name: '导入名册' }))
-    expect(c.importStudents).toHaveBeenCalledTimes(importCalls)
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 名学生' }))
+    await waitFor(() => { expect(c.importStudents).toHaveBeenLastCalledWith('class-a', [expect.objectContaining({ name: '新生' })]) })
     rendered.rerender(
       <StudentRoster state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
     )
@@ -368,32 +378,38 @@ describe('ScoreAnalysis actions', () => {
     expect(screen.getAllByText('当前班级还没有考试数据')).toHaveLength(2)
     fireEvent.change(screen.getByLabelText('选择班级'), { target: { value: 'class-a' } })
 
-    fireEvent.click(screen.getByRole('button', { name: '导入成绩' }))
-    fireEvent.change(screen.getByLabelText('考试名称'), { target: { value: '期末' } })
-    fireEvent.change(screen.getByLabelText('考试日期'), { target: { value: '2026-08-18' } })
-    fireEvent.change(screen.getByLabelText('导入成绩'), { target: { value: '数学\n90' } })
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
-    expect(screen.getByRole('alert').textContent).toContain('未找到姓名或学号列')
-    fireEvent.change(screen.getByLabelText('导入成绩'), {
-      target: { value: '姓名\t数学\n张同学\t95\n未知\t80' },
+    const importInput = rendered.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    vi.mocked(c.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: { name: '错误.xlsx', mediaType: '', markdown: '| 数学 |\n| --- |\n| 90 |', provider: 'mineru', truncated: false },
     })
-    vi.mocked(c.saveExam).mockResolvedValueOnce(failure)
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
-    await waitFor(() => { expect(c.saveExam).toHaveBeenCalled() })
+    fireEvent.change(importInput, { target: { files: [new File(['bad'], '错误.xlsx')] } })
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toContain('没有识别到姓名或学号列') })
+    fireEvent.click(screen.getAllByRole('button', { name: '关闭工作台' }).at(-1)!)
+
+    vi.mocked(c.extractDocument).mockResolvedValue({
+      ok: true,
+      value: { name: '期末.xlsx', mediaType: '', markdown: '| 姓名 | 数学 |\n| --- | --- |\n| 张同学 | 95 |\n| 未知 | 80 |', provider: 'mineru', truncated: false },
+    })
+    fireEvent.change(importInput, { target: { files: [new File(['scores'], '期末.xlsx')] } })
+    await screen.findByRole('dialog', { name: '上传并识别成绩表' })
+    fireEvent.change(screen.getByLabelText('考试名称'), { target: { value: '期末考试' } })
+    fireEvent.change(screen.getByLabelText('考试日期'), { target: { value: '2026-08-18' } })
     expect(screen.getByText('1 行未匹配到名册，已跳过')).toBeTruthy()
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '从 Excel 或 WPS 粘贴成绩' })).toBeNull() })
+    vi.mocked(c.saveExam).mockResolvedValueOnce(failure)
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 条成绩' }))
+    await waitFor(() => { expect(c.saveExam).toHaveBeenCalled() })
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 条成绩' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '上传并识别成绩表' })).toBeNull() })
+    expect(screen.getByText('1 行未匹配到名册，已跳过')).toBeTruthy()
     expect(confirm).toHaveBeenCalledTimes(2)
 
-    fireEvent.click(screen.getByRole('button', { name: '导入成绩' }))
-    fireEvent.change(screen.getByLabelText('考试名称'), { target: { value: '临时' } })
-    fireEvent.change(screen.getByLabelText('导入成绩'), { target: { value: '姓名\t数学\n张同学\t90' } })
+    fireEvent.change(importInput, { target: { files: [new File(['scores'], '临时.xlsx')] } })
+    await screen.findByRole('dialog', { name: '上传并识别成绩表' })
     rendered.rerender(<ScoreAnalysis state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
     await waitFor(() => { expect(screen.getByLabelText<HTMLSelectElement>('选择班级').value).toBe('') })
-    const saveCalls = vi.mocked(c.saveExam).mock.calls.length
-    fireEvent.click(screen.getAllByRole('button', { name: '导入成绩' }).at(-1)!)
-    expect(c.saveExam).toHaveBeenCalledTimes(saveCalls)
-    fireEvent.click(screen.getByRole('button', { name: '取消' }))
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 条成绩' }))
+    await waitFor(() => { expect(c.saveExam).toHaveBeenLastCalledWith(expect.objectContaining({ classId: 'class-a' })) })
   })
 })
 

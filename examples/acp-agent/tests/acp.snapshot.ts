@@ -53,6 +53,7 @@ const ADVANCED_CONFIG = fileURLToPath(new URL('../advanced.cordis.yml', import.m
 const FS_CONFIG = fileURLToPath(new URL('../fs.cordis.yml', import.meta.url))
 const SESSION_QUERY_CONFIG = fileURLToPath(new URL('../session-query.cordis.yml', import.meta.url))
 const IMAGE_CONFIG = fileURLToPath(new URL('../image.cordis.yml', import.meta.url))
+const DOCUMENT_CONFIG = fileURLToPath(new URL('../document.cordis.yml', import.meta.url))
 const IMAGE_OFFLOAD_CONFIG = fileURLToPath(new URL('./fixtures/image-offload.cordis.yml', import.meta.url))
 const IMAGE_TEXT_ROUTE_CONFIG = fileURLToPath(new URL('../image-text-route.cordis.yml', import.meta.url))
 const PTY_CONFIG = fileURLToPath(new URL('../pty.cordis.yml', import.meta.url))
@@ -239,6 +240,14 @@ const SCENARIOS: Scenario[] = [
     pinsHeader: true,
     headerClass: 'image',
     configPath: IMAGE_CONFIG,
+  },
+  {
+    name: 'read-document',
+    hasModelTurn: true,
+    recorded: false,
+    pinsHeader: true,
+    headerClass: 'document',
+    configPath: DOCUMENT_CONFIG,
   },
   {
     name: 'read-image-text-route',

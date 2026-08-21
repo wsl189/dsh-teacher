@@ -30,6 +30,8 @@ describe('TeacherWorkbenchSettingsRow layout', () => {
     render(
       <TeacherWorkbenchSettingsRow
         useTeacherSettings={selector => selector(snapshot)}
+        useSessions={() => { throw new Error('unused') }}
+        useWorkspaces={() => { throw new Error('unused') }}
         setSetting={setSetting}
         t={t}
       />,

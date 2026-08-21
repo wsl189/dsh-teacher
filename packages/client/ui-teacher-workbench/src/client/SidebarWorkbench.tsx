@@ -2,7 +2,16 @@
 
 import type { ComponentType } from 'react'
 import clsx from 'clsx'
-import { CalendarRange, LayoutDashboard, Scissors } from 'lucide-react'
+import {
+  CalendarRange,
+  ClipboardList,
+  FileText,
+  Grid2X2,
+  LayoutDashboard,
+  Megaphone,
+  MessageCircle,
+  Scissors,
+} from 'lucide-react'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   IconChevronDownOutline14,
@@ -22,6 +31,11 @@ import css from './TeacherWorkbench.module.css'
 const DailyIcon: ComponentType<{ size?: number; className?: string }> = props => <LayoutDashboard {...props} />
 const TimetableIcon: ComponentType<{ size?: number; className?: string }> = props => <CalendarRange {...props} />
 const QuestionsIcon: ComponentType<{ size?: number; className?: string }> = props => <Scissors {...props} />
+const FamilyIcon: ComponentType<{ size?: number; className?: string }> = props => <Megaphone {...props} />
+const ClassRecordsIcon: ComponentType<{ size?: number; className?: string }> = props => <ClipboardList {...props} />
+const TalkRecordsIcon: ComponentType<{ size?: number; className?: string }> = props => <MessageCircle {...props} />
+const SeatingIcon: ComponentType<{ size?: number; className?: string }> = props => <Grid2X2 {...props} />
+const ClassSummaryIcon: ComponentType<{ size?: number; className?: string }> = props => <FileText {...props} />
 
 /** Full sidebar-entry props. */
 export type SidebarWorkbenchProps =
@@ -41,6 +55,11 @@ const MODULES: readonly {
   { id: 'students', label: 'module.students', Icon: IconUserOutline16 },
   { id: 'scores', label: 'module.scores', Icon: IconDataOutline16 },
   { id: 'records', label: 'module.records', Icon: IconListPenOutline16 },
+  { id: 'family', label: 'module.family', Icon: FamilyIcon },
+  { id: 'classRecords', label: 'module.classRecords', Icon: ClassRecordsIcon },
+  { id: 'talkRecords', label: 'module.talkRecords', Icon: TalkRecordsIcon },
+  { id: 'seating', label: 'module.seating', Icon: SeatingIcon },
+  { id: 'classSummary', label: 'module.classSummary', Icon: ClassSummaryIcon },
 ]
 
 /**

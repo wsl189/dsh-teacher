@@ -222,11 +222,14 @@ function mount(
           addImages={() => null}
           removeImage={() => {}}
           draftImages={() => []}
+          addDocuments={vi.fn()}
+          removeDocument={vi.fn()}
           resolveSubmitMode={() => 'queue'}
           toggleCommandMenu={vi.fn()}
           useNotices={bindSnapshotSelector(wiring.notices)}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
+          useDocuments={bindSnapshotSelector(createSnapshotStore([]))}
           stop={stop}
           command={() => Promise.resolve(true)}
           t={t}

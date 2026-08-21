@@ -1,0 +1,27 @@
+- dialog "上传并识别成绩表":
+  - heading "上传并识别成绩表" [level=2]
+  - button "关闭工作台":
+    - img
+  - text: 考试名称
+  - textbox "考试名称": 期中成绩
+  - text: 考试日期
+  - textbox "考试日期": 2026-08-22
+  - strong: 高一（1）班
+  - text: 期中成绩.jpg · 匹配到 2 名学生，请确认后导入
+  - table:
+    - rowgroup:
+      - row "姓名 语文 数学":
+        - columnheader "姓名"
+        - columnheader "语文"
+        - columnheader "数学"
+    - rowgroup:
+      - row "张同学 88 95":
+        - cell "张同学"
+        - cell "88"
+        - cell "95"
+      - row "李同学 92 90":
+        - cell "李同学"
+        - cell "92"
+        - cell "90"
+  - button "取消"
+  - button "导入 2 条成绩"

@@ -50,6 +50,7 @@ async function bench() {
   runtime.provide('connection', { api: { settings: {} }, isLoopback: false })
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
+  runtime.provide('remote.ocr', { extract: vi.fn() })
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const sessionFake = sessionFakeFor()
   await runtime.sessions.add({
@@ -165,7 +166,9 @@ describe('conversation slot inject API', () => {
     await vi.waitFor(() => {
       expect(state.getSnapshot().draft).toBe('')
     })
-    expect(b.sessionFake.prompt).toHaveBeenCalledWith([{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal))
+    expect(b.sessionFake.prompt).toHaveBeenCalledWith(
+      [{ type: 'text', text: 'hello' }], 'queue', expect.any(AbortSignal), [],
+    )
     // Failure: the draft is retained through the round-trip.
     b.sessionFake.prompt.mockResolvedValueOnce({ ok: false, error: { code: 'agent-busy', message: 'b', details: { reason: 'b' } } })
     actions.setDraft('retry me')
@@ -212,6 +215,7 @@ describe('conversation slot inject API', () => {
     expect(absent.hooks.notices.getSnapshot()).toBeNull()
     expect(absent.hooks.lexicon.getSnapshot().size).toBe(0)
     expect(absent.hooks.menuLauncher.getSnapshot()).toBeNull()
+    expect(absent.hooks.documents.getSnapshot()).toBe(absent.hooks.documents.getSnapshot())
     // A scope whose service tree lost 'conversation' (the feature fiber
     // unloaded while a retained inject closure re-runs): fails loud too.
     const stop = injectFn(ROOT).stop!

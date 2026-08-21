@@ -14,7 +14,7 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
+import { boundContextSummary, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
 import { isAppendSurfaceEvent, isJsonValue } from '@deepseek-ai/dsh-session'
@@ -2359,7 +2359,7 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
       },
 
       async prompt(request) {
-        const { sessionId, mode, content, clientTimeZone } = request.payload
+        const { sessionId, mode, content, contexts = [], clientTimeZone } = request.payload
         const canonicalTimeZone = clientTimeZone === undefined
           ? undefined
           : canonicalClientTimeZone(clientTimeZone)
@@ -2394,6 +2394,18 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
               }
             }
             const durable = await durablePromptContent(ctx, content)
+            for (const document of contexts) {
+              const framing = `Uploaded document ${JSON.stringify(document.name)}${document.truncated ? ' (truncated by OCR output limit)' : ''}:\n\n${document.markdown}`
+              agent.inject(createUserMessage({
+                content: [{ type: 'text', text: framing }],
+                source: {
+                  kind: 'plugin',
+                  plugin: 'mineru-ocr',
+                  form: 'notice',
+                  summary: boundContextSummary(`OCR document: ${document.name}`),
+                },
+              }))
+            }
             const message: UserMessage = createUserMessage({ content: durable, source })
             if (mode === 'steer') agent.steer(message)
             else agent.followup(message)

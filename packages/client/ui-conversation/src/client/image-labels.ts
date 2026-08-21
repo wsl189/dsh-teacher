@@ -32,6 +32,7 @@ export function attachmentErrorText(
   switch (reason) {
     case 'MODEL_DOES_NOT_SUPPORT_IMAGES': return t('image.modelUnsupported')
     case 'SUBAGENT_IMAGE_UNSUPPORTED': return t('image.subagentUnsupported')
+    case 'SUBAGENT_DOCUMENT_UNSUPPORTED': return t('document.subagentUnsupported')
     case 'IMAGE_TOO_MANY_PIXELS': return t('image.tooManyPixels')
     case 'IMAGE_DIMENSION_TOO_LARGE':
       if (limits !== undefined) return t('image.dimensionTooLarge', { size: limits.maxImageDimension })

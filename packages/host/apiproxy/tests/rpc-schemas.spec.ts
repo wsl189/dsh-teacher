@@ -258,14 +258,19 @@ describe('sessions domain schemas', () => {
       sessionId: 's1',
       mode: 'queue',
       content: [{ type: 'text', text: 'hi' }],
+      contexts: [{ name: 'roster.xlsx', markdown: '| name |', truncated: false }],
       clientTimeZone: 'Asia/Shanghai',
     })
     expect(prompt.mode).toBe('queue')
     expect(prompt.clientTimeZone).toBe('Asia/Shanghai')
+    expect(prompt.contexts).toEqual([{ name: 'roster.xlsx', markdown: '| name |', truncated: false }])
     expect(sessionPromptRequestSchema.parse({
       sessionId: 's1', mode: 'queue', content: [],
     }).clientTimeZone).toBeUndefined()
     expect(() => sessionPromptRequestSchema.parse({ sessionId: 's1', mode: 'inject', content: [] })).toThrow()
+    expect(() => sessionPromptRequestSchema.parse({
+      sessionId: 's1', mode: 'queue', content: [], contexts: [{ name: '', markdown: 'x', truncated: false }],
+    })).toThrow()
     expect(sessionPromptValueSchema.parse({ accepted: true }).accepted).toBe(true)
     // The command slot appears only when the prompt dispatched a slash command.
     const dispatched = sessionPromptValueSchema.parse({ accepted: true, command: { kind: 'success', text: 'Goal set' } })
