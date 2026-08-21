@@ -213,8 +213,32 @@ describe('model list editing', () => {
     expect(firstMutate(mutate)).toMatchObject({
       ns: 'llm-pi-ai',
       expectedRevision: 3,
-      ops: [{ op: 'set', path: ['providers', 'openai', 'models'], value: [{ id: 'acme-large', contextWindow: 65_536 }] }],
+      ops: [{
+        op: 'set',
+        path: ['providers', 'openai', 'models'],
+        value: [{ id: 'acme-large', contextWindow: 65_536, input: ['text'] }],
+      }],
     })
+  })
+
+  it('writes each model input type explicitly', async () => {
+    const { mutate } = await mountSection({
+      providers: {
+        openai: {
+          models: [{ id: 'vision', input: ['text', 'image'] }],
+        },
+      },
+    })
+    openEditor('openai')
+    expandModel(1)
+
+    const input = screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`)
+    expect(input.value).toBe('image')
+    fireEvent.change(input, { target: { value: 'text' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'vision', input: ['text'] }])
   })
 
   it('names a duplicate model id in the edit flow too', async () => {
@@ -253,7 +277,7 @@ describe('model list editing', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     // What lands in settings is always a plain token count.
     expect(firstMutate(mutate).ops[0]?.value)
-      .toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 1000 }])
+      .toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 1000, input: ['text'] }])
   })
 
   it('refuses to apply while a capacity is unreadable', async () => {
@@ -712,6 +736,7 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     expandModel(1)
     fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'image' } })
     fireEvent.click(screen.getByText(en.create))
 
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
@@ -725,7 +750,7 @@ describe('hand-declared providers', () => {
           apiKeyEnv: 'ACME_GATEWAY_API_KEY',
           api: 'openai-completions',
           baseURL: 'https://gateway.acme.example/v1',
-          models: [{ id: 'acme-large', contextWindow: 65_536 }],
+          models: [{ id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] }],
         },
       }],
       // The section this card was drafted over: a route another tab declared
@@ -1094,7 +1119,7 @@ describe('hand-declared providers', () => {
     fireEvent.click(screen.getByText(en.create))
 
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
-    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'bare' }] })
+    expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'bare', input: ['text'] }] })
   })
 
   it('refuses to create until the route, endpoint, and a model are usable', () => {
@@ -1180,7 +1205,7 @@ describe('hand-declared providers', () => {
     expect(firstMutate(mutate).ops[0]?.value).toEqual({
       api: 'anthropic-messages',
       baseURL: 'https://acme.test/v1',
-      models: [{ id: 'm' }],
+      models: [{ id: 'm', input: ['text'] }],
     })
   })
 

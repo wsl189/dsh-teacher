@@ -32,7 +32,7 @@ Provider ID 是永久的，因为请求、已保存会话、模型默认值和�
 
 手动输入的模型在自己声明之前一律按纯文本对待，因为没有任何环节能去询问端点接受哪些模态。给这类模型附加图片，会在发送前就被拒绝，并点名该模型。
 
-因此自定义提供方下的视觉模型需要加一行。表单没有对应字段；请在 `$DSH_HOME/settings.yaml` 中给该模型加上 `input`：
+展开该模型的**模型详情**，把**输入类型**设为**文本和图片**。选择**仅文本**会存储 `input: [text]`，选择**文本和图片**会存储 `input: [text, image]`；即使路由设置了不同的回退值，该选择也只作用于当前模型。等价的保存结果如下：
 
 ```yaml
 llm-pi-ai:
@@ -43,6 +43,7 @@ llm-pi-ai:
       baseURL: https://gateway.example/v1
       models:
         - id: legacy-chat
+          input: [text]
         - id: vision-preview
           input: [text, image]
 ```
@@ -129,7 +130,7 @@ llm-pi-ai:
 - **密钥与地址都正确，网关却拒绝每一个请求**：它的请求形状与 OpenAI 不同。先在路由上设 `compat.supportsDeveloperRole: false` 与 `compat.maxTokensField: max_tokens`。
 - **只有推理模型失败**：pi-ai 把它们的系统提示词以 `developer` 角色发出，而网关拒绝该角色。设 `compat.supportsDeveloperRole: false`。
 - **某个 compat 开关因没有值而被拒绝**：冒号后什么都没写。给它一个值，或删掉该键以沿用已安装 catalog 的值。
-- **图片在发送前被拒绝**：该模型未声明图片模态。请给自定义提供方的模型加上 `input: [text, image]`；DeepSeek 自身的 chat-completions 路由是纯文本的，且无法通过配置改变。
+- **图片在发送前被拒绝**：展开自定义提供方模型的**模型详情**并选择**文本和图片**，或在 YAML 中给它加上 `input: [text, image]`；DeepSeek 自身的 chat-completions 路由是纯文本的，且无法通过配置改变。
 - **提供方拒绝了带图片的请求**：该模型声明了其端点实际并不提供的图片能力。请从授予它图片能力的那个列表中移除 `image`——可能是模型的 `input`，也可能是路由的 `defaultInput`——然后开启新会话：附加的图片会留在会话日志里，因此在会话离开它之前，同一个请求会不断重复。
 
 ## 进阶配置
