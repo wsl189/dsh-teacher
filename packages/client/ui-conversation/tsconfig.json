@@ -12,9 +12,6 @@
       "path": "../../attachment/attachment"
     },
     {
-      "path": "../../api/remotes/tsconfig.client.json"
-    },
-    {
       "path": "../../util/brand"
     },
     {
@@ -24,13 +21,7 @@
       "path": "../ui-slots"
     },
     {
-      "path": "../ui-attachment"
-    },
-    {
       "path": "../ui-primitives"
-    },
-    {
-      "path": "../web-react"
     },
     {
       "path": "../runtime"

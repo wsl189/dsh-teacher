@@ -1,6 +1,5 @@
 /** Registers the conversation components, shared store, and service callbacks. */
 import type { Context } from '@deepseek-ai/cordis'
-import type { OcrExtractResult } from '@deepseek-ai/dsh-api-remotes/client'
 import { resolveSlotLabel, type BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
@@ -50,7 +49,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr', 'settingsScope',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
@@ -207,6 +206,7 @@ export function apply(ctx: Context): void {
       'conversation.composer.dock': { kind: 'list', scope: 'session' },
       'conversation.input.left': { kind: 'list', scope: 'session' },
       'conversation.input.right': { kind: 'list', scope: 'session' },
+      'conversation.hero.brand.mark': { kind: 'single', scope: 'root' },
       'conversation.hero.workspace': { kind: 'single', scope: 'root' },
       'conversation.hero.agentPreset': { kind: 'single', scope: 'root' },
     },
@@ -259,6 +259,7 @@ export function apply(ctx: Context): void {
     name: 'conversation.session.header',
     locale: NS,
     children: {
+      'conversation.session.header.lineage': { kind: 'single', scope: 'session' },
       'conversation.session.header.actions': { kind: 'list', scope: 'session' },
       'conversation.session.header.utilities': { kind: 'list', scope: 'session' },
     },
@@ -283,6 +284,7 @@ export function apply(ctx: Context): void {
     // access control, model right); empty until their owning plugins
     // register.
     children: {
+      'conversation.input.attachments': { kind: 'single', scope: 'session-maybe' },
       'conversation.input.plan': { kind: 'single', scope: 'session' },
       'conversation.input.model': { kind: 'single', scope: 'session' },
     },
@@ -291,7 +293,6 @@ export function apply(ctx: Context): void {
         return {
           keyboard: undefined,
           addImages: undefined,
-          extractDocuments: undefined,
           removeImage: undefined,
           draftImages: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
@@ -323,30 +324,6 @@ export function apply(ctx: Context): void {
             return error instanceof Error ? error.message : String(error)
           }
         },
-        extractDocuments: async (files) => {
-          const results: OcrExtractResult[] = []
-          for (const file of files) {
-            try {
-              const carried = await ctx.remote.ocr.extract({
-                name: file.name,
-                mediaType: file.type,
-                contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
-              })
-              results.push(carried.ok
-                ? carried.value
-                : { ok: false, error: { code: 'provider-failure', message: carried.error.message } })
-            } catch (error) {
-              results.push({
-                ok: false,
-                error: {
-                  code: 'provider-failure',
-                  message: error instanceof Error ? error.message : 'document extraction failed',
-                },
-              })
-            }
-          }
-          return results
-        },
         removeImage: (id) => {
           conversation.releaseDraftImage(id)
           shell.removeImage(id)
@@ -362,6 +339,7 @@ export function apply(ctx: Context): void {
             inputTriggers.toggleSource('command', {
               trigger: '/',
               query: '',
+              quoted: false,
               position: snapshot.draft.slice(0, selection.start).trim() === '' ? 'leading' : 'inline',
               span: { ...selection, draftRev: snapshot.draftRev },
             })
@@ -407,6 +385,7 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
+      'conversation.message.images': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
     inject: (sessionId: SessionId, actions: BoundActions<typeof chatStore>): ChatViewInjected => {
@@ -420,10 +399,7 @@ export function apply(ctx: Context): void {
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-          void workspaces.openPath(resolveWorkspacePath(cwd, path)).catch(() => {
-            // Host/OS open failures stay silent in the chat row; the native
-            // app surfaces its own error dialog when the path is unusable.
-          })
+          return workspaces.openPath(resolveWorkspacePath(cwd, path))
         },
         loadOlder: () => { void scoped.loadOlder() },
         loadImage: attachment => conversation.resolveImage(sessionId, attachment),
@@ -479,13 +455,4 @@ export function apply(ctx: Context): void {
     }),
   }, DetailsPanel)
 
-}
-
-function bytesToBase64(data: Uint8Array): string {
-  let binary = ''
-  const chunk = 0x8000
-  for (let offset = 0; offset < data.length; offset += chunk) {
-    binary += String.fromCharCode(...data.subarray(offset, offset + chunk))
-  }
-  return btoa(binary)
 }

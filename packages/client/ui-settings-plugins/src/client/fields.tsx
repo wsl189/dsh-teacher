@@ -87,65 +87,6 @@ export function ValueField(props: FieldProps & {
   )
 }
 
-/** One value and its user-facing label in a finite-choice field. */
-export interface SelectOption {
-  /** Value staged in the settings document. */
-  value: string
-  /** Label rendered in the native option list. */
-  label: string
-}
-
-/**
- * A staged finite-choice field. The Host schema remains authoritative over
- * accepted values; this control keeps the ordinary edit/reset transaction.
- * @param props - the field frame, current value, and available choices.
- * @returns the labelled native select control.
- */
-export function SelectField(props: FieldProps & {
-  /** Complete list of values this deployment can stage. */
-  options: readonly SelectOption[]
-}) {
-  const knownValue = props.options.some(option => option.value === props.text)
-  return (
-    <div className={css.field}>
-      <div className={css.head}>
-        <label className={css.label} htmlFor={props.id}>{props.label}</label>
-        {props.overridden
-          ? (
-            <span className={css.badges}>
-              <span className={css.badge}>{props.overriddenLabel}</span>
-              <button
-                type="button"
-                className={css.reset}
-                disabled={props.disabled}
-                onClick={props.onReset}
-              >
-                {props.resetLabel}
-              </button>
-            </span>
-          )
-          : null}
-      </div>
-      <select
-        id={props.id}
-        className={props.invalid ? css.inputInvalid : css.input}
-        {...props.invalid ? { 'aria-invalid': true } : {}}
-        value={props.text}
-        disabled={props.disabled}
-        onChange={(event) => { props.onEdit(event.target.value) }}
-      >
-        {!knownValue && <option value={props.text}>{props.text}</option>}
-        {props.options.map(option => (
-          <option key={option.value} value={option.value}>{option.label}</option>
-        ))}
-      </select>
-      <p className={props.invalid ? css.invalid : css.hint}>
-        {props.invalid ? props.invalidLabel : props.hint}
-      </p>
-    </div>
-  )
-}
-
 /**
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank

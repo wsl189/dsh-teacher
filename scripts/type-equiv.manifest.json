@@ -2,86 +2,6 @@
   "comment": "Maps each primary ` ```ts type-equiv ` or ` ```ts public-api ` block (by doc + declared symbol + projection) to the source declaration and original JSDoc it must match. Paired `.zh.md` blocks are byte-identical derivatives checked through their unsuffixed sibling and have no duplicate entry. Omit projection for the complete declaration; use public-api with a ` ```ts public-api ` block for a body-stripped public class declaration. verify-type-equiv.ts enforces a 1:1 correspondence between primary blocks and entries. Add an entry when you add a primary source-equivalence block; remove it when you remove the block.",
   "entries": [
     {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrErrorCode",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrExtractRequest",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrExtractedDocument",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrExtractSuccess",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrFailure",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrExtractRejected",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrExtractResult",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrPageRange",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutRequest",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrBoundingBox",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutElement",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutPage",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutDocument",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutSuccess",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrLayoutResult",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
-      "doc": "docs/subsystems/ocr.md",
-      "symbol": "OcrProvider",
-      "source": "packages/ocr/ocr/src/types.ts"
-    },
-    {
       "doc": "docs/subsystems/core.md",
       "symbol": "Branded",
       "source": "packages/util/brand/src/index.ts"
@@ -380,6 +300,26 @@
       "doc": "docs/subsystems/schedule.md",
       "symbol": "ScheduleView",
       "source": "packages/schedule/schedule/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/agent-team.md",
+      "symbol": "TeamMemberSnapshot",
+      "source": "packages/experimental/agent-team/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/agent-team.md",
+      "symbol": "TeamMessageSnapshot",
+      "source": "packages/experimental/agent-team/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/agent-team.md",
+      "symbol": "TeamMessageSource",
+      "source": "packages/experimental/agent-team/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/agent-team.md",
+      "symbol": "TeamTaskSnapshot",
+      "source": "packages/experimental/agent-team/src/types.ts"
     },
     {
       "doc": "docs/subsystems/commands.md",
@@ -747,7 +687,17 @@
     },
     {
       "doc": "docs/subsystems/session-reference.md",
+      "symbol": "FileReferenceCandidate",
+      "source": "packages/context/file-reference/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-reference.md",
       "symbol": "SessionReferenceCandidate",
+      "source": "packages/context/session-reference/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/session-reference.md",
+      "symbol": "SessionReferenceMentionCandidate",
       "source": "packages/context/session-reference/src/types.ts"
     },
     {
@@ -967,12 +917,27 @@
     },
     {
       "doc": "docs/subsystems/attachment.md",
+      "symbol": "EncodedImageAttachment",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
       "symbol": "SaveImageAttachment",
       "source": "packages/attachment/attachment/src/types.ts"
     },
     {
       "doc": "docs/subsystems/attachment.md",
       "symbol": "StoredImageAttachment",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
+      "symbol": "ImageRequestPolicy",
+      "source": "packages/attachment/attachment/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/attachment.md",
+      "symbol": "RequestImageAttachment",
       "source": "packages/attachment/attachment/src/types.ts"
     },
     {

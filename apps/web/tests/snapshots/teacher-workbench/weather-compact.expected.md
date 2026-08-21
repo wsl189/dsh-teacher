@@ -1,5 +1,0 @@
-- button "查看详细天气":
-  - strong: {{clock}}
-  - text: 2026年8月20日星期四
-  - strong: 30°
-  - text: 少云 浦东新区 · 上海市 · 中国
