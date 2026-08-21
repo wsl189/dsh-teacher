@@ -546,6 +546,16 @@
   opacity: 0.4;
 }
 
+/* The pi-ai row exposes capabilities behind this disclosure, so its label is
+   visible rather than living only in the accessibility tree. */
+.modelDetailsButton {
+  width: auto;
+  gap: 4px;
+  padding: 0 8px;
+  white-space: nowrap;
+  font-size: 12px;
+}
+
 /* The delete glyph keeps the danger tint the rest of the section uses. */
 .iconButtonDanger:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover-danger);

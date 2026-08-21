@@ -59,7 +59,7 @@
             - text: acme-large
           - textbox "显示名称 1":
             - /placeholder: 显示名称
-          - button "模型详情 1" [expanded]
+          - button "模型详情 1" [expanded]: 模型详情
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":

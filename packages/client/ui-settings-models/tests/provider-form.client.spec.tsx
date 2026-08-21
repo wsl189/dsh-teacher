@@ -202,6 +202,8 @@ describe('model list editing', () => {
 
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
+    expect(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }).textContent)
+      .toContain(en.modelAdvanced)
     expandModel(1)
     fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Acme' } })

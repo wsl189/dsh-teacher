@@ -372,12 +372,13 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
             />
             <button
               type="button"
-              className={styles['iconButton']}
+              className={`${styles['iconButton']} ${styles['modelDetailsButton']}`}
               aria-label={`${t('modelAdvanced')} ${index + 1}`}
               aria-expanded={expanded.has(index)}
               title={t('modelAdvanced')}
               onClick={() => { toggleExpanded(index) }}
             >
+              <span>{t('modelAdvanced')}</span>
               <IconChevron open={expanded.has(index)} />
             </button>
             <button
