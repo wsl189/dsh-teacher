@@ -3297,6 +3297,11 @@
   pointer-events: auto;
 }
 
+.legacyQuestionShell .legacyHoverDelete:hover:not(:disabled),
+.legacyQuestionShell .legacyHoverDelete:focus-visible:not(:disabled) {
+  transform: translateY(-50%) scale(1);
+}
+
 .legacyBlankMain {
   position: relative;
   display: flex;
@@ -3477,10 +3482,14 @@
   gap: 8px;
 }
 
+.legacyStudentRows {
+  align-items: stretch;
+}
+
 .legacyStudentRow {
-  display: flex;
-  width: fit-content;
-  min-width: 150px;
+  display: block;
+  width: 100%;
+  min-width: 0;
   align-items: center;
 }
 
@@ -3488,16 +3497,17 @@
 .legacyStudentButtonActive,
 .legacyFolderButton,
 .legacyFolderButtonActive {
+  position: relative;
   display: flex;
   width: 100%;
   min-height: 38px;
-  padding: 8px 34px 8px 14px;
+  padding: 8px 40px;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
   gap: 10px;
   border-color: var(--legacy-line) !important;
   background: var(--dsw-alias-bg-module-platform) !important;
-  text-align: left;
+  text-align: center;
 }
 
 .legacyStudentButton {
@@ -3512,11 +3522,24 @@
 }
 
 .legacyHierarchyMarker {
+  position: absolute;
+  top: 50%;
+  left: 14px;
   display: inline-flex;
   width: 13px;
   flex: 0 0 13px;
+  transform: translateY(-50%);
   justify-content: center;
   color: var(--legacy-muted);
+}
+
+.legacyHierarchyName {
+  display: block;
+  overflow: hidden;
+  max-width: 100%;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .legacyHierarchyHint {
@@ -3527,10 +3550,31 @@
 }
 
 .legacyStudentAdd {
-  margin-left: 6px;
-  padding: 5px 8px;
+  position: absolute;
+  top: 50%;
+  right: 6px;
+  z-index: 5;
+  display: inline-flex;
+  width: 27px;
+  height: 25px;
+  padding: 0;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
   color: var(--legacy-orange) !important;
   font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.legacyQuestionShell .legacyStudentAdd:hover:not(:disabled),
+.legacyQuestionShell .legacyStudentAdd:focus-visible:not(:disabled) {
+  transform: translateY(-50%);
+}
+
+.legacyStudentRow > .legacyHoverDelete {
+  right: auto;
+  left: 6px;
 }
 
 .legacyBankFolders {
@@ -3543,6 +3587,12 @@
   right: min(25%, 330px);
   width: min(42%, 620px);
   z-index: 56;
+}
+
+.legacyBankImagesBesideClass {
+  right: min(25%, 330px);
+  left: calc(var(--legacy-left) + min(30%, 390px) + 22px);
+  width: auto;
 }
 
 .legacyFolderButtonActive {

@@ -23,6 +23,7 @@ const studentId = 'student-1' as TeacherStudentId
 const batchId = 'batch-1' as TeacherQuestionBatchId
 const imageId = 'image-1' as TeacherQuestionImageId
 const assignmentId = 'assignment-1' as TeacherQuestionAssignmentId
+const folderAssignmentId = 'assignment-2' as TeacherQuestionAssignmentId
 const folderId = 'folder-1' as TeacherQuestionFolderId
 
 const t: QuestionWorkbenchProps['t'] = (key, params) => {
@@ -113,18 +114,102 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByPlaceholderText(/同类题|讲义|PPT/u)).toBeNull()
   })
 
-  it('opens the original class, student-image, and question-bank drawer flow', async () => {
-    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={commands()} t={t} />)
+  it('toggles image drawers and keeps student and question-bank images mutually exclusive', async () => {
+    const c = commands()
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
     fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
     expect(screen.getByLabelText('学生列表')).toBeTruthy()
 
-    fireEvent.click(screen.getByRole('button', { name: '张三' }))
+    const student = screen.getByRole('button', { name: '张三' })
+    fireEvent.click(student)
     await waitFor(() => { expect(screen.getByLabelText('学生图片')).toBeTruthy() })
     await waitFor(() => { expect(screen.getByRole('button', { name: '第1题.png' })).toBeTruthy() })
 
-    fireEvent.click(screen.getAllByRole('button', { name: '试题图片库' }).at(-1)!)
+    fireEvent.click(student)
+    await waitFor(() => { expect(screen.queryByLabelText('学生图片')).toBeNull() })
+    fireEvent.click(student)
+    const studentImages = await screen.findByLabelText('学生图片')
+
+    fireEvent.click(within(studentImages).getByRole('button', { name: '试题图片库' }))
     expect(screen.getByRole('complementary', { name: '试题图片库' })).toBeTruthy()
-    expect(screen.getByRole('complementary', { name: '试题库图片' })).toBeTruthy()
+    expect(screen.queryByRole('complementary', { name: '试题库图片' })).toBeNull()
+    expect(screen.queryByLabelText('学生图片')).toBeNull()
+
+    const batch = screen.getByRole('button', { name: /^期中试卷/u })
+    fireEvent.click(batch)
+    const bankImages = screen.getByRole('complementary', { name: '试题库图片' })
+    expect(screen.queryByLabelText('学生图片')).toBeNull()
+    fireEvent.click(within(bankImages).getByLabelText('选择'))
+    fireEvent.click(within(bankImages).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.assignQuestions).toHaveBeenCalledWith({ studentId, imageIds: [imageId] })
+    })
+
+    fireEvent.click(batch)
+    expect(screen.queryByRole('complementary', { name: '试题库图片' })).toBeNull()
+  })
+
+  it('saves selected top-level question-bank images to a chosen local directory', async () => {
+    const c = commands()
+    const write = vi.fn(async () => {})
+    const close = vi.fn(async () => {})
+    const getFileHandle = vi.fn(async (_name: string, options?: { create?: boolean }) => {
+      if (options?.create !== true) throw new DOMException('missing', 'NotFoundError')
+      return { createWritable: async () => ({ write, close }) }
+    })
+    vi.stubGlobal('showDirectoryPicker', vi.fn(async () => ({
+      queryPermission: async () => 'granted' as const,
+      getFileHandle,
+    })))
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
+    fireEvent.click(screen.getByRole('button', { name: /^期中试卷/u }))
+    const bankImages = screen.getByRole('complementary', { name: '试题库图片' })
+    fireEvent.click(within(bankImages).getByLabelText('选择'))
+    fireEvent.click(within(bankImages).getByRole('button', { name: '另存为' }))
+
+    await waitFor(() => {
+      expect(c.readQuestionImage).toHaveBeenCalledWith({ target: { kind: 'batch', id: imageId } })
+      expect(getFileHandle).toHaveBeenLastCalledWith('第1题.png', { create: true })
+      expect(write).toHaveBeenCalledWith(expect.any(Blob))
+      expect(close).toHaveBeenCalledTimes(1)
+    })
+    expect(c.assignQuestions).not.toHaveBeenCalled()
+  })
+
+  it('shows every assigned image for a student while keeping folder views scoped', async () => {
+    const aggregateState: TeacherWorkbenchState = {
+      ...state,
+      questionAssignments: [
+        ...state.questionAssignments,
+        {
+          ...state.questionAssignments[0]!,
+          id: folderAssignmentId,
+          folderId,
+          fileName: '第2题.png',
+          relativePath: '高一/一班/张三/第一次作业/第2题.png',
+        },
+      ],
+    }
+    render(<QuestionWorkbench state={aggregateState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={commands()} t={t} />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    const student = screen.getByRole('button', { name: '张三' })
+
+    fireEvent.click(student)
+    let studentImages = await screen.findByRole('complementary', { name: '学生图片' })
+    expect(within(studentImages).getByRole('button', { name: '第1题.png' })).toBeTruthy()
+    expect(within(studentImages).getByRole('button', { name: '第2题.png' })).toBeTruthy()
+
+    fireEvent.click(student)
+    await waitFor(() => { expect(screen.queryByRole('complementary', { name: '学生图片' })).toBeNull() })
+    fireEvent.click(student)
+    fireEvent.click(student)
+    const folder = await screen.findByRole('button', { name: '第一次作业' })
+    fireEvent.click(folder)
+    studentImages = await screen.findByRole('complementary', { name: '学生图片' })
+    expect(within(studentImages).queryByRole('button', { name: '第1题.png' })).toBeNull()
+    expect(within(studentImages).getByRole('button', { name: '第2题.png' })).toBeTruthy()
   })
 
   it('preserves double-click expansion and triple-click subfolder creation', async () => {
@@ -172,9 +257,14 @@ describe('QuestionWorkbench reference shell', () => {
     const showSaveFilePicker = vi.fn(async () => ({
       createWritable: async () => ({ write, close }),
     }))
-    const showDirectoryPicker = vi.fn(async () => {
-      throw new Error('the protected-directory picker must not be used')
+    const getFileHandle = vi.fn(async (_name: string, options?: { create?: boolean }) => {
+      if (options?.create !== true) throw new DOMException('missing', 'NotFoundError')
+      return { createWritable: async () => ({ write, close }) }
     })
+    const showDirectoryPicker = vi.fn(async () => ({
+      queryPermission: async () => 'granted' as const,
+      getFileHandle,
+    }))
     vi.stubGlobal('isSecureContext', true)
     vi.stubGlobal('showSaveFilePicker', showSaveFilePicker)
     vi.stubGlobal('showDirectoryPicker', showDirectoryPicker)
@@ -218,11 +308,12 @@ describe('QuestionWorkbench reference shell', () => {
     const resultDialog = await screen.findByRole('dialog', { name: '批量生成成功' })
     fireEvent.click(within(resultDialog).getByRole('button', { name: '保存' }))
     await waitFor(() => {
-      expect(showSaveFilePicker).toHaveBeenCalledWith({ suggestedName: '张三.docx' })
+      expect(showDirectoryPicker).toHaveBeenCalledTimes(1)
+      expect(getFileHandle).toHaveBeenLastCalledWith('张三.docx', { create: true })
       expect(write).toHaveBeenCalledWith(expect.any(Blob))
       expect(close).toHaveBeenCalledTimes(1)
     })
-    expect(showDirectoryPicker).not.toHaveBeenCalled()
+    expect(showSaveFilePicker).not.toHaveBeenCalled()
 
     fireEvent.click(within(studentDrawer).getByLabelText('选择'))
     fireEvent.click(within(studentDrawer).getByRole('button', { name: '临时保存' }))
@@ -238,10 +329,11 @@ describe('QuestionWorkbench reference shell', () => {
     const pptResultDialog = await screen.findByRole('dialog', { name: '批量生成成功' })
     fireEvent.click(within(pptResultDialog).getByRole('button', { name: '保存' }))
     await waitFor(() => {
-      expect(showSaveFilePicker).toHaveBeenLastCalledWith({ suggestedName: '张三.pptx' })
+      expect(showDirectoryPicker).toHaveBeenCalledTimes(2)
+      expect(getFileHandle).toHaveBeenLastCalledWith('张三.pptx', { create: true })
       expect(close).toHaveBeenCalledTimes(2)
     })
-    expect(showDirectoryPicker).not.toHaveBeenCalled()
+    expect(showSaveFilePicker).not.toHaveBeenCalled()
   })
 
   it('restores toolbox generation from a naturally ordered browser folder', async () => {
@@ -249,8 +341,8 @@ describe('QuestionWorkbench reference shell', () => {
     c.generateUploadedQuestionDocument = vi.fn(async (request: TeacherQuestionUploadedDocumentRequest) => ({
       ok: true as const,
       value: {
-        fileName: `${request.folderName}.docx`,
-        mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        fileName: `${request.folderName}.${request.kind === 'word' ? 'docx' : 'pptx'}`,
+        mediaType: 'application/octet-stream',
         contentBase64: 'UEs=',
       },
     }))
@@ -273,6 +365,18 @@ describe('QuestionWorkbench reference shell', () => {
         ],
       }))
     })
-    expect(await screen.findByRole('dialog', { name: 'Word 生成完成' })).toBeTruthy()
+    const wordDialog = await screen.findByRole('dialog', { name: 'Word 生成完成' })
+    fireEvent.click(within(wordDialog).getByRole('button', { name: '关闭' }))
+
+    fireEvent.click(screen.getByRole('button', { name: '技能库' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: '生成 PPT' }))
+    fireEvent.change(input, { target: { files: [tenth, second] } })
+    await waitFor(() => {
+      expect(c.generateUploadedQuestionDocument).toHaveBeenLastCalledWith(expect.objectContaining({
+        kind: 'ppt',
+        folderName: '练习图片',
+      }))
+    })
+    expect(await screen.findByRole('dialog', { name: 'PPT 生成完成' })).toBeTruthy()
   })
 })

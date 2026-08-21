@@ -1,0 +1,43 @@
+- heading "试题分割系统" [level=2]
+- text: 布局验证试卷
+- button "技能库"
+- button "试题图片库"
+- button "添加学生"
+- button "上传 PDF"
+- button "设置"
+- button "Choose File"
+- button "Choose File"
+- complementary "学生目录":
+  - button "2026" [expanded]
+  - button "高一（1）班"
+  - button "删除"
+- main "试题工作区空白区域":
+  - strong: 试题工作区
+  - text: 使用右上角工具上传 PDF、打开试题库或添加学生 布局验证试卷 · 1 道试题
+- button "关闭工作台"
+- complementary "学生列表":
+  - heading "高一（1）班" [level=2]
+  - button "Word" [disabled]
+  - button "PPT" [disabled]
+  - button "关闭工作台"
+  - paragraph: 单击打开图片，双击展开或收起下级目录，三击新建子目录
+  - button "张同学"
+  - button "删除"
+  - button "月考"
+  - button "从试题库添加": +
+  - button "删除"
+- complementary "试题图片库":
+  - heading "试题图片库" [level=2]
+  - button "关闭工作台"
+  - button "布局验证试卷 1"
+  - button "删除"
+- complementary "试题库图片":
+  - button "全选"
+  - button "保存" [disabled]
+  - article:
+    - button "第 1 题":
+      - img "第 1 题"
+    - button "删除"
+    - text: 第1题.png
+    - checkbox "选择"
+    - text: 选择

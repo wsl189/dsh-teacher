@@ -14,4 +14,15 @@ describe('question workbench theme styles', () => {
     expect(referenceShell).not.toMatch(/\brgba?\(/u)
     expect(new Set(referenceShell.match(/#[\da-f]{3,8}\b/giu) ?? [])).toEqual(new Set(['#fff']))
   })
+
+  it('centers hierarchy labels without letting hover actions shift or wrap', () => {
+    expect(referenceShell).toContain('.legacyQuestionShell .legacyHoverDelete:hover:not(:disabled)')
+    expect(referenceShell).toMatch(/\.legacyStudentRow \{[^}]*width: 100%;[^}]*min-width: 0;/su)
+    expect(referenceShell).toMatch(/\.legacyHierarchyName \{[^}]*text-align: center;[^}]*white-space: nowrap;/su)
+    expect(referenceShell).toMatch(/\.legacyStudentAdd \{[^}]*position: absolute;[^}]*white-space: nowrap;/su)
+    expect(referenceShell).toContain('.legacyStudentRow > .legacyHoverDelete')
+    expect(referenceShell).toMatch(
+      /\.legacyBankImagesBesideClass \{[^}]*left: calc\(var\(--legacy-left\) \+ min\(30%, 390px\) \+ 22px\);[^}]*width: auto;/su,
+    )
+  })
 })

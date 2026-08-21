@@ -29,6 +29,7 @@ const TIMETABLE_EXPECTED = join(SNAPSHOT_DIR, 'timetable.expected.md')
 const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-delete.expected.md')
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
 const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
+const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
 const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const MODE = webSnapshotMode()
@@ -313,6 +314,145 @@ describe('web e2e: durable teacher workbench', () => {
     await openModule('学生名册')
     await page.getByRole('heading', { name: '高一（1）班' }).waitFor({ timeout: 10_000 })
     expect(await page.getByText('张同学', { exact: true }).count()).toBe(1)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('centers the question hierarchy and switches image drawers without overlap', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-question-drawers'))
+    let document = await scaffold.ctx.teacherWorkbench.read({})
+    let rosterClass = document.value.state.classes.find(item => item.usage === 'roster')
+    let student = document.value.state.students.find(item => item.classId === rosterClass?.id)
+
+    if (rosterClass === undefined || student === undefined) {
+      await openModule('学生名册')
+      const workbench = page.getByRole('region', { name: '工作台', exact: true })
+      await workbench.getByRole('button', { name: '新建班级' }).click()
+      const classEditor = page.getByRole('dialog', { name: '新建班级' })
+      await classEditor.getByLabel('班级名称').fill('高一（1）班')
+      await classEditor.getByLabel('年级').fill('高一')
+      await classEditor.getByLabel('学科').fill('数学')
+      await classEditor.getByRole('button', { name: '保存' }).click()
+      await classEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+      await workbench.getByRole('button', { name: '添加学生' }).click()
+      const studentEditor = page.getByRole('dialog', { name: '添加学生' })
+      await studentEditor.getByLabel('姓名').fill('张同学')
+      await studentEditor.getByRole('button', { name: '保存' }).click()
+      await studentEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+      document = await scaffold.ctx.teacherWorkbench.read({})
+      rosterClass = document.value.state.classes.find(item => item.usage === 'roster')
+      student = document.value.state.students.find(item => item.classId === rosterClass?.id)
+    }
+    if (rosterClass === undefined || student === undefined) throw new Error('question drawer roster setup failed')
+
+    let batch = document.value.state.questionBatches.find(item => item.name === '布局验证试卷')
+    if (batch === undefined) {
+      const saved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
+        name: '布局验证试卷',
+        sourceName: 'layout.pdf',
+        pageRange: '1',
+        images: [{
+          questionNo: 1,
+          fileName: '第1题.png',
+          mediaType: 'image/png',
+          width: 1,
+          height: 1,
+          contentBase64: (await readFile(RASTER_FIXTURE)).toString('base64'),
+        }],
+      })
+      expect(saved.ok).toBe(true)
+      if (!saved.ok) throw new Error(saved.error.message)
+      batch = saved.value.document.state.questionBatches.find(item => item.name === '布局验证试卷')
+    }
+    if (batch === undefined) throw new Error('question drawer batch setup failed')
+    const assigned = await scaffold.ctx.teacherWorkbench.assignQuestions({
+      studentId: student.id,
+      imageIds: batch.images.map(image => image.id),
+    })
+    expect(assigned.ok).toBe(true)
+
+    await openModule('试题切割')
+    const hierarchy = page.getByRole('complementary', { name: '学生目录' })
+    const classButton = hierarchy.getByRole('button', { name: rosterClass.name, exact: true })
+    const classRow = classButton.locator('..')
+    const classDelete = classRow.getByRole('button', { name: '删除' })
+    await classButton.hover()
+    const [classButtonBox, classDeleteBox] = await Promise.all([classButton.boundingBox(), classDelete.boundingBox()])
+    if (classButtonBox === null || classDeleteBox === null) throw new Error('question class controls have no layout box')
+    expect(Math.abs((classDeleteBox.y + classDeleteBox.height / 2) - (classButtonBox.y + classButtonBox.height / 2))).toBeLessThan(1)
+
+    await classButton.dblclick()
+    const classDrawer = page.getByRole('complementary', { name: '学生列表' })
+    await classDrawer.waitFor({ timeout: 10_000 })
+    const studentButton = classDrawer.getByRole('button', { name: student.name, exact: true })
+    await studentButton.click({ clickCount: 3 })
+    const folderDialog = page.getByRole('dialog', { name: '新建子目录' })
+    await folderDialog.waitFor({ timeout: 10_000 })
+    await folderDialog.getByLabel('目录名').fill('月考')
+    await folderDialog.getByRole('button', { name: '新建' }).click()
+    const folderButton = classDrawer.getByRole('button', { name: '月考', exact: true })
+    await folderButton.waitFor({ timeout: 10_000 })
+
+    for (const button of [studentButton, folderButton]) {
+      const label = button.locator('[class*="legacyHierarchyName"]')
+      const [buttonBox, labelBox] = await Promise.all([button.boundingBox(), label.boundingBox()])
+      if (buttonBox === null || labelBox === null) throw new Error('question hierarchy label has no layout box')
+      expect(Math.abs((labelBox.x + labelBox.width / 2) - (buttonBox.x + buttonBox.width / 2))).toBeLessThan(1)
+    }
+    const folderRow = folderButton.locator('..')
+    const addFromLibrary = folderRow.getByRole('button', { name: '从试题库添加' })
+    expect(await addFromLibrary.evaluate(element => getComputedStyle(element).whiteSpace)).toBe('nowrap')
+
+    const documentWithFolder = await scaffold.ctx.teacherWorkbench.read({})
+    const folder = documentWithFolder.value.state.questionFolders
+      .find(item => item.studentId === student.id && item.name === '月考')
+    if (folder === undefined) throw new Error('question drawer folder setup failed')
+    const assignedToFolder = await scaffold.ctx.teacherWorkbench.assignQuestions({
+      studentId: student.id,
+      folderId: folder.id,
+      imageIds: batch.images.map(image => image.id),
+    })
+    expect(assignedToFolder.ok).toBe(true)
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openModule('试题切割')
+    await classButton.dblclick()
+    await classDrawer.waitFor({ timeout: 10_000 })
+
+    await studentButton.click()
+    const studentImages = page.getByRole('complementary', { name: '学生图片' })
+    await studentImages.waitFor({ timeout: 10_000 })
+    await studentImages.getByRole('button', { name: '第1题.png', exact: true }).nth(1).waitFor({ timeout: 10_000 })
+    expect(await studentImages.getByRole('button', { name: '第1题.png', exact: true }).count()).toBe(2)
+    await studentButton.dblclick()
+    await folderButton.waitFor({ timeout: 10_000 })
+    await studentImages.getByRole('button', { name: '试题图片库' }).click()
+    const bankFolders = page.getByRole('complementary', { name: '试题图片库' })
+    await bankFolders.waitFor({ timeout: 10_000 })
+    expect(await page.getByRole('complementary', { name: '试题库图片' }).count()).toBe(0)
+    expect(await studentImages.count()).toBe(0)
+
+    const batchButton = bankFolders.getByRole('button', { name: /布局验证试卷/u })
+    await batchButton.click()
+    const bankImages = page.getByRole('complementary', { name: '试题库图片' })
+    await bankImages.waitFor({ timeout: 10_000 })
+    expect(await studentImages.count()).toBe(0)
+    const [classDrawerBox, bankImagesBox] = await Promise.all([classDrawer.boundingBox(), bankImages.boundingBox()])
+    if (classDrawerBox === null || bankImagesBox === null) throw new Error('question drawers have no layout box')
+    expect(classDrawerBox.x + classDrawerBox.width).toBeLessThanOrEqual(bankImagesBox.x)
+    await compareOrRefreshGolden(
+      QUESTION_DRAWERS_EXPECTED,
+      await captureStableAria(page, '[data-question-workbench]', scaffold.workspaceCwd),
+      MODE,
+    )
+
+    await batchButton.click()
+    await bankImages.waitFor({ state: 'hidden', timeout: 10_000 })
+    await bankFolders.getByRole('button', { name: '关闭工作台' }).click()
+    await page.getByRole('button', { name: '试题图片库', exact: true }).click()
+    await bankFolders.waitFor({ timeout: 10_000 })
+    await batchButton.click()
+    await bankImages.waitFor({ timeout: 10_000 })
+    expect(await bankImages.getByRole('button', { name: '另存为' }).isDisabled()).toBe(true)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

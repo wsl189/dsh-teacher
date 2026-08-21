@@ -83,6 +83,11 @@ interface FolderPrompt {
   readonly parent?: TeacherQuestionFolder
 }
 
+interface QuestionBankSaveTarget {
+  readonly studentId: TeacherStudentId
+  readonly folderId: TeacherQuestionFolderId | ''
+}
+
 interface HierarchyClickState {
   key: string
   count: number
@@ -142,13 +147,10 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const [batchImagesOpen, setBatchImagesOpen] = useState(false)
   const [studentImagesOpen, setStudentImagesOpen] = useState(false)
   const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
-  const [assignSheetOpen, setAssignSheetOpen] = useState(false)
   const [batchWordOpen, setBatchWordOpen] = useState(false)
   const [officeDialog, setOfficeDialog] = useState<OfficeDialog | null>(null)
   const [editor, setEditor] = useState<EditorRequest | null>(null)
-  const [assignClassId, setAssignClassId] = useState<TeacherClassId | ''>(() => classes[0]?.id ?? '')
-  const [assignStudentId, setAssignStudentId] = useState<TeacherStudentId | ''>(() => state.students[0]?.id ?? '')
-  const [assignFolderId, setAssignFolderId] = useState<TeacherQuestionFolderId | ''>('')
+  const [questionBankSaveTarget, setQuestionBankSaveTarget] = useState<QuestionBankSaveTarget | null>(null)
   const [addYear, setAddYear] = useState(fallbackYear)
   const [addGrade, setAddGrade] = useState('')
   const [addClassName, setAddClassName] = useState('')
@@ -170,13 +172,9 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     () => classStudents.filter(student => (temporarySelections.get(student.id) ?? 0) > 0),
     [classStudents, temporarySelections],
   )
-  const assignStudents = useMemo(
-    () => state.students.filter(student => student.classId === assignClassId),
-    [assignClassId, state.students],
-  )
   const studentAssignments = useMemo(
     () => state.questionAssignments.filter(item => item.studentId === activeStudentId
-      && (activeFolderId === '' ? item.folderId === undefined : item.folderId === activeFolderId)),
+      && (activeFolderId === '' || item.folderId === activeFolderId)),
     [activeFolderId, activeStudentId, state.questionAssignments],
   )
   const hierarchyRows = useMemo(
@@ -258,23 +256,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   }, [activeFolderId, activeStudentId, state.questionFolders])
 
   useEffect(() => {
-    if (assignClassId !== '' && classes.some(item => item.id === assignClassId)) return
-    setAssignClassId(classes[0]?.id ?? '')
-  }, [assignClassId, classes])
-
-  useEffect(() => {
-    if (assignStudentId !== '' && assignStudents.some(item => item.id === assignStudentId)) return
-    setAssignStudentId(assignStudents[0]?.id ?? '')
-  }, [assignStudentId, assignStudents])
-
-  useEffect(() => {
-    if (assignFolderId === '') return
-    const folder = state.questionFolders.find(item => item.id === assignFolderId)
-    if (folder?.studentId === assignStudentId) return
-    setAssignFolderId('')
-  }, [assignFolderId, assignStudentId, state.questionFolders])
-
-  useEffect(() => {
     if (pendingStudent === null) return
     const createdClass = classes.find(item => classAcademicYear(item, fallbackYear) === pendingStudent.academicYear
       && item.grade === pendingStudent.grade && item.name === pendingStudent.className)
@@ -309,7 +290,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setBatchImagesOpen(false)
     setStudentImagesOpen(false)
     setSettingsDrawerOpen(false)
-    setAssignSheetOpen(false)
     setBatchWordOpen(false)
     setFolderPrompt(null)
     setFolderName('')
@@ -438,9 +418,16 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   }
 
   const openStudent = (student: TeacherStudent, folderId: TeacherQuestionFolderId | '' = ''): void => {
+    const sameTarget = activeStudentId === student.id && activeFolderId === folderId
     setActiveStudentId(student.id)
     setActiveFolderId(folderId)
     setSelectedAssignmentIds(new Set())
+    if (studentImagesOpen && sameTarget) {
+      setStudentImagesOpen(false)
+      return
+    }
+    setQuestionBankOpen(false)
+    setBatchImagesOpen(false)
     setStudentImagesOpen(true)
   }
 
@@ -448,14 +435,13 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     if (student !== undefined) {
       setActiveStudentId(student.id)
       setActiveFolderId(folderId)
-      setAssignClassId(student.classId)
-      setAssignStudentId(student.id)
-      setAssignFolderId(folderId)
+      setQuestionBankSaveTarget({ studentId: student.id, folderId })
     } else {
-      setAssignFolderId('')
+      setQuestionBankSaveTarget(null)
     }
+    setStudentImagesOpen(false)
     setQuestionBankOpen(true)
-    if (activeBatch !== undefined) setBatchImagesOpen(true)
+    setBatchImagesOpen(false)
   }
 
   const toggleHierarchyRow = (row: StudentHierarchyRow): void => {
@@ -536,9 +522,22 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   }
 
   const openBatch = (batchId: TeacherQuestionBatchId): void => {
+    if (batchImagesOpen && activeBatchId === batchId) {
+      setBatchImagesOpen(false)
+      return
+    }
     setActiveBatchId(batchId)
     setSelectedBatchImageIds(new Set())
+    setStudentImagesOpen(false)
     setBatchImagesOpen(true)
+  }
+
+  const requestCloseClassDrawer = (): void => {
+    if (studentImagesOpen) {
+      setStudentImagesOpen(false)
+      return
+    }
+    setClassDrawerOpen(false)
   }
 
   const toggleBatchImage = (imageId: string): void => {
@@ -552,24 +551,53 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       : new Set(activeBatch.images.map(image => image.id)))
   }
 
-  const openAssignSheet = (): void => {
-    if (selectedBatchImageIds.size === 0) return
-    const preferred = activeStudent ?? state.students[0]
-    setAssignClassId(preferred?.classId ?? classes[0]?.id ?? '')
-    setAssignStudentId(preferred?.id ?? '')
-    setAssignSheetOpen(true)
-  }
+  const saveSelectedBatchImages = async (): Promise<void> => {
+    if (activeBatch === undefined || selectedBatchImageIds.size === 0 || busy !== null) return
+    const selectedImages = activeBatch.images.filter(image => selectedBatchImageIds.has(image.id))
+    if (questionBankSaveTarget === null) {
+      try {
+        const directory = await pickWritableDirectory(
+          t('questions.directoryPickerUnsupported'),
+          t('questions.directoryPermissionDenied'),
+        )
+        if (directory === null) return
+        setBusy('assign')
+        let saved = 0
+        let failed = 0
+        for (const image of selectedImages) {
+          const result = await commands.readQuestionImage({ target: { kind: 'batch', id: image.id } })
+          if (!result.ok) {
+            failed += 1
+            continue
+          }
+          try {
+            await writeUniqueFile(directory, result.value.fileName, artifactBlob(result.value))
+            saved += 1
+          } catch {
+            failed += 1
+          }
+        }
+        setBusy(null)
+        if (saved > 0) setSelectedBatchImageIds(new Set())
+        setToast(failed === 0
+          ? t('questions.imagesSaved', { count: saved })
+          : t('questions.imagesSavedWithFailed', { saved, failed }))
+      } catch (cause) {
+        setBusy(null)
+        if (isAbortError(cause)) return
+        setToast(errorMessage(cause, t('questions.imageExportFailed')))
+      }
+      return
+    }
 
-  const assignSelected = async (): Promise<void> => {
-    if (activeBatch === undefined || assignStudentId === '' || selectedBatchImageIds.size === 0 || busy !== null) return
     setBusy('assign')
     const result = await commands.assignQuestions({
-      studentId: assignStudentId,
-      ...(assignFolderId === '' ? {} : { folderId: assignFolderId }),
-      imageIds: activeBatch.images.filter(image => selectedBatchImageIds.has(image.id)).map(image => image.id),
+      studentId: questionBankSaveTarget.studentId,
+      ...(questionBankSaveTarget.folderId === '' ? {} : { folderId: questionBankSaveTarget.folderId }),
+      imageIds: selectedImages.map(image => image.id),
     })
     setBusy(null)
-    setAssignSheetOpen(false)
+    if (result.ok) setSelectedBatchImageIds(new Set())
     setToast(result.ok ? t('questions.assigned') : result.error.message)
   }
 
@@ -741,7 +769,24 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const saveOfficeArtifacts = async (): Promise<void> => {
     if (officeDialog === null || officeDialog.artifacts.length === 0) return
     try {
-      if (officeDialog.artifacts.length === 1) {
+      if (officeDialog.scope === 'class') {
+        const directory = await pickWritableDirectory(
+          t('questions.directoryPickerUnsupported'),
+          t('questions.directoryPermissionDenied'),
+        )
+        if (directory === null) return
+        let saved = 0
+        let failed = 0
+        for (const artifact of officeDialog.artifacts) {
+          try {
+            await writeUniqueFile(directory, artifact.fileName, artifactBlob(artifact))
+            saved += 1
+          } catch {
+            failed += 1
+          }
+        }
+        setToast(t('questions.filesSaved', { saved, failed }))
+      } else if (officeDialog.artifacts.length === 1) {
         const artifact = officeDialog.artifacts[0]
         if (artifact === undefined) return
         const saved = await saveSingleArtifact(artifact)
@@ -791,7 +836,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   }
 
   const anyDrawerOpen = addStudentOpen || classDrawerOpen || questionBankOpen || batchImagesOpen
-    || studentImagesOpen || settingsDrawerOpen || assignSheetOpen || batchWordOpen
+    || studentImagesOpen || settingsDrawerOpen || batchWordOpen
 
   return (
     <div className={css.legacyQuestionShell} data-question-workbench data-reference-question-shell>
@@ -905,7 +950,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
 
       {classDrawerOpen && activeClass !== undefined && (
         <aside className={`${css.legacyDrawer} ${css.legacyClassDrawer}`} aria-label={t('questions.classStudents')}>
-          <DrawerHeader title={classDisplayName(activeClass)} onClose={() => { setClassDrawerOpen(false) }} t={t}>
+          <DrawerHeader title={classDisplayName(activeClass)} onClose={requestCloseClassDrawer} t={t}>
             <button
               type="button"
               disabled={classStudentsWithTemporaryImages.length === 0 || busy !== null}
@@ -924,8 +969,13 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             {classStudents.length === 0 && <div className={css.legacyDrawerState}>{t('questions.noStudents')}</div>}
             {hierarchyRows.map((row) => {
               const selected = activeStudentId === row.student.id && activeFolderId === (row.folder?.id ?? '')
+              const indentation = row.depth * 16
               return (
-                <div key={row.key} className={css.legacyStudentRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
+                <div
+                  key={row.key}
+                  className={css.legacyStudentRow}
+                  style={{ marginLeft: `${String(indentation)}px`, maxWidth: `calc(100% - ${String(indentation)}px)` }}
+                >
                   <button
                     type="button"
                     className={selected ? css.legacyStudentButtonActive : css.legacyStudentButton}
@@ -933,10 +983,10 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                     onClick={() => { handleHierarchyClick(row) }}
                   >
                     <span className={css.legacyHierarchyMarker} aria-hidden="true">{row.hasChildren ? row.expanded ? '▾' : '▸' : '·'}</span>
-                    <span>{row.folder?.name ?? row.student.name}</span>
+                    <span className={css.legacyHierarchyName}>{row.folder?.name ?? row.student.name}</span>
                   </button>
                   {row.folder !== undefined && !row.hasChildren && (
-                    <button type="button" className={css.legacyStudentAdd} aria-label={t('questions.addFromLibrary')} onClick={() => { openQuestionBank(row.student, row.folder?.id ?? '') }}>｜+</button>
+                    <button type="button" className={css.legacyStudentAdd} aria-label={t('questions.addFromLibrary')} onClick={() => { openQuestionBank(row.student, row.folder?.id ?? '') }}>+</button>
                   )}
                   <button
                     type="button"
@@ -969,10 +1019,15 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       )}
 
       {batchImagesOpen && activeBatch !== undefined && (
-        <aside className={`${css.legacyDrawer} ${css.legacyBankImages}`} aria-label={t('questions.batchImages')}>
+        <aside
+          className={`${css.legacyDrawer} ${css.legacyBankImages} ${classDrawerOpen ? css.legacyBankImagesBesideClass : ''}`}
+          aria-label={t('questions.batchImages')}
+        >
           <div className={css.legacyImagesHeader}>
             <button type="button" onClick={toggleAllBatchImages}>{selectedBatchImageIds.size === activeBatch.images.length ? t('questions.clearAll') : t('questions.selectAll')}</button>
-            <button type="button" disabled={selectedBatchImageIds.size === 0 || state.students.length === 0} onClick={openAssignSheet}>{t('questions.saveToStudent')}</button>
+            <button type="button" disabled={selectedBatchImageIds.size === 0 || busy !== null} onClick={() => { void saveSelectedBatchImages() }}>
+              {questionBankSaveTarget === null ? t('questions.saveAs') : t('questions.saveGenerated')}
+            </button>
           </div>
           <div className={css.legacyImageScroll}>
             {activeBatch.images.map(image => (
@@ -1040,25 +1095,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
         </aside>
       )}
 
-      {assignSheetOpen && (
-        <section className={css.legacyTopSheet} role="dialog" aria-modal="true" aria-label={t('questions.selectStudent')}>
-          <DrawerHeader title={t('questions.saveToStudent')} onClose={() => { setAssignSheetOpen(false) }} t={t} />
-          <div className={css.legacyAssignGrid}>
-            <FormField label={t('questions.classLabel')}>
-              <select value={assignClassId} onChange={(event) => { setAssignClassId(event.target.value as TeacherClassId); setAssignFolderId('') }}>
-                {classes.map(item => <option key={item.id} value={item.id}>{classDisplayName(item)}</option>)}
-              </select>
-            </FormField>
-            <FormField label={t('questions.studentLabel')}>
-              <select value={assignStudentId} onChange={(event) => { setAssignStudentId(event.target.value as TeacherStudentId); setAssignFolderId('') }}>
-                {assignStudents.map(student => <option key={student.id} value={student.id}>{student.name}</option>)}
-              </select>
-            </FormField>
-          </div>
-          <div className={css.legacySheetActions}><button type="button" disabled={assignStudentId === '' || busy !== null} onClick={() => { void assignSelected() }}>{t('questions.confirmSave')}</button></div>
-        </section>
-      )}
-
       {batchWordOpen && (
         <aside className={`${css.legacyDrawer} ${css.legacyBatchWordDrawer}`} aria-label={t('questions.wordConfig')}>
           <DrawerHeader title={t('questions.wordConfig')} onClose={() => { setBatchWordOpen(false) }} t={t} />
@@ -1095,7 +1131,9 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             <div>
               {officeDialog.mode === 'success' && (
                 <button type="button" onClick={() => { void saveOfficeArtifacts() }}>
-                  {officeDialog.artifacts.length === 1 ? t('questions.saveGenerated') : t('questions.downloadAll')}
+                  {officeDialog.scope === 'class' || officeDialog.artifacts.length === 1
+                    ? t('questions.saveGenerated')
+                    : t('questions.downloadAll')}
                 </button>
               )}
               {officeDialog.mode === 'error' && officeDialog.retry !== undefined && (
@@ -1390,8 +1428,54 @@ interface OfficeFileHandle {
   createWritable(): Promise<OfficeWritable>
 }
 
+interface OfficeDirectoryHandle {
+  queryPermission?(options?: { readonly mode?: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>
+  requestPermission?(options?: { readonly mode?: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>
+  getFileHandle(name: string, options?: { readonly create?: boolean }): Promise<OfficeFileHandle>
+}
+
 type OfficePickerGlobal = typeof globalThis & {
   showSaveFilePicker?: (options: { readonly suggestedName: string }) => Promise<OfficeFileHandle>
+  showDirectoryPicker?: () => Promise<OfficeDirectoryHandle>
+}
+
+async function pickWritableDirectory(
+  unsupported: string,
+  denied: string,
+): Promise<OfficeDirectoryHandle | null> {
+  const picker = (globalThis as OfficePickerGlobal).showDirectoryPicker
+  if (picker === undefined) throw new Error(unsupported)
+  const directory = await picker()
+  let permission = await directory.queryPermission?.({ mode: 'readwrite' })
+  if (permission !== 'granted') permission = await directory.requestPermission?.({ mode: 'readwrite' })
+  if (permission !== 'granted') throw new Error(denied)
+  return directory
+}
+
+async function writeUniqueFile(directory: OfficeDirectoryHandle, desiredName: string, blob: Blob): Promise<void> {
+  const fileName = await uniqueDirectoryFileName(directory, desiredName)
+  const handle = await directory.getFileHandle(fileName, { create: true })
+  const writable = await handle.createWritable()
+  await writable.write(blob)
+  await writable.close()
+}
+
+async function uniqueDirectoryFileName(directory: OfficeDirectoryHandle, desiredName: string): Promise<string> {
+  const safeName = desiredName.trim().replace(/[\\/:*?"<>|]/gu, '_') || `image_${Date.now()}.png`
+  const dot = safeName.lastIndexOf('.')
+  const hasExtension = dot > 0 && dot < safeName.length - 1
+  const stem = hasExtension ? safeName.slice(0, dot) : safeName
+  const extension = hasExtension ? safeName.slice(dot) : ''
+  for (let index = 0; index < 5000; index += 1) {
+    const candidate = index === 0 ? safeName : `${stem}_${index}${extension}`
+    try {
+      await directory.getFileHandle(candidate)
+    } catch (cause) {
+      if (cause instanceof DOMException && cause.name === 'NotFoundError') return candidate
+      throw cause
+    }
+  }
+  return `${stem}_${Date.now()}${extension}`
 }
 
 async function saveSingleArtifact(artifact: TeacherQuestionDocumentPayload): Promise<boolean> {
