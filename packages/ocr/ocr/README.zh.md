@@ -20,7 +20,7 @@ Typert 命名空间为 `ocr`，通过 `extract`、`layout` 与 `layoutLimits` �
 |---|---|
 | `provider` | 可选提供方 id。只有组合中恰好一个可用提供方时才可留空。 |
 
-源码等价声明见生成的[配置目录](../../../docs/config-catalog.md)。
+源码等价声明见生成的[配置目录](../../../docs/config-catalog.zh.md)。
 
 ## 模型体验
 

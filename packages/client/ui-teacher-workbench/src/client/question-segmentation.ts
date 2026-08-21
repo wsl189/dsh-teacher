@@ -7,6 +7,8 @@ import type {
   TeacherQuestionImageUpload,
   TeacherSegmentedQuestion,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import * as pdfjs from 'pdfjs-dist'
+import { WorkerMessageHandler } from 'pdfjs-dist/build/pdf.worker.mjs'
 
 /** One page slice contributing pixels to a detected question. */
 export type QuestionPageRegion = TeacherQuestionPageRegion
@@ -49,20 +51,16 @@ function decodedBase64Bytes(value: string): number {
 }
 
 type PdfJsModule = typeof import('pdfjs-dist')
-type PdfJsWorkerModule = typeof import('pdfjs-dist/build/pdf.worker.mjs')
 
 let pdfJsPromise: Promise<PdfJsModule> | undefined
 
 /** Load PDF.js inside the single-file Client plugin and install its in-process worker. */
 function loadPdfJs(): Promise<PdfJsModule> {
-  pdfJsPromise ??= Promise.all([
-    import('pdfjs-dist'),
-    import('pdfjs-dist/build/pdf.worker.mjs'),
-  ]).then(([pdfjs, worker]) => {
+  pdfJsPromise ??= Promise.resolve().then(() => {
     const scope = globalThis as typeof globalThis & {
-      pdfjsWorker?: { WorkerMessageHandler: PdfJsWorkerModule['WorkerMessageHandler'] }
+      pdfjsWorker?: { WorkerMessageHandler: typeof WorkerMessageHandler }
     }
-    scope.pdfjsWorker ??= { WorkerMessageHandler: worker.WorkerMessageHandler }
+    scope.pdfjsWorker ??= { WorkerMessageHandler }
     return pdfjs
   })
   return pdfJsPromise

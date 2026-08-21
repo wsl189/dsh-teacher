@@ -88,7 +88,15 @@ export function apply(ctx: ClientContext): void {
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
     hooks: { workbench: controller, teacherSettings: settings },
     ensure: () => controller.ensure(),
-    subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
+    subscribeSessionNavigation: (listener) => {
+      let current = ctx.sessions.list.getSnapshot().current
+      return ctx.sessions.list.subscribe(() => {
+        const next = ctx.sessions.list.getSnapshot().current
+        if (next === current) return
+        current = next
+        listener()
+      })
+    },
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),
     loadWeather: (location, signal) => fetchTeacherWeather(location, ctx.remote.teacherWorkbench, signal),
@@ -201,13 +209,15 @@ export function apply(ctx: ClientContext): void {
     setSetting: (field, value) => settings.set(field, value),
   })
 
-  ctx.slots.inject('sidebar.workbench', () => ctx.slots.register({
-    name: 'sidebar.workbench',
+  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
+    name: 'sidebar.footer.action',
+    id: 'teacher-workbench',
+    order: 10,
     locale: NS,
     store: viewStore,
   }, SidebarWorkbench))
-  ctx.slots.inject('shell.main', () => ctx.slots.register({
-    name: 'shell.main',
+  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
+    name: 'shell.overlay',
     id: 'teacher-workbench',
     order: 20,
     locale: NS,

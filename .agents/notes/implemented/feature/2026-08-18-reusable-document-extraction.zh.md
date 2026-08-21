@@ -18,7 +18,7 @@ Status: implemented
 
 对话消费方用一枚回形针同时提供现有图片附件与可提取文档。提取 Markdown 会被追加到可见草稿的 `<document name="...">` 包装中，需要时携带显式截断标记。用户发送前可编辑或删除它。发送继续经现有 prompt 路径，因此包装与 Markdown 可从普通已记录 `user/message` 重建；原始文档字节不进入 Session 日志或模型。
 
-教师工作台消费方仅在展开日历中开放校历识别。MinerU Markdown 与 HTML 表格会被确定性投影为带日期的复核行；HTML 投影先解析跨行和跨列单元格，再把事项列与负责人及部门元数据分离。教师可在一次 compare-and-set 变更追加已接受日历事项前选择、编辑或移除行。原始上传、提取 Markdown 与未选复核行保持浏览器瞬时状态；[持久教师工作台决策](2026-08-17-durable-teacher-workbench.md)仍拥有日历事项存储。
+教师工作台消费方仅在展开日历中开放校历识别。MinerU Markdown 与 HTML 表格会被确定性投影为带日期的复核行；HTML 投影先解析跨行和跨列单元格，再把事项列与负责人及部门元数据分离。教师可在一次 compare-and-set 变更追加已接受日历事项前选择、编辑或移除行。原始上传、提取 Markdown 与未选复核行保持浏览器瞬时状态；[持久教师工作台决策](2026-08-17-durable-teacher-workbench.zh.md)仍拥有日历事项存储。
 
 ## 已考虑的替代方案
 

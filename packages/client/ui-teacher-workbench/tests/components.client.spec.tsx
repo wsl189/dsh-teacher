@@ -65,7 +65,7 @@ describe('SidebarWorkbench', () => {
     const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
     const state = { expanded: true, active: 'lesson' as const, open: true }
     const rendered = render(
-      <SidebarWorkbench {...globalProps} wide expandSidebar={vi.fn()} useStore={selector => selector(state)} actions={actions} t={t} />,
+      <SidebarWorkbench {...globalProps} wide useStore={selector => selector(state)} actions={actions} t={t} />,
     )
     expect(screen.getAllByRole('button')).toHaveLength(8)
     fireEvent.click(screen.getByRole('button', { name: '学生名册' }))
@@ -76,7 +76,6 @@ describe('SidebarWorkbench', () => {
       <SidebarWorkbench
         {...globalProps}
         wide
-        expandSidebar={vi.fn()}
         useStore={selector => selector({ ...state, expanded: false })}
         actions={actions}
         t={t}
@@ -85,13 +84,11 @@ describe('SidebarWorkbench', () => {
     expect(screen.getAllByRole('button')).toHaveLength(1)
   })
 
-  it('expands the sidebar and disclosure from the collapsed rail', () => {
-    const expandSidebar = vi.fn()
+  it('opens the active module from the collapsed rail', () => {
     const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
-    render(<SidebarWorkbench {...globalProps} wide={false} expandSidebar={expandSidebar} useStore={selector => selector({ expanded: false, active: 'lesson', open: false })} actions={actions} t={t} />)
+    render(<SidebarWorkbench {...globalProps} wide={false} useStore={selector => selector({ expanded: false, active: 'lesson', open: false })} actions={actions} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
-    expect(expandSidebar).toHaveBeenCalledOnce()
-    expect(actions.setExpanded).toHaveBeenCalledWith(true)
+    expect(actions.openModule).toHaveBeenCalledWith('lesson')
   })
 })
 
@@ -386,6 +383,8 @@ describe('WorkbenchSurface', () => {
       loadWeather: vi.fn(async () => { throw new Error('weather is not configured') }),
       ...c.value,
       t,
+      sidebarWidth: 280,
+      detailsWidth: 0,
     } as WorkbenchSurfaceProps
   }
 

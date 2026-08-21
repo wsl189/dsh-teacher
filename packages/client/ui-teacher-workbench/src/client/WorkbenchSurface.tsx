@@ -20,7 +20,7 @@ import css from './TeacherWorkbench.module.css'
 
 /** Full main-surface component props. */
 export type WorkbenchSurfaceProps =
-  PropsRuntime<'shell.main'>
+  PropsRuntime<'shell.overlay'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
   & InjectFace<TeacherWorkbenchInjected>
@@ -110,7 +110,13 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
       : 'error.transport'
 
   return (
-    <section className={css.workbenchSurface} role="region" aria-label={props.t('title')} data-workbench-surface>
+    <section
+      className={css.workbenchSurface}
+      role="region"
+      aria-label={props.t('title')}
+      data-workbench-surface
+      style={{ left: props.sidebarWidth, right: props.detailsWidth }}
+    >
       <div className={css.workbenchShell}>
         <div className={css.workbenchBody}>
           <main className={clsx(css.workbenchContent, active === 'questions' && css.workbenchContentQuestion)}>

@@ -25,7 +25,7 @@ const QuestionsIcon: ComponentType<{ size?: number; className?: string }> = prop
 
 /** Full sidebar-entry props. */
 export type SidebarWorkbenchProps =
-  PropsRuntime<'sidebar.workbench'>
+  PropsRuntime<'sidebar.footer.action'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
 
@@ -48,14 +48,13 @@ const MODULES: readonly {
  * @param props - composed sidebar slot props.
  * @returns the sidebar entry tree.
  */
-export function SidebarWorkbench({ wide, expandSidebar, useStore, actions, t }: SidebarWorkbenchProps) {
+export function SidebarWorkbench({ wide, useStore, actions, t }: SidebarWorkbenchProps) {
   const expanded = useStore(state => state.expanded)
   const active = useStore(state => state.active)
   const open = useStore(state => state.open)
   const toggle = (): void => {
     if (!wide) {
-      expandSidebar()
-      actions.setExpanded(true)
+      actions.openModule(active)
       return
     }
     actions.setExpanded(!expanded)

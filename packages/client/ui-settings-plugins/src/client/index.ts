@@ -4,7 +4,7 @@
  *
  * The section declares `settings.plugins.tab`; its own `configurable` tab then
  * declares `settings.plugin.item` and renders whatever cards were registered
- * into it. The three cards this package ships are the host-plane sections the
+ * into it. The five cards this package ships are the host-plane sections the
  * deployment already exposes; each binds its namespace through the client
  * settings scope, which keeps them unaware of one another and of other tabs.
  */
@@ -76,30 +76,21 @@ export function apply(ctx: ClientContext): void {
   // scope publishes nothing when one is written. This is the only signal that
   // a key written on another surface reached the Host.
   ctx.effect(
-    () => ctx.remote.$on('credentials/updated', (ref) => { webSearch.refreshCredential(ref) }),
+    () => ctx.remote.$on('credentials/reference-updated', (ref) => { webSearch.refreshCredential(ref) }),
     'ui-settings-plugins: credential invalidations',
   )
 
-  // Which namespaces the Host serves is a registration fact the wire does not
-  // announce, so the directory re-reads on the two signals that can carry a
-  // changed composition: a settings document commit and a reconnect.
+  // Which namespaces the Host serves comes from the shared describe mirror,
+  // whose owning plugin already refreshes it on document commits and
+  // reconnects — the tab only derives.
   const configurable = new ConfigurablePluginsTabController(
-    api, () => ctx.slots.entries('settings.plugin.item'))
+    ctx.settingsScope.describe(), () => ctx.slots.entries('settings.plugin.item'))
   ctx.effect(() => () => { configurable.dispose() }, 'ui-settings-plugins: tab directory')
-  ctx.effect(
-    () => ctx.remote.$on('settings/document-updated', () => { void configurable.load() }),
-    'ui-settings-plugins: served-namespace invalidations',
-  )
-  ctx.effect(
-    () => ctx.on('connection/reset', () => { void configurable.load() }),
-    'ui-settings-plugins: served-namespace reconnect',
-  )
   // A card registered after the first read joins the list without a wire call.
   ctx.effect(
     () => ctx.slots.subscribe('settings.plugin.item', () => { configurable.refresh() }),
     'ui-settings-plugins: card ledger',
   )
-  void configurable.load()
 
   let tabsVersion = -1
   let tabsRevision = -1

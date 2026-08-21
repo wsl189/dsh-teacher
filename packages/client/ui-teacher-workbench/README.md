@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Teacher-workbench feature for the dsh Web GUI. It contributes a Workbench disclosure between New Session and workspace browsing, an in-app teaching surface in `shell.main`, and a feature-owned row in General settings. Selecting a disclosed module replaces the visible center content while keeping the application sidebar available. The surface begins directly with the active module instead of repeating a Workbench header; selecting or reselecting a Session, including New Session navigation, dismisses it and reveals the still-mounted conversation.
+Teacher-workbench feature for the dsh Web GUI. It contributes a Workbench disclosure through `sidebar.footer.action`, an in-app teaching surface through `shell.overlay`, and a feature-owned row in General settings. The overlay follows the rendered sidebar and details widths, so selecting a disclosed module replaces only the visible center content while keeping the application sidebar available. The surface begins directly with the active module instead of repeating a Workbench header; changing or clearing the current Session dismisses it and reveals the still-mounted conversation.
 
 The surface begins with Daily Management. A right-aligned summary beside the module heading shows the current time, date, configured location, and current weather; selecting it opens the full time and next-twelve-hours forecast. Today, Important, and Urgent each occupy an equal-width independent task card. Quick Notes, Ledger, and Calendar form a second three-card row. The Ledger card opens a full-board view whose categories can be added or deleted; each category accepts manual or voice descriptions, a CNY amount, and a required local date and time, while existing entries remain editable. Creating inside a task card assigns that exclusive category, and editing can move a task between cards. Important and Urgent rows expose a ten-color marker picker, while Today rows omit the marker. The expanded calendar combines Gregorian dates, lunar dates, statutory holidays, and date-specific items; it also accepts images, PDF, DOCX, PPTX, and XLSX school calendars through the shared OCR Remote, projects recognized dates and activities into an editable review list, and persists only selected rows in one revisioned write. HTML table projection respects row and column spans so responsibility metadata remains separate from dated activities.
 
@@ -18,7 +18,7 @@ Current academic year, teacher identity, school, default subject, weather locati
 
 ## Extension Points
 
-The package occupies `sidebar.workbench`, adds one `shell.main` entry, and registers one `settings.general.item` row. It does not declare new child slots.
+The package adds one `sidebar.footer.action`, one `shell.overlay` entry, and one `settings.general.item` row. It does not declare new child slots.
 
 ## Model Experience
 

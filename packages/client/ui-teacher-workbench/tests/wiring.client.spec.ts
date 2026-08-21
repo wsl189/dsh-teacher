@@ -119,13 +119,25 @@ describe('teacher-workbench browser wiring', () => {
     const registrations: { entry: Record<string, unknown>; component: unknown }[] = []
     const resetListeners: (() => void)[] = []
     const navigationListeners: (() => void)[] = []
+    let currentSession = 'session-a'
     const effectDisposers: (() => void)[] = []
     const localeDispose = vi.fn()
     const slotDispose = vi.fn()
     const ctx = {
       locale: { register: vi.fn(() => localeDispose) },
       remote: { teacherWorkbench: { read, write, weather, normalizeTimetable } },
-      sessions: { list: { getSnapshot: () => ({ current: 'session-a' }) } },
+      sessions: {
+        list: {
+          getSnapshot: () => ({ current: currentSession }),
+          subscribe: (listener: () => void) => {
+            navigationListeners.push(listener)
+            return () => {
+              const index = navigationListeners.indexOf(listener)
+              if (index !== -1) navigationListeners.splice(index, 1)
+            }
+          },
+        },
+      },
       settingsScope: { bind: vi.fn(() => scope) },
       effect: vi.fn((factory: () => undefined | (() => void)) => {
         const result = factory()
@@ -133,9 +145,8 @@ describe('teacher-workbench browser wiring', () => {
       }),
       on: vi.fn((event: string, listener: () => void) => {
         if (event === 'connection/reset') resetListeners.push(listener)
-        if (event === 'sessions/navigate') navigationListeners.push(listener)
         return () => {
-          const list = event === 'connection/reset' ? resetListeners : navigationListeners
+          const list = resetListeners
           const index = list.indexOf(listener)
           if (index !== -1) list.splice(index, 1)
         }
@@ -151,7 +162,7 @@ describe('teacher-workbench browser wiring', () => {
 
     apply(ctx as never)
     expect(registrations.map(item => item.entry.name)).toEqual([
-      'sidebar.workbench', 'shell.main', 'settings.general.item',
+      'sidebar.footer.action', 'shell.overlay', 'settings.general.item',
     ])
     expect(ctx.locale.register).toHaveBeenCalledWith('teacherWorkbench', expect.any(Object))
     expect(ctx.settingsScope.bind).toHaveBeenCalledWith({
@@ -160,10 +171,11 @@ describe('teacher-workbench browser wiring', () => {
 
     resetListeners[0]!()
     expect(read).not.toHaveBeenCalled()
-    const surfaceEntry = registrations.find(item => item.entry.name === 'shell.main')!.entry
+    const surfaceEntry = registrations.find(item => item.entry.name === 'shell.overlay')!.entry
     const surface = (surfaceEntry.inject as () => Record<string, unknown>)()
     const navigated = vi.fn()
     const stopNavigation = (surface.subscribeSessionNavigation as (listener: () => void) => () => void)(navigated)
+    currentSession = 'session-b'
     navigationListeners[0]!()
     expect(navigated).toHaveBeenCalledOnce()
     stopNavigation()
@@ -200,7 +212,7 @@ describe('teacher-workbench browser wiring', () => {
       className: '一班', classNames: ['一班'], grade: '高一', kind: 'lesson', target: 'class', teacherName: '王老师',
     })
     expect(normalizeTimetable).toHaveBeenCalledWith(expect.objectContaining({
-      parentSessionId: 'session-a', fileName: '课表.png', markdown: '| 周一 |',
+      parentSessionId: 'session-b', fileName: '课表.png', markdown: '| 周一 |',
     }))
     await command('deleteClass', 'class-a')
     await command('saveStudent', {

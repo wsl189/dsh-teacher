@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-08-19-question-segmentation-workbench.md) | 中文
 
-> 本决策扩展[持久化教师工作台](2026-08-17-durable-teacher-workbench.md)与[可复用文档提取](2026-08-18-reusable-document-extraction.md)。两者对存储和 OCR 的所有权保持不变；本决策增加结构化版面提取与第七个工作台模块。
+> 本决策扩展[持久化教师工作台](2026-08-17-durable-teacher-workbench.zh.md)与[可复用文档提取](2026-08-18-reusable-document-extraction.zh.md)。两者对存储和 OCR 的所有权保持不变；本决策增加结构化版面提取与第七个工作台模块。
 
 ## 问题
 

@@ -3,4 +3,4 @@
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-question-segmentation-workbench.md
 2026-08-19-question-segmentation-workbench.md: 4da396157722e8c9ce84851497121f493cad1c39
-2026-08-19-question-segmentation-workbench.zh.md: 500f9eaba36557a6e490f171233121755b43a727
+2026-08-19-question-segmentation-workbench.zh.md: 79669495e22c22cdf5463d762916bbb57856efa2
