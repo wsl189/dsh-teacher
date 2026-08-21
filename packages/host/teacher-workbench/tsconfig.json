@@ -16,6 +16,7 @@
     { "path": "../../util/brand" },
     { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../settings/settings" },
+    { "path": "../../skill/skill" },
     { "path": "../../storage/storage" },
     { "path": "../../storage/storage-domain" },
     { "path": "../../subagent/subagent" },

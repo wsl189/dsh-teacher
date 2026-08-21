@@ -151,6 +151,16 @@ interface OcrLayoutDocument {
 ```
 
 ```ts type-equiv
+/** Provider limits a browser Consumer uses to split source PDFs before upload. */
+interface OcrLayoutLimits {
+  /** Maximum decoded bytes accepted in one layout request. */
+  readonly maxFileBytes: number
+  /** Maximum pages parsed in one layout request. */
+  readonly maxPagesPerRequest: number
+}
+```
+
+```ts type-equiv
 /** Successful structured-layout extraction. */
 interface OcrLayoutSuccess {
   /** Success discriminant. */
@@ -165,7 +175,22 @@ interface OcrLayoutSuccess {
 type OcrLayoutResult = OcrLayoutSuccess | OcrExtractRejected
 ```
 
-边界框使用各页面宽高所声明坐标系中的 `[左, 上, 右, 下]`。可选页码范围从零开始且首尾均包含。消费方把这些数值映射回浏览器渲染像素时按比例缩放，并且必须自行拥有领域分组与复核，而不能把提供方几何信息直接当作权威切分。
+```ts type-equiv
+/** Successful provider-limit resolution. */
+interface OcrLayoutLimitsSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Current limits of the selected provider. */
+  readonly value: OcrLayoutLimits
+}
+```
+
+```ts type-equiv
+/** Remote and same-process provider-limit result. */
+type OcrLayoutLimitsResult = OcrLayoutLimitsSuccess | OcrExtractRejected
+```
+
+边界框使用各页面宽高所声明坐标系中的 `[左, 上, 右, 下]`。可选页码范围从零开始且首尾均包含。消费方把这些数值映射回浏览器渲染像素时按比例缩放；浏览器消费方可按所选提供方的当前限制在上传前拆分源 PDF，并且必须自行拥有领域分组与复核，而不能把提供方几何信息直接当作权威切分。
 
 ## 提供方约定
 
@@ -176,6 +201,8 @@ interface OcrProvider {
   readonly id: string
   /** Cheap local usability check that performs no network request. */
   available(): boolean
+  /** @returns current upload and page limits for one structured-layout request. */
+  layoutLimits(): OcrLayoutLimits
   /**
    * Extract one document.
    * @param request - transport request fields whose semantics the provider validates.
@@ -230,7 +257,13 @@ registerProvider(provider: OcrProvider): () => void
  * @returns normalized pages and coordinates or a stable failure.
  */
 @Remote('layout') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>
+
+/**
+ * Resolve the selected provider's current structured-layout request limits.
+ * @returns upload and page limits, or a stable provider-selection failure.
+ */
+@Remote('layoutLimits') layoutLimits(): OcrLayoutLimitsResult
 ```
 
-Source: [`packages/ocr/ocr/src/index.ts:55`](../../packages/ocr/ocr/src/index.ts)
+Source: [`packages/ocr/ocr/src/index.ts:59`](../../packages/ocr/ocr/src/index.ts)
 <!-- END GENERATED cordis-surface -->

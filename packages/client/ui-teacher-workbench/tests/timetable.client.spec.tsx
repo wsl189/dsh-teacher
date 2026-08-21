@@ -28,6 +28,7 @@ function commands(): TeacherWorkbenchCommands {
     extractDocument: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
     normalizeTimetable: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     extractQuestionLayout: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
+    segmentQuestions: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     importCalendarItems: action(), saveTimetableEntry: action(), deleteTimetableEntry: action(), importTimetableEntries: action(),
     saveClass: action(), deleteClass: action(), saveStudent: action(), importStudents: action(), deleteStudent: action(),
     createQuestionFolder: action(), deleteQuestionFolder: action(),

@@ -52,7 +52,6 @@ export type { SidebarWorkbenchProps } from './SidebarWorkbench.tsx'
 export type { WorkbenchSurfaceProps } from './WorkbenchSurface.tsx'
 export type { TeacherWorkbenchSettingsRowProps } from './TeacherWorkbenchSettingsRow.tsx'
 export type { QuestionWorkbenchProps } from './QuestionWorkbench.tsx'
-export { detectQuestions } from './question-segmentation.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -138,7 +137,33 @@ export function apply(ctx: ClientContext): void {
             },
           }))
     },
-    extractQuestionLayout: (file, pageRange) => extractWorkbenchLayout(file, ctx.remote.ocr, pageRange),
+    extractQuestionLayout: (file, pageIndexes, rasterScale) => extractWorkbenchLayout(file, ctx.remote.ocr, pageIndexes, rasterScale),
+    segmentQuestions: (layout, padding) => {
+      const parentSessionId = ctx.sessions.list.getSnapshot().current
+      return parentSessionId === undefined
+        ? Promise.resolve({
+          ok: false as const,
+          error: { code: 'session-unavailable' as const, message: 'no current session' },
+        })
+        : ctx.remote.teacherWorkbench.segmentQuestions({
+          parentSessionId,
+          fileName: layout.name,
+          pages: layout.pages,
+          padding,
+        }).then(carried => carried.ok
+          ? carried.value
+          : {
+            ok: false as const,
+            error: { code: 'tool-model-unavailable' as const, message: carried.error.message },
+          })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: {
+              code: 'tool-model-unavailable' as const,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }))
+    },
     importCalendarItems: inputs => controller.importCalendarItems(inputs),
     saveTimetableEntry: input => controller.saveTimetableEntry(input),
     deleteTimetableEntry: id => controller.deleteTimetableEntry(id),

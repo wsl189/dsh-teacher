@@ -806,7 +806,7 @@ export interface Config {
   studentsRoot: string
   /** Maximum decoded bytes accepted for one question image. */
   maxQuestionImageBytes: number
-  /** Maximum decoded bytes accepted for one complete paper batch. */
+  /** Maximum decoded bytes accepted for one automatically saved part. */
   maxQuestionBatchBytes: number
   /** Maximum MinerU characters admitted to one timetable-agent prompt. */
   maxTimetableSourceCharacters: number
@@ -816,10 +816,24 @@ export interface Config {
   timetableAgentTimeoutMs: number
   /** Wall-clock deadline for one direct-vision timetable-agent run. */
   timetableVisionAgentTimeoutMs: number
+  /** Maximum selected PDF pages admitted to one question-segmentation agent run. */
+  maxQuestionLayoutPages: number
+  /** Selected PDF pages owned by one automatic question-segmentation group. */
+  questionSegmentationBatchPages: number
+  /** Maximum OCR elements admitted to one question-segmentation agent run. */
+  maxQuestionLayoutElements: number
+  /** Maximum serialized OCR characters returned by one question-layout tool call. */
+  maxQuestionSourceChunkCharacters: number
+  /** Maximum questions accepted from one question-segmentation agent run. */
+  maxSegmentedQuestions: number
+  /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
+  maxQuestionBoundarySubmissions: number
+  /** Wall-clock deadline for one question-segmentation agent run. */
+  questionSegmentationAgentTimeoutMs: number
 }
 ```
 
-来源：[`packages/host/teacher-workbench/src/index.ts:109`](../packages/host/teacher-workbench/src/index.ts)
+来源：[`packages/host/teacher-workbench/src/index.ts:120`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
@@ -1341,7 +1355,7 @@ export interface OcrRuntimeConfig {
 }
 ```
 
-来源：[`packages/ocr/ocr/src/index.ts:39`](../packages/ocr/ocr/src/index.ts)
+来源：[`packages/ocr/ocr/src/index.ts:53`](../packages/ocr/ocr/src/index.ts)
 
 <a id="deepseek-aidsh-ocr-mineru"></a>
 
@@ -1368,6 +1382,8 @@ export interface Config {
   readonly maxOutputCharacters: number
   /** Maximum JSON response bytes accepted from MinerU. */
   readonly maxResponseBytes: number
+  /** Maximum PDF pages sent to MinerU in one structured-layout request. */
+  readonly layoutBatchPages: number
 }
 
 type MinerUBackend = typeof BACKEND_VALUES[number]
@@ -1377,7 +1393,7 @@ type MinerUEffort = typeof EFFORT_VALUES[number]
 type MinerULanguage = typeof LANGUAGE_VALUES[number]
 ```
 
-来源：[`packages/ocr/ocr-mineru/src/index.ts:83`](../packages/ocr/ocr-mineru/src/index.ts)
+来源：[`packages/ocr/ocr-mineru/src/index.ts:87`](../packages/ocr/ocr-mineru/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 

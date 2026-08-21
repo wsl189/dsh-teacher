@@ -1,0 +1,58 @@
+{
+  "modelCalls": 6,
+  "exposedTools": {
+    "source": true,
+    "submission": true,
+    "structuredOutput": true
+  },
+  "result": {
+    "ok": true,
+    "value": {
+      "groupCount": 2,
+      "maxSaveBatchBytes": 100663296,
+      "questions": [
+        {
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 30,
+              "top": 130,
+              "right": 620,
+              "bottom": 490,
+              "pageWidth": 720,
+              "pageHeight": 1000
+            }
+          ]
+        },
+        {
+          "questionNo": 2,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 30,
+              "top": 510,
+              "right": 630,
+              "bottom": 950,
+              "pageWidth": 720,
+              "pageHeight": 1000
+            },
+            {
+              "pageIndex": 1,
+              "left": 35,
+              "top": 50,
+              "right": 510,
+              "bottom": 195,
+              "pageWidth": 720,
+              "pageHeight": 1000
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

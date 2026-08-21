@@ -37,7 +37,7 @@ import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { QuestionImageEditor } from './QuestionImageEditor.tsx'
 import { parseQuestionPageRange } from './question-page-range.ts'
-import { detectQuestions, readPdfPageCount, renderQuestionCrops } from './question-segmentation.ts'
+import { partitionQuestionUploads, readPdfPageCount, renderQuestionCrops } from './question-segmentation.ts'
 import css from './TeacherWorkbench.module.css'
 
 /** Reference-style question-workspace module props. */
@@ -327,30 +327,51 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setPageRangeOpen(false)
     setCutFailure(null)
     setBusy('cut')
+    let savedCount = 0
     try {
-      const result = await commands.extractQuestionLayout(pendingPdf, { start: selection.start, end: selection.end })
+      const result = await commands.extractQuestionLayout(pendingPdf, selection.pageIndexes, settings.questionRenderScale)
       if (!result.ok) throw new Error(result.error.message)
       const exactPages = new Set(selection.pageIndexes)
       const layout: OcrLayoutDocument = {
         ...result.value,
         pages: result.value.pages.filter(page => exactPages.has(page.pageIndex)),
       }
-      const questions = detectQuestions(layout, settings.questionCropPadding)
+      const segmented = await commands.segmentQuestions(layout, settings.questionCropPadding)
+      if (!segmented.ok) throw new Error(segmented.error.message)
+      const questions = segmented.value.questions
       if (questions.length === 0) throw new Error(t('questions.noMarkers'))
-      const crops = await renderQuestionCrops(pendingPdf, layout, questions, settings.questionRenderScale)
-      const saved = await commands.saveQuestionBatch({
-        name: pendingPdf.name.replace(/\.pdf$/iu, ''),
-        sourceName: pendingPdf.name,
-        pageRange: selection.label || t('questions.allPages'),
-        images: crops,
-      })
-      if (!saved.ok) throw new Error(saved.error.message)
-      setToast(t('questions.cutSaved', { count: crops.length }))
+      const groupCount = segmented.value.groupCount
+      const maxSaveBatchBytes = segmented.value.maxSaveBatchBytes
+      const baseName = pendingPdf.name.replace(/\.pdf$/iu, '')
+      const selectedRange = selection.label || t('questions.allPages')
+      let savedBatchId: TeacherQuestionBatchId | undefined
+      for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
+        const groupQuestions = questions.filter(question => question.groupIndex === groupIndex)
+        if (groupQuestions.length === 0) continue
+        const crops = await renderQuestionCrops(pendingPdf, layout, groupQuestions, settings.questionRenderScale)
+        const parts = partitionQuestionUploads(crops, maxSaveBatchBytes)
+        for (const images of parts) {
+          const saved = await commands.saveQuestionBatch({
+            ...(savedBatchId === undefined ? {} : { appendToBatchId: savedBatchId }),
+            name: baseName,
+            sourceName: pendingPdf.name,
+            pageRange: selectedRange,
+            images,
+          })
+          if (!saved.ok) throw new Error(saved.error.message)
+          savedBatchId = saved.batchId ?? savedBatchId
+          if (savedBatchId === undefined) throw new Error(t('questions.cutFailed'))
+          savedCount += images.length
+        }
+      }
+      if (savedBatchId !== undefined) setActiveBatchId(savedBatchId)
+      setToast(t('questions.cutSaved', { count: savedCount }))
       setPendingPdf(null)
       setPageRange('')
       if (fileInputRef.current !== null) fileInputRef.current.value = ''
     } catch (cause) {
-      setCutFailure(errorMessage(cause, t('questions.cutFailed')))
+      const message = errorMessage(cause, t('questions.cutFailed'))
+      setCutFailure(savedCount > 0 ? t('questions.cutPartiallySaved', { count: savedCount, message }) : message)
     } finally {
       setBusy(null)
     }

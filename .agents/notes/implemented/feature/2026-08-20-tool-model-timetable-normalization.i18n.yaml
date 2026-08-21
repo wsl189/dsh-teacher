@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-tool-model-timetable-normalization.md
-2026-08-20-tool-model-timetable-normalization.md: 3cb4224e56cef7753f48f803dbde43020273caf3
-2026-08-20-tool-model-timetable-normalization.zh.md: 347124de9d76317ee55b0fc68879e231e7acb3f5
+2026-08-20-tool-model-timetable-normalization.md: bf5cf685f1a730fcc707c98cec1c1fdd865f1bc2
+2026-08-20-tool-model-timetable-normalization.zh.md: 34e5147645ddac462f7b88fabc4ff3fe18ff931c

@@ -17,7 +17,7 @@ export interface TeacherWorkbenchHostSettings {
   studentsRoot?: string
   /** Single decoded image byte limit. */
   maxQuestionImageBytes?: number
-  /** Complete batch decoded byte limit. */
+  /** One automatic save part's decoded byte limit. */
   maxQuestionBatchBytes?: number
 }
 

@@ -19,6 +19,7 @@ function provider(id: string, available = true): OcrProvider {
   return {
     id,
     available: () => available,
+    layoutLimits: () => ({ maxFileBytes: 1024, maxPagesPerRequest: 4 }),
     extract: request => Promise.resolve({
       name: request.name,
       mediaType: request.mediaType,
@@ -66,6 +67,15 @@ describe('OcrRuntime', () => {
         provider: 'mineru',
         pages: [{ pageIndex: 0, width: 100, height: 200, elements: [] }],
       },
+    })
+  })
+
+  it('returns the selected provider structured-layout limits', async () => {
+    const { ocr } = await harness({ provider: 'mineru' })
+    ocr.registerProvider(provider('mineru'))
+    expect(ocr.layoutLimits()).toEqual({
+      ok: true,
+      value: { maxFileBytes: 1024, maxPagesPerRequest: 4 },
     })
   })
 

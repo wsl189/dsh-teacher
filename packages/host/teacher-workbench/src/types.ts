@@ -38,6 +38,8 @@ export type TeacherQuestionImageId = Branded<'TeacherQuestionImageId'>
 export type TeacherQuestionAssignmentId = Branded<'TeacherQuestionAssignmentId'>
 /** Opaque student question-folder identity. */
 export type TeacherQuestionFolderId = Branded<'TeacherQuestionFolderId'>
+/** Opaque identity assigned to one OCR element during a question-segmentation run. */
+export type TeacherQuestionLayoutElementId = Branded<'TeacherQuestionLayoutElementId'>
 
 /** Stable palette key used to mark a daily task. */
 export type TeacherDailyTodoColor =
@@ -561,6 +563,108 @@ export interface TeacherTimetableNormalizeSuccess {
 /** Timetable normalization result. */
 export type TeacherTimetableNormalizeResult = TeacherTimetableNormalizeSuccess | TeacherTimetableNormalizeRejected
 
+/** Browser-supplied OCR element used only as evidence for question boundaries. */
+export interface TeacherQuestionLayoutElement {
+  /** Provider-normalized content family. */
+  readonly type: 'text' | 'equation' | 'image' | 'table' | 'other'
+  /** Reading-order text assembled by the OCR provider. */
+  readonly text: string
+  /** Left, top, right, and bottom coordinates in page units. */
+  readonly bbox: readonly [number, number, number, number]
+}
+
+/** One selected OCR page supplied to the question-boundary agent. */
+export interface TeacherQuestionLayoutPage {
+  /** Zero-based index in the original PDF. */
+  readonly pageIndex: number
+  /** Page width in OCR coordinates. */
+  readonly width: number
+  /** Page height in OCR coordinates. */
+  readonly height: number
+  /** Elements in provider reading order. */
+  readonly elements: readonly TeacherQuestionLayoutElement[]
+}
+
+/** Detect semantic question boundaries in an already extracted PDF layout. */
+export interface TeacherQuestionSegmentRequest {
+  /** Live root session that owns the short-lived child agent. */
+  readonly parentSessionId: SessionId
+  /** Original PDF display name used only as task context. */
+  readonly fileName: string
+  /** Exact selected pages and their OCR geometry. */
+  readonly pages: readonly TeacherQuestionLayoutPage[]
+  /** Extra vertical page units retained around accepted boundaries. */
+  readonly padding: number
+}
+
+/** One source-page slice contributing pixels to a question crop. */
+export interface TeacherQuestionPageRegion {
+  /** Zero-based index in the original PDF. */
+  readonly pageIndex: number
+  /** Inclusive crop left in OCR page units. */
+  readonly left: number
+  /** Inclusive crop top in OCR page units. */
+  readonly top: number
+  /** Exclusive crop right in OCR page units. */
+  readonly right: number
+  /** Exclusive crop bottom in OCR page units. */
+  readonly bottom: number
+  /** OCR page width used for proportional browser rendering. */
+  readonly pageWidth: number
+  /** OCR page height used for proportional browser rendering. */
+  readonly pageHeight: number
+}
+
+/** One top-level question accepted by the segmentation validator. */
+export interface TeacherSegmentedQuestion {
+  /** Unique source-order display number assigned after boundary validation. */
+  readonly questionNo: number
+  /** Original PDF page containing the accepted top-level question marker. */
+  readonly headPageIndex: number
+  /** Zero-based processing group that owns this question. */
+  readonly groupIndex: number
+  /** Ordered page slices joined into one raster by the browser. */
+  readonly regions: readonly TeacherQuestionPageRegion[]
+}
+
+/** Stable question-segmentation failure codes. */
+export type TeacherQuestionSegmentErrorCode =
+  | 'invalid-request'
+  | 'session-unavailable'
+  | 'tool-model-unavailable'
+  | 'source-too-large'
+  | 'timed-out'
+  | 'model-failed'
+  | 'invalid-output'
+
+/** Rejected semantic question-boundary detection. */
+export interface TeacherQuestionSegmentRejected {
+  /** Failure discriminant. */
+  readonly ok: false
+  /** Stable failure and concise diagnostic. */
+  readonly error: {
+    readonly code: TeacherQuestionSegmentErrorCode
+    readonly message: string
+  }
+}
+
+/** Successful semantic question-boundary detection. */
+export interface TeacherQuestionSegmentSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Validated crop regions in source order. */
+  readonly value: {
+    /** Number of semantic page groups processed for this request. */
+    readonly groupCount: number
+    /** Maximum decoded image bytes sent in one automatic save part. */
+    readonly maxSaveBatchBytes: number
+    readonly questions: readonly TeacherSegmentedQuestion[]
+  }
+}
+
+/** Semantic question-boundary result returned to the browser. */
+export type TeacherQuestionSegmentResult = TeacherQuestionSegmentSuccess | TeacherQuestionSegmentRejected
+
 /** Stable weather-provider failure codes presented by the workbench UI. */
 export type TeacherWeatherErrorCode = 'location-not-found' | 'provider-unavailable' | 'invalid-response'
 
@@ -661,6 +765,8 @@ export interface TeacherQuestionImageUpload {
 
 /** Atomic paper-batch save request. */
 export interface TeacherQuestionBatchSaveRequest {
+  /** Existing paper batch that receives this bounded continuation part. */
+  readonly appendToBatchId?: TeacherQuestionBatchId
   /** Teacher-facing batch name. */
   readonly name: string
   /** Original PDF display name. */

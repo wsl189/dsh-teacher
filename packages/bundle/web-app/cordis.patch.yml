@@ -74,14 +74,15 @@
     - id: ocr-mineru
       name: '@deepseek-ai/dsh-ocr-mineru'
       config:
-        endpoint: http://127.0.0.1:8000/file_parse
+        endpoint: http://127.0.0.1:8005/file_parse
         backend: pipeline
         effort: high
         language: ch
-        timeoutMs: 300000
+        timeoutMs: 3600000
         maxFileBytes: 20971520
         maxOutputCharacters: 500000
         maxResponseBytes: 8388608
+        layoutBatchPages: 4
 
     - id: teacher-workbench
       name: '@deepseek-ai/dsh-host-teacher-workbench'
@@ -91,11 +92,18 @@
         segmentsRoot: !!js dshHomePath('teacher-workbench/segments')
         studentsRoot: !!js dshHomePath('teacher-workbench/students')
         maxQuestionImageBytes: 26214400
-        maxQuestionBatchBytes: 314572800
+        maxQuestionBatchBytes: 100663296
         maxTimetableSourceCharacters: 500000
         maxTimetableEntries: 1000
-        timetableAgentTimeoutMs: 300000
-        timetableVisionAgentTimeoutMs: 35000
+        timetableAgentTimeoutMs: 3600000
+        timetableVisionAgentTimeoutMs: 3600000
+        maxQuestionLayoutPages: 50
+        questionSegmentationBatchPages: 20
+        maxQuestionLayoutElements: 5000
+        maxQuestionSourceChunkCharacters: 18000
+        maxSegmentedQuestions: 300
+        maxQuestionBoundarySubmissions: 5
+        questionSegmentationAgentTimeoutMs: 3600000
 
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download

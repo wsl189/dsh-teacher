@@ -13,6 +13,7 @@ import type {
   OcrExtractResult,
   OcrExtractedDocument,
   OcrLayoutRequest,
+  OcrLayoutLimitsResult,
   OcrLayoutResult,
   OcrProvider,
 } from './types.ts'
@@ -29,6 +30,9 @@ export type {
   OcrFailure,
   OcrBoundingBox,
   OcrLayoutDocument,
+  OcrLayoutLimits,
+  OcrLayoutLimitsResult,
+  OcrLayoutLimitsSuccess,
   OcrLayoutElement,
   OcrLayoutPage,
   OcrLayoutRequest,
@@ -120,6 +124,22 @@ export class OcrRuntime extends TypertRemoteService {
       const failure = error instanceof OcrError
         ? { code: error.code, message: error.message }
         : { code: 'provider-failure' as const, message: 'document layout extraction failed' }
+      return Object.freeze({ ok: false, error: Object.freeze(failure) })
+    }
+  }
+
+  /**
+   * Resolve the selected provider's current structured-layout request limits.
+   * @returns upload and page limits, or a stable provider-selection failure.
+   */
+  @Remote('layoutLimits')
+  layoutLimits(): OcrLayoutLimitsResult {
+    try {
+      return Object.freeze({ ok: true, value: Object.freeze(this.resolveProvider().layoutLimits()) })
+    } catch (error) {
+      const failure = error instanceof OcrError
+        ? { code: error.code, message: error.message }
+        : { code: 'provider-failure' as const, message: 'document layout limits are unavailable' }
       return Object.freeze({ ok: false, error: Object.freeze(failure) })
     }
   }

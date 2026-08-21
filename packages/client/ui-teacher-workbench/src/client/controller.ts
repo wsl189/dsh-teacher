@@ -34,6 +34,7 @@ import type {
   TeacherQuickNote,
   TeacherQuickNoteId,
   TeacherQuestionAssignRequest,
+  TeacherQuestionBatchId,
   TeacherQuestionBatchDeleteRequest,
   TeacherQuestionBatchDocumentRequest,
   TeacherQuestionBatchDocumentResult,
@@ -125,7 +126,7 @@ export interface TeacherWorkbenchSnapshot {
 
 /** Settled object-layer command. */
 export type TeacherWorkbenchActionResult =
-  | { ok: true }
+  | { ok: true; batchId?: TeacherQuestionBatchId }
   | { ok: false; error: { code: string; message: string } }
 
 type TeacherWorkbenchActionFailure = Extract<TeacherWorkbenchActionResult, { ok: false }>
@@ -1199,7 +1200,9 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
         if (!carried.ok) return this.failure(carried.error.code, carried.error.message)
         if (!carried.value.ok) return this.failure(carried.value.error.code, carried.value.error.message)
         this.publish({ status: 'ready', document: carried.value.value.document, error: null })
-        return OK
+        return carried.value.value.batchId === undefined
+          ? OK
+          : { ok: true, batchId: carried.value.value.batchId }
       } catch (error) {
         return this.failure('transport', error instanceof Error ? error.message : 'question operation failed')
       }

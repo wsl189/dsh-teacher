@@ -70,6 +70,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     extractDocument: props.extractDocument,
     normalizeTimetable: props.normalizeTimetable,
     extractQuestionLayout: props.extractQuestionLayout,
+    segmentQuestions: props.segmentQuestions,
     importCalendarItems: props.importCalendarItems,
     saveTimetableEntry: props.saveTimetableEntry,
     deleteTimetableEntry: props.deleteTimetableEntry,

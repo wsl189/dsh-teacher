@@ -1,31 +1,51 @@
-/** Deterministic MinerU-layout question detection and browser PDF raster cutting. */
+/** Browser PDF raster cutting from Host-validated question regions. */
 
 import type {
   OcrLayoutDocument,
   OcrLayoutPage,
+  TeacherQuestionPageRegion,
   TeacherQuestionImageUpload,
+  TeacherSegmentedQuestion,
 } from '@deepseek-ai/dsh-api-remotes/client'
 
 /** One page slice contributing pixels to a detected question. */
-export interface QuestionPageRegion {
-  /** Zero-based source PDF page index. */
-  readonly pageIndex: number
-  /** Top coordinate in MinerU page units. */
-  readonly top: number
-  /** Bottom coordinate in MinerU page units. */
-  readonly bottom: number
-  /** MinerU page width. */
-  readonly pageWidth: number
-  /** MinerU page height. */
-  readonly pageHeight: number
-}
+export type QuestionPageRegion = TeacherQuestionPageRegion
 
 /** One detected question and its one-or-more source page slices. */
-export interface DetectedQuestion {
-  /** Number recognized at the question marker. */
-  readonly questionNo: number
-  /** Source regions joined vertically into the saved raster. */
-  readonly regions: readonly QuestionPageRegion[]
+export type DetectedQuestion = TeacherSegmentedQuestion
+
+/**
+ * Split rendered crops into ordered save requests below a decoded-byte ceiling.
+ * @param images - ordered browser-rendered question crops.
+ * @param maxBytes - Host-advertised aggregate decoded-byte ceiling for one part.
+ * @returns non-empty parts preserving question order.
+ */
+export function partitionQuestionUploads(
+  images: readonly TeacherQuestionImageUpload[],
+  maxBytes: number,
+): readonly (readonly TeacherQuestionImageUpload[])[] {
+  if (!Number.isSafeInteger(maxBytes) || maxBytes < 1) throw new TypeError('maxBytes must be a positive integer')
+  const parts: TeacherQuestionImageUpload[][] = []
+  let current: TeacherQuestionImageUpload[] = []
+  let currentBytes = 0
+  for (const image of images) {
+    const bytes = decodedBase64Bytes(image.contentBase64)
+    if (bytes > maxBytes) throw new Error(`第 ${String(image.questionNo)} 题图片超过单张保存上限`)
+    if (current.length > 0 && currentBytes + bytes > maxBytes) {
+      parts.push(current)
+      current = []
+      currentBytes = 0
+    }
+    current.push(image)
+    currentBytes += bytes
+  }
+  if (current.length > 0) parts.push(current)
+  return parts
+}
+
+function decodedBase64Bytes(value: string): number {
+  const padding = value.endsWith('==') ? 2 : value.endsWith('=') ? 1 : 0
+  return Math.floor(value.length * 3 / 4) - padding
 }
 
 type PdfJsModule = typeof import('pdfjs-dist')
@@ -49,6 +69,46 @@ function loadPdfJs(): Promise<PdfJsModule> {
 }
 
 /**
+ * Rasterize one source PDF page into a PNG that fits one OCR upload request.
+ * @param file - original browser-held PDF.
+ * @param pageIndex - zero-based source page index.
+ * @param initialScale - configured PDF.js render scale.
+ * @param maxBytes - provider-advertised decoded upload limit.
+ * @returns PNG bytes whose size does not exceed `maxBytes`.
+ */
+export async function renderPdfPageForOcr(
+  file: File,
+  pageIndex: number,
+  initialScale: number,
+  maxBytes: number,
+): Promise<Blob> {
+  const pdfjs = await loadPdfJs()
+  const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+  const pdf = await loading.promise
+  try {
+    const page = await pdf.getPage(pageIndex + 1)
+    let scale = initialScale
+    for (;;) {
+      const viewport = page.getViewport({ scale })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.ceil(viewport.width))
+      canvas.height = Math.max(1, Math.ceil(viewport.height))
+      const context = canvas.getContext('2d')
+      if (context === null) throw new Error('浏览器无法创建 PDF 画布')
+      await page.render({ canvas, canvasContext: context, viewport }).promise
+      const blob = await canvasBlob(canvas)
+      if (blob.size <= maxBytes) return blob
+      if (canvas.width === 1 && canvas.height === 1) {
+        throw new Error(`PDF 第 ${String(pageIndex + 1)} 页无法压缩到 OCR 单批大小限制以内`)
+      }
+      scale /= 2
+    }
+  } finally {
+    await loading.destroy()
+  }
+}
+
+/**
  * Read the number of pages in one browser-held PDF without retaining a worker document.
  * @param file - PDF selected through the question-workbench upload control.
  * @returns the positive page count reported by PDF.js.
@@ -62,31 +122,6 @@ export async function readPdfPageCount(file: File): Promise<number> {
   } finally {
     await loading.destroy()
   }
-}
-
-interface QuestionMarker {
-  readonly questionNo: number
-  readonly pageIndex: number
-  readonly top: number
-  readonly left: number
-}
-
-/**
- * Find a monotonic question-number chain and convert it into page crop regions.
- * @param layout - normalized OCR pages and reading-order elements.
- * @param padding - extra vertical page units retained around each marker boundary.
- * @returns detected questions in source order.
- */
-export function detectQuestions(layout: OcrLayoutDocument, padding: number): DetectedQuestion[] {
-  const pages = [...layout.pages].sort((left, right) => left.pageIndex - right.pageIndex)
-  const markers = chooseMarkerChain(pages.flatMap(findPageMarkers))
-  return markers.map((marker, index) => {
-    const next = markers[index + 1]
-    return {
-      questionNo: marker.questionNo,
-      regions: questionRegions(pages, marker, next, Math.max(0, padding)),
-    }
-  }).filter(question => question.regions.length > 0)
 }
 
 /**
@@ -128,13 +163,22 @@ export async function renderQuestionCrops(
         const source = rendered.get(region.pageIndex)
         const pageLayout = pageLayouts.get(region.pageIndex)
         if (source === undefined || pageLayout === undefined) throw new Error('PDF 页渲染结果不完整')
+        const scaleX = source.width / pageLayout.width
         const scaleY = source.height / pageLayout.height
+        const left = Math.max(0, Math.floor(region.left * scaleX))
         const top = Math.max(0, Math.floor(region.top * scaleY))
+        const right = Math.min(source.width, Math.ceil(region.right * scaleX))
         const bottom = Math.min(source.height, Math.ceil(region.bottom * scaleY))
-        return { source, top, height: Math.max(1, bottom - top) }
+        return {
+          source,
+          left,
+          top,
+          width: Math.max(1, right - left),
+          height: Math.max(1, bottom - top),
+        }
       })
       const separator = slices.length > 1 ? 12 : 0
-      const width = Math.max(...slices.map(slice => slice.source.width))
+      const width = Math.max(...slices.map(slice => slice.width))
       const height = slices.reduce((sum, slice) => sum + slice.height, 0) + separator * Math.max(0, slices.length - 1)
       const output = document.createElement('canvas')
       output.width = width
@@ -145,7 +189,18 @@ export async function renderQuestionCrops(
       context.fillRect(0, 0, width, height)
       let y = 0
       for (const slice of slices) {
-        context.drawImage(slice.source, 0, slice.top, slice.source.width, slice.height, 0, y, slice.source.width, slice.height)
+        const x = Math.floor((width - slice.width) / 2)
+        context.drawImage(
+          slice.source,
+          slice.left,
+          slice.top,
+          slice.width,
+          slice.height,
+          x,
+          y,
+          slice.width,
+          slice.height,
+        )
         y += slice.height + separator
       }
       const blob = await canvasBlob(output)
@@ -196,60 +251,6 @@ export async function rotateQuestionCrop(
   } finally {
     bitmap.close()
   }
-}
-
-function findPageMarkers(page: OcrLayoutPage): QuestionMarker[] {
-  const maxLeft = page.width * 0.38
-  return page.elements.flatMap((element): QuestionMarker[] => {
-    if (element.type !== 'text' && element.type !== 'equation') return []
-    const match = /^\s*(?:第\s*)?(\d{1,3})\s*(?:[.．、:：)）]|题(?:\s|$))/u.exec(element.text)
-    if (match?.[1] === undefined || element.bbox[0] > maxLeft) return []
-    const questionNo = Number(match[1])
-    return Number.isSafeInteger(questionNo) && questionNo > 0
-      ? [{ questionNo, pageIndex: page.pageIndex, top: element.bbox[1], left: element.bbox[0] }]
-      : []
-  })
-}
-
-function chooseMarkerChain(raw: readonly QuestionMarker[]): QuestionMarker[] {
-  const markers = [...raw].sort((left, right) => left.pageIndex - right.pageIndex || left.top - right.top || left.left - right.left)
-  if (markers.length < 2) return markers
-  let best: QuestionMarker[] = []
-  for (let start = 0; start < markers.length; start += 1) {
-    const first = markers[start]
-    if (first === undefined) continue
-    const chain = [first]
-    let expected = first.questionNo + 1
-    for (let index = start + 1; index < markers.length; index += 1) {
-      const candidate = markers[index]
-      if (candidate?.questionNo !== expected) continue
-      chain.push(candidate)
-      expected += 1
-    }
-    const preferred = chain.length > best.length
-      || (chain.length === best.length
-        && (chain[0]?.questionNo ?? Number.MAX_SAFE_INTEGER) < (best[0]?.questionNo ?? Number.MAX_SAFE_INTEGER))
-    if (preferred) best = chain
-  }
-  return best.length >= 2 ? best : markers
-}
-
-function questionRegions(
-  pages: readonly OcrLayoutPage[],
-  marker: QuestionMarker,
-  next: QuestionMarker | undefined,
-  padding: number,
-): QuestionPageRegion[] {
-  const lastPageIndex = next?.pageIndex ?? pages.at(-1)?.pageIndex ?? marker.pageIndex
-  return pages.filter(page => page.pageIndex >= marker.pageIndex && page.pageIndex <= lastPageIndex).flatMap((page) => {
-    const top = page.pageIndex === marker.pageIndex ? Math.max(0, marker.top - padding) : 0
-    const bottom = next !== undefined && page.pageIndex === next.pageIndex
-      ? Math.min(page.height, Math.max(0, next.top - padding))
-      : page.height
-    return bottom > top
-      ? [{ pageIndex: page.pageIndex, top, bottom, pageWidth: page.width, pageHeight: page.height }]
-      : []
-  })
 }
 
 function canvasBlob(canvas: HTMLCanvasElement): Promise<Blob> {

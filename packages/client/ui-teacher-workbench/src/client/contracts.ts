@@ -4,7 +4,7 @@ import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   OcrExtractResult,
-  OcrLayoutRequest,
+  OcrLayoutDocument,
   OcrLayoutResult,
   TeacherCalendarItemId,
   TeacherClassId,
@@ -27,6 +27,7 @@ import type {
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
   TeacherQuestionImageReplaceRequest,
+  TeacherQuestionSegmentResult,
   TeacherQuestionFolderId,
   TeacherQuestionTemporaryListRequest,
   TeacherQuestionTemporaryListResult,
@@ -96,7 +97,9 @@ export interface TeacherWorkbenchCommands {
     image?: File,
   ) => Promise<TeacherTimetableNormalizeResult>
   /** Extract page geometry for deterministic question cutting. */
-  extractQuestionLayout: (file: File, pageRange?: OcrLayoutRequest['pageRange']) => Promise<OcrLayoutResult>
+  extractQuestionLayout: (file: File, pageIndexes?: readonly number[], rasterScale?: number) => Promise<OcrLayoutResult>
+  /** Detect semantic top-level question boundaries through the configured tool model. */
+  segmentQuestions: (layout: OcrLayoutDocument, padding: number) => Promise<TeacherQuestionSegmentResult>
   /** Persist reviewed school-calendar rows in one write. */
   importCalendarItems: (inputs: readonly TeacherCalendarImportInput[]) => Promise<TeacherWorkbenchActionResult>
   /** Save one durable timetable entry. */

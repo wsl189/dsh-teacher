@@ -941,6 +941,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         parameters: [{ name: 'request', description: 'base64 document bytes and optional inclusive page window.' }],
         returns: 'normalized pages and coordinates or a stable failure.',
       },
+      {
+        signature: '@Remote(\'layoutLimits\') layoutLimits(): OcrLayoutLimitsResult',
+        description: 'Resolve the selected provider\'s current structured-layout request limits.',
+        parameters: [],
+        returns: 'upload and page limits, or a stable provider-selection failure.',
+      },
     ],
   },
   {
@@ -1803,8 +1809,14 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'structured rows for browser review or a stable failure.',
       },
       {
+        signature: '@Remote(\'segmentQuestions\') segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>',
+        description: 'Detect complete top-level question boundaries through the configured tool model.',
+        parameters: [{ name: 'request', description: 'live parent session, selected OCR pages, and crop padding.' }],
+        returns: 'validated source-page crop regions or a stable failure.',
+      },
+      {
         signature: '@Remote(\'saveQuestionBatch\') saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult>',
-        description: 'Persist a browser-rendered paper batch and commit its metadata.',
+        description: 'Persist one browser-rendered paper-batch part and commit its metadata.',
         parameters: [{ name: 'request', description: 'batch metadata and ordered raster payloads.' }],
         returns: 'the committed document and generated batch id, or a stable failure.',
       },
@@ -3644,6 +3656,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface OcrLayoutElement {\n    readonly type: \'text\' | \'equation\' | \'image\' | \'table\' | \'other\';\n    readonly text: string;\n    readonly bbox: OcrBoundingBox;\n}',
   },
   {
+    name: 'OcrLayoutLimits',
+    declaration: 'export interface OcrLayoutLimits {\n    readonly maxFileBytes: number;\n    readonly maxPagesPerRequest: number;\n}',
+  },
+  {
+    name: 'OcrLayoutLimitsResult',
+    declaration: 'export type OcrLayoutLimitsResult = OcrLayoutLimitsSuccess | OcrExtractRejected;',
+  },
+  {
+    name: 'OcrLayoutLimitsSuccess',
+    declaration: 'export interface OcrLayoutLimitsSuccess {\n    readonly ok: true;\n    readonly value: OcrLayoutLimits;\n}',
+  },
+  {
     name: 'OcrLayoutPage',
     declaration: 'export interface OcrLayoutPage {\n    readonly pageIndex: number;\n    readonly width: number;\n    readonly height: number;\n    readonly elements: readonly OcrLayoutElement[];\n}',
   },
@@ -3665,7 +3689,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OcrProvider',
-    declaration: 'export interface OcrProvider {\n    readonly id: string;\n    available(): boolean;\n    extract(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractedDocument>;\n    extractLayout(request: OcrLayoutRequest, signal?: AbortSignal): Promise<OcrLayoutDocument>;\n}',
+    declaration: 'export interface OcrProvider {\n    readonly id: string;\n    available(): boolean;\n    layoutLimits(): OcrLayoutLimits;\n    extract(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractedDocument>;\n    extractLayout(request: OcrLayoutRequest, signal?: AbortSignal): Promise<OcrLayoutDocument>;\n}',
   },
   {
     name: 'OneShotSubagentDescriptorData',
@@ -4557,7 +4581,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionBatchSaveRequest',
-    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
+    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly appendToBatchId?: TeacherQuestionBatchId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
   },
   {
     name: 'TeacherQuestionDocumentImageUpload',
@@ -4640,6 +4664,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionImageUpload {\n    readonly questionNo: number;\n    readonly fileName: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly contentBase64: string;\n}',
   },
   {
+    name: 'TeacherQuestionLayoutElement',
+    declaration: 'export interface TeacherQuestionLayoutElement {\n    readonly type: \'text\' | \'equation\' | \'image\' | \'table\' | \'other\';\n    readonly text: string;\n    readonly bbox: readonly [\n        number,\n        number,\n        number,\n        number\n    ];\n}',
+  },
+  {
+    name: 'TeacherQuestionLayoutPage',
+    declaration: 'export interface TeacherQuestionLayoutPage {\n    readonly pageIndex: number;\n    readonly width: number;\n    readonly height: number;\n    readonly elements: readonly TeacherQuestionLayoutElement[];\n}',
+  },
+  {
     name: 'TeacherQuestionMutationResult',
     declaration: 'export type TeacherQuestionMutationResult = TeacherQuestionMutationSuccess | TeacherQuestionRejected;',
   },
@@ -4648,8 +4680,32 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionMutationSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly document: TeacherWorkbenchDocument;\n        readonly batchId?: TeacherQuestionBatchId;\n    };\n}',
   },
   {
+    name: 'TeacherQuestionPageRegion',
+    declaration: 'export interface TeacherQuestionPageRegion {\n    readonly pageIndex: number;\n    readonly left: number;\n    readonly top: number;\n    readonly right: number;\n    readonly bottom: number;\n    readonly pageWidth: number;\n    readonly pageHeight: number;\n}',
+  },
+  {
     name: 'TeacherQuestionRejected',
     declaration: 'export interface TeacherQuestionRejected {\n    readonly ok: false;\n    readonly error: TeacherQuestionFailure;\n}',
+  },
+  {
+    name: 'TeacherQuestionSegmentErrorCode',
+    declaration: 'export type TeacherQuestionSegmentErrorCode = \'invalid-request\' | \'session-unavailable\' | \'tool-model-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
+  },
+  {
+    name: 'TeacherQuestionSegmentRejected',
+    declaration: 'export interface TeacherQuestionSegmentRejected {\n    readonly ok: false;\n    readonly error: {\n        readonly code: TeacherQuestionSegmentErrorCode;\n        readonly message: string;\n    };\n}',
+  },
+  {
+    name: 'TeacherQuestionSegmentRequest',
+    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly padding: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionSegmentResult',
+    declaration: 'export type TeacherQuestionSegmentResult = TeacherQuestionSegmentSuccess | TeacherQuestionSegmentRejected;',
+  },
+  {
+    name: 'TeacherQuestionSegmentSuccess',
+    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionStudentDocumentOptions',
@@ -4718,6 +4774,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeacherRecordTemplateKind',
     declaration: 'export type TeacherRecordTemplateKind = \'observation\' | \'teaching\';',
+  },
+  {
+    name: 'TeacherSegmentedQuestion',
+    declaration: 'export interface TeacherSegmentedQuestion {\n    readonly questionNo: number;\n    readonly headPageIndex: number;\n    readonly groupIndex: number;\n    readonly regions: readonly TeacherQuestionPageRegion[];\n}',
   },
   {
     name: 'TeacherStudent',

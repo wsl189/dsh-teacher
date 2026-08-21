@@ -76,6 +76,14 @@ export interface OcrLayoutDocument {
   readonly pages: readonly OcrLayoutPage[]
 }
 
+/** Provider limits a browser Consumer uses to split source PDFs before upload. */
+export interface OcrLayoutLimits {
+  /** Maximum decoded bytes accepted in one layout request. */
+  readonly maxFileBytes: number
+  /** Maximum pages parsed in one layout request. */
+  readonly maxPagesPerRequest: number
+}
+
 /** Normalized machine-readable document content. */
 export interface OcrExtractedDocument {
   /** Original document display name. */
@@ -128,12 +136,25 @@ export interface OcrLayoutSuccess {
 /** Remote and same-process structured extraction result. */
 export type OcrLayoutResult = OcrLayoutSuccess | OcrExtractRejected
 
+/** Successful provider-limit resolution. */
+export interface OcrLayoutLimitsSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Current limits of the selected provider. */
+  readonly value: OcrLayoutLimits
+}
+
+/** Remote and same-process provider-limit result. */
+export type OcrLayoutLimitsResult = OcrLayoutLimitsSuccess | OcrExtractRejected
+
 /** One implementation registered with the OCR runtime. */
 export interface OcrProvider {
   /** Stable provider id used by deployment selection. */
   readonly id: string
   /** Cheap local usability check that performs no network request. */
   available(): boolean
+  /** @returns current upload and page limits for one structured-layout request. */
+  layoutLimits(): OcrLayoutLimits
   /**
    * Extract one document.
    * @param request - transport request fields whose semantics the provider validates.

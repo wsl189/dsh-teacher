@@ -68,12 +68,27 @@
     },
     {
       "doc": "docs/subsystems/ocr.md",
+      "symbol": "OcrLayoutLimits",
+      "source": "packages/ocr/ocr/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ocr.md",
       "symbol": "OcrLayoutSuccess",
       "source": "packages/ocr/ocr/src/types.ts"
     },
     {
       "doc": "docs/subsystems/ocr.md",
       "symbol": "OcrLayoutResult",
+      "source": "packages/ocr/ocr/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ocr.md",
+      "symbol": "OcrLayoutLimitsSuccess",
+      "source": "packages/ocr/ocr/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ocr.md",
+      "symbol": "OcrLayoutLimitsResult",
       "source": "packages/ocr/ocr/src/types.ts"
     },
     {

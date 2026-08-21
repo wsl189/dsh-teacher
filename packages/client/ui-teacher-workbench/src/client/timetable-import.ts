@@ -136,7 +136,7 @@ function parseTimetableDocuments(
   const blockEntries = tableEntries.length + recordEntries.length > 0
     ? []
     : parseTextLines(documentText, context)
-  const parsed = [...tableEntries, ...recordEntries, ...blockEntries]
+  const parsed = reconcileClassNames([...tableEntries, ...recordEntries, ...blockEntries], context)
   const deduplicated: ParsedTimetableEntry[] = []
   const seen = new Map<string, number>()
   for (const item of parsed) {
@@ -151,6 +151,33 @@ function parseTimetableDocuments(
     }
   }
   return deduplicated
+}
+
+function reconcileClassNames(
+  entries: readonly ParsedTimetableEntry[],
+  defaults: TimetableImportDefaults,
+): ParsedTimetableEntry[] {
+  const preferred = new Map<string, string>()
+  for (const className of defaults.classNames) {
+    const identity = classIdentity(className, extractGrade(className) || defaults.grade)
+    if (identity !== undefined && !preferred.has(identity)) preferred.set(identity, className)
+  }
+  for (const entry of entries) {
+    const identity = classIdentity(entry.className, entry.grade)
+    if (identity !== undefined && !preferred.has(identity)) preferred.set(identity, entry.className)
+  }
+  return entries.map((entry) => {
+    const identity = classIdentity(entry.className, entry.grade)
+    const className = identity === undefined ? undefined : preferred.get(identity)
+    return className === undefined || className === entry.className ? entry : { ...entry, className }
+  })
+}
+
+function classIdentity(className: string, grade: string): string | undefined {
+  const ordinal = classOrdinal(className)
+  if (ordinal === undefined) return undefined
+  const normalizedGrade = (extractGrade(className) || grade).replace(/(?:年级|年)$/u, '')
+  return `${normalizedGrade}\u0000${String(ordinal)}`
 }
 
 function ocrDocumentCandidates(markdown: string): string[][] {

@@ -11,6 +11,9 @@ import {
   type OcrExtractedDocument,
   type OcrLayoutDocument,
   type OcrLayoutElement,
+  type OcrLayoutLimits,
+  type OcrLayoutPage,
+  type OcrPageRange,
   type OcrLayoutRequest,
   type OcrProvider,
 } from '@deepseek-ai/dsh-ocr'
@@ -32,10 +35,11 @@ type MinerULanguage = typeof LANGUAGE_VALUES[number]
 const DEFAULT_BACKEND: MinerUBackend = 'pipeline'
 const DEFAULT_EFFORT: MinerUEffort = 'high'
 const DEFAULT_LANGUAGE: MinerULanguage = 'ch'
-const DEFAULT_TIMEOUT_MS = 5 * 60 * 1000
+const DEFAULT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_MAX_FILE_BYTES = 20 * 1024 * 1024
 const DEFAULT_MAX_OUTPUT_CHARACTERS = 500_000
 const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+const DEFAULT_LAYOUT_BATCH_PAGES = 4
 
 /** User-settings namespace for the MinerU provider. */
 export const OCR_MINERU_SETTINGS_NAMESPACE = settingsNamespace('ocr-mineru')
@@ -97,6 +101,8 @@ export interface Config {
   readonly maxOutputCharacters: number
   /** Maximum JSON response bytes accepted from MinerU. */
   readonly maxResponseBytes: number
+  /** Maximum PDF pages sent to MinerU in one structured-layout request. */
+  readonly layoutBatchPages: number
 }
 
 /** Validated plugin configuration schema. */
@@ -109,6 +115,7 @@ export const Config: z<Config> = z.object({
   maxFileBytes: z.natural().min(1_024).max(100 * 1024 * 1024).default(DEFAULT_MAX_FILE_BYTES),
   maxOutputCharacters: z.natural().min(1_000).max(5_000_000).default(DEFAULT_MAX_OUTPUT_CHARACTERS),
   maxResponseBytes: z.natural().min(16_384).max(64 * 1024 * 1024).default(DEFAULT_MAX_RESPONSE_BYTES),
+  layoutBatchPages: z.natural().min(1).max(100).default(DEFAULT_LAYOUT_BATCH_PAGES),
 })
 
 /** Fetch-compatible dependency used by the provider and deterministic tests. */
@@ -132,6 +139,12 @@ export class MinerUProvider implements OcrProvider {
   /** @returns true when the configured endpoint is an HTTP(S) URL. */
   available(): boolean {
     return /^https?:\/\//u.test(this.source().endpoint)
+  }
+
+  /** @returns current MinerU upload and structured-layout page limits. */
+  layoutLimits(): OcrLayoutLimits {
+    const config = this.source()
+    return { maxFileBytes: config.maxFileBytes, maxPagesPerRequest: config.layoutBatchPages }
   }
 
   /**
@@ -178,18 +191,21 @@ export class MinerUProvider implements OcrProvider {
   async extractLayout(request: OcrLayoutRequest, signal?: AbortSignal): Promise<OcrLayoutDocument> {
     const config = this.source()
     const decoded = decodeRequest(request, config.maxFileBytes)
-    const parsed = await this.callMinerU(config, createForm(request, decoded, config, 'layout'), signal)
-    const validated = mineruLayoutResponseSchema.safeParse(parsed)
-    if (!validated.success) throw new OcrError('MinerU layout response fields are invalid', 'invalid-response')
-    const encoded = Object.values(validated.data.results)
-      .map(result => result.middle_json ?? '')
-      .find(content => content.trim() !== '')
-    if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
-    const middle = parseMiddleJson(encoded)
-    const pageOffset = request.pageRange?.start ?? 0
-    const pages = middle.pdf_info
-      .map(page => normalizePage(page, pageOffset))
-      .sort((left, right) => left.pageIndex - right.pageIndex)
+    const ranges = layoutRanges(request.pageRange, config.layoutBatchPages)
+    const pages: OcrLayoutPage[] = []
+    for (const pageRange of ranges) {
+      const batchRequest = pageRange === undefined ? request : { ...request, pageRange }
+      const parsed = await this.callMinerU(config, createForm(batchRequest, decoded, config, 'layout'), signal)
+      const validated = mineruLayoutResponseSchema.safeParse(parsed)
+      if (!validated.success) throw new OcrError('MinerU layout response fields are invalid', 'invalid-response')
+      const encoded = Object.values(validated.data.results)
+        .map(result => result.middle_json ?? '')
+        .find(content => content.trim() !== '')
+      if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
+      const middle = parseMiddleJson(encoded)
+      pages.push(...middle.pdf_info.map(page => normalizePage(page, pageRange?.start ?? 0)))
+    }
+    pages.sort((left, right) => left.pageIndex - right.pageIndex)
     if (pages.length === 0) throw new OcrError('MinerU returned no parsed pages', 'empty-result')
     return { name: request.name, provider: this.id, pages }
   }
@@ -219,6 +235,18 @@ export class MinerUProvider implements OcrProvider {
       throw new OcrError('MinerU returned non-JSON output', 'invalid-response', { cause: error })
     }
   }
+}
+
+function layoutRanges(range: OcrPageRange | undefined, batchPages: number): Array<OcrPageRange | undefined> {
+  if (range === undefined) return [undefined]
+  if (!Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end) || range.start < 0 || range.end < range.start) {
+    throw new OcrError('page range must be an ordered pair of non-negative integers', 'invalid-request')
+  }
+  const ranges: OcrPageRange[] = []
+  for (let start = range.start; start <= range.end; start += batchPages) {
+    ranges.push({ start, end: Math.min(range.end, start + batchPages - 1) })
+  }
+  return ranges
 }
 
 /** Services required by the provider plugin. */
@@ -490,9 +518,6 @@ function isBox(value: OcrBoundingBox | undefined): value is OcrBoundingBox {
 function decodeRequest(request: OcrExtractRequest, maxFileBytes: number): DecodedRequest {
   const name = request.name.trim()
   if (name === '' || name.length > 255) throw new OcrError('document name is missing or too long', 'invalid-request')
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(request.contentBase64)) {
-    throw new OcrError('document bytes are not canonical base64', 'invalid-request')
-  }
   if (request.contentBase64.length > Math.ceil(maxFileBytes / 3) * 4) {
     throw new OcrError(`document exceeds the configured ${String(maxFileBytes)} byte limit`, 'file-too-large')
   }

@@ -33,6 +33,8 @@ import {
   type TeacherQuestionMediaConfig,
 } from './question-media.ts'
 import { normalizeTimetableWithAgent } from './timetable-agent.ts'
+import { segmentQuestionsInBatches } from './question-segmentation-batches.ts'
+import { registerQuestionSegmentationSkill } from './question-segmentation-skill.ts'
 import type {
   TeacherQuestionAssignRequest,
   TeacherQuestionBatchId,
@@ -49,6 +51,8 @@ import type {
   TeacherQuestionImageTarget,
   TeacherQuestionMutationResult,
   TeacherQuestionRejected,
+  TeacherQuestionSegmentRequest,
+  TeacherQuestionSegmentResult,
   TeacherQuestionTemporaryListRequest,
   TeacherQuestionTemporaryListResult,
   TeacherQuestionTemporarySaveRequest,
@@ -70,11 +74,18 @@ import type {
 
 const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbench')
 const DEFAULT_QUESTION_IMAGE_BYTES = 25 * 1024 * 1024
-const DEFAULT_QUESTION_BATCH_BYTES = 300 * 1024 * 1024
+const DEFAULT_QUESTION_BATCH_BYTES = 96 * 1024 * 1024
 const DEFAULT_TIMETABLE_SOURCE_CHARACTERS = 500_000
 const DEFAULT_TIMETABLE_ENTRIES = 1_000
-const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 300_000
-const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 45_000
+const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 60 * 60 * 1000
+const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
+const DEFAULT_QUESTION_LAYOUT_PAGES = 50
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 20
+const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
+const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 18_000
+const DEFAULT_SEGMENTED_QUESTIONS = 300
+const DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS = 5
+const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 
 export type * from './types.ts'
 export {
@@ -117,7 +128,7 @@ export interface Config {
   studentsRoot: string
   /** Maximum decoded bytes accepted for one question image. */
   maxQuestionImageBytes: number
-  /** Maximum decoded bytes accepted for one complete paper batch. */
+  /** Maximum decoded bytes accepted for one automatically saved part. */
   maxQuestionBatchBytes: number
   /** Maximum MinerU characters admitted to one timetable-agent prompt. */
   maxTimetableSourceCharacters: number
@@ -127,6 +138,20 @@ export interface Config {
   timetableAgentTimeoutMs: number
   /** Wall-clock deadline for one direct-vision timetable-agent run. */
   timetableVisionAgentTimeoutMs: number
+  /** Maximum selected PDF pages admitted to one question-segmentation agent run. */
+  maxQuestionLayoutPages: number
+  /** Selected PDF pages owned by one automatic question-segmentation group. */
+  questionSegmentationBatchPages: number
+  /** Maximum OCR elements admitted to one question-segmentation agent run. */
+  maxQuestionLayoutElements: number
+  /** Maximum serialized OCR characters returned by one question-layout tool call. */
+  maxQuestionSourceChunkCharacters: number
+  /** Maximum questions accepted from one question-segmentation agent run. */
+  maxSegmentedQuestions: number
+  /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
+  maxQuestionBoundarySubmissions: number
+  /** Wall-clock deadline for one question-segmentation agent run. */
+  questionSegmentationAgentTimeoutMs: number
 }
 
 /** Host service owning the revisioned workbench document. */
@@ -143,6 +168,15 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxTimetableEntries: z.natural().min(1).max(10_000).default(DEFAULT_TIMETABLE_ENTRIES),
     timetableAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS),
     timetableVisionAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS),
+    maxQuestionLayoutPages: z.natural().min(1).max(1_000).default(DEFAULT_QUESTION_LAYOUT_PAGES),
+    questionSegmentationBatchPages: z.natural().min(1).max(998).default(DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES),
+    maxQuestionLayoutElements: z.natural().min(1).max(100_000).default(DEFAULT_QUESTION_LAYOUT_ELEMENTS),
+    maxQuestionSourceChunkCharacters: z.natural().min(4_000).max(100_000)
+      .default(DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS),
+    maxSegmentedQuestions: z.natural().min(1).max(10_000).default(DEFAULT_SEGMENTED_QUESTIONS),
+    maxQuestionBoundarySubmissions: z.natural().min(1).max(20).default(DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS),
+    questionSegmentationAgentTimeoutMs: z.natural().min(1_000).max(3_600_000)
+      .default(DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS),
   })
 
   private global?: DomainGlobal<TeacherWorkbenchDocument>
@@ -166,6 +200,13 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxTimetableEntries: DEFAULT_TIMETABLE_ENTRIES,
     timetableAgentTimeoutMs: DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS,
     timetableVisionAgentTimeoutMs: DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS,
+    maxQuestionLayoutPages: DEFAULT_QUESTION_LAYOUT_PAGES,
+    questionSegmentationBatchPages: DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES,
+    maxQuestionLayoutElements: DEFAULT_QUESTION_LAYOUT_ELEMENTS,
+    maxQuestionSourceChunkCharacters: DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS,
+    maxSegmentedQuestions: DEFAULT_SEGMENTED_QUESTIONS,
+    maxQuestionBoundarySubmissions: DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS,
+    questionSegmentationAgentTimeoutMs: DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS,
   }) {
     super(ctx, 'teacherWorkbench')
     this.weatherProvider = new TeacherWeatherProvider(config)
@@ -174,6 +215,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       setSource: (source) => { this.configSource = source },
       onChange: () => {},
     })
+    registerQuestionSegmentationSkill(ctx)
   }
 
   /** Open and own the durable singleton. */
@@ -257,18 +299,37 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Persist a browser-rendered paper batch and commit its metadata.
+   * Detect complete top-level question boundaries through the configured tool model.
+   * @param request - live parent session, selected OCR pages, and crop padding.
+   * @returns validated source-page crop regions or a stable failure.
+   */
+  @Remote('segmentQuestions')
+  segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult> {
+    return segmentQuestionsInBatches(this.ctx, request, this.configSource())
+  }
+
+  /**
+   * Persist one browser-rendered paper-batch part and commit its metadata.
    * @param request - batch metadata and ordered raster payloads.
    * @returns the committed document and generated batch id, or a stable failure.
    */
   @Remote('saveQuestionBatch')
   saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
-      const persisted = await persistQuestionBatch(this.questionMediaConfig(), request, Date.now())
+      const current = this.requireGlobal().get()
+      const existingBatch = request.appendToBatchId === undefined
+        ? undefined
+        : current.state.questionBatches.find(batch => batch.id === request.appendToBatchId)
+      if (request.appendToBatchId !== undefined && existingBatch === undefined) {
+        throw new TeacherQuestionMediaError('not-found', '待追加的试卷批次不存在')
+      }
+      const persisted = await persistQuestionBatch(this.questionMediaConfig(), request, Date.now(), existingBatch)
       try {
         const document = await this.commitQuestionState(state => ({
           ...state,
-          questionBatches: [...state.questionBatches, persisted.batch],
+          questionBatches: existingBatch === undefined
+            ? [...state.questionBatches, persisted.batch]
+            : state.questionBatches.map(batch => batch.id === persisted.batch.id ? persisted.batch : batch),
         }))
         return questionMutationSuccess(document, persisted.batch.id)
       } catch (error) {

@@ -12,6 +12,7 @@ const config = (overrides: Partial<Config> = {}): Config => ({
   maxFileBytes: 1024,
   maxOutputCharacters: 1000,
   maxResponseBytes: 16_384,
+  layoutBatchPages: 4,
   ...overrides,
 })
 
@@ -23,6 +24,12 @@ const request = (overrides: Partial<Parameters<MinerUProvider['extract']>[0]> = 
 })
 
 describe('MinerUProvider', () => {
+  it('advertises the current upload and layout batch limits', () => {
+    const provider = new MinerUProvider(config({ maxFileBytes: 4096, layoutBatchPages: 7 }))
+
+    expect(provider.layoutLimits()).toEqual({ maxFileBytes: 4096, maxPagesPerRequest: 7 })
+  })
+
   it('uploads MinerU multipart fields and returns Markdown', async () => {
     const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       const form = init?.body as FormData
@@ -142,6 +149,40 @@ describe('MinerUProvider', () => {
       })
   })
 
+  it('splits a large layout page range into bounded MinerU requests and restores source indexes', async () => {
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData
+      const start = Number(form.get('start_page_id'))
+      const end = Number(form.get('end_page_id'))
+      return Response.json({
+        results: {
+          paper: {
+            middle_json: JSON.stringify({
+              pdf_info: Array.from({ length: end - start + 1 }, (_, pageIndex) => ({
+                page_idx: pageIndex,
+                page_size: [720, 405],
+                para_blocks: [],
+              })),
+            }),
+          },
+        },
+      })
+    })
+    const provider = new MinerUProvider(config({ layoutBatchPages: 4 }), fetch)
+
+    const result = await provider.extractLayout({
+      ...request({ name: 'paper.pdf', mediaType: 'application/pdf' }),
+      pageRange: { start: 0, end: 9 },
+    })
+
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(fetch.mock.calls.map((call) => {
+      const form = call[1]?.body as FormData
+      return [form.get('start_page_id'), form.get('end_page_id')]
+    })).toEqual([['0', '3'], ['4', '7'], ['8', '9']])
+    expect(result.pages.map(page => page.pageIndex)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
+  })
+
   it('infers a supported extension from media type and truncates output', async () => {
     const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect((init?.body as FormData).get('files')).toMatchObject({ name: 'calendar.xlsx' })
@@ -190,6 +231,21 @@ describe('MinerUProvider', () => {
     const formatProvider = new MinerUProvider(config(), fetch)
     await expect(formatProvider.extract(request({ name: 'calendar.txt' }))).rejects.toMatchObject({ code: 'unsupported-format' } satisfies Partial<OcrError>)
     expect(fetch).not.toHaveBeenCalled()
+  })
+
+  it('validates multi-megabyte canonical base64 without recursive regular-expression matching', async () => {
+    const fetch = vi.fn(() => Promise.resolve(Response.json({
+      results: { paper: { md_content: '# Paper' } },
+    })))
+    const bytes = Buffer.alloc(4 * 1024 * 1024, 0x61)
+    const provider = new MinerUProvider(config({ maxFileBytes: 5 * 1024 * 1024 }), fetch)
+
+    await expect(provider.extract(request({
+      name: 'paper.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: bytes.toString('base64'),
+    }))).resolves.toMatchObject({ markdown: '# Paper' })
+    expect(fetch).toHaveBeenCalledOnce()
   })
 
   it('rejects an invalid structured page range before fetch', async () => {

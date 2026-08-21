@@ -57,6 +57,26 @@ ${table}
     }))
   })
 
+  it('uses one class name across morning and evening tables with different punctuation', () => {
+    const drafts = parseTimetable(`
+25-26学年第一学期高二早读安排表
+<table>
+  <tr><td>班级</td><td>高二10班</td><td>高二11班</td></tr>
+  <tr><td>星期一</td><td>李丹</td><td>杨月梅</td></tr>
+</table>
+25-26学年第一学期高二晚自习安排表
+<table>
+  <tr><td>班级</td><td>高二（10）班</td><td>高二（11）班</td></tr>
+  <tr><td>星期一</td><td>李丹</td><td>杨月梅</td></tr>
+</table>
+`, { className: '', classNames: ['高二10班'], grade: '高二', kind: 'morningStudy', teacherName: '' })
+
+    expect(drafts).toHaveLength(4)
+    expect(drafts.filter(item => item.className === '高二10班')).toHaveLength(2)
+    expect(drafts.filter(item => item.className === '高二11班')).toHaveLength(2)
+    expect(drafts.some(item => item.className.includes('（'))).toBe(false)
+  })
+
   it('prefers a complete enhanced overview to incomplete overlapping regions', () => {
     const drafts = parseTimetable(`
 ## OCR pass: enhanced whole image

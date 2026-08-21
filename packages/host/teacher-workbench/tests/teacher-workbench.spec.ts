@@ -28,6 +28,7 @@ import type {
   TeacherRecordId,
   TeacherRecordTemplateId,
   TeacherQuickNoteId,
+  TeacherQuestionBatchId,
   TeacherQuestionFolderId,
   TeacherStudentId,
   TeacherTimetableEntryId,
@@ -65,6 +66,65 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
+  it('appends bounded save parts to one logical paper batch', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-append-'))
+    temporaryRoots.push(root)
+    const b = await harness(undefined, {
+      geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
+      geocodingCacheEntries: 16,
+      segmentsRoot: join(root, 'segments'),
+      studentsRoot: join(root, 'students'),
+      maxQuestionImageBytes: 1024 * 1024,
+      maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxTimetableSourceCharacters: 120_000,
+      maxTimetableEntries: 1_000,
+      timetableAgentTimeoutMs: 120_000,
+      timetableVisionAgentTimeoutMs: 45_000,
+      maxQuestionLayoutPages: 50,
+      questionSegmentationBatchPages: 20,
+      maxQuestionLayoutElements: 5_000,
+      maxQuestionSourceChunkCharacters: 18_000,
+      maxSegmentedQuestions: 300,
+      maxQuestionBoundarySubmissions: 3,
+      questionSegmentationAgentTimeoutMs: 90_000,
+    })
+    contexts.push(b.ctx)
+    const image = async (questionNo: number, color: string) => ({
+      questionNo,
+      fileName: `第${String(questionNo)}题.png`,
+      mediaType: 'image/png' as const,
+      width: 12,
+      height: 8,
+      contentBase64: (await sharp({ create: { width: 12, height: 8, channels: 3, background: color } }).png().toBuffer()).toString('base64'),
+    })
+
+    const first = await b.service.saveQuestionBatch({
+      name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(1, '#ff0000')],
+    })
+    expect(first.ok).toBe(true)
+    if (!first.ok || first.value.batchId === undefined) throw new Error('missing batch id')
+    const second = await b.service.saveQuestionBatch({
+      appendToBatchId: first.value.batchId,
+      name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(2, '#0000ff')],
+    })
+
+    expect(second).toMatchObject({
+      ok: true,
+      value: {
+        batchId: first.value.batchId,
+        document: {
+          state: {
+            questionBatches: [{ id: first.value.batchId, name: '合并试卷', images: [{ questionNo: 1 }, { questionNo: 2 }] }],
+          },
+        },
+      },
+    })
+    expect(await b.service.saveQuestionBatch({
+      appendToBatchId: 'missing' as TeacherQuestionBatchId,
+      name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(3, '#00ff00')],
+    })).toMatchObject({ ok: false, error: { code: 'not-found' } })
+  })
+
   it('serves migrated defaults before the first durable write', async () => {
     const b = await harness()
     contexts.push(b.ctx)
@@ -305,6 +365,13 @@ describe('TeacherWorkbenchService', () => {
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,
+      maxQuestionLayoutPages: 50,
+      questionSegmentationBatchPages: 20,
+      maxQuestionLayoutElements: 5_000,
+      maxQuestionSourceChunkCharacters: 18_000,
+      maxSegmentedQuestions: 300,
+      maxQuestionBoundarySubmissions: 3,
+      questionSegmentationAgentTimeoutMs: 90_000,
     })
     contexts.push(b.ctx)
     const owningClass = { ...classItem('class-a', '高一（1）班'), academicYear: '2026' }

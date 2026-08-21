@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   TeacherClassId,
+  TeacherQuestionBatchId,
   TeacherStudentId,
   TeacherWorkbenchDocument,
   TeacherWorkbenchState,
@@ -46,6 +47,26 @@ function fakeRemote(options: FakeOptions = {}) {
 }
 
 describe('TeacherWorkbenchController', () => {
+  it('returns the Host batch id so later save parts append to the same paper', async () => {
+    const fake = fakeRemote()
+    const batchId = 'batch-a' as TeacherQuestionBatchId
+    const saveQuestionBatch = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        ok: true as const,
+        value: { document: fake.getDocument(), batchId },
+      },
+    }))
+    Object.assign(fake.remote, { saveQuestionBatch })
+    const controller = new TeacherWorkbenchController(fake.remote)
+
+    await expect(controller.saveQuestionBatch({
+      name: '试卷', sourceName: '试卷.pdf', pageRange: '全部页', images: [{
+        questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AA==',
+      }],
+    })).resolves.toEqual({ ok: true, batchId })
+  })
+
   it('collapses initial reads and publishes through subscribe/unsubscribe', async () => {
     const fake = fakeRemote()
     const controller = new TeacherWorkbenchController(fake.remote)

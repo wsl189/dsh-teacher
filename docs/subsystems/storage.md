@@ -239,7 +239,14 @@ Host service owning the revisioned workbench document.
 @Remote('normalizeTimetable') normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult>
 
 /**
- * Persist a browser-rendered paper batch and commit its metadata.
+ * Detect complete top-level question boundaries through the configured tool model.
+ * @param request - live parent session, selected OCR pages, and crop padding.
+ * @returns validated source-page crop regions or a stable failure.
+ */
+@Remote('segmentQuestions') segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>
+
+/**
+ * Persist one browser-rendered paper-batch part and commit its metadata.
  * @param request - batch metadata and ordered raster payloads.
  * @returns the committed document and generated batch id, or a stable failure.
  */
@@ -316,7 +323,7 @@ Host service owning the revisioned workbench document.
 @Remote('generateStudentDocuments') async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult>
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:133`](../../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:158`](../../packages/host/teacher-workbench/src/index.ts)
 
 <a id="domain-events"></a>
 

@@ -48,7 +48,7 @@ export interface TeacherQuestionMediaConfig {
   readonly studentsRoot: string
   /** Maximum bytes accepted for one raster. */
   readonly maxImageBytes: number
-  /** Maximum aggregate bytes accepted for one paper batch. */
+  /** Maximum aggregate bytes accepted for one automatically saved part. */
   readonly maxBatchBytes: number
 }
 
@@ -118,33 +118,47 @@ export class TeacherQuestionMediaError extends Error {
 }
 
 /**
- * Validate and atomically materialize one complete question batch.
+ * Validate and atomically materialize one bounded question-batch part.
  * @param config - current media roots and decoded-byte limits.
  * @param request - batch metadata and ordered raster payloads.
  * @param now - shared creation timestamp for the batch and its images.
+ * @param existingBatch - existing logical paper that receives a continuation part.
  * @returns prepared metadata plus a filesystem rollback.
  */
 export async function persistQuestionBatch(
   config: TeacherQuestionMediaConfig,
   request: TeacherQuestionBatchSaveRequest,
   now: number,
+  existingBatch?: TeacherQuestionBatch,
 ): Promise<PersistedQuestionBatch> {
   if (request.images.length === 0) throw new TeacherQuestionMediaError('invalid-request', '切题结果不能为空')
   if (request.name.trim() === '') throw new TeacherQuestionMediaError('invalid-request', '试卷名称不能为空')
+  if (existingBatch !== undefined && (
+    request.name.trim() !== existingBatch.name
+    || safeFileName(request.sourceName, '试卷.pdf') !== existingBatch.sourceName
+    || request.pageRange.trim() !== existingBatch.pageRange
+  )) {
+    throw new TeacherQuestionMediaError('invalid-request', '追加分片与原试卷信息不一致')
+  }
+  const existingQuestionNumbers = new Set(existingBatch?.images.map(image => image.questionNo) ?? [])
   const decoded: DecodedImage[] = []
   let aggregateBytes = 0
   for (const upload of request.images) {
     if (!Number.isSafeInteger(upload.questionNo) || upload.questionNo < 1) {
       throw new TeacherQuestionMediaError('invalid-request', '题号必须是正整数')
     }
+    if (existingQuestionNumbers.has(upload.questionNo)) {
+      throw new TeacherQuestionMediaError('invalid-request', '追加分片包含重复题号')
+    }
+    existingQuestionNumbers.add(upload.questionNo)
     const image = await decodeImage(upload, config.maxImageBytes)
     aggregateBytes += image.bytes.byteLength
-    if (aggregateBytes > config.maxBatchBytes) throw new TeacherQuestionMediaError('file-too-large', '切题图片总大小超过设置上限')
+    if (aggregateBytes > config.maxBatchBytes) throw new TeacherQuestionMediaError('file-too-large', '当前切题保存分片超过设置上限')
     decoded.push(image)
   }
-  const batchId = randomUUID() as TeacherQuestionBatchId
+  const batchId = existingBatch?.id ?? randomUUID() as TeacherQuestionBatchId
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
-  const temporary = within(root, `.pending-${String(batchId)}`)
+  const temporary = within(root, `.pending-${String(batchId)}-${randomUUID()}`)
   const finalDir = within(root, String(batchId))
   const images: TeacherQuestionImage[] = request.images.map((upload, index) => {
     const image = decoded[index]
@@ -160,6 +174,7 @@ export async function persistQuestionBatch(
       updatedAt: now,
     }
   })
+  const appendedPaths: string[] = []
   try {
     await mkdir(temporary, { recursive: true })
     await Promise.all(images.map(async (image, index) => {
@@ -168,24 +183,45 @@ export async function persistQuestionBatch(
       await writeFile(join(temporary, storedImageName(String(image.id), image.mediaType)), decodedImage.bytes, { flag: 'wx' })
     }))
     await mkdir(root, { recursive: true })
-    await rename(temporary, finalDir)
+    if (existingBatch === undefined) {
+      await rename(temporary, finalDir)
+    } else {
+      for (const image of images) {
+        const storedName = storedImageName(String(image.id), image.mediaType)
+        const destination = within(finalDir, storedName)
+        await rename(within(temporary, storedName), destination)
+        appendedPaths.push(destination)
+      }
+      await rm(temporary, { recursive: true, force: true })
+    }
   } catch (error) {
     await rm(temporary, { recursive: true, force: true })
-    await rm(finalDir, { recursive: true, force: true })
+    if (existingBatch === undefined) await rm(finalDir, { recursive: true, force: true })
+    else await removeQuestionFiles(appendedPaths)
     throw new TeacherQuestionMediaError('storage-failure', '保存切题图片失败', { cause: error })
   }
   const batch: TeacherQuestionBatch = {
     id: batchId,
-    name: request.name.trim(),
-    sourceName: safeFileName(request.sourceName, '试卷.pdf'),
-    pageRange: request.pageRange.trim(),
-    createdAt: now,
-    images,
+    name: existingBatch?.name ?? request.name.trim(),
+    sourceName: existingBatch?.sourceName ?? safeFileName(request.sourceName, '试卷.pdf'),
+    pageRange: existingBatch?.pageRange ?? request.pageRange.trim(),
+    createdAt: existingBatch?.createdAt ?? now,
+    images: [...(existingBatch?.images ?? []), ...images].sort((left, right) => left.questionNo - right.questionNo),
   }
   return {
     batch,
-    rollback: async () => { await rm(finalDir, { recursive: true, force: true }) },
+    rollback: existingBatch === undefined
+      ? async () => { await rm(finalDir, { recursive: true, force: true }) }
+      : async () => { await removeQuestionFiles(appendedPaths) },
   }
+}
+
+async function removeQuestionFiles(paths: readonly string[]): Promise<void> {
+  await Promise.all(paths.map(async (path) => {
+    await unlink(path).catch((error: unknown) => {
+      if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+    })
+  }))
 }
 
 /**

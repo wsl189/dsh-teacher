@@ -151,6 +151,16 @@ interface OcrLayoutDocument {
 ```
 
 ```ts type-equiv
+/** Provider limits a browser Consumer uses to split source PDFs before upload. */
+interface OcrLayoutLimits {
+  /** Maximum decoded bytes accepted in one layout request. */
+  readonly maxFileBytes: number
+  /** Maximum pages parsed in one layout request. */
+  readonly maxPagesPerRequest: number
+}
+```
+
+```ts type-equiv
 /** Successful structured-layout extraction. */
 interface OcrLayoutSuccess {
   /** Success discriminant. */
@@ -165,7 +175,22 @@ interface OcrLayoutSuccess {
 type OcrLayoutResult = OcrLayoutSuccess | OcrExtractRejected
 ```
 
-Bounding boxes use `[left, top, right, bottom]` in the coordinate system declared by each page's width and height. The optional page range is zero-based and inclusive. Consumers scale those values proportionally when mapping them back to browser-rendered pixels; they must own domain-specific grouping and review instead of treating provider geometry as authoritative segmentation.
+```ts type-equiv
+/** Successful provider-limit resolution. */
+interface OcrLayoutLimitsSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Current limits of the selected provider. */
+  readonly value: OcrLayoutLimits
+}
+```
+
+```ts type-equiv
+/** Remote and same-process provider-limit result. */
+type OcrLayoutLimitsResult = OcrLayoutLimitsSuccess | OcrExtractRejected
+```
+
+Bounding boxes use `[left, top, right, bottom]` in the coordinate system declared by each page's width and height. The optional page range is zero-based and inclusive. Consumers scale those values proportionally when mapping them back to browser-rendered pixels; browser Consumers can use the selected provider's current limits to split source PDFs before upload, and must own domain-specific grouping and review instead of treating provider geometry as authoritative segmentation.
 
 ## Provider Contract
 
@@ -176,6 +201,8 @@ interface OcrProvider {
   readonly id: string
   /** Cheap local usability check that performs no network request. */
   available(): boolean
+  /** @returns current upload and page limits for one structured-layout request. */
+  layoutLimits(): OcrLayoutLimits
   /**
    * Extract one document.
    * @param request - transport request fields whose semantics the provider validates.
@@ -230,7 +257,13 @@ registerProvider(provider: OcrProvider): () => void
  * @returns normalized pages and coordinates or a stable failure.
  */
 @Remote('layout') async layout(request: OcrLayoutRequest): Promise<OcrLayoutResult>
+
+/**
+ * Resolve the selected provider's current structured-layout request limits.
+ * @returns upload and page limits, or a stable provider-selection failure.
+ */
+@Remote('layoutLimits') layoutLimits(): OcrLayoutLimitsResult
 ```
 
-Source: [`packages/ocr/ocr/src/index.ts:55`](../../packages/ocr/ocr/src/index.ts)
+Source: [`packages/ocr/ocr/src/index.ts:59`](../../packages/ocr/ocr/src/index.ts)
 <!-- END GENERATED cordis-surface -->
