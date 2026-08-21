@@ -102,9 +102,6 @@ export function parseTimetable(
   markdown: string,
   defaults: TimetableImportDefaults,
 ): TimetableImportDraft[] {
-  const documents = detailedOcrDocuments(markdown)
-  const rows = extractTableRows(markdown)
-  const documentText = normalizeText(markdown)
   const documentClass = extractDocumentClass(markdown)
   const context: TimetableImportDefaults = {
     ...defaults,
@@ -112,6 +109,25 @@ export function parseTimetable(
     grade: documentClass?.grade || defaults.grade || '',
     teacherName: documentClass?.className ? '' : defaults.teacherName,
   }
+  const candidates = ocrDocumentCandidates(markdown)
+    .map(documents => parseTimetableDocuments(documents, context))
+  const parsed = candidates.reduce<ParsedTimetableEntry[]>((best, candidate) => (
+    candidate.length >= best.length ? candidate : best
+  ), [])
+  return parsed.map((item, index) => ({
+    id: `timetable-import-${String(index + 1)}`,
+    selected: isPlausibleClassName(item.className) && item.subject !== '',
+    ...item,
+  }))
+}
+
+function parseTimetableDocuments(
+  documents: readonly string[],
+  context: TimetableImportDefaults,
+): ParsedTimetableEntry[] {
+  const source = documents.join('\n\n')
+  const rows = extractTableRows(source)
+  const documentText = normalizeText(source)
   const tableEntries = [
     ...documents.flatMap(document => parseStudyClassTables(document, context)),
     ...documents.flatMap(document => parseMatrixTable(extractTableRows(document), context)),
@@ -134,23 +150,20 @@ export function parseTimetable(
       deduplicated[prior] = item
     }
   }
-  return deduplicated.map((item, index) => ({
-    id: `timetable-import-${String(index + 1)}`,
-    selected: isPlausibleClassName(item.className) && item.subject !== '',
-    ...item,
-  }))
+  return deduplicated
 }
 
-function detailedOcrDocuments(markdown: string): string[] {
+function ocrDocumentCandidates(markdown: string): string[][] {
   const marker = /^## OCR pass: (.+)$/gmu
   const matches = [...markdown.matchAll(marker)]
-  if (matches.length === 0) return [markdown]
+  if (matches.length === 0) return [[markdown]]
   const documents = matches.map((match, index) => ({
     label: match[1]?.trim() ?? '',
     body: markdown.slice(match.index + match[0].length, matches[index + 1]?.index ?? markdown.length),
   }))
-  const detailed = documents.filter(document => document.label !== 'enhanced whole image')
-  return (detailed.length > 0 ? detailed : documents).map(document => document.body)
+  const overview = documents.filter(document => document.label === 'enhanced whole image').map(document => document.body)
+  const detailed = documents.filter(document => document.label !== 'enhanced whole image').map(document => document.body)
+  return [overview, detailed].filter(candidate => candidate.length > 0)
 }
 
 /**
@@ -178,14 +191,15 @@ function parseStudyClassTables(
   defaults: TimetableImportDefaults,
 ): ParsedTimetableEntry[] {
   return extractHtmlTables(markdown).flatMap(({ heading, rows }) => {
-    const headingKind = inferKind(heading, defaults.kind)
-    if (headingKind === 'lesson') return []
     const headerIndex = rows.findIndex((row) => {
       const [label = ''] = row
       return /^(?:班级|班别)$/u.test(cleanLabel(label))
         && row.slice(1).filter(cell => isPlausibleClassName(extractClass(cell)?.className ?? cell)).length >= 2
     })
     if (headerIndex < 0) return []
+    const sectionText = [heading, ...rows.slice(0, headerIndex).flat()].join('\n')
+    const headingKind = inferKind(sectionText, defaults.kind)
+    if (headingKind === 'lesson') return []
     const header = rows[headerIndex] ?? []
     const columns = header.flatMap((cell, index): MatrixColumn[] => {
       if (index === 0) return []
@@ -193,7 +207,11 @@ function parseStudyClassTables(
       const sourceName = extracted?.className ?? cleanValue(cell)
       if (!isPlausibleClassName(sourceName)) return []
       const grade = extracted?.grade || defaults.grade
-      const className = classNameForOrdinal(grade, classOrdinal(sourceName), defaults.classNames) || sourceName
+      const ordinal = classOrdinal(sourceName)
+      const knownClass = defaults.classNames.find(className => classOrdinal(className) === ordinal)
+      const className = knownClass
+        || (extracted?.grade === '' ? classNameForOrdinal(grade, ordinal, []) : '')
+        || sourceName
       return [{ index, weekday: 1, className, grade, fixedClass: true }]
     })
     if (columns.length < 2) return []
@@ -203,7 +221,7 @@ function parseStudyClassTables(
       const label = row[0] ?? ''
       const weekday = parseWeekday(label)
       if (weekday === undefined) continue
-      const kind = inferKind(`${heading}\n${label}`, headingKind)
+      const kind = inferKind(`${sectionText}\n${label}`, headingKind)
       const periodKey = `${kind}:${String(weekday)}`
       const period = (periods.get(periodKey) ?? 0) + 1
       periods.set(periodKey, period)
@@ -254,17 +272,20 @@ function parseMatrixBlock(
   const weekdayIndexes = new Set(weekdayColumns.map(column => column.index))
   const classColumn = header.findIndex(cell => /(?:班级|班别)/u.test(cleanLabel(cell)))
   const gradeColumn = header.findIndex(cell => /年级/u.test(cleanLabel(cell)))
-  let slotColumn = header.findIndex(cell => /(?:节次|节数|课次|时间|时段)/u.test(cleanLabel(cell)))
-  if (slotColumn < 0) {
-    const width = Math.max(header.length, ...rows.map(row => row.length))
-    const candidates = Array.from({ length: width }, (_unused, index) => index)
-      .filter(index => !weekdayIndexes.has(index))
-    slotColumn = candidates.reduce((best, candidate) => (
-      periodColumnScore(rows.slice(1), candidate) > periodColumnScore(rows.slice(1), best)
-        ? candidate
-        : best
-    ), candidates[0] ?? -1)
-  }
+  const labelledSlotColumn = header.findIndex(cell => (
+    /^(?:节次|节数|课次|时间|时段)(?:[/（(].*)?$/u.test(cleanLabel(cell))
+  ))
+  const width = Math.max(header.length, ...rows.map(row => row.length))
+  const candidates = Array.from({ length: width }, (_unused, index) => index)
+    .filter(index => !weekdayIndexes.has(index))
+  const scoredSlotColumn = candidates.reduce((best, candidate) => (
+    periodColumnScore(rows.slice(1), candidate) > periodColumnScore(rows.slice(1), best)
+      ? candidate
+      : best
+  ), candidates[0] ?? -1)
+  const slotColumn = periodColumnScore(rows.slice(1), scoredSlotColumn) > 0
+    ? scoredSlotColumn
+    : labelledSlotColumn
   if (slotColumn < 0) return []
   const hasClassSubheader = weekdayColumns
     .filter(column => parseClassHeader(possibleSubheader[column.index]) !== undefined)
@@ -515,7 +536,12 @@ function classNameForOrdinal(grade: string, ordinal: number | undefined, classNa
 }
 
 function classOrdinal(value: string): number | undefined {
-  const match = cleanValue(value).match(/[（(]?([一二三四五六七八九十百\d]+)[)）]?\s*班$/u)
+  const text = cleanValue(value)
+  const match = text.match(/[（(]\s*([一二三四五六七八九十百\d]+)\s*[)）]\s*班$/u)
+    ?? text.match(/(\d{1,3})\s*班$/u)
+    ?? text.replace(/^(?:高|初|小)\s*[一二三四五六123456]\s*(?:年级|年)?/u, '')
+      .match(/([一二三四五六七八九十百]+)\s*班$/u)
+    ?? text.match(/([一二三四五六七八九十百]+)\s*班$/u)
   if (match === null) return undefined
   const ordinal = chineseNumber(match[1] ?? '')
   return Number.isSafeInteger(ordinal) && ordinal > 0 ? ordinal : undefined

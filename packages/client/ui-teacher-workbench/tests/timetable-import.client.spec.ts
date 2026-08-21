@@ -57,6 +57,34 @@ ${table}
     }))
   })
 
+  it('prefers a complete enhanced overview to incomplete overlapping regions', () => {
+    const drafts = parseTimetable(`
+## OCR pass: enhanced whole image
+
+高三（11）班 课程表
+<table>
+  <tr><td>节次</td><td>一</td><td>二</td></tr>
+  <tr><td>1</td><td>数学</td><td>语文</td></tr>
+  <tr><td>2</td><td>英语</td><td>物理</td></tr>
+</table>
+
+## OCR pass: overlapping visual region 1/2
+
+<table>
+  <tr><td>节次</td><td>一</td><td>二</td></tr>
+  <tr><td>1</td><td>一</td><td>二</td></tr>
+</table>
+
+## OCR pass: overlapping visual region 2/2
+
+<table><tr><td>英语</td><td>物理</td></tr></table>
+`, { className: '高三（11）班', classNames: ['高三（11）班'], grade: '高三', kind: 'lesson', teacherName: '' })
+
+    expect(drafts).toHaveLength(4)
+    expect(drafts.map(item => item.subject)).toEqual(['数学', '语文', '英语', '物理'])
+    expect(drafts).toContainEqual(expect.objectContaining({ weekday: 2, period: 2, subject: '物理' }))
+  })
+
   it('expands HTML row spans and falls back to readable text lines', () => {
     const html = parseTimetable(`
 <table>
@@ -215,6 +243,43 @@ ${table}
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高二1班', grade: '高二', kind: 'morningStudy', weekday: 1, subject: '早读', teacherName: '王俊茹' }))
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高二2班', kind: 'morningStudy', weekday: 2, subject: '英语', teacherName: '王勇' }))
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高二2班', kind: 'eveningStudy', weekday: 1, subject: '晚自习', teacherName: '蔡晓瑜' }))
+  })
+
+  it('reads study kinds from title rows inside separate tables', () => {
+    const drafts = parseTimetable(`
+<table>
+  <tr><td colspan="3">25-26学年第一学期高二早读安排表</td></tr>
+  <tr><td>班级</td><td>高二1班</td><td>高二2班</td></tr>
+  <tr><td>星期一</td><td>王俊茹</td><td>蔡晓瑜</td></tr>
+</table>
+<table>
+  <tr><td colspan="3">25-26学年第一学期高二晚自习安排表</td></tr>
+  <tr><td>班级</td><td>高二1班</td><td>高二2班</td></tr>
+  <tr><td>星期一</td><td>江海莲</td><td>蔡晓瑜*</td></tr>
+</table>
+`, { className: '', classNames: [], grade: '高二', kind: 'morningStudy', teacherName: '' })
+
+    expect(drafts).toHaveLength(4)
+    expect(drafts.filter(item => item.kind === 'morningStudy')).toHaveLength(2)
+    expect(drafts.filter(item => item.kind === 'eveningStudy')).toHaveLength(2)
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高二2班', kind: 'eveningStudy', subject: '晚自习', teacherName: '蔡晓瑜',
+    }))
+  })
+
+  it('reconciles cropped study class labels with the existing class catalog by ordinal', () => {
+    const drafts = parseTimetable(`
+晚自习安排表
+<table>
+  <tr><td>班级</td><td>二11班</td><td>二10班</td></tr>
+  <tr><td>星期一</td><td>杨月梅</td><td>李丹</td></tr>
+</table>
+`, { className: '', classNames: ['高二11班', '高二10班'], grade: '高二', kind: 'eveningStudy', teacherName: '' })
+
+    expect(drafts).toHaveLength(2)
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高二11班', kind: 'eveningStudy', teacherName: '杨月梅',
+    }))
   })
 
   it('leaves timetable headers and period labels unselected instead of treating them as classes', () => {
