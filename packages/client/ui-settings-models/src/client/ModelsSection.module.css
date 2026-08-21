@@ -45,6 +45,59 @@
   color: var(--dsw-alias-state-success-primary);
 }
 
+.toolModelCard {
+  margin-top: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.toolModelHeader {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.toolModelTitle {
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+  color: var(--dsw-alias-label-primary);
+}
+
+.toolModelDescription,
+.toolModelStatus {
+  margin: 0;
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.toolModelStatusError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.toolModelSelect {
+  box-sizing: border-box;
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+}
+
+.toolModelSelect:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
 .rows {
   list-style: none;
   /* Extra air between the title/intro block and the first provider card. */

@@ -23,8 +23,10 @@ function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
     saveDailyTodo: action(), toggleDailyTodo: action(), deleteDailyTodo: action(),
-    saveQuickNote: action(), deleteQuickNote: action(), saveCalendarItem: action(), deleteCalendarItem: action(),
+    saveQuickNote: action(), deleteQuickNote: action(), saveLedgerCategory: action(), deleteLedgerCategory: action(),
+    saveLedgerEntry: action(), deleteLedgerEntry: action(), saveCalendarItem: action(), deleteCalendarItem: action(),
     extractDocument: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
+    normalizeTimetable: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     extractQuestionLayout: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
     importCalendarItems: action(), saveTimetableEntry: action(), deleteTimetableEntry: action(), importTimetableEntries: action(),
     saveClass: action(), deleteClass: action(), saveStudent: action(), importStudents: action(), deleteStudent: action(),
@@ -55,7 +57,8 @@ function state(): TeacherWorkbenchState {
   const gradeClassB = 'grade-class-b' as TeacherClassId
   const weekday = weekdayToday()
   return {
-    dailyTodos: [], quickNotes: [], calendarItems: [], students: [], resources: [], templates: [], records: [], exams: [],
+    dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], students: [],
+    resources: [], templates: [], records: [], exams: [],
     questionBatches: [], questionFolders: [], questionAssignments: [],
     classes: [
       { id: classA, usage: 'timetable', name: '高一（1）班', grade: '高一', subject: '数学' },
@@ -104,6 +107,37 @@ afterEach(() => {
 })
 
 describe('Timetable', () => {
+  it('orders numeric class names naturally in the grade timetable', () => {
+    const current = state()
+    const gradeClasses = [1, 10, 11, 2, 3].map(number => ({
+      id: `grade-${String(number)}` as TeacherClassId,
+      usage: 'gradeTimetable' as const,
+      name: `高三（${String(number)}）班`,
+      grade: '高三',
+      subject: '',
+    }))
+    render(<Timetable
+      state={{
+        ...current,
+        classes: [...current.classes.filter(item => item.usage !== 'gradeTimetable'), ...gradeClasses],
+      }}
+      settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+      commands={commands()}
+      setTeacherName={vi.fn(async () => {})}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '年级课表' }))
+    expect(screen.getAllByRole('button', { name: /删除班级“高三/u }).map(button => button.getAttribute('aria-label')))
+      .toEqual([
+        '删除班级“高三（1）班”',
+        '删除班级“高三（2）班”',
+        '删除班级“高三（3）班”',
+        '删除班级“高三（10）班”',
+        '删除班级“高三（11）班”',
+      ])
+  })
+
   it('projects shared entries by class, teacher, week, grade, and study type', async () => {
     const c = commands()
     render(<Timetable
@@ -312,6 +346,11 @@ describe('Timetable', () => {
 
     expect(await screen.findByRole('dialog', { name: '上传并识别课程表' })).toBeTruthy()
     expect(await screen.findByText('识别到 2 节，请确认班级、星期和节次后导入')).toBeTruthy()
+    expect(c.extractDocument).toHaveBeenCalledWith(expect.any(File), {
+      includeDiscardedText: true,
+      enhanceImageDetail: false,
+    })
+    expect(c.normalizeTimetable).not.toHaveBeenCalled()
     fireEvent.change(screen.getAllByLabelText('课程')[0]!, { target: { value: '数学（确认）' } })
     fireEvent.click(screen.getByRole('button', { name: '导入 2 节' }))
     await waitFor(() => {
@@ -320,5 +359,84 @@ describe('Timetable', () => {
         expect.objectContaining({ classId: 'week-class-a', usage: 'timetable', className: '高一（1）班', weekday: 2, period: 1, subject: '语文' }),
       ])
     })
+  })
+
+  it('locks a direct-image upload to the study destination while normalization is running', async () => {
+    const c = commands()
+    vi.mocked(c.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: {
+        name: '值班表.jpeg', mediaType: 'image/jpeg', provider: 'mineru', truncated: false,
+        markdown: '| 星期 | 节次 | 班级 | 课程 | 教师 |\n| --- | --- | --- | --- | --- |\n| 周一 | 晚自习 | 高一（1）班 | 晚自习 | 李老师 |',
+      },
+    })
+    const rendered = render(<Timetable
+      state={state()}
+      settings={{ ...DEFAULT_TEACHER_WORKBENCH_SETTINGS, teacherName: '王老师' }}
+      commands={c}
+      setTeacherName={vi.fn(async () => {})}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '早晚自习' }))
+    fireEvent.click(screen.getByRole('button', { name: '识别课程表' }))
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(input, { target: { files: [new File(['study'], '值班表.jpeg', { type: 'image/jpeg' })] } })
+    fireEvent.click(screen.getByRole('tab', { name: '年级课表' }))
+
+    expect(await screen.findByText('识别到 1 节，请确认班级、星期和节次后导入')).toBeTruthy()
+    expect(c.extractDocument).toHaveBeenCalledWith(expect.any(File), {
+      includeDiscardedText: true,
+      enhanceImageDetail: true,
+    })
+    expect(c.normalizeTimetable).not.toHaveBeenCalled()
+    const kind = screen.getByLabelText<HTMLSelectElement>('类型')
+    expect([...kind.options].map(option => option.value)).toEqual(['morningStudy', 'eveningStudy'])
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 节' }))
+    await waitFor(() => {
+      expect(c.importTimetableEntries).toHaveBeenCalledWith([
+        expect.objectContaining({ usage: 'timetable', kind: 'eveningStudy', subject: '晚自习' }),
+      ])
+    })
+  })
+
+  it('falls back to the timetable agent when MinerU rules find no rows', async () => {
+    const c = commands()
+    vi.mocked(c.extractDocument).mockResolvedValueOnce({
+      ok: true,
+      value: {
+        name: '密集年级表.jpeg', mediaType: 'image/jpeg', markdown: '高三年级课表\n一班\t数学',
+        provider: 'mineru', truncated: false,
+      },
+    })
+    vi.mocked(c.normalizeTimetable).mockResolvedValueOnce({
+      ok: true,
+      value: { items: [{
+        className: '年级一班', grade: '高一', kind: 'lesson', weekday: 1, period: 1,
+        startTime: '', endTime: '', subject: '数学', teacherName: '王老师', location: '',
+      }] },
+    })
+    const rendered = render(<Timetable
+      state={state()}
+      settings={{ ...DEFAULT_TEACHER_WORKBENCH_SETTINGS, teacherName: '王老师' }}
+      commands={c}
+      setTeacherName={vi.fn(async () => {})}
+      t={t}
+    />)
+
+    fireEvent.click(screen.getByRole('tab', { name: '年级课表' }))
+    fireEvent.click(screen.getByRole('button', { name: '识别课程表' }))
+    const input = rendered.container.querySelector<HTMLInputElement>('input[type="file"]')!
+    fireEvent.change(input, { target: { files: [new File(['dense'], '密集年级表.jpeg', { type: 'image/jpeg' })] } })
+
+    expect(await screen.findByText('识别到 1 节，请确认班级、星期和节次后导入')).toBeTruthy()
+    expect(c.extractDocument).toHaveBeenCalledWith(expect.any(File), {
+      includeDiscardedText: true,
+      enhanceImageDetail: true,
+    })
+    expect(c.normalizeTimetable).toHaveBeenCalledOnce()
+    expect(c.normalizeTimetable).toHaveBeenCalledWith(
+      '密集年级表.jpeg', expect.stringContaining('高三年级课表'), expect.objectContaining({ target: 'grade' }),
+    )
   })
 })

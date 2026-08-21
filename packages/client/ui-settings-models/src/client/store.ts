@@ -1,13 +1,15 @@
 /**
  * Models settings page store: one snapshot joining the configurable-provider
  * directory (`llm.providers`), the settings namespaces (`settings.describe`),
- * and the referenced credentials (`credentials.describe`). The host stays the
- * single fact source — every mutation writes through the wire and the page
- * re-renders from the next describe, pushed or refetched.
+ * referenced credentials (`credentials.describe`), and the live model catalog
+ * (`llm.models`). The host stays the single fact source — every mutation writes
+ * through the wire and the page re-renders from the next describe, pushed or
+ * refetched.
  */
 
 import type {
-  ConfigurableProviderView, CredentialView, IApiClient, SettingsNamespaceView,
+  ConfigurableProviderView, CredentialView, IApiClient, ModelCatalogFailure, ModelProviderGroup,
+  SettingsNamespaceView,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
@@ -40,12 +42,18 @@ export interface ModelsSettingsState {
   error: string | null
   /** Credential enrichment failure; provider/settings rows remain usable. */
   credentialError: string | null
+  /** Model-directory enrichment failure; provider/settings rows remain usable. */
+  modelCatalogError: string | null
   /** Whether the settings provider accepts writes. */
   writable: boolean
   /** Every configurable provider joined with its configured/credential state. */
   rows: readonly ProviderRow[]
   /** Namespace views by ns, for the editor's schema/layers/secrets. */
   namespaces: ReadonlyMap<string, SettingsNamespaceView>
+  /** Models advertised by currently configured provider routes. */
+  modelGroups: readonly ModelProviderGroup[]
+  /** Provider-local model-catalog failures. */
+  modelFailures: readonly ModelCatalogFailure[]
 }
 
 /**
@@ -99,7 +107,8 @@ function apiKeyEnvOf(namespace: SettingsNamespaceView | undefined, path: readonl
 export class ModelsSettingsStore {
   /** The snapshot the section renders from (uSES-safe store). */
   readonly store: SnapshotStore<ModelsSettingsState> = createSnapshotStore<ModelsSettingsState>({
-    status: 'idle', error: null, credentialError: null, writable: false, rows: [], namespaces: new Map(),
+    status: 'idle', error: null, credentialError: null, modelCatalogError: null,
+    writable: false, rows: [], namespaces: new Map(), modelGroups: [], modelFailures: [],
   })
 
   /** Latest load wins; an older response never overwrites a newer one. */
@@ -122,16 +131,31 @@ export class ModelsSettingsStore {
     let providers: ConfigurableProviderView[]
     let writable: boolean
     let views: SettingsNamespaceView[]
+    let modelGroups: ModelProviderGroup[] = []
+    let modelFailures: ModelCatalogFailure[] = []
+    let modelCatalogError: string | null = null
     try {
-      const [providersResponse, settingsResponse] = await Promise.all([
+      const [providersResponse, settingsResponse, modelsResponse] = await Promise.all([
         this.api.llm.providers({}),
         this.api.settings.describe({}),
+        Promise.resolve().then(() => this.api.llm.models({})).catch((error: unknown) => {
+          modelCatalogError = messageOf(error)
+          return undefined
+        }),
       ])
       if (!providersResponse.result.ok) throw new Error(providersResponse.result.error.message)
       if (!settingsResponse.result.ok) throw new Error(settingsResponse.result.error.message)
       providers = providersResponse.result.value.providers
       writable = settingsResponse.result.value.writable
       views = settingsResponse.result.value.namespaces
+      if (modelsResponse !== undefined) {
+        if (modelsResponse.result.ok) {
+          modelGroups = modelsResponse.result.value.groups
+          modelFailures = modelsResponse.result.value.failures
+        } else {
+          modelCatalogError = modelsResponse.result.error.message
+        }
+      }
     } catch (error) {
       if (generation !== this.generation) return
       this.store.update((s) => {
@@ -177,6 +201,7 @@ export class ModelsSettingsStore {
       s.status = 'ready'
       s.error = null
       s.credentialError = credentialError
+      s.modelCatalogError = modelCatalogError
       s.writable = writable
       s.rows = rows.map(row => ({
         ...row,
@@ -185,6 +210,8 @@ export class ModelsSettingsStore {
           : {},
       }))
       s.namespaces = namespaces
+      s.modelGroups = modelGroups
+      s.modelFailures = modelFailures
     })
   }
 }

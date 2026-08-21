@@ -100,7 +100,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/core/agent-default-model/src/index.ts:41`](../packages/core/agent-default-model/src/index.ts)
+Source: [`packages/core/agent-default-model/src/index.ts:57`](../packages/core/agent-default-model/src/index.ts)
 
 <a id="deepseek-aidsh-agent-instructions"></a>
 
@@ -806,10 +806,18 @@ export interface Config {
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one complete paper batch. */
   maxQuestionBatchBytes: number
+  /** Maximum MinerU characters admitted to one timetable-agent prompt. */
+  maxTimetableSourceCharacters: number
+  /** Maximum structured rows accepted from one timetable-agent run. */
+  maxTimetableEntries: number
+  /** Wall-clock deadline for one timetable-agent run. */
+  timetableAgentTimeoutMs: number
+  /** Wall-clock deadline for one direct-vision timetable-agent run. */
+  timetableVisionAgentTimeoutMs: number
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:91`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:109`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
@@ -1367,7 +1375,7 @@ type MinerUEffort = typeof EFFORT_VALUES[number]
 type MinerULanguage = typeof LANGUAGE_VALUES[number]
 ```
 
-Source: [`packages/ocr/ocr-mineru/src/index.ts:80`](../packages/ocr/ocr-mineru/src/index.ts)
+Source: [`packages/ocr/ocr-mineru/src/index.ts:83`](../packages/ocr/ocr-mineru/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 

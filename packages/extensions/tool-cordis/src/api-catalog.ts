@@ -93,6 +93,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a detached provider, model, and optional reasoning selection.',
       },
       {
+        signature: 'currentToolSelection(): ToolModelSelection',
+        description: 'Read the model selected for product-owned background agent tasks. An unset tool model follows the current default model without inheriting its conversation reasoning effort.',
+        parameters: [],
+        returns: 'a detached provider and model selection.',
+      },
+      {
         signature: 'async saveSelection(next: ModelSelection): Promise<void>',
         description: 'Save the complete default model selection. A deployment without a settings provider keeps its composition entry.',
         parameters: [{ name: 'next', description: 'resolved selection accepted by an entry point.' }],
@@ -1791,6 +1797,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'current conditions, twelve forecast hours, or a stable failure.',
       },
       {
+        signature: '@Remote(\'normalizeTimetable\') normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult>',
+        description: 'Reconstruct MinerU timetable text through the configured tool model.',
+        parameters: [{ name: 'request', description: 'live parent session, OCR source, and current timetable defaults.' }],
+        returns: 'structured rows for browser review or a stable failure.',
+      },
+      {
         signature: '@Remote(\'saveQuestionBatch\') saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult>',
         description: 'Persist a browser-rendered paper batch and commit its metadata.',
         parameters: [{ name: 'request', description: 'batch metadata and ordered raster payloads.' }],
@@ -2753,7 +2765,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'AgentOptions',
-    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    maxTokens?: number;\n}',
+    declaration: 'export interface AgentOptions {\n    provider?: string;\n    model?: string;\n    reasoningEffort?: ReasoningEffortId;\n    maxTokens?: number;\n}',
   },
   {
     name: 'AgentPreset',
@@ -3609,7 +3621,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OcrExtractRequest',
-    declaration: 'export interface OcrExtractRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+    declaration: 'export interface OcrExtractRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n    readonly includeDiscardedText?: boolean;\n    readonly enhanceImageDetail?: boolean;\n}',
   },
   {
     name: 'OcrExtractResult',
@@ -4441,11 +4453,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherClass',
-    declaration: 'export interface TeacherClass {\n    readonly id: TeacherClassId;\n    readonly academicYear?: string;\n    readonly name: string;\n    readonly grade: string;\n    readonly subject: string;\n}',
+    declaration: 'export interface TeacherClass {\n    readonly id: TeacherClassId;\n    readonly usage: TeacherClassUsage;\n    readonly academicYear?: string;\n    readonly name: string;\n    readonly grade: string;\n    readonly subject: string;\n}',
   },
   {
     name: 'TeacherClassId',
     declaration: 'export type TeacherClassId = Branded<\'TeacherClassId\'>;',
+  },
+  {
+    name: 'TeacherClassUsage',
+    declaration: 'export type TeacherClassUsage = \'roster\' | \'timetable\' | \'gradeTimetable\';',
   },
   {
     name: 'TeacherDailyTodo',
@@ -4474,6 +4490,22 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeacherExamId',
     declaration: 'export type TeacherExamId = Branded<\'TeacherExamId\'>;',
+  },
+  {
+    name: 'TeacherLedgerCategory',
+    declaration: 'export interface TeacherLedgerCategory {\n    readonly id: TeacherLedgerCategoryId;\n    readonly name: string;\n    readonly createdAt: number;\n}',
+  },
+  {
+    name: 'TeacherLedgerCategoryId',
+    declaration: 'export type TeacherLedgerCategoryId = Branded<\'TeacherLedgerCategoryId\'>;',
+  },
+  {
+    name: 'TeacherLedgerEntry',
+    declaration: 'export interface TeacherLedgerEntry {\n    readonly id: TeacherLedgerEntryId;\n    readonly categoryId: TeacherLedgerCategoryId;\n    readonly description: string;\n    readonly amountCents: number;\n    readonly occurredAt: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherLedgerEntryId',
+    declaration: 'export type TeacherLedgerEntryId = Branded<\'TeacherLedgerEntryId\'>;',
   },
   {
     name: 'TeacherLessonResource',
@@ -4708,6 +4740,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherTimetableEntryKind = \'lesson\' | \'morningStudy\' | \'eveningStudy\';',
   },
   {
+    name: 'TeacherTimetableNormalizeDefaults',
+    declaration: 'export interface TeacherTimetableNormalizeDefaults {\n    readonly className: string;\n    readonly classNames: readonly string[];\n    readonly grade: string;\n    readonly kind: TeacherTimetableEntryKind;\n    readonly target: TeacherTimetableNormalizeTarget;\n    readonly teacherName: string;\n}',
+  },
+  {
+    name: 'TeacherTimetableNormalizedEntry',
+    declaration: 'export interface TeacherTimetableNormalizedEntry {\n    readonly className: string;\n    readonly grade: string;\n    readonly kind: TeacherTimetableEntryKind;\n    readonly weekday: TeacherWeekday;\n    readonly period: number;\n    readonly startTime: string;\n    readonly endTime: string;\n    readonly subject: string;\n    readonly teacherName: string;\n    readonly location: string;\n}',
+  },
+  {
+    name: 'TeacherTimetableNormalizeErrorCode',
+    declaration: 'export type TeacherTimetableNormalizeErrorCode = \'invalid-request\' | \'session-unavailable\' | \'tool-model-unavailable\' | \'vision-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
+  },
+  {
+    name: 'TeacherTimetableNormalizeRejected',
+    declaration: 'export interface TeacherTimetableNormalizeRejected {\n    readonly ok: false;\n    readonly error: {\n        readonly code: TeacherTimetableNormalizeErrorCode;\n        readonly message: string;\n    };\n}',
+  },
+  {
+    name: 'TeacherTimetableNormalizeRequest',
+    declaration: 'export interface TeacherTimetableNormalizeRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly markdown: string;\n    readonly image?: {\n        readonly mediaType: \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';\n        readonly contentBase64: string;\n    };\n    readonly defaults: TeacherTimetableNormalizeDefaults;\n}',
+  },
+  {
+    name: 'TeacherTimetableNormalizeResult',
+    declaration: 'export type TeacherTimetableNormalizeResult = TeacherTimetableNormalizeSuccess | TeacherTimetableNormalizeRejected;',
+  },
+  {
+    name: 'TeacherTimetableNormalizeSuccess',
+    declaration: 'export interface TeacherTimetableNormalizeSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly items: readonly TeacherTimetableNormalizedEntry[];\n    };\n}',
+  },
+  {
+    name: 'TeacherTimetableNormalizeTarget',
+    declaration: 'export type TeacherTimetableNormalizeTarget = \'class\' | \'grade\' | \'study\';',
+  },
+  {
     name: 'TeacherWeatherErrorCode',
     declaration: 'export type TeacherWeatherErrorCode = \'location-not-found\' | \'provider-unavailable\' | \'invalid-response\';',
   },
@@ -4769,7 +4833,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherWorkbenchState',
-    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
+    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly ledgerCategories: readonly TeacherLedgerCategory[];\n    readonly ledgerEntries: readonly TeacherLedgerEntry[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
   },
   {
     name: 'TeacherWorkbenchSuccess',
@@ -4942,6 +5006,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'ToolMessageSource',
     declaration: 'export interface ToolMessageSource {\n    kind: \'tool\';\n    callId: CallId;\n}',
+  },
+  {
+    name: 'ToolModelSelection',
+    declaration: 'export interface ToolModelSelection {\n    provider: string;\n    model: string;\n    reasoningEffort?: ReturnType<typeof ReasoningEffortId>;\n}',
   },
   {
     name: 'ToolOutputDefinition',

@@ -12,7 +12,7 @@ import {
 } from '../src/client/controller.ts'
 
 const emptyState = (): TeacherWorkbenchState => ({
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
   questionBatches: [], questionFolders: [], questionAssignments: [],
 })
@@ -64,7 +64,7 @@ describe('TeacherWorkbenchController', () => {
   it('runs every module mutation through one revisioned document', async () => {
     const fake = fakeRemote()
     const ids = [
-      'todo-a', 'note-a', 'calendar-a',
+      'todo-a', 'note-a', 'ledger-category-a', 'ledger-entry-a', 'ledger-entry-b', 'calendar-a',
       'class-a', 'timetable-class-a', 'timetable-a', 'timetable-b', 'student-a', 'student-b', 'resource-a', 'template-a', 'record-a', 'exam-a',
     ]
     const controller = new TeacherWorkbenchController(fake.remote, {
@@ -93,6 +93,35 @@ describe('TeacherWorkbenchController', () => {
     await controller.saveQuickNote({ id: noteId, content: '课堂观察更新' })
     expect(controller.getSnapshot().document!.state.quickNotes[0]).toMatchObject({ content: '课堂观察更新', createdAt: 1234 })
     await controller.deleteQuickNote(noteId)
+
+    await controller.saveLedgerCategory({ name: '  保险保费  ' })
+    const ledgerCategoryId = controller.getSnapshot().document!.state.ledgerCategories[0]!.id
+    await controller.saveLedgerEntry({
+      categoryId: ledgerCategoryId,
+      description: '  家庭保险  ',
+      amountCents: 120_000,
+      occurredAt: '2026-08-20T10:30',
+    })
+    const ledgerEntryId = controller.getSnapshot().document!.state.ledgerEntries[0]!.id
+    await controller.saveLedgerEntry({
+      id: ledgerEntryId,
+      categoryId: ledgerCategoryId,
+      description: '家庭保险续费',
+      amountCents: 125_000,
+      occurredAt: '2026-08-21T09:00',
+    })
+    expect(controller.getSnapshot().document!.state.ledgerEntries[0]).toMatchObject({
+      description: '家庭保险续费', amountCents: 125_000, createdAt: 1234,
+    })
+    await controller.deleteLedgerEntry(ledgerEntryId)
+    await controller.saveLedgerEntry({
+      categoryId: ledgerCategoryId,
+      description: '车险',
+      amountCents: 80_000,
+      occurredAt: '2026-08-22T09:00',
+    })
+    await controller.deleteLedgerCategory(ledgerCategoryId)
+    expect(controller.getSnapshot().document!.state).toMatchObject({ ledgerCategories: [], ledgerEntries: [] })
 
     await controller.saveCalendarItem({ date: '2026-08-20', time: '09:00', title: '  教研会  ', details: '一楼' })
     const calendarId = controller.getSnapshot().document!.state.calendarItems[0]!.id
@@ -153,7 +182,7 @@ describe('TeacherWorkbenchController', () => {
     await controller.deleteClass(timetableClassId)
 
     expect(controller.getSnapshot().document!.state).toEqual(emptyState())
-    expect(fake.write).toHaveBeenCalledTimes(28)
+    expect(fake.write).toHaveBeenCalledTimes(34)
   })
 
   it('keeps identical class names independent across timetable areas and the roster', async () => {

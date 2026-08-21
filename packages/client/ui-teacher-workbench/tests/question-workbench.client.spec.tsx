@@ -32,7 +32,8 @@ const t: QuestionWorkbenchProps['t'] = (key, params) => {
 }
 
 const state: TeacherWorkbenchState = {
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [], resources: [], templates: [], records: [], exams: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
+  resources: [], templates: [], records: [], exams: [],
   classes: [
     { id: classId, usage: 'roster', academicYear: '2026', name: '一班', grade: '高一', subject: '数学' },
     { id: 'grade-class' as TeacherClassId, usage: 'gradeTimetable', name: '第一节', grade: '高二', subject: '数学' },

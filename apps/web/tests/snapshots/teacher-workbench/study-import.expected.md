@@ -10,7 +10,6 @@
   - combobox "班级名称": 高二1班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习" [selected]
     - option "晚自习"
   - combobox "星期":
@@ -31,7 +30,6 @@
   - combobox "班级名称": 高二2班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习" [selected]
     - option "晚自习"
   - combobox "星期":
@@ -52,7 +50,6 @@
   - combobox "班级名称": 高二1班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习" [selected]
     - option "晚自习"
   - combobox "星期":
@@ -73,7 +70,6 @@
   - combobox "班级名称": 高二2班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习" [selected]
     - option "晚自习"
   - combobox "星期":
@@ -94,7 +90,6 @@
   - combobox "班级名称": 高二1班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习"
     - option "晚自习" [selected]
   - combobox "星期":
@@ -115,7 +110,6 @@
   - combobox "班级名称": 高二2班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习"
     - option "晚自习" [selected]
   - combobox "星期":
@@ -136,7 +130,6 @@
   - combobox "班级名称": 高二1班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习"
     - option "晚自习" [selected]
   - combobox "星期":
@@ -157,7 +150,6 @@
   - combobox "班级名称": 高二2班
   - textbox "年级": 高二
   - combobox "类型":
-    - option "课程"
     - option "早自习"
     - option "晚自习" [selected]
   - combobox "星期":

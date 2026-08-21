@@ -28,7 +28,7 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 })
 
 const emptyState = (): TeacherWorkbenchState => ({
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
   questionBatches: [], questionFolders: [], questionAssignments: [],
 })
@@ -41,9 +41,14 @@ function commands(): TeacherWorkbenchCommands {
     deleteDailyTodo: action(),
     saveQuickNote: action(),
     deleteQuickNote: action(),
+    saveLedgerCategory: action(),
+    deleteLedgerCategory: action(),
+    saveLedgerEntry: action(),
+    deleteLedgerEntry: action(),
     saveCalendarItem: action(),
     deleteCalendarItem: action(),
     extractDocument: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
+    normalizeTimetable: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     extractQuestionLayout: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
     importCalendarItems: action(),
     saveTimetableEntry: action(),

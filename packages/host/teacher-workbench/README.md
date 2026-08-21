@@ -2,9 +2,9 @@
 
 English | [中文](README.zh.md)
 
-Host-owned persistence, question media, document generation, and weather access for the Web teacher workbench. The plugin stores one schema-validated, revisioned document through `ctx.storageDomain` and exposes `teacherWorkbench/read` plus compare-and-set `teacherWorkbench/write` Remote methods. Dedicated question Remotes atomically save, read, replace, delete, assign, and render stored images without sending server paths to the browser. `teacherWorkbench/weather` resolves a configured district, county, or city through a Nominatim-compatible endpoint, fetches the forecast from Open-Meteo, validates both responses, and returns stable lookup, availability, or response errors without requiring the browser to contact either provider directly.
+Host-owned persistence, question media, document generation, weather access, and timetable normalization for the Web teacher workbench. The plugin stores one schema-validated, revisioned document through `ctx.storageDomain` and exposes `teacherWorkbench/read` plus compare-and-set `teacherWorkbench/write` Remote methods. Dedicated question Remotes atomically save, read, replace, delete, assign, and render stored images without sending server paths to the browser. `teacherWorkbench/weather` resolves a configured district, county, or city through a Nominatim-compatible endpoint, fetches the forecast from Open-Meteo, validates both responses, and returns stable lookup, availability, or response errors without requiring the browser to contact either provider directly. When browser-side MinerU reconciliation finds no entries, `teacherWorkbench/normalizeTimetable` starts a short-lived child agent loop under the current session, selects `ctx.agentDefaultModel.currentToolSelection()`, exposes run-scoped source, matrix-submission, and line-splice patch tools, and accepts only a token for a matrix validated in that run before the browser may review rows.
 
-The version-6 document contains daily tasks, quick notes, dated calendar items, normalized weekly timetable entries, lesson resources, classes and students, exams, reusable record templates, authored teaching records, paper-batch metadata, nested student question folders, and student question assignments. Every class belongs to exactly one catalog: roster classes own students and exams and supply Question Cutting, normal timetable classes are selectable by Today, Week, and Morning/Evening Study, and grade-timetable classes are selectable only by Grade. The schema rejects student, exam, or timetable references that cross those catalogs, while identical display names may retain independent identities in each catalog. Each timetable entry occupies one unique class/type/weekday/period slot; deleting a class also removes its schedule. Question folders and assignments reference durable students and source images; deleting a folder, student, class, image, or batch removes its dependent metadata and best-effort cleans its owned files. Daily-management and teaching edits share one revision, so concurrent browser windows use the same compare-and-set conflict handling. Browser code never writes Local Storage; every accepted mutation lands in the storage backend selected for the `teacher_workbench` domain.
+The version-7 document contains daily tasks, quick notes, ledger categories and entries, dated calendar items, normalized weekly timetable entries, lesson resources, classes and students, exams, reusable record templates, authored teaching records, paper-batch metadata, nested student question folders, and student question assignments. Ledger entries reference one durable category, store a required local date and time, and represent CNY amounts as non-negative integer cents; deleting a category removes its entries in the same revisioned write. Every class belongs to exactly one catalog: roster classes own students and exams and supply Question Cutting, normal timetable classes are selectable by Today, Week, and Morning/Evening Study, and grade-timetable classes are selectable only by Grade. The schema rejects ledger, student, exam, or timetable references whose owner is absent or crosses those catalogs, while identical class display names may retain independent identities in each catalog. Each timetable entry occupies one unique class/type/weekday/period slot; deleting a class also removes its schedule. Question folders and assignments reference durable students and source images; deleting a folder, student, class, image, or batch removes its dependent metadata and best-effort cleans its owned files. Daily-management and teaching edits share one revision, so concurrent browser windows use the same compare-and-set conflict handling. Browser code never writes Local Storage; every accepted mutation lands in the storage backend selected for the `teacher_workbench` domain.
 
 ## Question Image Storage and Output
 
@@ -22,6 +22,10 @@ The version-6 document contains daily tasks, quick notes, dated calendar items, 
 | `maxQuestionBatchBytes` | Maximum combined decoded size of one saved paper batch. |
 | `geocodingEndpoint` | Nominatim-compatible location-search endpoint. |
 | `geocodingCacheEntries` | Maximum number of resolved locations retained in memory. |
+| `maxTimetableSourceCharacters` | Maximum MinerU characters admitted to one timetable-agent request. |
+| `maxTimetableEntries` | Maximum structured timetable rows accepted from one run. |
+| `timetableAgentTimeoutMs` | Wall-clock deadline for a text/OCR timetable-agent run. |
+| `timetableVisionAgentTimeoutMs` | Wall-clock deadline for a direct-vision timetable-agent run. |
 
 The first four fields are available in **Settings → Plugins → Plugin configuration → Question workspace storage** under the `teacher-workbench` settings namespace. The Web bundle defaults the roots to `~/.dsh/teacher-workbench/segments` and `~/.dsh/teacher-workbench/students`.
 
@@ -33,11 +37,19 @@ The plugin provides `ctx.teacherWorkbench`. Browser consumers use the generated 
 
 ## Model Experience
 
-None, as the service exposes teacher-workbench records and weather only to GUI callers and adds no model context, tools, or messages.
+### Timetable normalization child
+
+#### What the model sees
+
+A fresh child receives the upload name, a destination captured when extraction starts, current class/grade/type/teacher defaults, known class names, a run-scoped source tool, a matrix-submission tool, a line-splice patch tool, and a compact final-output schema. A vision-capable route receives one overview plus overlapping enlarged views of a raster source; extracted PDF and Office content and image fallback use compact MinerU regions through the source tool. The child inspects the source, submits one complete source-oriented matrix, and repairs rejected draft lines through 1-based splices while the Host preserves every unlisted line and block. The final output contains only the token for a matrix accepted in that run. The parser tolerates an axis or fields keyword joined to its first argument by an opening parenthesis, but semantic and dimension failures still require an explicit draft repair. The Host accepts repeated local period headers in chronological data order and assigns their later rows distinct periods without assuming source coordinates. Class, Grade, and Study destinations change relevant record semantics but do not prescribe a document layout. Every uploaded string is untrusted data, ordinary tools remain hidden, and the result is returned to browser review rather than the parent conversation.
+
+#### Token effect
+
+Each attempt pays for an independent child run plus source, submission, and patch calls. The selected tool model's configured `contextWindow` and `maxTokens` govern every request; the timetable plugin does not replace either value. Raster uploads start enhanced OCR concurrently with direct vision so a direct timeout or invalid result can immediately start a text child. The Web bundle budgets 35 seconds for direct vision and five minutes for the text child, allowing dense extracted tables more repair rounds without delaying the switch away from unsuccessful direct vision.
 
 #### KV Cache effect
 
-None; the package neither assembles nor sends a model-provider request.
+Independent of the parent conversation cache. Reuse requires the same tool-model route, fixed persona and schema, defaults, and MinerU source; changed source data establishes a different suffix or prefix according to the provider.
 
 ## Known Limitations and Deferred Work
 

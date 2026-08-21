@@ -47,6 +47,13 @@
     - button "下节课增加小组讨论 2026/8/20 {{clock}}"
     - button "编辑"
     - button "删除"
+- region "账本":
+  - heading "账本" [level=2]
+  - text: 1 笔 · ¥286.50
+  - button "放大板块"
+  - button "打开账本":
+    - strong: ¥286.50
+    - text: 4 个分类
 - region "2026年8月":
   - heading "2026年8月" [level=2]
   - text: 0 项日程

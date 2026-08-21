@@ -13,7 +13,7 @@ import { apply, inject } from '../src/client/index.ts'
 import { createTeacherWorkbenchViewStore } from '../src/client/view-store.ts'
 
 const emptyState = (): TeacherWorkbenchState => ({
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
   questionBatches: [], questionFolders: [], questionAssignments: [],
 })
@@ -110,6 +110,10 @@ describe('teacher-workbench browser wiring', () => {
       ok: true,
       value: { ok: false, error: { code: 'location-not-found', message: 'missing' } },
     }))
+    const normalizeTimetable = vi.fn(async () => ({
+      ok: true,
+      value: { ok: true, value: { items: [] } },
+    }))
     const setSetting = vi.fn(async () => {})
     const scope = { set: setSetting }
     const registrations: { entry: Record<string, unknown>; component: unknown }[] = []
@@ -120,7 +124,8 @@ describe('teacher-workbench browser wiring', () => {
     const slotDispose = vi.fn()
     const ctx = {
       locale: { register: vi.fn(() => localeDispose) },
-      remote: { teacherWorkbench: { read, write, weather } },
+      remote: { teacherWorkbench: { read, write, weather, normalizeTimetable } },
+      sessions: { list: { getSnapshot: () => ({ current: 'session-a' }) } },
       settingsScope: { bind: vi.fn(() => scope) },
       effect: vi.fn((factory: () => undefined | (() => void)) => {
         const result = factory()
@@ -175,6 +180,10 @@ describe('teacher-workbench browser wiring', () => {
     await command('deleteDailyTodo', 'todo-a')
     await command('saveQuickNote', { content: '随记' })
     await command('deleteQuickNote', 'note-a')
+    await command('saveLedgerCategory', { name: '保险保费' })
+    await command('saveLedgerEntry', { categoryId: 'ledger-category-a', description: '车险', amountCents: 120000, occurredAt: '2026-08-18T10:00' })
+    await command('deleteLedgerEntry', 'ledger-entry-a')
+    await command('deleteLedgerCategory', 'ledger-category-a')
     await command('saveCalendarItem', {
       date: '2026-08-18', time: '09:00', title: '教研', details: '',
     })
@@ -187,6 +196,12 @@ describe('teacher-workbench browser wiring', () => {
     })
     await command('importTimetableEntries', [])
     await command('deleteTimetableEntry', 'timetable-a')
+    await command('normalizeTimetable', '课表.png', '| 周一 |', {
+      className: '一班', classNames: ['一班'], grade: '高一', kind: 'lesson', target: 'class', teacherName: '王老师',
+    })
+    expect(normalizeTimetable).toHaveBeenCalledWith(expect.objectContaining({
+      parentSessionId: 'session-a', fileName: '课表.png', markdown: '| 周一 |',
+    }))
     await command('deleteClass', 'class-a')
     await command('saveStudent', {
       classId: 'class-a', name: '学生', studentNumber: '', gender: '', guardian: '', relation: '',

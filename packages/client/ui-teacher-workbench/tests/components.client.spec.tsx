@@ -27,7 +27,7 @@ const t: WorkbenchSurfaceProps['t'] = (key, params) => {
 }
 
 const emptyState = (): TeacherWorkbenchState => ({
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
   questionBatches: [], questionFolders: [], questionAssignments: [],
 })
@@ -42,8 +42,9 @@ function commands() {
   return {
     value: {
       saveDailyTodo: ok, toggleDailyTodo: ok, deleteDailyTodo: ok,
-      saveQuickNote: ok, deleteQuickNote: ok, saveCalendarItem: ok, deleteCalendarItem: ok,
-      extractDocument: vi.fn(), importCalendarItems: ok,
+      saveQuickNote: ok, deleteQuickNote: ok, saveLedgerCategory: ok, deleteLedgerCategory: ok,
+      saveLedgerEntry: ok, deleteLedgerEntry: ok, saveCalendarItem: ok, deleteCalendarItem: ok,
+      extractDocument: vi.fn(), normalizeTimetable: vi.fn(), importCalendarItems: ok,
       saveTimetableEntry: ok, deleteTimetableEntry: ok, importTimetableEntries: ok,
       saveClass: ok, deleteClass: ok, saveStudent: ok, importStudents: ok, deleteStudent: ok,
       saveResource: ok, deleteResource: ok, saveTemplate: ok, deleteTemplate: ok,

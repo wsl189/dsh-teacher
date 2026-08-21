@@ -19,6 +19,9 @@
     - text: 关闭
   - heading "模型" [level=2]
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
+  - text: 工具模型
+  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
+  - combobox "工具模型"
   - list:
     - listitem:
       - text: minimax-cn

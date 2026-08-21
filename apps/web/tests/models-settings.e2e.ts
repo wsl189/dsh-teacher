@@ -211,6 +211,22 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('selects the tool model only from live configured model routes', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-tool-model'))
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    const toolModel = dialog.getByRole('combobox', { name: '工具模型' })
+    await toolModel.waitFor({ timeout: 10_000 })
+    await expect.poll(async () => toolModel.locator('option').allTextContents(), { timeout: 10_000 })
+      .toContain('acme-large')
+    await toolModel.selectOption(JSON.stringify(['acme-gateway', 'acme-large']))
+    await dialog.getByText('工具模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
+
+    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    expect(document).toContain('toolProvider: acme-gateway')
+    expect(document).toContain('toolModel: acme-large')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it('reopens the name and protocol a declared route was created with', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-declared-identity'))
     const dialog = page.getByRole('dialog', { name: '设置' })

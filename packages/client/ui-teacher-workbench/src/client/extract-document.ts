@@ -19,6 +19,8 @@ export interface TeacherWorkbenchOcrRemote {
 export interface TeacherWorkbenchExtractOptions {
   /** Retain peripheral text that may contain a table title or grade label. */
   readonly includeDiscardedText?: boolean
+  /** Ask the OCR provider to cross-check raster images at multiple scales and regions. */
+  readonly enhanceImageDetail?: boolean
 }
 
 /**
@@ -72,6 +74,7 @@ export async function extractWorkbenchDocument(
       mediaType: file.type,
       contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
       ...(options.includeDiscardedText === true ? { includeDiscardedText: true } : {}),
+      ...(options.enhanceImageDetail === true ? { enhanceImageDetail: true } : {}),
     })
     return carried.ok
       ? carried.value
@@ -87,7 +90,12 @@ export async function extractWorkbenchDocument(
   }
 }
 
-function bytesToBase64(data: Uint8Array): string {
+/**
+ * Encode browser bytes for JSON RPC media transport.
+ * @param data - Browser-held bytes to encode.
+ * @returns Canonical Base64 content.
+ */
+export function bytesToBase64(data: Uint8Array): string {
   let binary = ''
   const chunk = 0x8000
   for (let offset = 0; offset < data.length; offset += chunk) {

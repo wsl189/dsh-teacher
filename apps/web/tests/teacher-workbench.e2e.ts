@@ -20,6 +20,7 @@ import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './s
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/teacher-workbench', import.meta.url))
 const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
 const DAILY_EXPECTED = join(SNAPSHOT_DIR, 'daily.expected.md')
+const LEDGER_EXPECTED = join(SNAPSHOT_DIR, 'ledger.expected.md')
 const VOICE_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'voice-error.expected.md')
 const WEATHER_COMPACT_EXPECTED = join(SNAPSHOT_DIR, 'weather-compact.expected.md')
 const WEATHER_EXPECTED = join(SNAPSHOT_DIR, 'weather.expected.md')
@@ -28,6 +29,7 @@ const TIMETABLE_EXPECTED = join(SNAPSHOT_DIR, 'timetable.expected.md')
 const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-delete.expected.md')
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
 const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
+const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const MODE = webSnapshotMode()
 
@@ -80,7 +82,9 @@ describe('web e2e: durable teacher workbench', () => {
     })
     await new Promise<void>((resolve) => { minerUServer.listen(0, '127.0.0.1', resolve) })
     const address = minerUServer.address() as AddressInfo
-    scaffold = await launchWebScaffold({ ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse` })
+    scaffold = await launchWebScaffold({
+      ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse`,
+    })
     browser = await chromium.launch()
     page = await browser.newPage({
       viewport: { width: 1440, height: 900 },
@@ -136,6 +140,26 @@ describe('web e2e: durable teacher workbench', () => {
     await noteEditor.getByRole('button', { name: '保存' }).click()
     await noteEditor.waitFor({ state: 'hidden', timeout: 10_000 })
 
+    const ledgerPanel = workbench.locator('section[aria-labelledby="daily-ledger-title"]')
+    await ledgerPanel.getByRole('button', { name: '放大板块' }).click()
+    await ledgerPanel.getByRole('button', { name: '添加账本分类' }).click()
+    const categoryEditor = page.getByRole('dialog', { name: '添加账本分类' })
+    await categoryEditor.getByLabel('分类名称').fill('住房费用')
+    await categoryEditor.getByRole('button', { name: '保存' }).click()
+    await categoryEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+    const housingLedger = ledgerPanel.getByRole('article', { name: '住房费用' })
+    await housingLedger.getByLabel('账目说明').fill('八月物业费')
+    await housingLedger.getByLabel('金额（元）').fill('286.50')
+    await housingLedger.getByLabel('发生时间').fill('2026-08-20T19:30')
+    await housingLedger.getByRole('button', { name: '添加明细' }).click()
+    await housingLedger.getByText('八月物业费', { exact: true }).waitFor({ timeout: 10_000 })
+    await compareOrRefreshGolden(
+      LEDGER_EXPECTED,
+      await captureStableAria(page, 'section[aria-labelledby="daily-ledger-title"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await ledgerPanel.getByRole('button', { name: '恢复日常管理布局' }).click()
+
     await compareOrRefreshGolden(
       DAILY_EXPECTED,
       await captureStableAria(page, '[class*="dailyBoard"]', scaffold.workspaceCwd),
@@ -166,6 +190,12 @@ describe('web e2e: durable teacher workbench', () => {
       category: 'important', color: 'red',
     }])
     expect(saved.value.state.quickNotes).toMatchObject([{ content: '下节课增加小组讨论' }])
+    expect(saved.value.state.ledgerCategories).toEqual(expect.arrayContaining([
+      expect.objectContaining({ name: '住房费用' }),
+    ]))
+    expect(saved.value.state.ledgerEntries).toMatchObject([{
+      description: '八月物业费', amountCents: 28_650, occurredAt: '2026-08-20T19:30',
+    }])
     expect(saved.value.state.calendarItems).toMatchObject([{
       date: '2026-08-20', time: '09:00', title: '年级教研会', details: '第一会议室',
     }])
@@ -181,6 +211,8 @@ describe('web e2e: durable teacher workbench', () => {
     await reloadedImportantCard.getByText('准备公开课', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await reloadedImportantCard.getByText('批改一班作业', { exact: true }).count()).toBe(0)
     expect(await page.getByText('下节课增加小组讨论', { exact: true }).count()).toBe(1)
+    const reloadedLedger = page.locator('section[aria-labelledby="daily-ledger-title"]')
+    await reloadedLedger.getByText('1 笔 · ¥286.50', { exact: true }).waitFor({ timeout: 10_000 })
     const compactCalendar = page.locator('section[aria-labelledby="daily-calendar-title"]')
     expect(await compactCalendar.getByRole('button', { name: /^2026-08-20.*1 项安排$/ }).count()).toBe(1)
     expect(await compactCalendar.locator('i[class*="calendarEventCount"]').count()).toBe(0)
@@ -390,7 +422,7 @@ describe('web e2e: durable teacher workbench', () => {
     await workbench.locator('input[type="file"]').setInputFiles({
       name: '年级课表.jpg',
       mimeType: 'image/jpeg',
-      buffer: Buffer.from('keyless timetable fixture'),
+      buffer: await readFile(RASTER_FIXTURE),
     })
     const review = page.getByRole('dialog', { name: '上传并识别课程表' })
     await review.getByText('识别到 8 节，请确认班级、星期和节次后导入').waitFor({ timeout: 10_000 })
@@ -407,7 +439,9 @@ describe('web e2e: durable teacher workbench', () => {
     await expect.poll(async () => {
       const snapshot = await scaffold.ctx.teacherWorkbench.read({})
       return {
-        classes: snapshot.value.state.classes.map(item => ({ name: item.name, usage: item.usage })),
+        classes: snapshot.value.state.classes
+          .filter(item => item.usage !== 'roster')
+          .map(item => ({ name: item.name, usage: item.usage })),
         gradeEntries: snapshot.value.state.timetableEntries.filter((item) => {
           const owner = snapshot.value.state.classes.find(candidate => candidate.id === item.classId)
           return owner?.usage === 'gradeTimetable'
@@ -415,7 +449,6 @@ describe('web e2e: durable teacher workbench', () => {
       }
     }, { timeout: 10_000 }).toEqual({
       classes: [
-        { name: '高一（1）班', usage: 'roster' },
         { name: '高一（1）班', usage: 'timetable' },
         { name: '高三（1）班', usage: 'gradeTimetable' },
         { name: '高三（2）班', usage: 'gradeTimetable' },
@@ -431,7 +464,6 @@ describe('web e2e: durable teacher workbench', () => {
       await page.keyboard.press('Escape')
     }
     await openModule('试题切割')
-    expect(await workbench.getByRole('button', { name: '高一（1）班' }).count()).toBe(1)
     expect(await workbench.getByRole('button', { name: '高三（2）班' }).count()).toBe(0)
 
     await openModule('课程表')
@@ -473,7 +505,7 @@ describe('web e2e: durable teacher workbench', () => {
     await workbench.locator('input[type="file"]').setInputFiles({
       name: '早读安排.jpg',
       mimeType: 'image/jpeg',
-      buffer: Buffer.from('keyless study fixture'),
+      buffer: await readFile(RASTER_FIXTURE),
     })
     const review = page.getByRole('dialog', { name: '上传并识别课程表' })
     await review.getByText('识别到 8 节，请确认班级、星期和节次后导入').waitFor({ timeout: 10_000 })

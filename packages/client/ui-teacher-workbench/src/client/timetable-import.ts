@@ -102,6 +102,7 @@ export function parseTimetable(
   markdown: string,
   defaults: TimetableImportDefaults,
 ): TimetableImportDraft[] {
+  const documents = detailedOcrDocuments(markdown)
   const rows = extractTableRows(markdown)
   const documentText = normalizeText(markdown)
   const documentClass = extractDocumentClass(markdown)
@@ -112,8 +113,8 @@ export function parseTimetable(
     teacherName: documentClass?.className ? '' : defaults.teacherName,
   }
   const tableEntries = [
-    ...parseStudyClassTables(markdown, context),
-    ...parseMatrixTable(rows, context),
+    ...documents.flatMap(document => parseStudyClassTables(document, context)),
+    ...documents.flatMap(document => parseMatrixTable(extractTableRows(document), context)),
   ]
   const recordEntries = tableEntries.length > 0 ? [] : parseRecordTable(rows, context)
   const blockEntries = tableEntries.length + recordEntries.length > 0
@@ -138,6 +139,18 @@ export function parseTimetable(
     selected: isPlausibleClassName(item.className) && item.subject !== '',
     ...item,
   }))
+}
+
+function detailedOcrDocuments(markdown: string): string[] {
+  const marker = /^## OCR pass: (.+)$/gmu
+  const matches = [...markdown.matchAll(marker)]
+  if (matches.length === 0) return [markdown]
+  const documents = matches.map((match, index) => ({
+    label: match[1]?.trim() ?? '',
+    body: markdown.slice(match.index + match[0].length, matches[index + 1]?.index ?? markdown.length),
+  }))
+  const detailed = documents.filter(document => document.label !== 'enhanced whole image')
+  return (detailed.length > 0 ? detailed : documents).map(document => document.body)
 }
 
 /**
@@ -221,7 +234,7 @@ function parseMatrixTable(
 ): ParsedTimetableEntry[] {
   const entries: ParsedTimetableEntry[] = []
   const headerIndexes = rows.flatMap((row, index) => (
-    row.filter(cell => parseWeekday(cell) !== undefined).length >= 2 ? [index] : []
+    weekdayHeaderColumns(row, rows[index + 1]).length >= 2 ? [index] : []
   ))
   headerIndexes.forEach((headerIndex, blockIndex) => {
     const endIndex = headerIndexes[blockIndex + 1] ?? rows.length
@@ -235,10 +248,8 @@ function parseMatrixBlock(
   defaults: TimetableImportDefaults,
 ): ParsedTimetableEntry[] {
   const header = rows[0] ?? []
-  const weekdayColumns = header.flatMap((cell, index) => {
-    const weekday = parseWeekday(cell)
-    return weekday === undefined ? [] : [{ index, weekday }]
-  })
+  const possibleSubheader = rows[1] ?? []
+  const weekdayColumns = weekdayHeaderColumns(header, possibleSubheader)
   if (weekdayColumns.length < 2) return []
   const weekdayIndexes = new Set(weekdayColumns.map(column => column.index))
   const classColumn = header.findIndex(cell => /(?:班级|班别)/u.test(cleanLabel(cell)))
@@ -255,23 +266,23 @@ function parseMatrixBlock(
     ), candidates[0] ?? -1)
   }
   if (slotColumn < 0) return []
-  const possibleSubheader = rows[1] ?? []
   const hasClassSubheader = weekdayColumns
     .filter(column => parseClassHeader(possibleSubheader[column.index]) !== undefined)
     .length >= 2
-  const bodyRows = rows.slice(hasClassSubheader ? 2 : 1)
+  const rawBodyRows = rows.slice(hasClassSubheader ? 2 : 1)
   const courseColumns = timetableColumns(
     weekdayColumns,
     hasClassSubheader ? possibleSubheader : undefined,
-    bodyRows,
+    rawBodyRows,
     slotColumn,
     defaults,
   )
   if (courseColumns.length === 0) return []
+  const bodyRows = defaults.kind === 'lesson'
+    ? mergeSplitCourseRows(rawBodyRows, slotColumn, courseColumns.map(column => column.index))
+    : rawBodyRows
   const entries: ParsedTimetableEntry[] = []
   const studyPeriods = { morningStudy: 0, eveningStudy: 0 }
-  let periodOffset = 0
-  let priorRawPeriod = 0
   let highestPeriod = 0
   for (const row of bodyRows) {
     if (row.filter(cell => parseWeekday(cell) !== undefined).length >= 2) continue
@@ -283,13 +294,14 @@ function parseMatrixBlock(
       studyPeriods[kind] += 1
       period = studyPeriods[kind]
     }
+    if (period === undefined && kind === 'lesson' && rowHasCourseCells(row, courseColumns.map(column => column.index))) {
+      period = highestPeriod + 1
+    }
     if (period === undefined) continue
     if (rawPeriod !== undefined && kind === 'lesson') {
-      if (priorRawPeriod > 0 && rawPeriod < priorRawPeriod) periodOffset = highestPeriod
-      period = periodOffset + rawPeriod
-      priorRawPeriod = rawPeriod
-      highestPeriod = Math.max(highestPeriod, period)
+      period = rawPeriod > highestPeriod ? rawPeriod : highestPeriod + 1
     }
+    if (kind === 'lesson') highestPeriod = Math.max(highestPeriod, period)
     const times = parseTimes(slotText)
     const rowClass = extractClass(row[classColumn] ?? '')
     const rawClassName = cleanValue(row[classColumn] ?? '')
@@ -317,6 +329,108 @@ function parseMatrixBlock(
     }
   }
   return entries
+}
+
+function weekdayHeaderColumns(
+  header: readonly string[],
+  subheader: readonly string[] | undefined,
+): Array<{ readonly index: number; readonly weekday: TeacherWeekday }> {
+  const direct = new Map<number, TeacherWeekday>()
+  header.forEach((cell, index) => {
+    const weekday = parseWeekday(cell)
+    if (weekday !== undefined) direct.set(index, weekday)
+  })
+  if (subheader === undefined) return [...direct].map(([index, weekday]) => ({ index, weekday }))
+  for (const run of ascendingClassRuns(subheader)) {
+    const weekdays = new Set<TeacherWeekday>()
+    for (let index = run.start; index <= run.end; index += 1) {
+      const weekday = direct.get(index)
+      if (weekday !== undefined) weekdays.add(weekday)
+    }
+    const joined = parseWeekday(header.slice(run.start, run.end + 1).join(''))
+    if (joined !== undefined) weekdays.add(joined)
+    if (weekdays.size !== 1) continue
+    const [weekday] = weekdays
+    if (weekday === undefined) continue
+    for (let index = run.start; index <= run.end; index += 1) direct.set(index, weekday)
+  }
+  return [...direct].sort(([left], [right]) => left - right).map(([index, weekday]) => ({ index, weekday }))
+}
+
+function ascendingClassRuns(row: readonly string[]): Array<{ readonly start: number; readonly end: number }> {
+  const runs: Array<{ start: number; end: number }> = []
+  let start = -1
+  let prior = 0
+  row.forEach((cell, index) => {
+    const ordinal = parseClassHeader(cell)?.ordinal
+    if (ordinal === 1) {
+      if (start >= 0 && index - start >= 2) runs.push({ start, end: index - 1 })
+      start = index
+      prior = 1
+    } else if (start >= 0 && ordinal === prior + 1) {
+      prior = ordinal
+    } else {
+      if (start >= 0 && index - start >= 2) runs.push({ start, end: index - 1 })
+      start = -1
+      prior = 0
+    }
+  })
+  if (start >= 0 && row.length - start >= 2) runs.push({ start, end: row.length - 1 })
+  return runs
+}
+
+function mergeSplitCourseRows(
+  rows: readonly (readonly string[])[],
+  slotColumn: number,
+  courseColumns: readonly number[],
+): string[][] {
+  const merged: string[][] = []
+  for (let index = 0; index < rows.length; index += 1) {
+    const row = [...(rows[index] ?? [])]
+    const next = rows[index + 1]
+    const rowPeriod = parsePeriod(row[slotColumn] ?? '')
+    const nextPeriod = next === undefined ? undefined : parsePeriod(next[slotColumn] ?? '')
+    const subjectCells = courseColumns.filter(column => looksLikeCourse(row[column] ?? '')).length
+    const populatedCells = courseColumns.filter(column => cleanValue(row[column] ?? '') !== '').length
+    const companionCells = next === undefined
+      ? 0
+      : courseColumns.filter(column => cleanValue(next[column] ?? '') !== '').length
+    const companionPeople = next === undefined
+      ? 0
+      : courseColumns.filter(column => looksLikePerson(next[column] ?? '')).length
+    const threshold = Math.max(2, Math.ceil(courseColumns.length / 2))
+    const canMerge = next !== undefined
+      && (subjectCells >= threshold || (populatedCells >= threshold && companionPeople >= threshold))
+      && companionCells >= threshold
+      && (nextPeriod === undefined || nextPeriod === rowPeriod)
+    if (!canMerge) {
+      merged.push(row)
+      continue
+    }
+    for (const column of courseColumns) {
+      const subject = cleanValue(row[column] ?? '')
+      const companion = cleanValue(next[column] ?? '')
+      row[column] = subject === companion ? subject : `${subject}${companion}`
+    }
+    merged.push(row)
+    index += 1
+  }
+  return merged
+}
+
+function rowHasCourseCells(row: readonly string[], columns: readonly number[]): boolean {
+  return columns.filter(column => looksLikeCourse(row[column] ?? '')).length >= Math.max(2, Math.ceil(columns.length / 2))
+}
+
+function looksLikeCourse(value: string): boolean {
+  const text = cleanValue(value).replace(/^目习/u, '自习')
+  return COMPACT_SUBJECTS.some(subject => text.startsWith(subject))
+    || /(?:自习|班会|答疑|阅读|实验|实践|活动|选修|复习|辅导|训练|拓展|社团|作业)/u.test(text)
+}
+
+function looksLikePerson(value: string): boolean {
+  const text = cleanValue(value)
+  return !looksLikeCourse(text) && /^[\p{Script=Han}·]{2,5}$/u.test(text)
 }
 
 function periodColumnScore(rows: readonly (readonly string[])[], column: number): number {
@@ -482,7 +596,7 @@ function parseCourseCell(
   value: string,
   defaults: Pick<TimetableImportDefaults, 'className' | 'grade' | 'teacherName'>,
 ): Pick<ParsedTimetableEntry, 'className' | 'grade' | 'subject' | 'teacherName' | 'location'> | null {
-  const text = normalizeCell(value)
+  const text = normalizeCell(value).replace(/^目习/u, '自习')
   if (text === '' || /^(?:[-—/]|无|空)$/u.test(text)) return null
   const explicitSubject = labelledValue(text, /(?:课程|科目|学科|内容)/u)
   const explicitTeacher = labelledValue(text, /(?:任课教师|教师|老师)/u)
@@ -562,8 +676,9 @@ function studySubject(value: string, kind: TeacherTimetableEntryKind): string {
 }
 
 function parseWeekday(value: string): TeacherWeekday | undefined {
-  const match = cleanValue(value).match(/(?:星期|周)\s*([一二三四五六日天])/u)
-    ?? cleanValue(value).match(/^([一二三四五六日天])$/u)
+  const normalized = cleanLabel(value)
+  const match = normalized.match(/(?:星期|周)([一二三四五六日天])/u)
+    ?? normalized.match(/^([一二三四五六日天])$/u)
   if (match === null) return undefined
   return WEEKDAY_LABELS[match[1] ?? '']
 }

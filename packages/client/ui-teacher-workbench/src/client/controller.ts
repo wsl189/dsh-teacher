@@ -21,6 +21,10 @@ import type {
   TeacherLessonResource,
   TeacherLessonResourceCategory,
   TeacherLessonResourceId,
+  TeacherLedgerCategory,
+  TeacherLedgerCategoryId,
+  TeacherLedgerEntry,
+  TeacherLedgerEntryId,
   TeacherRecord,
   TeacherRecordId,
   TeacherRecordStatus,
@@ -262,6 +266,28 @@ export interface TeacherQuickNoteInput {
   content: string
 }
 
+/** Ledger-category form data. */
+export interface TeacherLedgerCategoryInput {
+  /** Existing identity when editing. */
+  id?: TeacherLedgerCategoryId
+  /** Category display name. */
+  name: string
+}
+
+/** Ledger-entry form data. */
+export interface TeacherLedgerEntryInput {
+  /** Existing identity when editing. */
+  id?: TeacherLedgerEntryId
+  /** Owning ledger category. */
+  categoryId: TeacherLedgerCategoryId
+  /** Expense description. */
+  description: string
+  /** Non-negative CNY amount in integer cents. */
+  amountCents: number
+  /** Required local ISO date and time. */
+  occurredAt: string
+}
+
 /** Calendar-item form data. */
 export interface TeacherCalendarItemInput {
   /** Existing identity when editing. */
@@ -484,6 +510,74 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
     return this.mutate(state => ({
       ...state,
       quickNotes: state.quickNotes.filter(item => item.id !== id),
+    }))
+  }
+
+  /**
+   * Save a new or existing ledger category.
+   * @param input - category name and optional identity.
+   * @returns the settled persistence result.
+   */
+  saveLedgerCategory(input: TeacherLedgerCategoryInput): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const existing = input.id === undefined
+        ? undefined
+        : state.ledgerCategories.find(item => item.id === input.id)
+      const item: TeacherLedgerCategory = {
+        id: input.id ?? this.id() as TeacherLedgerCategoryId,
+        name: input.name.trim(),
+        createdAt: existing?.createdAt ?? this.now(),
+      }
+      return { ...state, ledgerCategories: upsert(state.ledgerCategories, item) }
+    })
+  }
+
+  /**
+   * Delete one ledger category and every entry it owns.
+   * @param id - category identity.
+   * @returns the settled persistence result.
+   */
+  deleteLedgerCategory(id: TeacherLedgerCategoryId): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate(state => ({
+      ...state,
+      ledgerCategories: state.ledgerCategories.filter(item => item.id !== id),
+      ledgerEntries: state.ledgerEntries.filter(item => item.categoryId !== id),
+    }))
+  }
+
+  /**
+   * Save a new or existing ledger entry.
+   * @param input - category, description, amount, time, and optional identity.
+   * @returns the settled persistence result.
+   */
+  saveLedgerEntry(input: TeacherLedgerEntryInput): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const existing = input.id === undefined
+        ? undefined
+        : state.ledgerEntries.find(item => item.id === input.id)
+      const now = this.now()
+      const item: TeacherLedgerEntry = {
+        id: input.id ?? this.id() as TeacherLedgerEntryId,
+        categoryId: input.categoryId,
+        description: input.description.trim(),
+        amountCents: input.amountCents,
+        occurredAt: input.occurredAt,
+        createdAt: existing?.createdAt ?? now,
+        updatedAt: now,
+      }
+      return { ...state, ledgerEntries: upsert(state.ledgerEntries, item) }
+    })
+  }
+
+  /**
+   * Delete one ledger entry.
+   * @param id - entry identity.
+   * @returns the settled persistence result.
+   */
+  deleteLedgerEntry(id: TeacherLedgerEntryId): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate(state => ({
+      ...state,
+      ledgerEntries: state.ledgerEntries.filter(item => item.id !== id),
     }))
   }
 

@@ -16,6 +16,7 @@ import {
 } from '@deepseek-ai/dsh-ocr'
 import z from '@deepseek-ai/schemastery'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import sharp from 'sharp'
 import { z as validation } from 'zod'
 
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:8000/file_parse'
@@ -142,16 +143,22 @@ export class MinerUProvider implements OcrProvider {
   async extract(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractedDocument> {
     const config = this.source()
     const decoded = decodeRequest(request, config.maxFileBytes)
-    const parsed = await this.callMinerU(config, createForm(request, decoded, config, 'markdown'), signal)
-    const validated = mineruResponseSchema.safeParse(parsed)
-    if (!validated.success) throw new OcrError('MinerU response fields are invalid', 'invalid-response')
-    const markdown = Object.values(validated.data.results)
-      .map(result => result.md_content ?? '')
-      .find(content => content.trim() !== '')
-    if (markdown === undefined) throw new OcrError('MinerU returned no document content', 'empty-result')
-    const completeMarkdown = request.includeDiscardedText === true
-      ? prependDiscardedText(markdown, validated.data.results)
-      : markdown
+    const imageDetail = request.enhanceImageDetail === true && request.mediaType.startsWith('image/')
+    const passes = imageDetail ? await rasterPasses(decoded.bytes) : [{ label: 'whole document', bytes: decoded.bytes }]
+    const extracted: string[] = []
+    for (const [index, pass] of passes.entries()) {
+      const passRequest = imageDetail
+        ? { ...request, name: `${request.name}.detail-${String(index + 1)}.png`, mediaType: 'image/png' }
+        : request
+      const parsed = await this.callMinerU(config, createForm(passRequest, {
+        bytes: pass.bytes,
+        uploadName: imageDetail ? passRequest.name : decoded.uploadName,
+      }, config, 'markdown'), signal)
+      extracted.push(`## OCR pass: ${pass.label}\n\n${markdownFromResponse(parsed, request.includeDiscardedText === true)}`)
+    }
+    const completeMarkdown = imageDetail
+      ? extracted.join('\n\n')
+      : extracted[0]?.replace(/^## OCR pass: whole document\n\n/u, '') ?? ''
     const truncated = completeMarkdown.length > config.maxOutputCharacters
     return {
       name: request.name,
@@ -275,6 +282,71 @@ function createForm(
 }
 
 type MinerUMarkdownResults = validation.infer<typeof mineruResponseSchema>['results']
+
+interface RasterPass {
+  readonly label: string
+  readonly bytes: Uint8Array
+}
+
+const ENHANCED_IMAGE_LONG_EDGE = 3_200
+const ENHANCED_IMAGE_SCALE = 2
+const LANDSCAPE_COLUMNS = 3
+const LANDSCAPE_ROWS = 2
+const PORTRAIT_COLUMNS = 2
+const PORTRAIT_ROWS = 3
+const REGION_OVERLAP_RATIO = 0.06
+
+async function rasterPasses(bytes: Uint8Array): Promise<RasterPass[]> {
+  const metadata = await sharp(bytes, { failOn: 'error' }).metadata()
+  const { width, height } = metadata
+  const scale = Math.min(ENHANCED_IMAGE_SCALE, ENHANCED_IMAGE_LONG_EDGE / Math.max(width, height))
+  const whole = await sharp(bytes).resize({
+    width: Math.max(width, Math.round(width * scale)),
+    height: Math.max(height, Math.round(height * scale)),
+    fit: 'fill',
+  }).png().toBuffer()
+  const columns = width >= height ? LANDSCAPE_COLUMNS : PORTRAIT_COLUMNS
+  const rows = width >= height ? LANDSCAPE_ROWS : PORTRAIT_ROWS
+  const regions: RasterPass[] = []
+  for (let row = 0; row < rows; row += 1) {
+    for (let column = 0; column < columns; column += 1) {
+      const nominalLeft = Math.floor(column * width / columns)
+      const nominalTop = Math.floor(row * height / rows)
+      const nominalRight = Math.ceil((column + 1) * width / columns)
+      const nominalBottom = Math.ceil((row + 1) * height / rows)
+      const overlapX = Math.round((nominalRight - nominalLeft) * REGION_OVERLAP_RATIO)
+      const overlapY = Math.round((nominalBottom - nominalTop) * REGION_OVERLAP_RATIO)
+      const left = Math.max(0, nominalLeft - overlapX)
+      const top = Math.max(0, nominalTop - overlapY)
+      const right = Math.min(width, nominalRight + overlapX)
+      const bottom = Math.min(height, nominalBottom + overlapY)
+      const region = await sharp(bytes)
+        .extract({ left, top, width: right - left, height: bottom - top })
+        .resize({
+          width: (right - left) * ENHANCED_IMAGE_SCALE,
+          height: (bottom - top) * ENHANCED_IMAGE_SCALE,
+          fit: 'fill',
+        })
+        .png()
+        .toBuffer()
+      regions.push({
+        label: `overlapping visual region ${String(regions.length + 1)}/${String(columns * rows)}; normalized bounds ${left / width},${top / height},${right / width},${bottom / height}`,
+        bytes: region,
+      })
+    }
+  }
+  return [{ label: 'enhanced whole image', bytes: whole }, ...regions]
+}
+
+function markdownFromResponse(parsed: unknown, includeDiscardedText: boolean): string {
+  const validated = mineruResponseSchema.safeParse(parsed)
+  if (!validated.success) throw new OcrError('MinerU response fields are invalid', 'invalid-response')
+  const markdown = Object.values(validated.data.results)
+    .map(result => result.md_content ?? '')
+    .find(content => content.trim() !== '')
+  if (markdown === undefined) throw new OcrError('MinerU returned no document content', 'empty-result')
+  return includeDiscardedText ? prependDiscardedText(markdown, validated.data.results) : markdown
+}
 
 function prependDiscardedText(markdown: string, results: MinerUMarkdownResults): string {
   const encoded = Object.values(results)

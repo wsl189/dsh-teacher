@@ -92,6 +92,10 @@
         studentsRoot: !!js dshHomePath('teacher-workbench/students')
         maxQuestionImageBytes: 26214400
         maxQuestionBatchBytes: 314572800
+        maxTimetableSourceCharacters: 500000
+        maxTimetableEntries: 1000
+        timetableAgentTimeoutMs: 300000
+        timetableVisionAgentTimeoutMs: 35000
 
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download

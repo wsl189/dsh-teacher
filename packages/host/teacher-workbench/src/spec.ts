@@ -14,6 +14,8 @@ import type {
   TeacherDailyTodoId,
   TeacherExamId,
   TeacherLessonResourceId,
+  TeacherLedgerCategoryId,
+  TeacherLedgerEntryId,
   TeacherQuickNoteId,
   TeacherQuestionAssignmentId,
   TeacherQuestionBatchId,
@@ -168,6 +170,24 @@ export const teacherQuickNoteSchema = z.object({
   updatedAt: epochMilliseconds,
 })
 
+/** Runtime schema for one ledger category. */
+export const teacherLedgerCategorySchema = z.object({
+  id: identity<TeacherLedgerCategoryId>(),
+  name: text.trim().min(1).max(40),
+  createdAt: epochMilliseconds,
+})
+
+/** Runtime schema for one ledger entry. */
+export const teacherLedgerEntrySchema = z.object({
+  id: identity<TeacherLedgerEntryId>(),
+  categoryId: identity<TeacherLedgerCategoryId>(),
+  description: text.trim().min(1).max(500),
+  amountCents: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  occurredAt: optionalLocalDateTime.refine(value => value !== '', 'ledger time is required'),
+  createdAt: epochMilliseconds,
+  updatedAt: epochMilliseconds,
+})
+
 /** Runtime schema for one calendar item. */
 export const teacherCalendarItemSchema = z.object({
   id: identity<TeacherCalendarItemId>(),
@@ -246,6 +266,8 @@ export const teacherQuestionAssignmentSchema = z.object({
 export const teacherWorkbenchStateSchema = z.object({
   dailyTodos: z.array(teacherDailyTodoSchema),
   quickNotes: z.array(teacherQuickNoteSchema),
+  ledgerCategories: z.array(teacherLedgerCategorySchema),
+  ledgerEntries: z.array(teacherLedgerEntrySchema),
   calendarItems: z.array(teacherCalendarItemSchema),
   timetableEntries: z.array(teacherTimetableEntrySchema),
   classes: z.array(teacherClassSchema),
@@ -260,6 +282,8 @@ export const teacherWorkbenchStateSchema = z.object({
 }).superRefine((state, ctx) => {
   uniqueIds(state.dailyTodos, 'dailyTodos', ctx)
   uniqueIds(state.quickNotes, 'quickNotes', ctx)
+  const ledgerCategoryIds = uniqueIds(state.ledgerCategories, 'ledgerCategories', ctx)
+  uniqueIds(state.ledgerEntries, 'ledgerEntries', ctx)
   uniqueIds(state.calendarItems, 'calendarItems', ctx)
   uniqueIds(state.timetableEntries, 'timetableEntries', ctx)
   uniqueIds(state.classes, 'classes', ctx)
@@ -279,6 +303,16 @@ export const teacherWorkbenchStateSchema = z.object({
     })
   })
   uniqueIds(state.questionAssignments, 'questionAssignments', ctx)
+
+  const ledgerCategoryNames = new Set<string>()
+  state.ledgerCategories.forEach((category, index) => {
+    const key = category.name.normalize('NFKC').toLocaleLowerCase()
+    if (ledgerCategoryNames.has(key)) issue(ctx, ['ledgerCategories', index, 'name'], 'duplicate ledger category')
+    ledgerCategoryNames.add(key)
+  })
+  state.ledgerEntries.forEach((entry, index) => {
+    if (!ledgerCategoryIds.has(entry.categoryId)) issue(ctx, ['ledgerEntries', index, 'categoryId'], 'unknown ledger category')
+  })
 
   state.students.forEach((student, index) => {
     const owner = classesById.get(student.classId)
@@ -362,6 +396,12 @@ export const teacherWorkbenchDocumentSchema = z.object({
 export const INITIAL_TEACHER_WORKBENCH_STATE: TeacherWorkbenchState = Object.freeze({
   dailyTodos: Object.freeze([]),
   quickNotes: Object.freeze([]),
+  ledgerCategories: Object.freeze([
+    ledgerCategory('builtin-ledger-insurance', '保险保费'),
+    ledgerCategory('builtin-ledger-utilities', '水电燃气'),
+    ledgerCategory('builtin-ledger-other', '其他账目'),
+  ]),
+  ledgerEntries: Object.freeze([]),
   calendarItems: Object.freeze([]),
   timetableEntries: Object.freeze([]),
   classes: Object.freeze([]),
@@ -395,13 +435,17 @@ export const INITIAL_TEACHER_WORKBENCH_DOCUMENT: TeacherWorkbenchDocument = Obje
 /** Durable singleton owned by the workbench service. */
 export const teacherWorkbenchDomainSpec = defineDomain({
   name: 'teacher_workbench',
-  version: 6,
+  version: 7,
   global: {
     schema: teacherWorkbenchDocumentSchema,
     initial: INITIAL_TEACHER_WORKBENCH_DOCUMENT,
   },
   tables: {},
 })
+
+function ledgerCategory(id: string, name: string) {
+  return Object.freeze({ id: id as TeacherLedgerCategoryId, name, createdAt: 0 })
+}
 
 function resource(
   id: string,

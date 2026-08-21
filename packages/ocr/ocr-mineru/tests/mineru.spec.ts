@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OcrError } from '@deepseek-ai/dsh-ocr'
+import sharp from 'sharp'
 import { Config as ConfigSchema, MinerUProvider, type Config } from '../src/index.ts'
 
 const config = (overrides: Partial<Config> = {}): Config => ({
@@ -74,6 +75,27 @@ describe('MinerUProvider', () => {
       markdown: '高三年\n\n<table><tr><td>第一节</td></tr></table>',
       truncated: false,
     })
+  })
+
+  it('cross-checks raster detail with one enhanced whole image and six overlapping regions', async () => {
+    const bytes = await sharp({
+      create: { width: 60, height: 30, channels: 3, background: '#ffffff' },
+    }).png().toBuffer()
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData
+      const file = form.get('files') as File
+      expect(file.name).toMatch(/\.detail-\d+\.png$/u)
+      return Response.json({ results: { timetable: { md_content: `content-${String(fetch.mock.calls.length)}` } } })
+    })
+    const provider = new MinerUProvider(config({ maxFileBytes: 10_000, maxOutputCharacters: 10_000 }), fetch)
+
+    const result = await provider.extract(request({
+      contentBase64: bytes.toString('base64'),
+      enhanceImageDetail: true,
+    }))
+    expect(result.markdown).toContain('## OCR pass: enhanced whole image')
+    expect(result.truncated).toBe(false)
+    expect(fetch).toHaveBeenCalledTimes(7)
   })
 
   it('requests middle JSON and normalizes line and image coordinates', async () => {

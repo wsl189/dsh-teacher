@@ -4,6 +4,7 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Opaque class identity. */
 export type TeacherClassId = Branded<'TeacherClassId'>
@@ -21,6 +22,10 @@ export type TeacherExamId = Branded<'TeacherExamId'>
 export type TeacherDailyTodoId = Branded<'TeacherDailyTodoId'>
 /** Opaque quick-note identity. */
 export type TeacherQuickNoteId = Branded<'TeacherQuickNoteId'>
+/** Opaque ledger-category identity. */
+export type TeacherLedgerCategoryId = Branded<'TeacherLedgerCategoryId'>
+/** Opaque ledger-entry identity. */
+export type TeacherLedgerEntryId = Branded<'TeacherLedgerEntryId'>
 /** Opaque calendar-item identity. */
 export type TeacherCalendarItemId = Branded<'TeacherCalendarItemId'>
 /** Opaque timetable-entry identity. */
@@ -214,6 +219,34 @@ export interface TeacherQuickNote {
   readonly updatedAt: number
 }
 
+/** One teacher-defined grouping for daily ledger entries. */
+export interface TeacherLedgerCategory {
+  /** Stable identity. */
+  readonly id: TeacherLedgerCategoryId
+  /** Teacher-facing category name. */
+  readonly name: string
+  /** Creation time in Unix epoch milliseconds. */
+  readonly createdAt: number
+}
+
+/** One expense recorded below a teacher-defined ledger category. */
+export interface TeacherLedgerEntry {
+  /** Stable identity. */
+  readonly id: TeacherLedgerEntryId
+  /** Category that owns this entry. */
+  readonly categoryId: TeacherLedgerCategoryId
+  /** Teacher-authored expense description. */
+  readonly description: string
+  /** Non-negative CNY amount stored as integer cents. */
+  readonly amountCents: number
+  /** Local ISO date and time chosen by the teacher. */
+  readonly occurredAt: string
+  /** Creation time in Unix epoch milliseconds. */
+  readonly createdAt: number
+  /** Last edit time in Unix epoch milliseconds. */
+  readonly updatedAt: number
+}
+
 /** One teacher-authored item attached to a calendar date. */
 export interface TeacherCalendarItem {
   /** Stable identity. */
@@ -347,6 +380,10 @@ export interface TeacherWorkbenchState {
   readonly dailyTodos: readonly TeacherDailyTodo[]
   /** Quick notes in creation order. */
   readonly quickNotes: readonly TeacherQuickNote[]
+  /** Ledger categories in creation order. */
+  readonly ledgerCategories: readonly TeacherLedgerCategory[]
+  /** Ledger entries in creation order. */
+  readonly ledgerEntries: readonly TeacherLedgerEntry[]
   /** Teacher-authored calendar items. */
   readonly calendarItems: readonly TeacherCalendarItem[]
   /** Timetable entries grouped by their owning class usage. */
@@ -426,6 +463,103 @@ export interface TeacherWorkbenchRejected {
 export type TeacherWorkbenchReadResult = TeacherWorkbenchSuccess
 /** Compare-and-set write result. */
 export type TeacherWorkbenchWriteResult = TeacherWorkbenchSuccess | TeacherWorkbenchRejected
+
+/** Destination selected before timetable extraction starts. */
+export type TeacherTimetableNormalizeTarget = 'class' | 'grade' | 'study'
+
+/** Existing timetable context supplied to the normalization agent. */
+export interface TeacherTimetableNormalizeDefaults {
+  /** Class selected in the current timetable view, when one applies. */
+  readonly className: string
+  /** Classes already configured for the selected grade. */
+  readonly classNames: readonly string[]
+  /** Grade selected in the current timetable view. */
+  readonly grade: string
+  /** Entry family implied by the current timetable view. */
+  readonly kind: TeacherTimetableEntryKind
+  /** Timetable destination whose content rules the agent must follow. */
+  readonly target: TeacherTimetableNormalizeTarget
+  /** Teacher name configured for the workbench. */
+  readonly teacherName: string
+}
+
+/** Normalize one OCR document through a one-shot structured-output agent. */
+export interface TeacherTimetableNormalizeRequest {
+  /** Live root session that owns the short-lived child agent. */
+  readonly parentSessionId: SessionId
+  /** Uploaded file name used only as task context. */
+  readonly fileName: string
+  /** MinerU Markdown, including discarded text when available. */
+  readonly markdown: string
+  /** Original raster source offered directly when the configured tool model accepts image input. */
+  readonly image?: {
+    /** Browser-declared raster media type, verified by the attachment service. */
+    readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
+    /** Canonical base64-encoded source bytes. */
+    readonly contentBase64: string
+  }
+  /** Current workbench defaults and known class names. */
+  readonly defaults: TeacherTimetableNormalizeDefaults
+}
+
+/** One normalized row accepted by the timetable import review. */
+export interface TeacherTimetableNormalizedEntry {
+  /** Class display name. */
+  readonly className: string
+  /** Grade display name. */
+  readonly grade: string
+  /** Entry family. */
+  readonly kind: TeacherTimetableEntryKind
+  /** Monday-based weekday. */
+  readonly weekday: TeacherWeekday
+  /** One-based lesson period. */
+  readonly period: number
+  /** Optional local start time in HH:mm form. */
+  readonly startTime: string
+  /** Optional local end time in HH:mm form. */
+  readonly endTime: string
+  /** Course or study-subject name. */
+  readonly subject: string
+  /** Optional teacher name. */
+  readonly teacherName: string
+  /** Optional classroom or location. */
+  readonly location: string
+}
+
+/** Stable failure codes for timetable normalization. */
+export type TeacherTimetableNormalizeErrorCode =
+  | 'invalid-request'
+  | 'session-unavailable'
+  | 'tool-model-unavailable'
+  | 'vision-unavailable'
+  | 'source-too-large'
+  | 'timed-out'
+  | 'model-failed'
+  | 'invalid-output'
+
+/** Rejected timetable normalization. */
+export interface TeacherTimetableNormalizeRejected {
+  /** Failure discriminant. */
+  readonly ok: false
+  /** Stable failure and concise diagnostic. */
+  readonly error: {
+    readonly code: TeacherTimetableNormalizeErrorCode
+    readonly message: string
+  }
+}
+
+/** Successful timetable normalization. */
+export interface TeacherTimetableNormalizeSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Rows ready for editable browser review. */
+  readonly value: {
+    readonly items: readonly TeacherTimetableNormalizedEntry[]
+  }
+}
+
+/** Timetable normalization result. */
+export type TeacherTimetableNormalizeResult = TeacherTimetableNormalizeSuccess | TeacherTimetableNormalizeRejected
 
 /** Stable weather-provider failure codes presented by the workbench UI. */
 export type TeacherWeatherErrorCode = 'location-not-found' | 'provider-unavailable' | 'invalid-response'

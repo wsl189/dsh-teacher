@@ -66,6 +66,20 @@ describe('AgentDefaultModelConfig', () => {
     await bench.ctx.fiber.dispose()
   })
 
+  it('uses the configured tool model and otherwise follows the default model', async () => {
+    const bench = await boot()
+    expect(bench.defaultModel.currentToolSelection()).toEqual({
+      provider: 'deepseek-official', model: 'deepseek-v4-flash',
+    })
+    await bench.settingsFiber.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      toolProvider: 'ollama', toolModel: 'qwen3:8b',
+    })
+    expect(bench.defaultModel.currentToolSelection()).toEqual({ provider: 'ollama', model: 'qwen3:8b' })
+    await bench.defaultModel.saveSelection({ provider: 'acme-gateway', model: 'acme-large' })
+    expect(bench.defaultModel.currentToolSelection()).toEqual({ provider: 'ollama', model: 'qwen3:8b' })
+    await bench.ctx.fiber.dispose()
+  })
+
   it('layers a hand-written partial section over the entry', async () => {
     const bench = await boot()
     await bench.settingsFiber.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {

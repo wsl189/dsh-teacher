@@ -5,6 +5,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type {
   TeacherCalendarItemId,
   TeacherDailyTodoId,
+  TeacherLedgerCategoryId,
+  TeacherLedgerEntryId,
   TeacherQuickNoteId,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
@@ -14,6 +16,7 @@ import { buildTeacherCalendarMonth } from '../src/client/calendar-data.ts'
 import { DailyManagement } from '../src/client/DailyManagement.tsx'
 import { DailyTodoPanel } from '../src/client/DailyTodoPanel.tsx'
 import { QuickNotesPanel } from '../src/client/QuickNotesPanel.tsx'
+import { LedgerPanel } from '../src/client/LedgerPanel.tsx'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -26,7 +29,7 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 })
 
 const emptyState = (): TeacherWorkbenchState => ({
-  dailyTodos: [], quickNotes: [], calendarItems: [], timetableEntries: [],
+  dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
   questionBatches: [], questionFolders: [], questionAssignments: [],
 })
@@ -36,8 +39,11 @@ function commands(): TeacherWorkbenchCommands {
   return {
     saveDailyTodo: action(), toggleDailyTodo: action(), deleteDailyTodo: action(),
     saveQuickNote: action(), deleteQuickNote: action(),
+    saveLedgerCategory: action(), deleteLedgerCategory: action(),
+    saveLedgerEntry: action(), deleteLedgerEntry: action(),
     saveCalendarItem: action(), deleteCalendarItem: action(),
     extractDocument: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
+    normalizeTimetable: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     extractQuestionLayout: vi.fn(async () => ({ ok: false, error: { code: 'provider-unavailable', message: 'unavailable' } } as const)),
     importCalendarItems: action(),
     saveTimetableEntry: action(),
@@ -341,6 +347,102 @@ describe('quick notes panel', () => {
   })
 })
 
+describe('ledger panel', () => {
+  it('opens from the compact card and manages category entries with voice and time', async () => {
+    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    vi.stubGlobal('confirm', vi.fn(() => true))
+    const categoryId = 'ledger-category-a' as TeacherLedgerCategoryId
+    const entryId = 'ledger-entry-a' as TeacherLedgerEntryId
+    const state: TeacherWorkbenchState = {
+      ...emptyState(),
+      ledgerCategories: [{ id: categoryId, name: '水电燃气', createdAt: 1 }],
+      ledgerEntries: [{
+        id: entryId,
+        categoryId,
+        description: '七月电费',
+        amountCents: 8_880,
+        occurredAt: '2026-08-01T08:30',
+        createdAt: 1,
+        updatedAt: 1,
+      }],
+    }
+    const c = commands()
+    const expand = vi.fn()
+    const rendered = render(
+      <LedgerPanel
+        state={state}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={c}
+        expanded={false}
+        onExpand={expand}
+        onCollapse={vi.fn()}
+        t={t}
+      />,
+    )
+    expect(screen.getByText('¥88.80')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '打开账本' }))
+    expect(expand).toHaveBeenCalledOnce()
+
+    const collapse = vi.fn()
+    rendered.rerender(
+      <LedgerPanel
+        state={state}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={c}
+        expanded
+        onExpand={expand}
+        onCollapse={collapse}
+        t={t}
+      />,
+    )
+    const category = screen.getByRole('article', { name: '水电燃气' })
+    expect(within(category).getByTitle('发生时间').getAttribute('data-has-value')).toBe('false')
+    expect(within(category).getByLabelText<HTMLInputElement>('发生时间').value).toBe('')
+    expect(within(category).getByRole<HTMLButtonElement>('button', { name: '添加明细' }).disabled).toBe(true)
+    fireEvent.click(within(category).getByRole('button', { name: '开始语音输入' }))
+    act(() => { RecognitionMock.instances[0]!.emitFinal('八月水费') })
+    fireEvent.change(within(category).getByLabelText('金额（元）'), { target: { value: '36.50' } })
+    fireEvent.change(within(category).getByLabelText('发生时间'), { target: { value: '2026-08-20T19:30' } })
+    expect(within(category).getByTitle('发生时间: 2026-08-20 19:30').getAttribute('data-has-value')).toBe('true')
+    fireEvent.click(within(category).getByRole('button', { name: '添加明细' }))
+    await waitFor(() => {
+      expect(c.saveLedgerEntry).toHaveBeenCalledWith({
+        categoryId,
+        description: '八月水费',
+        amountCents: 3_650,
+        occurredAt: '2026-08-20T19:30',
+      })
+    })
+
+    fireEvent.click(within(category).getByText('七月电费'))
+    const editor = screen.getByRole('dialog', { name: '编辑账目' })
+    fireEvent.change(within(editor).getByLabelText('账目说明'), { target: { value: '七月电费调整' } })
+    fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.saveLedgerEntry).toHaveBeenLastCalledWith({
+        id: entryId,
+        categoryId,
+        description: '七月电费调整',
+        amountCents: 8_880,
+        occurredAt: '2026-08-01T08:30',
+      })
+    })
+
+    fireEvent.click(screen.getByRole('button', { name: '添加账本分类' }))
+    const categoryEditor = screen.getByRole('dialog', { name: '添加账本分类' })
+    fireEvent.change(within(categoryEditor).getByLabelText('分类名称'), { target: { value: '房屋费用' } })
+    fireEvent.click(within(categoryEditor).getByRole('button', { name: '保存' }))
+    await waitFor(() => { expect(c.saveLedgerCategory).toHaveBeenCalledWith({ name: '房屋费用' }) })
+
+    fireEvent.click(within(category).getByRole('button', { name: '删除明细' }))
+    expect(c.deleteLedgerEntry).toHaveBeenCalledWith(entryId)
+    fireEvent.click(within(category).getByRole('button', { name: '删除分类“水电燃气”' }))
+    expect(c.deleteLedgerCategory).toHaveBeenCalledWith(categoryId)
+    fireEvent.click(screen.getByRole('button', { name: '恢复日常管理布局' }))
+    expect(collapse).toHaveBeenCalledOnce()
+  })
+})
+
 describe('calendar panel', () => {
   it('shows lunar and agenda data and saves, edits, deletes, and completes dated items', async () => {
     const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
@@ -568,7 +670,8 @@ describe('daily management board', () => {
         t={t}
       />,
     )
-    fireEvent.click(screen.getByRole('button', { name: '放大板块' }))
+    const calendar = screen.getByRole('region', { name: /年\d+月/ })
+    fireEvent.click(within(calendar).getByRole('button', { name: '放大板块' }))
     expect(screen.getByRole('complementary', { name: '当日安排' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '恢复日常管理布局' }))
     expect(screen.queryByRole('complementary', { name: '当日安排' })).toBeNull()

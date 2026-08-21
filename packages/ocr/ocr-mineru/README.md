@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files to a deployment-controlled MinerU synchronous `/file_parse` endpoint. Ordinary extraction requests Markdown with formula and table recognition enabled. When `includeDiscardedText` is set, the same request also asks for `middle_json` and prepends unique discarded lines that are absent from the Markdown. Structured extraction requests MinerU `middle_json`, then normalizes page sizes, reading-order lines, content families, and bounding boxes for source-document cropping.
+This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files to a deployment-controlled MinerU synchronous `/file_parse` endpoint. Ordinary extraction requests Markdown with formula and table recognition enabled. When `includeDiscardedText` is set, the same request also asks for `middle_json` and prepends unique discarded lines that are absent from the Markdown. When a Consumer requests `enhanceImageDetail` for a raster image, the provider sequentially extracts one enhanced whole image and six overlapping coordinate-labelled regions, then returns every pass for downstream reconciliation. Structured extraction requests MinerU `middle_json`, then normalizes page sizes, reading-order lines, content families, and bounding boxes for source-document cropping.
 
 ## Configuration
 
@@ -27,7 +27,7 @@ This output is geometry, not a ready-made domain segmentation. The teacher workb
 
 ## Formats and Failures
 
-The provider accepts PDF, PNG, JPEG, WebP, BMP, TIFF, DOCX, PPTX, and XLSX. It rejects empty, malformed, unsupported, and oversized requests before network I/O. Network failures and timeouts return `provider-unavailable`; non-success HTTP responses, invalid JSON fields, oversized responses, and empty extraction output use stable OCR failure codes.
+The provider accepts PDF, PNG, JPEG, WebP, BMP, TIFF, DOCX, PPTX, and XLSX. Raster-detail enhancement applies only to image media types; PDF and Office formats retain their native document extraction. It rejects empty, malformed, unsupported, and oversized requests before network I/O. Network failures and timeouts return `provider-unavailable`; non-success HTTP responses, invalid JSON fields, oversized responses, and empty extraction output use stable OCR failure codes.
 
 The configured endpoint receives the complete uploaded document. Keep it on infrastructure whose data-retention and access policy is appropriate for the documents users select; the default loopback address does not transmit files to a third party.
 
@@ -42,6 +42,7 @@ No direct invalidation; the Consumer owns any request containing the returned Ma
 ## Known Limitations and Deferred Work
 
 - **Synchronous parsing only** - a document occupies one HTTP request until MinerU finishes; asynchronous job polling and progress are not exposed.
+- **Detail passes multiply image extraction work** - an explicitly enhanced raster image makes seven sequential MinerU requests, so the deployment deadline and capacity must cover the additional work.
 - **No legacy Office formats** - `.doc`, `.ppt`, and `.xls` are rejected; convert them to DOCX, PPTX, or XLSX before upload.
 - **Provider output needs domain review** - dense tables, merged cells, scans, and handwriting can produce imperfect reading order; calendar import therefore presents editable rows before persistence.
 - **Structured output requires `middle_json`** - a MinerU deployment that omits or changes the expected `pdf_info` geometry returns `invalid-response`; coordinate Consumers do not fall back to Markdown guessing.

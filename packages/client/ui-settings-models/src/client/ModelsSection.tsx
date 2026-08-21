@@ -60,6 +60,40 @@ interface EditorTarget extends ProviderIdentity {
   declared?: boolean
 }
 
+interface ToolModelSelection {
+  provider: string
+  model: string
+}
+
+function toolModelValue(selection: ToolModelSelection): string {
+  return JSON.stringify([selection.provider, selection.model])
+}
+
+function parseToolModelValue(value: string): ToolModelSelection | undefined {
+  try {
+    const parsed: unknown = JSON.parse(value)
+    return Array.isArray(parsed)
+      && parsed.length === 2
+      && typeof parsed[0] === 'string'
+      && typeof parsed[1] === 'string'
+      ? { provider: parsed[0], model: parsed[1] }
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
+function configuredToolModel(value: unknown): ToolModelSelection | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const settings = value as { provider?: unknown; model?: unknown; toolProvider?: unknown; toolModel?: unknown }
+  if (typeof settings.toolProvider === 'string' && typeof settings.toolModel === 'string') {
+    return { provider: settings.toolProvider, model: settings.toolModel }
+  }
+  return typeof settings.provider === 'string' && typeof settings.model === 'string'
+    ? { provider: settings.provider, model: settings.model }
+    : undefined
+}
+
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
@@ -185,6 +219,8 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   const [savedTarget, setSavedTarget] = useState<ProviderIdentity | undefined>(undefined)
   const [declaring, setDeclaring] = useState(false)
   const [dismissedSetup, setDismissedSetup] = useState<ReadonlySet<string>>(() => new Set())
+  const [toolModelStatus, setToolModelStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle')
+  const [toolModelFailure, setToolModelFailure] = useState<string | undefined>(undefined)
 
   const announceSaved = (target: ProviderIdentity): void => {
     // Announced only once the refreshed directory is in the snapshot the
@@ -270,11 +306,79 @@ function Loaded({ injected }: { injected: ModelsSectionInjected }): ReactNode {
   // one whose schema names the protocols one may speak; without it mounted
   // there is nothing to declare and the entry point stays disabled.
   const protocols = protocolChoices(state.namespaces.get('llm-pi-ai'))
+  const defaultModelNamespace = state.namespaces.get('agent-default-model')
+  const toolModel = configuredToolModel(defaultModelNamespace?.value)
+  const configuredModelGroups = state.modelGroups.filter(group => state.rows.some(row => (
+    row.entry.provider === group.id && providerUsable(row)
+  )))
+  const availableToolModels = configuredModelGroups.flatMap(group => group.models.map(model => ({
+    provider: group.id,
+    providerName: group.name,
+    model: model.id,
+    modelName: model.name,
+  })))
+  const selectedToolModel = toolModel === undefined ? '' : toolModelValue(toolModel)
+  const selectedToolModelAvailable = availableToolModels.some(item => toolModelValue(item) === selectedToolModel)
+  const saveToolModel = (value: string): void => {
+    const selection = parseToolModelValue(value)
+    if (selection === undefined || defaultModelNamespace === undefined) return
+    setToolModelStatus('saving')
+    setToolModelFailure(undefined)
+    void api.settings.mutate({
+      ns: 'agent-default-model',
+      expectedRevision: defaultModelNamespace.revision,
+      ops: [
+        { op: 'set', path: ['toolProvider'], value: selection.provider },
+        { op: 'set', path: ['toolModel'], value: selection.model },
+      ],
+    }).then(async (response) => {
+      if (!response.result.ok) throw new Error(response.result.error.message)
+      await controller.load()
+      setToolModelStatus('saved')
+    }).catch((error: unknown) => {
+      setToolModelFailure(messageOf(error))
+      setToolModelStatus('error')
+    })
+  }
 
   return (
     <div className={styles['section']}>
       <h2 className={styles['title']}>{t('title')}</h2>
       <p className={styles['intro']}>{t('intro')}</p>
+      <div className={styles['toolModelCard']}>
+        <div className={styles['toolModelHeader']}>
+          <span id="settings-tool-model-label" className={styles['toolModelTitle']}>{t('toolModelTitle')}</span>
+          <p className={styles['toolModelDescription']}>{t('toolModelDescription')}</p>
+        </div>
+        <select
+          className={`${styles['toolModelSelect']} ${styles['selectInput']}`}
+          aria-labelledby="settings-tool-model-label"
+          value={selectedToolModelAvailable ? selectedToolModel : ''}
+          disabled={!state.writable || toolModelStatus === 'saving' || availableToolModels.length === 0 || defaultModelNamespace === undefined}
+          onChange={(event) => { saveToolModel(event.target.value) }}
+        >
+          {availableToolModels.length === 0 ? <option value="">{t('toolModelUnavailable')}</option> : null}
+          {availableToolModels.length > 0 && !selectedToolModelAvailable ? <option value="">{t('toolModelSelect')}</option> : null}
+          {configuredModelGroups.map(group => (
+            <optgroup key={group.id} label={group.name}>
+              {group.models.map(model => (
+                <option key={model.id} value={toolModelValue({ provider: group.id, model: model.id })}>
+                  {model.name === model.id ? model.id : `${model.name} (${model.id})`}
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+        {state.modelCatalogError === null
+          ? toolModelStatus === 'saving'
+            ? <p className={styles['toolModelStatus']} role="status">{t('toolModelSaving')}</p>
+            : toolModelStatus === 'saved'
+              ? <p className={styles['toolModelStatus']} role="status">{t('toolModelSaved')}</p>
+              : toolModelStatus === 'error'
+                ? <p className={`${styles['toolModelStatus']} ${styles['toolModelStatusError']}`} role="alert">{`${t('toolModelSaveFailed')}: ${toolModelFailure ?? ''}`}</p>
+                : null
+          : <p className={`${styles['toolModelStatus']} ${styles['toolModelStatusError']}`} role="alert">{t('toolModelCatalogFailed')}</p>}
+      </div>
       {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
       {savedIdentity === undefined
         ? null

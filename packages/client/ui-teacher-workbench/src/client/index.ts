@@ -16,7 +16,7 @@ import {
 } from '../settings.ts'
 import { TeacherWorkbenchController } from './controller.ts'
 import type { TeacherWorkbenchInjected, TeacherWorkbenchSettingsInjected } from './contracts.ts'
-import { extractWorkbenchDocument, extractWorkbenchLayout } from './extract-document.ts'
+import { bytesToBase64, extractWorkbenchDocument, extractWorkbenchLayout } from './extract-document.ts'
 import { fetchTeacherWeather } from './weather.ts'
 import { createTeacherWorkbenchViewStore } from './view-store.ts'
 import { SidebarWorkbench } from './SidebarWorkbench.tsx'
@@ -31,6 +31,8 @@ export type {
   TeacherDailyTodoInput,
   TeacherExamInput,
   TeacherLessonResourceInput,
+  TeacherLedgerCategoryInput,
+  TeacherLedgerEntryInput,
   TeacherRecordInput,
   TeacherRecordTemplateInput,
   TeacherQuickNoteInput,
@@ -96,9 +98,46 @@ export function apply(ctx: ClientContext): void {
     deleteDailyTodo: id => controller.deleteDailyTodo(id),
     saveQuickNote: input => controller.saveQuickNote(input),
     deleteQuickNote: id => controller.deleteQuickNote(id),
+    saveLedgerCategory: input => controller.saveLedgerCategory(input),
+    deleteLedgerCategory: id => controller.deleteLedgerCategory(id),
+    saveLedgerEntry: input => controller.saveLedgerEntry(input),
+    deleteLedgerEntry: id => controller.deleteLedgerEntry(id),
     saveCalendarItem: input => controller.saveCalendarItem(input),
     deleteCalendarItem: id => controller.deleteCalendarItem(id),
     extractDocument: (file, options) => extractWorkbenchDocument(file, ctx.remote.ocr, options),
+    normalizeTimetable: async (fileName, markdown, defaults, image) => {
+      const parentSessionId = ctx.sessions.list.getSnapshot().current
+      return parentSessionId === undefined
+        ? Promise.resolve({
+          ok: false as const,
+          error: { code: 'session-unavailable' as const, message: 'no current session' },
+        })
+        : ctx.remote.teacherWorkbench.normalizeTimetable({
+          parentSessionId,
+          fileName,
+          markdown,
+          defaults,
+          ...(image === undefined ? {} : {
+            image: {
+              mediaType: image.type as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
+              contentBase64: bytesToBase64(new Uint8Array(await image.arrayBuffer())),
+            },
+          }),
+        })
+          .then(carried => carried.ok
+            ? carried.value
+            : {
+              ok: false as const,
+              error: { code: 'tool-model-unavailable' as const, message: carried.error.message },
+            })
+          .catch((error: unknown) => ({
+            ok: false as const,
+            error: {
+              code: 'tool-model-unavailable' as const,
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }))
+    },
     extractQuestionLayout: (file, pageRange) => extractWorkbenchLayout(file, ctx.remote.ocr, pageRange),
     importCalendarItems: inputs => controller.importCalendarItems(inputs),
     saveTimetableEntry: input => controller.saveTimetableEntry(input),

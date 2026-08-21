@@ -32,6 +32,7 @@ import {
   TeacherQuestionMediaError,
   type TeacherQuestionMediaConfig,
 } from './question-media.ts'
+import { normalizeTimetableWithAgent } from './timetable-agent.ts'
 import type {
   TeacherQuestionAssignRequest,
   TeacherQuestionBatchId,
@@ -53,6 +54,8 @@ import type {
   TeacherQuestionTemporarySaveRequest,
   TeacherQuestionTemporarySaveResult,
   TeacherQuestionUploadedDocumentRequest,
+  TeacherTimetableNormalizeRequest,
+  TeacherTimetableNormalizeResult,
   TeacherWorkbenchDocument,
   TeacherWorkbenchInvalidState,
   TeacherWorkbenchReadRequest,
@@ -68,6 +71,10 @@ import type {
 const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbench')
 const DEFAULT_QUESTION_IMAGE_BYTES = 25 * 1024 * 1024
 const DEFAULT_QUESTION_BATCH_BYTES = 300 * 1024 * 1024
+const DEFAULT_TIMETABLE_SOURCE_CHARACTERS = 500_000
+const DEFAULT_TIMETABLE_ENTRIES = 1_000
+const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 300_000
+const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 45_000
 
 export type * from './types.ts'
 export {
@@ -78,6 +85,8 @@ export {
   teacherDailyTodoSchema,
   teacherExamSchema,
   teacherLessonResourceSchema,
+  teacherLedgerCategorySchema,
+  teacherLedgerEntrySchema,
   teacherQuickNoteSchema,
   teacherQuestionFolderSchema,
   teacherRecordSchema,
@@ -110,6 +119,14 @@ export interface Config {
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one complete paper batch. */
   maxQuestionBatchBytes: number
+  /** Maximum MinerU characters admitted to one timetable-agent prompt. */
+  maxTimetableSourceCharacters: number
+  /** Maximum structured rows accepted from one timetable-agent run. */
+  maxTimetableEntries: number
+  /** Wall-clock deadline for one timetable-agent run. */
+  timetableAgentTimeoutMs: number
+  /** Wall-clock deadline for one direct-vision timetable-agent run. */
+  timetableVisionAgentTimeoutMs: number
 }
 
 /** Host service owning the revisioned workbench document. */
@@ -122,6 +139,10 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     studentsRoot: z.string().default(''),
     maxQuestionImageBytes: z.natural().min(1_024).max(200 * 1024 * 1024).default(DEFAULT_QUESTION_IMAGE_BYTES),
     maxQuestionBatchBytes: z.natural().min(1_024).max(2 * 1024 * 1024 * 1024).default(DEFAULT_QUESTION_BATCH_BYTES),
+    maxTimetableSourceCharacters: z.natural().min(1_000).max(1_000_000).default(DEFAULT_TIMETABLE_SOURCE_CHARACTERS),
+    maxTimetableEntries: z.natural().min(1).max(10_000).default(DEFAULT_TIMETABLE_ENTRIES),
+    timetableAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS),
+    timetableVisionAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS),
   })
 
   private global?: DomainGlobal<TeacherWorkbenchDocument>
@@ -141,6 +162,10 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     studentsRoot: '',
     maxQuestionImageBytes: DEFAULT_QUESTION_IMAGE_BYTES,
     maxQuestionBatchBytes: DEFAULT_QUESTION_BATCH_BYTES,
+    maxTimetableSourceCharacters: DEFAULT_TIMETABLE_SOURCE_CHARACTERS,
+    maxTimetableEntries: DEFAULT_TIMETABLE_ENTRIES,
+    timetableAgentTimeoutMs: DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS,
+    timetableVisionAgentTimeoutMs: DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS,
   }) {
     super(ctx, 'teacherWorkbench')
     this.weatherProvider = new TeacherWeatherProvider(config)
@@ -219,6 +244,16 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('weather')
   weather(request: TeacherWeatherRequest): Promise<TeacherWeatherResult> {
     return this.weatherProvider.fetch(request.location)
+  }
+
+  /**
+   * Reconstruct MinerU timetable text through the configured tool model.
+   * @param request - live parent session, OCR source, and current timetable defaults.
+   * @returns structured rows for browser review or a stable failure.
+   */
+  @Remote('normalizeTimetable')
+  normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult> {
+    return normalizeTimetableWithAgent(this.ctx, request, this.configSource())
   }
 
   /**
@@ -545,6 +580,8 @@ function snapshotState(state: TeacherWorkbenchState): TeacherWorkbenchState {
   return Object.freeze({
     dailyTodos: Object.freeze(state.dailyTodos.map(item => Object.freeze({ ...item }))),
     quickNotes: Object.freeze(state.quickNotes.map(item => Object.freeze({ ...item }))),
+    ledgerCategories: Object.freeze(state.ledgerCategories.map(item => Object.freeze({ ...item }))),
+    ledgerEntries: Object.freeze(state.ledgerEntries.map(item => Object.freeze({ ...item }))),
     calendarItems: Object.freeze(state.calendarItems.map(item => Object.freeze({ ...item }))),
     timetableEntries: Object.freeze(state.timetableEntries.map(item => Object.freeze({ ...item }))),
     classes: Object.freeze(state.classes.map(item => Object.freeze({ ...item }))),

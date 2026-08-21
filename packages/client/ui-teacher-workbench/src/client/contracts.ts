@@ -11,6 +11,8 @@ import type {
   TeacherDailyTodoId,
   TeacherExamId,
   TeacherLessonResourceId,
+  TeacherLedgerCategoryId,
+  TeacherLedgerEntryId,
   TeacherRecordId,
   TeacherRecordTemplateId,
   TeacherQuickNoteId,
@@ -33,6 +35,8 @@ import type {
   TeacherQuestionUploadedDocumentRequest,
   TeacherStudentId,
   TeacherTimetableEntryId,
+  TeacherTimetableNormalizeDefaults,
+  TeacherTimetableNormalizeResult,
   TeacherWeatherForecast,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
@@ -43,6 +47,8 @@ import type {
   TeacherDailyTodoInput,
   TeacherExamInput,
   TeacherLessonResourceInput,
+  TeacherLedgerCategoryInput,
+  TeacherLedgerEntryInput,
   TeacherRecordInput,
   TeacherRecordTemplateInput,
   TeacherQuickNoteInput,
@@ -68,12 +74,27 @@ export interface TeacherWorkbenchCommands {
   saveQuickNote: (input: TeacherQuickNoteInput) => Promise<TeacherWorkbenchActionResult>
   /** Delete a quick note. */
   deleteQuickNote: (id: TeacherQuickNoteId) => Promise<TeacherWorkbenchActionResult>
+  /** Save a ledger category. */
+  saveLedgerCategory: (input: TeacherLedgerCategoryInput) => Promise<TeacherWorkbenchActionResult>
+  /** Delete a ledger category and its entries. */
+  deleteLedgerCategory: (id: TeacherLedgerCategoryId) => Promise<TeacherWorkbenchActionResult>
+  /** Save a ledger entry. */
+  saveLedgerEntry: (input: TeacherLedgerEntryInput) => Promise<TeacherWorkbenchActionResult>
+  /** Delete a ledger entry. */
+  deleteLedgerEntry: (id: TeacherLedgerEntryId) => Promise<TeacherWorkbenchActionResult>
   /** Save a calendar item. */
   saveCalendarItem: (input: TeacherCalendarItemInput) => Promise<TeacherWorkbenchActionResult>
   /** Delete a calendar item. */
   deleteCalendarItem: (id: TeacherCalendarItemId) => Promise<TeacherWorkbenchActionResult>
   /** Extract an uploaded document through the shared Host OCR runtime. */
   extractDocument: (file: File, options?: TeacherWorkbenchExtractOptions) => Promise<OcrExtractResult>
+  /** Reconstruct OCR timetable text through the configured tool model. */
+  normalizeTimetable: (
+    fileName: string,
+    markdown: string,
+    defaults: TeacherTimetableNormalizeDefaults,
+    image?: File,
+  ) => Promise<TeacherTimetableNormalizeResult>
   /** Extract page geometry for deterministic question cutting. */
   extractQuestionLayout: (file: File, pageRange?: OcrLayoutRequest['pageRange']) => Promise<OcrLayoutResult>
   /** Persist reviewed school-calendar rows in one write. */

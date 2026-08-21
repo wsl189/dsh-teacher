@@ -4,7 +4,9 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testi
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-web-react'
-import type { RpcResponse, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  ModelCatalogFailure, ModelProviderGroup, RpcResponse, SettingsNamespaceView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ModelsSection, needsSetup, providerCopy, providerTargetLabel, removeProviderProfile,
 } from '../src/client/ModelsSection.tsx'
@@ -158,7 +160,9 @@ function scriptedFace(overrides: {
           { provider: 'plain', displayName: 'plain', settingsNs: 'llm-plain', settingsPath: ['profiles', 'plain'], active: false },
         ],
       }))),
-      models: vi.fn(() => Promise.resolve(ok({ groups: [], failures: [] }))),
+      models: vi.fn(() => Promise.resolve(ok({
+        groups: [] as ModelProviderGroup[], failures: [] as ModelCatalogFailure[],
+      }))),
     },
     settings: {
       describe: vi.fn(() => Promise.resolve(ok({ writable: true, hasDocument: false, namespaces: wireNamespaces() }))),
@@ -230,6 +234,46 @@ describe('ModelsSection', () => {
     const uninjected = {} as ModelsSectionProps
     render(<ModelsSection {...uninjected} />)
     expect(document.body.textContent).toBe('')
+  })
+
+  it('selects the tool model only from configured usable model routes', async () => {
+    const scripted = scriptedFace()
+    scripted.face.llm.models.mockResolvedValue(ok({
+      groups: [
+        { id: 'deepseek-official', name: 'DeepSeek', models: [{ id: 'deepseek-v4-flash', name: 'DeepSeek V4 Flash' }] },
+        { id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-5-mini', name: 'GPT-5 mini' }] },
+      ],
+      failures: [],
+    }))
+    scripted.face.settings.describe.mockResolvedValue(ok({
+      writable: true,
+      hasDocument: false,
+      namespaces: [...wireNamespaces(), {
+        ns: 'agent-default-model',
+        schema: {},
+        value: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        base: { provider: 'deepseek-official', model: 'deepseek-v4-flash' },
+        user: {},
+        applies: 'live' as const,
+        secrets: [],
+        revision: 4,
+      }],
+    }))
+    const { mutate } = await mountFace(scripted)
+    const select = screen.getByLabelText<HTMLSelectElement>(en.toolModelTitle)
+    expect(within(select).queryByRole('option', { name: /DeepSeek V4 Flash/u })).toBeNull()
+    expect(within(select).getByRole('option', { name: /GPT-5 mini/u })).toBeTruthy()
+
+    fireEvent.change(select, { target: { value: JSON.stringify(['openai', 'gpt-5-mini']) } })
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    expect(mutate).toHaveBeenCalledWith({
+      ns: 'agent-default-model',
+      expectedRevision: 4,
+      ops: [
+        { op: 'set', path: ['toolProvider'], value: 'openai' },
+        { op: 'set', path: ['toolModel'], value: 'gpt-5-mini' },
+      ],
+    })
   })
 
   it('renders the unkeyed whole-section provider as an open setup card in the first-run posture', async () => {

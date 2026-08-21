@@ -31,6 +31,8 @@ interface OcrExtractRequest {
   readonly contentBase64: string
   /** Include text that the provider classified outside the main reading order. */
   readonly includeDiscardedText?: boolean
+  /** Re-read raster images at multiple scales and overlapping regions to retain small text and table headers. */
+  readonly enhanceImageDetail?: boolean
 }
 ```
 

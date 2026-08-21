@@ -23,6 +23,8 @@ import type {
   TeacherDailyTodoId,
   TeacherExamId,
   TeacherLessonResourceId,
+  TeacherLedgerCategoryId,
+  TeacherLedgerEntryId,
   TeacherRecordId,
   TeacherRecordTemplateId,
   TeacherQuickNoteId,
@@ -169,6 +171,20 @@ describe('TeacherWorkbenchService', () => {
         createdAt: 1,
         updatedAt: 1,
       }],
+      ledgerCategories: [{
+        id: 'ledger-category-a' as TeacherLedgerCategoryId,
+        name: '保险保费',
+        createdAt: 1,
+      }],
+      ledgerEntries: [{
+        id: 'ledger-entry-a' as TeacherLedgerEntryId,
+        categoryId: 'ledger-category-a' as TeacherLedgerCategoryId,
+        description: '家庭保险',
+        amountCents: 120_000,
+        occurredAt: '2026-08-20T10:30',
+        createdAt: 1,
+        updatedAt: 1,
+      }],
       calendarItems: [{
         id: 'calendar-a' as TeacherCalendarItemId,
         date: '2026-08-20',
@@ -248,6 +264,8 @@ describe('TeacherWorkbenchService', () => {
     expect(Object.isFrozen(result.value.state.students[0]?.extras)).toBe(true)
     expect(Object.isFrozen(result.value.state.dailyTodos[0])).toBe(true)
     expect(Object.isFrozen(result.value.state.quickNotes[0])).toBe(true)
+    expect(Object.isFrozen(result.value.state.ledgerCategories[0])).toBe(true)
+    expect(Object.isFrozen(result.value.state.ledgerEntries[0])).toBe(true)
     expect(Object.isFrozen(result.value.state.calendarItems[0])).toBe(true)
     expect(Object.isFrozen(result.value.state.timetableEntries[0])).toBe(true)
     expect(Object.isFrozen(result.value.state.templates[0]?.fields)).toBe(true)
@@ -283,6 +301,10 @@ describe('TeacherWorkbenchService', () => {
       studentsRoot: join(root, 'students'),
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxTimetableSourceCharacters: 120_000,
+      maxTimetableEntries: 1_000,
+      timetableAgentTimeoutMs: 120_000,
+      timetableVisionAgentTimeoutMs: 45_000,
     })
     contexts.push(b.ctx)
     const owningClass = { ...classItem('class-a', '高一（1）班'), academicYear: '2026' }
@@ -551,6 +573,11 @@ describe('teacher workbench schema relationships', () => {
       category: 'today', color: 'blue', createdAt: 0, updatedAt: 0,
     }
     const note = { id: 'note-a', content: '随记', createdAt: 0, updatedAt: 0 }
+    const ledgerCategory = { id: 'ledger-category-a', name: '保险保费', createdAt: 0 }
+    const ledgerEntry = {
+      id: 'ledger-entry-a', categoryId: 'missing-category', description: '车险', amountCents: 100,
+      occurredAt: '2026-08-18T10:00', createdAt: 0, updatedAt: 0,
+    }
     const calendarItem = { id: 'calendar-a', date: '2026-08-18', time: '', title: '日程', details: '', createdAt: 0, updatedAt: 0 }
     const timetable = {
       id: 'timetable-a', classId: classA.id, kind: 'lesson', weekday: 1, period: 1,
@@ -559,6 +586,8 @@ describe('teacher workbench schema relationships', () => {
     const result = teacherWorkbenchStateSchema.safeParse({
       dailyTodos: [todo, todo],
       quickNotes: [note, note],
+      ledgerCategories: [ledgerCategory, ledgerCategory],
+      ledgerEntries: [ledgerEntry, ledgerEntry],
       calendarItems: [calendarItem, calendarItem],
       timetableEntries: [timetable, timetable, { ...timetable, id: 'timetable-b', classId: 'missing-class', period: 2 }],
       classes: [classA],
@@ -574,10 +603,10 @@ describe('teacher workbench schema relationships', () => {
     expect(result.success).toBe(false)
     if (!result.success) {
       expect(result.error.issues.map(issue => issue.message)).toEqual(expect.arrayContaining([
-        'duplicate id', 'duplicate timetable slot', 'unknown template', 'unknown class',
+        'duplicate id', 'duplicate timetable slot', 'unknown ledger category', 'unknown template', 'unknown class',
       ]))
       expect(result.error.issues.filter(issue => issue.message === 'duplicate id').map(issue => issue.path[0]))
-        .toEqual(expect.arrayContaining(['dailyTodos', 'quickNotes', 'calendarItems', 'timetableEntries']))
+        .toEqual(expect.arrayContaining(['dailyTodos', 'quickNotes', 'ledgerCategories', 'ledgerEntries', 'calendarItems', 'timetableEntries']))
     }
   })
 

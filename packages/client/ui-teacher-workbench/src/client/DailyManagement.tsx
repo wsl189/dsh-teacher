@@ -7,6 +7,7 @@ import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { CalendarPanel } from './CalendarPanel.tsx'
 import { DailyTodoPanel } from './DailyTodoPanel.tsx'
+import { LedgerPanel } from './LedgerPanel.tsx'
 import { QuickNotesPanel } from './QuickNotesPanel.tsx'
 import { WeatherPanel } from './WeatherPanel.tsx'
 import css from './TeacherWorkbench.module.css'
@@ -37,7 +38,7 @@ export interface DailyManagementProps {
  * @returns the daily dashboard with weather and calendar detail modes.
  */
 export function DailyManagement(props: DailyManagementProps) {
-  const [expanded, setExpanded] = useState<'weather' | 'calendar' | null>(null)
+  const [expanded, setExpanded] = useState<'weather' | 'ledger' | 'calendar' | null>(null)
   return (
     <div className={`${css.dailyManagement} ${expanded === 'weather' ? css.dailyManagementWeatherExpanded : ''}`}>
       <div className={`${css.contentHeading} ${css.dailyContentHeading}`}>
@@ -53,9 +54,18 @@ export function DailyManagement(props: DailyManagementProps) {
         loadWeather={props.loadWeather}
         t={props.t}
       />
-      <div className={`${css.dailyBoard} ${expanded === 'calendar' ? css.dailyBoardExpanded : ''}`}>
+      <div className={`${css.dailyBoard} ${expanded === 'ledger' || expanded === 'calendar' ? css.dailyBoardExpanded : ''}`}>
         <DailyTodoPanel state={props.state} settings={props.settings} commands={props.commands} t={props.t} />
         <QuickNotesPanel state={props.state} settings={props.settings} commands={props.commands} t={props.t} />
+        <LedgerPanel
+          state={props.state}
+          settings={props.settings}
+          commands={props.commands}
+          expanded={expanded === 'ledger'}
+          onExpand={() => { setExpanded('ledger') }}
+          onCollapse={() => { setExpanded(null) }}
+          t={props.t}
+        />
         <CalendarPanel
           state={props.state}
           commands={props.commands}

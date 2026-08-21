@@ -11,8 +11,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一" [selected]
     - option "周二"
@@ -32,8 +30,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一" [selected]
     - option "周二"
@@ -53,8 +49,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一"
     - option "周二" [selected]
@@ -74,8 +68,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一"
     - option "周二" [selected]
@@ -95,8 +87,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一" [selected]
     - option "周二"
@@ -116,8 +106,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一" [selected]
     - option "周二"
@@ -137,8 +125,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一"
     - option "周二" [selected]
@@ -158,8 +144,6 @@
   - textbox "年级": 高三
   - combobox "类型":
     - option "课程" [selected]
-    - option "早自习"
-    - option "晚自习"
   - combobox "星期":
     - option "周一"
     - option "周二" [selected]

@@ -9,11 +9,16 @@
   ],
   "references": [
     { "path": "../../../vendor/cordis" },
+    { "path": "../../core/agent" },
+    { "path": "../../core/agent-default-model" },
+    { "path": "../../core/session" },
+    { "path": "../../core/tools" },
     { "path": "../../util/brand" },
     { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../settings/settings" },
     { "path": "../../storage/storage" },
     { "path": "../../storage/storage-domain" },
+    { "path": "../../subagent/subagent" },
     { "path": "../../typert/protocol" }
   ]
 }

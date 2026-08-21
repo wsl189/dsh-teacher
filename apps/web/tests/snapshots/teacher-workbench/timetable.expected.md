@@ -9,7 +9,7 @@
   - textbox "筛选教师姓名":
     - /placeholder: 姓名
     - text: 王老师
-  - text: 8月20日 · 周四
+  - text: 8月21日 · 周五
   - table:
     - rowgroup:
       - row "节次 开始时间 课程 任课教师 上课班级":

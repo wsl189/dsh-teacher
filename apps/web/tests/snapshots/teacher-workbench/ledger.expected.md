@@ -1,0 +1,71 @@
+- region "账本":
+  - heading "账本" [level=2]
+  - text: 1 笔 · ¥286.50
+  - button "添加账本分类"
+  - button "恢复日常管理布局"
+  - article "保险保费":
+    - heading "保险保费" [level=3]
+    - text: 0 笔 · ¥0.00
+    - button "删除分类“保险保费”"
+    - text: 账目说明
+    - textbox "账目说明":
+      - /placeholder: 例如家庭保险或八月电费
+    - button "开始语音输入"
+    - text: 金额（元）
+    - textbox "金额（元）":
+      - /placeholder: "0.00"
+    - text: 发生时间
+    - textbox "发生时间"
+    - button "添加明细" [disabled]
+    - text: 这个分类还没有账目
+  - article "水电燃气":
+    - heading "水电燃气" [level=3]
+    - text: 0 笔 · ¥0.00
+    - button "删除分类“水电燃气”"
+    - text: 账目说明
+    - textbox "账目说明":
+      - /placeholder: 例如家庭保险或八月电费
+    - button "开始语音输入"
+    - text: 金额（元）
+    - textbox "金额（元）":
+      - /placeholder: "0.00"
+    - text: 发生时间
+    - textbox "发生时间"
+    - button "添加明细" [disabled]
+    - text: 这个分类还没有账目
+  - article "其他账目":
+    - heading "其他账目" [level=3]
+    - text: 0 笔 · ¥0.00
+    - button "删除分类“其他账目”"
+    - text: 账目说明
+    - textbox "账目说明":
+      - /placeholder: 例如家庭保险或八月电费
+    - button "开始语音输入"
+    - text: 金额（元）
+    - textbox "金额（元）":
+      - /placeholder: "0.00"
+    - text: 发生时间
+    - textbox "发生时间"
+    - button "添加明细" [disabled]
+    - text: 这个分类还没有账目
+  - article "住房费用":
+    - heading "住房费用" [level=3]
+    - text: 1 笔 · ¥286.50
+    - button "删除分类“住房费用”"
+    - text: 账目说明
+    - textbox "账目说明":
+      - /placeholder: 例如家庭保险或八月电费
+    - button "开始语音输入"
+    - text: 金额（元）
+    - textbox "金额（元）":
+      - /placeholder: "0.00"
+    - text: 发生时间
+    - textbox "发生时间"
+    - button "添加明细" [disabled]
+    - article:
+      - button "八月物业费 2026-08-20 {{clock}}":
+        - text: 八月物业费
+        - time: 2026-08-20 {{clock}}
+      - strong: ¥286.50
+      - button "编辑"
+      - button "删除明细"

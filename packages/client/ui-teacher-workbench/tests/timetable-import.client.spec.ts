@@ -33,6 +33,30 @@ describe('parseTimetable', () => {
     ])
   })
 
+  it('reconciles study tables independently across enhanced MinerU passes', () => {
+    const table = `
+25-26学年第一学期高二早读安排表
+<table><tr><td>班级</td><td>高二1班</td><td>高二2班</td></tr><tr><td>星期一</td><td>王俊茹</td><td>蔡晓瑜</td></tr></table>
+25-26学年第一学期高二晚自习安排表
+<table><tr><td>班级</td><td>高二1班</td><td>高二2班</td></tr><tr><td>星期一</td><td>江海莲</td><td>蔡晓瑜*</td></tr></table>`
+    const drafts = parseTimetable(`
+## OCR pass: enhanced whole image
+${table}
+## OCR pass: overlapping visual region 1/2
+${table}
+## OCR pass: overlapping visual region 2/2
+${table}
+`, { className: '', classNames: [], grade: '', kind: 'morningStudy', teacherName: '' })
+
+    expect(drafts).toHaveLength(4)
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高二1班', weekday: 1, kind: 'morningStudy', subject: '早读', teacherName: '王俊茹',
+    }))
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高二2班', weekday: 1, kind: 'eveningStudy', subject: '晚自习', teacherName: '蔡晓瑜',
+    }))
+  })
+
   it('expands HTML row spans and falls back to readable text lines', () => {
     const html = parseTimetable(`
 <table>
@@ -101,6 +125,52 @@ describe('parseTimetable', () => {
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高三（1）班', weekday: 2, period: 1, subject: '英语', teacherName: '王五' }))
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高三（1）班', weekday: 1, period: 3, subject: '历史', teacherName: '孙八' }))
     expect(drafts).toContainEqual(expect.objectContaining({ className: '高三（2）班', weekday: 5, period: 4, subject: '数学', teacherName: '张三' }))
+  })
+
+  it('reconciles detailed MinerU passes with split weekday headings and course-teacher rows', () => {
+    const drafts = parseTimetable(`
+高三年
+
+## OCR pass: enhanced whole image
+
+<table><tr><td>不可用整图</td></tr></table>
+
+## OCR pass: overlapping visual region 1/2
+
+<table>
+  <tr><td>星期</td><td>星 期 一</td><td>星 期 一</td></tr>
+  <tr><td>班级</td><td>1</td><td>2</td></tr>
+  <tr><td>第一节</td><td>数学</td><td>英语</td></tr>
+  <tr><td>第一节</td><td>张三</td><td>李四</td></tr>
+  <tr><td>第一节</td><td>历史</td><td>地理</td></tr>
+  <tr><td>第一节</td><td>王五</td><td>赵六</td></tr>
+</table>
+
+## OCR pass: overlapping visual region 2/2
+
+<table>
+  <tr><td></td><td>星</td><td>期 五</td></tr>
+  <tr><td></td><td>1</td><td>2</td></tr>
+  <tr><td>行</td><td>语文</td><td>化学</td></tr>
+  <tr><td></td><td>钱七</td><td>孙八</td></tr>
+  <tr><td>第二节</td><td>生物学</td><td>物理</td></tr>
+  <tr><td></td><td>周九</td><td>吴十</td></tr>
+</table>
+`, { className: '', classNames: [], grade: '高三', kind: 'lesson', teacherName: '' })
+
+    expect(drafts).toHaveLength(8)
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高三（1）班', weekday: 1, period: 1, subject: '数学', teacherName: '张三',
+    }))
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高三（2）班', weekday: 1, period: 2, subject: '地理', teacherName: '赵六',
+    }))
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高三（1）班', weekday: 5, period: 1, subject: '语文', teacherName: '钱七',
+    }))
+    expect(drafts).toContainEqual(expect.objectContaining({
+      className: '高三（2）班', weekday: 5, period: 2, subject: '物理', teacherName: '吴十',
+    }))
   })
 
   it('uses a discarded grade title to name classes in a grade-wide matrix', () => {

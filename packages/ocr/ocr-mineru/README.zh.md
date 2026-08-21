@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-本插件向 `ctx.ocr` 注册 `mineru` 提供方 id，并把上传文件发送到由部署方控制的 MinerU 同步 `/file_parse` 端点。普通提取会启用公式与表格识别并请求 Markdown。设置 `includeDiscardedText` 时，同一次请求还会获取 `middle_json`，并把 Markdown 中没有的唯一丢弃文本行放在正文之前。结构化提取则请求 MinerU `middle_json`，再归一化页面尺寸、阅读顺序行、内容类别与边界框，供源文档裁切使用。
+本插件向 `ctx.ocr` 注册 `mineru` 提供方 id，并把上传文件发送到由部署方控制的 MinerU 同步 `/file_parse` 端点。普通提取会启用公式与表格识别并请求 Markdown。设置 `includeDiscardedText` 时，同一次请求还会获取 `middle_json`，并把 Markdown 中没有的唯一丢弃文本行放在正文之前。消费方为栅格图片请求 `enhanceImageDetail` 时，提供方会依次提取一张增强后的完整图片与六个带坐标标签的重叠区域，再把所有轮次交给下游核对。结构化提取则请求 MinerU `middle_json`，再归一化页面尺寸、阅读顺序行、内容类别与边界框，供源文档裁切使用。
 
 ## 配置
 
@@ -27,7 +27,7 @@ DSH 插件设置页通过**插件 → 插件配置 → 文档识别**展示这�
 
 ## 格式与失败
 
-提供方接受 PDF、PNG、JPEG、WebP、BMP、TIFF、DOCX、PPTX 与 XLSX。空文件、格式错误、不受支持与超限请求会在网络 I/O 前被拒绝。网络故障与超时返回 `provider-unavailable`；非成功 HTTP 响应、无效 JSON 字段、响应超限和空提取结果使用稳定 OCR 失败码。
+提供方接受 PDF、PNG、JPEG、WebP、BMP、TIFF、DOCX、PPTX 与 XLSX。栅格细节增强只应用于图片媒体类型；PDF 与 Office 格式保持原生文档提取。空文件、格式错误、不受支持与超限请求会在网络 I/O 前被拒绝。网络故障与超时返回 `provider-unavailable`；非成功 HTTP 响应、无效 JSON 字段、响应超限和空提取结果使用稳定 OCR 失败码。
 
 配置端点会收到完整上传文档。请将它设在数据保留与访问策略适合用户所选文档的基础设施上；默认回环地址不会把文件发往第三方。
 
@@ -42,6 +42,7 @@ DSH 插件设置页通过**插件 → 插件配置 → 文档识别**展示这�
 ## 已知限制与延后工作
 
 - **仅支持同步解析**：MinerU 完成前，一份文档始终占用一个 HTTP 请求；尚未开放异步任务轮询与进度。
+- **细节轮次会增加图片提取工作量**：显式增强的栅格图片会发起七次串行 MinerU 请求，部署截止时间与容量必须覆盖额外工作。
 - **不支持旧版 Office 格式**：`.doc`、`.ppt` 和 `.xls` 会被拒绝；上传前需转换为 DOCX、PPTX 或 XLSX。
 - **领域使用前需复核提供方输出**：密集表格、合并单元格、扫描件和手写内容可能产生不完美的阅读顺序；因此校历导入在持久化前会展示可编辑行。
 - **结构化输出依赖 `middle_json`**：如果 MinerU 部署省略或改变预期的 `pdf_info` 几何结构，将返回 `invalid-response`；坐标消费方不会回退到猜测 Markdown 版面。

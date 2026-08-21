@@ -26,10 +26,23 @@ import css from './TeacherWorkbench.module.css'
 
 type TimetableView = 'today' | 'week' | 'grade' | 'study'
 
+const CLASS_NAME_COLLATOR = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+
 type TimetableImportState =
-  | { readonly kind: 'extracting'; readonly fileName: string }
-  | { readonly kind: 'review'; readonly fileName: string; readonly items: readonly TimetableImportDraft[]; readonly truncated: boolean }
-  | { readonly kind: 'error'; readonly fileName: string; readonly message: string }
+  | { readonly kind: 'extracting'; readonly fileName: string; readonly context: TimetableImportContext }
+  | { readonly kind: 'normalizing'; readonly fileName: string; readonly context: TimetableImportContext }
+  | { readonly kind: 'review'; readonly fileName: string; readonly context: TimetableImportContext; readonly items: readonly TimetableImportDraft[]; readonly truncated: boolean }
+  | { readonly kind: 'error'; readonly fileName: string; readonly context: TimetableImportContext; readonly message: string }
+
+interface TimetableImportContext {
+  readonly classes: readonly TeacherClass[]
+  readonly defaults: TimetableRecognitionDefaults
+  readonly usage: TeacherTimetableClassUsage
+}
+
+type TimetableRecognitionDefaults = TimetableImportDefaults & {
+  readonly target: 'class' | 'grade' | 'study'
+}
 
 interface EditorRequest {
   readonly entry?: TeacherTimetableEntry
@@ -94,7 +107,9 @@ export function Timetable(props: TimetableProps) {
   const classes = useMemo(
     () => props.state.classes
       .filter(item => item.usage === usage)
-      .sort((left, right) => left.grade.localeCompare(right.grade) || left.name.localeCompare(right.name)),
+      .sort((left, right) => (
+        CLASS_NAME_COLLATOR.compare(left.grade, right.grade) || CLASS_NAME_COLLATOR.compare(left.name, right.name)
+      )),
     [props.state.classes, usage],
   )
   const selectedClass = classes.find(item => item.id === selectedClassId) ?? classes[0]
@@ -133,32 +148,78 @@ export function Timetable(props: TimetableProps) {
       ...overrides,
     })
   }
-  const importDefaults = (): TimetableImportDefaults => ({
+  const importDefaults = (): TimetableRecognitionDefaults => ({
     className: view === 'grade' || (onlyMine && (view === 'today' || view === 'week')) ? '' : selectedClass?.name ?? '',
     classNames: classes
       .filter(item => item.grade === (view === 'grade' ? activeGrade : selectedClass?.grade))
       .map(item => item.name),
     grade: view === 'grade' ? activeGrade : selectedClass?.grade ?? '',
     kind: view === 'study' ? 'morningStudy' : 'lesson',
-    teacherName: view === 'grade' ? '' : props.settings.teacherName,
+    target: view === 'grade' ? 'grade' : view === 'study' ? 'study' : 'class',
+    teacherName: view === 'grade' || view === 'study' ? '' : props.settings.teacherName,
   })
   const recognizeTimetable = async (file: File): Promise<void> => {
-    setImportState({ kind: 'extracting', fileName: file.name })
-    const result = await props.commands.extractDocument(file, { includeDiscardedText: true })
+    const context: TimetableImportContext = { classes, defaults: importDefaults(), usage }
+    const directImage = file.type === 'image/png'
+      || file.type === 'image/jpeg'
+      || file.type === 'image/webp'
+      || file.type === 'image/gif'
+    setImportState({ kind: 'extracting', fileName: file.name, context })
+    const result = await props.commands.extractDocument(file, {
+      includeDiscardedText: true,
+      enhanceImageDetail: directImage,
+    })
     if (!result.ok) {
       setImportState({
         kind: 'error',
         fileName: file.name,
+        context,
         message: importFailureText(result.error.code, result.error.message, props.t),
       })
       return
     }
-    const items = parseTimetable(result.value.markdown, importDefaults())
-    if (items.length === 0) {
-      setImportState({ kind: 'error', fileName: file.name, message: props.t('timetable.importNoItems') })
+    const ruleItems = parseTimetable(result.value.markdown, context.defaults)
+    if (ruleItems.length > 0) {
+      setImportState({
+        kind: 'review',
+        fileName: file.name,
+        context,
+        items: ruleItems,
+        truncated: result.value.truncated,
+      })
       return
     }
-    setImportState({ kind: 'review', fileName: file.name, items, truncated: result.value.truncated })
+    setImportState({ kind: 'normalizing', fileName: file.name, context })
+    const normalized = await props.commands.normalizeTimetable(
+      file.name,
+      result.value.markdown,
+      context.defaults,
+    )
+    if (!normalized.ok) {
+      setImportState({
+        kind: 'error',
+        fileName: file.name,
+        context,
+        message: normalizeFailureText(normalized.error.code, normalized.error.message, props.t),
+      })
+      return
+    }
+    const items: TimetableImportDraft[] = normalized.value.items.map((item, index) => ({
+      ...item,
+      id: `agent-${String(index)}`,
+      selected: isPlausibleClassName(item.className) && item.subject.trim() !== '',
+    }))
+    if (items.length === 0) {
+      setImportState({ kind: 'error', fileName: file.name, context, message: props.t('timetable.importNoItems') })
+      return
+    }
+    setImportState({
+      kind: 'review',
+      fileName: file.name,
+      context,
+      items,
+      truncated: result.value.truncated,
+    })
   }
   const deleteClass = (owner: TeacherClass): void => {
     if (!window.confirm(props.t('timetable.confirmDeleteClass', { name: owner.name }))) return
@@ -316,8 +377,6 @@ export function Timetable(props: TimetableProps) {
       {importState !== null && (
         <TimetableImportModal
           state={importState}
-          classes={classes}
-          usage={usage}
           commands={props.commands}
           t={props.t}
           onChange={setImportState}
@@ -798,25 +857,33 @@ function TimetableEditor(props: {
 
 function TimetableImportModal(props: {
   state: TimetableImportState
-  classes: readonly TeacherClass[]
-  usage: TeacherTimetableClassUsage
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
   onChange: (state: TimetableImportState) => void
   onClose: () => void
 }) {
   const review = props.state.kind === 'review' ? props.state : null
-  const selected = review?.items.filter(item => item.selected && isPlausibleClassName(item.className) && item.subject.trim() !== '') ?? []
+  const allowedKinds = props.state.context.defaults.target === 'study'
+    ? ['morningStudy', 'eveningStudy'] as const
+    : ['lesson'] as const
+  const selected = review?.items.filter(item => (
+    item.selected
+    && isPlausibleClassName(item.className)
+    && item.subject.trim() !== ''
+    && (allowedKinds as readonly TeacherTimetableEntryKind[]).includes(item.kind)
+  )) ?? []
   const update = (id: string, change: Partial<TimetableImportDraft>): void => {
     if (review === null) return
     props.onChange({ ...review, items: review.items.map(item => item.id === id ? { ...item, ...change } : item) })
   }
   const importItems = async (): Promise<void> => {
     const result = await props.commands.importTimetableEntries(selected.map((item) => {
-      const classId = props.classes.find(owner => owner.name === item.className.trim() && owner.grade === item.grade.trim())?.id
+      const classId = props.state.context.classes.find(owner => (
+        owner.name === item.className.trim() && owner.grade === item.grade.trim()
+      ))?.id
       return {
         ...(classId === undefined ? {} : { classId }),
-        usage: props.usage,
+        usage: props.state.context.usage,
         className: item.className,
         grade: item.grade,
         kind: item.kind,
@@ -855,6 +922,12 @@ function TimetableImportModal(props: {
           <div><strong>{props.t('timetable.importExtracting')}</strong><span>{props.state.fileName}</span></div>
         </div>
       )}
+      {props.state.kind === 'normalizing' && (
+        <div className={css.calendarImportStatus} role="status">
+          <span className={css.calendarImportSpinner} aria-hidden />
+          <div><strong>{props.t('timetable.importNormalizing')}</strong><span>{props.state.fileName}</span></div>
+        </div>
+      )}
       {props.state.kind === 'error' && (
         <div className={css.calendarImportError} role="alert">
           <strong>{props.t('timetable.importFailed')}</strong>
@@ -864,7 +937,7 @@ function TimetableImportModal(props: {
       {review !== null && (
         <div className={css.calendarImportBody}>
           <datalist id="timetable-import-class-options">
-            {props.classes.map(item => <option key={item.id} value={item.name}>{item.grade}</option>)}
+            {props.state.context.classes.map(item => <option key={item.id} value={item.name}>{item.grade}</option>)}
           </datalist>
           <div className={css.calendarImportSummary}>
             <div><strong>{review.fileName}</strong><span>{props.t('timetable.importFound', { count: review.items.length })}</span></div>
@@ -893,7 +966,7 @@ function TimetableImportModal(props: {
                   <input list="timetable-import-class-options" aria-label={props.t('class.name')} title={props.t('class.name')} value={item.className} onChange={(event) => { update(item.id, { className: event.target.value }) }} />
                   <input aria-label={props.t('class.grade')} title={props.t('class.grade')} value={item.grade} onChange={(event) => { update(item.id, { grade: event.target.value }) }} />
                   <select aria-label={props.t('timetable.kind')} title={props.t('timetable.kind')} value={item.kind} onChange={(event) => { update(item.id, { kind: event.target.value as TeacherTimetableEntryKind }) }}>
-                    {Object.entries(KIND_KEYS).map(([value, key]) => <option key={value} value={value}>{props.t(key)}</option>)}
+                    {allowedKinds.map(value => <option key={value} value={value}>{props.t(KIND_KEYS[value])}</option>)}
                   </select>
                   <select aria-label={props.t('timetable.weekday')} title={props.t('timetable.weekday')} value={item.weekday} onChange={(event) => { update(item.id, { weekday: Number(event.target.value) as TeacherWeekday }) }}>
                     {WEEKDAYS.map(day => <option key={day} value={day}>{weekdayLabel(day, props.t)}</option>)}
@@ -923,6 +996,17 @@ function importFailureText(code: string, message: string, t: TeacherWorkbenchTra
     case 'provider-unavailable': return t('timetable.importProviderUnavailable')
     case 'unsupported-format': return t('timetable.importUnsupported')
     case 'file-too-large': return t('timetable.importTooLarge')
+    default: return t('timetable.importFailureDetail', { message })
+  }
+}
+
+function normalizeFailureText(code: string, message: string, t: TeacherWorkbenchTranslate): string {
+  switch (code) {
+    case 'session-unavailable': return t('timetable.importSessionUnavailable')
+    case 'tool-model-unavailable': return t('timetable.importToolModelUnavailable')
+    case 'source-too-large': return t('timetable.importTooLarge')
+    case 'timed-out': return t('timetable.importToolModelTimedOut')
+    case 'invalid-output': return t('timetable.importToolModelInvalid')
     default: return t('timetable.importFailureDetail', { message })
   }
 }
