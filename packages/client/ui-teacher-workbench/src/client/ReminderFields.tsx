@@ -11,6 +11,15 @@ import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
 
+const MAX_REMINDER_MINUTES = 525_600
+const REMINDER_UNIT_MINUTES = {
+  minutes: 1,
+  hours: 60,
+  days: 1_440,
+} as const
+
+type ReminderUnit = keyof typeof REMINDER_UNIT_MINUTES
+
 /** Controlled reminder fields shared by daily-management editors. */
 export function ReminderFields(props: {
   deadline: string
@@ -88,6 +97,11 @@ export function ReminderFields(props: {
       {validationIssue === 'occurrence-past' && (
         <p className={css.reminderError}>{props.t('daily.reminder.occurrencePast')}</p>
       )}
+      {validationIssue === 'amount-invalid' && reminder !== null && (
+        <p className={css.reminderError}>{props.t(reminder.rule.kind === 'once'
+          ? 'daily.reminder.onceAmountInvalid'
+          : 'daily.reminder.repeatAmountInvalid')}</p>
+      )}
       {loaded && targets.length === 0 && <p>{props.t('daily.reminder.noBots')}</p>}
       {reminder !== null && (
         <div className={css.reminderGrid}>
@@ -108,30 +122,22 @@ export function ReminderFields(props: {
               <option value="repeat">{props.t('daily.reminder.repeat')}</option>
             </select>
           </label>
-          <label>
-            <span>{reminder.rule.kind === 'once'
-              ? props.t('daily.reminder.minutesBefore')
-              : props.t('daily.reminder.everyMinutes')}</span>
-            <input
-              type="number"
-              min={reminder.rule.kind === 'once' ? 0 : 5}
-              max={525_600}
-              value={reminder.rule.kind === 'once'
-                ? reminder.rule.minutesBefore
-                : reminder.rule.everyMinutes}
-              onChange={(event) => {
-                const parsed = Number(event.target.value)
-                if (!Number.isFinite(parsed)) return
-                const amount = Math.min(525_600, Math.max(reminder.rule.kind === 'once' ? 0 : 5, parsed))
-                props.onChange({
-                  ...reminder,
-                  rule: reminder.rule.kind === 'once'
-                    ? { kind: 'once', minutesBefore: amount }
-                    : { kind: 'repeat', everyMinutes: amount },
-                })
-              }}
-            />
-          </label>
+          <ReminderAmountField
+            key={reminder.rule.kind}
+            kind={reminder.rule.kind}
+            minutes={reminder.rule.kind === 'once'
+              ? reminder.rule.minutesBefore
+              : reminder.rule.everyMinutes}
+            t={props.t}
+            onMinutesChange={(minutes) => {
+              props.onChange({
+                ...reminder,
+                rule: reminder.rule.kind === 'once'
+                  ? { kind: 'once', minutesBefore: minutes }
+                  : { kind: 'repeat', everyMinutes: minutes },
+              })
+            }}
+          />
           <label>
             <span>{props.t('daily.reminder.platform')}</span>
             <select
@@ -165,6 +171,56 @@ export function ReminderFields(props: {
   )
 }
 
+function ReminderAmountField(props: {
+  kind: TeacherReminder['rule']['kind']
+  minutes: number
+  t: TeacherWorkbenchTranslate
+  onMinutesChange: (minutes: number) => void
+}) {
+  const [unit, setUnit] = useState<ReminderUnit>('minutes')
+  const [amount, setAmount] = useState(() => Number.isFinite(props.minutes) ? String(props.minutes) : '')
+  const amountLabel = props.kind === 'once'
+    ? props.t('daily.reminder.minutesBefore')
+    : props.t('daily.reminder.everyMinutes')
+  const unitLabel = props.t('daily.reminder.unit')
+  const factor = REMINDER_UNIT_MINUTES[unit]
+  const updateAmount = (nextAmount: string, nextUnit: ReminderUnit): void => {
+    setAmount(nextAmount)
+    const parsed = nextAmount.trim() === '' ? Number.NaN : Number(nextAmount)
+    props.onMinutesChange(Number.isFinite(parsed) ? parsed * REMINDER_UNIT_MINUTES[nextUnit] : Number.NaN)
+  }
+
+  return (
+    <div className={css.reminderAmountField}>
+      <span>{amountLabel}</span>
+      <div className={css.reminderAmountControls}>
+        <input
+          type="number"
+          aria-label={amountLabel}
+          min={props.kind === 'once' ? 0 : 5 / factor}
+          max={MAX_REMINDER_MINUTES / factor}
+          step={1 / factor}
+          value={amount}
+          onChange={(event) => { updateAmount(event.target.value, unit) }}
+        />
+        <select
+          aria-label={unitLabel}
+          value={unit}
+          onChange={(event) => {
+            const nextUnit = event.target.value as ReminderUnit
+            setUnit(nextUnit)
+            updateAmount(amount, nextUnit)
+          }}
+        >
+          <option value="minutes">{props.t('daily.reminder.unit.minutes')}</option>
+          <option value="hours">{props.t('daily.reminder.unit.hours')}</option>
+          <option value="days">{props.t('daily.reminder.unit.days')}</option>
+        </select>
+      </div>
+    </div>
+  )
+}
+
 /** Convert a durable reminder into the editable credential-free form. */
 export function editableReminder(reminder: TeacherReminder | undefined): TeacherReminderInput | null {
   return reminder === undefined ? null : {
@@ -180,7 +236,7 @@ export function reminderValid(deadline: string, reminder: TeacherReminderInput |
   return reminderValidationIssue(deadline, reminder) === null
 }
 
-type ReminderValidationIssue = 'required' | 'past' | 'occurrence-past'
+type ReminderValidationIssue = 'required' | 'past' | 'amount-invalid' | 'occurrence-past'
 
 function reminderValidationIssue(
   deadline: string,
@@ -189,13 +245,16 @@ function reminderValidationIssue(
   if (reminder === null) return null
   const issue = reminderDeadlineIssue(deadline)
   if (issue !== null) return issue
+  const amount = reminder.rule.kind === 'once' ? reminder.rule.minutesBefore : reminder.rule.everyMinutes
+  const minimum = reminder.rule.kind === 'once' ? 0 : 5
+  if (!Number.isInteger(amount) || amount < minimum || amount > MAX_REMINDER_MINUTES) return 'amount-invalid'
   const due = new Date(deadline).getTime()
   return reminder.rule.kind === 'once' && due - reminder.rule.minutesBefore * 60_000 <= Date.now()
     ? 'occurrence-past'
     : null
 }
 
-function reminderDeadlineIssue(deadline: string): Exclude<ReminderValidationIssue, 'occurrence-past'> | null {
+function reminderDeadlineIssue(deadline: string): 'required' | 'past' | null {
   if (deadline === '') return 'required'
   const due = new Date(deadline).getTime()
   return !Number.isFinite(due) || due <= Date.now() ? 'past' : null

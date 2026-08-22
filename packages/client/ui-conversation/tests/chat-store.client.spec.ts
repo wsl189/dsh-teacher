@@ -12,7 +12,9 @@ beforeEach(() => {
 describe('createChatStore', () => {
   it('init shape: empty selection/draft/view', () => {
     const store = createChatStore().create()
-    expect(store.store.getSnapshot()).toEqual({ selection: null, draft: '', view: null, inspect: null })
+    expect(store.store.getSnapshot()).toEqual({
+      selection: null, previewPath: null, draft: '', view: null, inspect: null,
+    })
   })
 
   it('actions cover the declared write set', () => {
@@ -22,6 +24,12 @@ describe('createChatStore', () => {
     expect(store.store.getSnapshot().selection).toEqual({ turnSeq: 3, callId: 'c1', toolName: 'bash' })
     store.actions.select(null)
     expect(store.store.getSnapshot().selection).toBeNull()
+
+    store.actions.preview('report.pdf')
+    expect(store.store.getSnapshot().previewPath).toBe('report.pdf')
+    expect(store.store.getSnapshot().selection).toBeNull()
+    store.actions.select({ turnSeq: 4 })
+    expect(store.store.getSnapshot().previewPath).toBeNull()
 
     store.actions.setDraft('hello')
     expect(store.store.getSnapshot().draft).toBe('hello')

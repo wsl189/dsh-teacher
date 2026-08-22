@@ -1,8 +1,8 @@
-/** Register the Tool call tree, details renderer, and built-in atomic views. */
+/** Register grouped Tool presentation, details output, and built-in atomic views. */
 import type { ConnectionHandle } from '@deepseek-ai/dsh-client-connection/client'
 import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { ToolCallTree } from './tool/ToolCallTree.tsx'
+import { ToolCallGroup } from './tool/ToolCallTree.tsx'
 import { ToolDetails } from './tool/ToolDetails.tsx'
 import { CONVERSATION_NS as NS } from './locale.ts'
 import { askQuestionToolview } from './tool/toolviews/ask-question-row.tsx'
@@ -23,15 +23,14 @@ export const inject = ['slots', 'connection']
 export function apply(ctx: ClientContext): void {
   const connection = ctx.get('connection') as ConnectionHandle
   const toolInject = () => ({ hooks: { hostDescription: connection.hostDescription } })
-  ctx.slots.inject('conversation.chat.node', () => ctx.slots.register({
-    name: 'conversation.chat.node',
-    key: 'tool-call',
+  ctx.slots.inject('conversation.chat.toolGroup', () => ctx.slots.register({
+    name: 'conversation.chat.toolGroup',
     locale: NS,
     children: {
       'tool.call.toolview': { kind: 'keyed', scope: 'session' },
     },
     inject: toolInject,
-  }, ToolCallTree))
+  }, ToolCallGroup))
 
   ctx.slots.inject('conversation.details.tool', () => ctx.slots.register({
     name: 'conversation.details.tool',

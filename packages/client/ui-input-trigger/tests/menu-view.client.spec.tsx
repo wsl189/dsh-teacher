@@ -88,6 +88,17 @@ describe('MenuView', () => {
     expect(screen.queryByText('正在加载…')).not.toBeNull()
   })
 
+  it('renders a launcher label without replacing the source-owned candidate name', () => {
+    mount(openState({
+      groups: [{
+        source: 'command',
+        status: 'ready',
+        items: [{ name: 'goal', label: '目标模式', description: '设置或查看长期任务目标' }],
+      }],
+    }))
+    expect(screen.getByRole('option').textContent).toBe('目标模式设置或查看长期任务目标')
+  })
+
   it('keeps an opted-out source title hidden while its candidates are pending', () => {
     mount(openState({
       groups: [{ source: 'reference', showGroupTitle: false, status: 'pending', items: [] }],

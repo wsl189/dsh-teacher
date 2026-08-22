@@ -21,6 +21,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/teacher-workbench', impo
 const SIDEBAR_EXPECTED = join(SNAPSHOT_DIR, 'sidebar.expected.md')
 const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
 const DAILY_EXPECTED = join(SNAPSHOT_DIR, 'daily.expected.md')
+const REMINDER_EXPECTED = join(SNAPSHOT_DIR, 'reminder.expected.md')
 const LEDGER_EXPECTED = join(SNAPSHOT_DIR, 'ledger.expected.md')
 const VOICE_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'voice-error.expected.md')
 const WEATHER_COMPACT_EXPECTED = join(SNAPSHOT_DIR, 'weather-compact.expected.md')
@@ -96,6 +97,15 @@ describe('web e2e: durable teacher workbench', () => {
     scaffold = await launchWebScaffold({
       ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse`,
     })
+    scaffold.ctx.provide('mobileNotifications', {
+      listTargets: async () => [{
+        channel: 'weixin',
+        botId: 'workbench-e2e-bot' as never,
+        label: '测试微信机器人',
+        connected: true,
+      }],
+      send: async () => undefined,
+    })
     browser = await chromium.launch()
     page = await browser.newPage({
       viewport: { width: 1440, height: 900 },
@@ -148,7 +158,22 @@ describe('web e2e: durable teacher workbench', () => {
     await todayCard.getByLabel('新增今日待办').fill('批改一班作业')
     await todayCard.getByRole('button', { name: '截止时间' }).click()
     const deadlineEditor = page.getByRole('dialog', { name: '设置截止时间与提醒' })
-    await deadlineEditor.getByLabel('截止时间').fill('2026-08-18T18:30')
+    await deadlineEditor.getByLabel('截止时间').fill('2099-08-18T18:30')
+    await deadlineEditor.getByRole('checkbox', { name: '发送手机机器人提醒' }).check()
+    await deadlineEditor.getByLabel('提醒方式').selectOption('repeat')
+    const frequency = deadlineEditor.getByLabel('提醒频率')
+    await frequency.fill('4')
+    await deadlineEditor.getByText('请输入 5 分钟到 365 天内、可换算为整分钟的提醒频率。').waitFor()
+    expect(await deadlineEditor.getByRole('button', { name: '保存' }).isDisabled()).toBe(true)
+    await frequency.fill('')
+    expect(await frequency.inputValue()).toBe('')
+    await deadlineEditor.getByLabel('时间单位').selectOption('hours')
+    await frequency.fill('2')
+    await compareOrRefreshGolden(
+      REMINDER_EXPECTED,
+      await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd),
+      MODE,
+    )
     await deadlineEditor.getByRole('button', { name: '保存' }).click()
     await deadlineEditor.waitFor({ state: 'hidden', timeout: 10_000 })
     await todayCard.getByRole('button', { name: '添加待办' }).click()
@@ -213,8 +238,12 @@ describe('web e2e: durable teacher workbench', () => {
     }).toBe(2)
     const saved = await scaffold.ctx.teacherWorkbench.read({})
     expect(saved.value.state.dailyTodos).toMatchObject([{
-      title: '批改一班作业', dueAt: '2026-08-18T18:30', completed: false,
+      title: '批改一班作业', dueAt: '2099-08-18T18:30', completed: false,
       category: 'today', color: 'blue',
+      reminder: {
+        channel: 'weixin', botId: 'workbench-e2e-bot', botLabel: '测试微信机器人',
+        rule: { kind: 'repeat', everyMinutes: 120 },
+      },
     }, {
       title: '准备公开课', dueAt: '', completed: false,
       category: 'important', color: 'red',

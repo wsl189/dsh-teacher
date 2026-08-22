@@ -1,0 +1,27 @@
+- dialog "设置截止时间与提醒":
+  - heading "设置截止时间与提醒" [level=2]
+  - button "关闭工作台":
+    - img
+  - text: 截止时间
+  - textbox "截止时间": 2099-08-18T{{clock}}
+  - group "定时提醒":
+    - text: 定时提醒
+    - checkbox "发送手机机器人提醒" [checked]
+    - text: 发送手机机器人提醒 提醒方式
+    - combobox "提醒方式":
+      - option "一次性提醒"
+      - option "重复提醒至截止时间" [selected]
+    - text: 提醒频率
+    - spinbutton "提醒频率": "2"
+    - combobox "时间单位":
+      - option "分钟"
+      - option "小时" [selected]
+      - option "天"
+    - text: 手机平台
+    - combobox "手机平台":
+      - option "微信" [selected]
+    - text: 机器人
+    - combobox "机器人":
+      - option "测试微信机器人" [selected]
+  - button "取消"
+  - button "保存"

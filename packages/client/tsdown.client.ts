@@ -112,7 +112,7 @@ export function clientBundle(
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(id, clientEntry)
+    const client = clientConfig(id, clientEntry, options.client)
     const node = [lib, ...(options.companions ?? [])]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     if (face === 'client') {
@@ -201,6 +201,8 @@ interface ClientBundleOptions {
   readonly companions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */
   readonly lib?: UserConfig
+  /** Overrides for the browser client bundle. */
+  readonly client?: UserConfig
 }
 
 type BuildFace = 'host' | 'client' | undefined
@@ -434,7 +436,7 @@ function matchesSpecifier(patterns: readonly RegExp[], specifier: string): boole
   return patterns.some(pattern => pattern.test(specifier))
 }
 
-function clientConfig(id: string, entry: string): UserConfig {
+function clientConfig(id: string, entry: string, overrides: UserConfig = {}): UserConfig {
   const isRequested = (specifier: string): boolean => clientExternals(id).has(specifier)
   return {
     name: `${id}/client`,
@@ -563,6 +565,7 @@ function clientConfig(id: string, entry: string): UserConfig {
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },
+    ...overrides,
   }
 }
 

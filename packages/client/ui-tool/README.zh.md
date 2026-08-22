@@ -2,13 +2,15 @@
 
 [English](README.md) | 中文
 
-Client 工具展示插件。`ui-conversation` 通过 `conversation.chat.node` 的匹配 key 分发每个已排序的 `tool-call` Conversation Node；本包渲染其中的 root 及其 Code Dispatch 子调用，并把每个原子调用通过 keyed slot `tool.call.toolview` 分发。没有注册的工具名称使用通用卡片。
+Client 工具展示插件。`ui-conversation` 把已排序的 `tool-call` Conversation Node 划分为最大的连续分组，并通过 `conversation.chat.toolGroup` 分发每组；本包渲染其中的 root 及其 Code Dispatch 子调用，并把每个原子调用通过 keyed slot `tool.call.toolview` 分发。没有注册的工具名称使用通用卡片。
 
 业务 UI 包只注册 wire 工具名称和原子视图，不配对会话事件、不重建 transcript（文本记录），也不拥有 root/subcall 拓扑。运行时仍对 call/result 配对、生命周期和递归 `subCalls` 投影拥有最终决定权；conversation view 仍对 ChatFlow 位置拥有最终决定权。
 
 ## 渲染约定
 
-`ToolCallTree` 接收一个已经包含递归 `subCalls` 的 root `ToolCallBlock`、selection 状态、会话 `cwd`，以及用于打开文件和检查调用的 Host 回调。它递归遍历标准调用块，让 root 与任意深度的 child 经过同一条原子分发路径，不订阅独立的 parent-to-children map。
+`ToolCallGroup` 接收一个连续分组中按顺序排列的 Chat Node key、selection 状态、会话 `cwd`，以及用于打开文件和检查调用的 Host 回调。没有 child 的单个 root 仍显示为普通工具行。存在两个或更多调用时（递归 Code Dispatch child 也计数），界面默认显示一行收起的动作摘要；激活该行会展开原有 root tree。摘要按首次出现顺序归并编辑、读取、搜索、命令、代码和通用动作，用 `×N` 标记重复项，并保留运行中、失败与已停止状态。未知工具名称只在生成摘要时按动词 token 分类，展开后仍使用其已注册的原子 renderer 或 Generic renderer。
+
+每个 root `ToolCallBlock` 已包含递归 `subCalls`。renderer 让任意深度的标准调用块经过同一条原子分发路径，不订阅独立的 parent-to-children map。conversation 拥有连续分组成员关系与外层 flow anchor；工具拥有摘要文案、disclosure 状态和递归展示。
 
 每个 root 和 child 包装层都保留 `data-chat-anchor-key="call:<id>"` 与 `data-chat-call-id` DOM 约定，供分页和 selection 使用。
 

@@ -343,6 +343,7 @@ describe('DetailsPanel diff Output section', () => {
         useProjection={(() => undefined)}
         useStore={bindSnapshotSelector(chat)}
         actions={chat.actions}
+        openFile={vi.fn(async () => {})}
         closeDetails={vi.fn()}
         t={t}
       />,

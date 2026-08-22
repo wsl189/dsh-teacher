@@ -64,7 +64,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await scaffold?.close()
   })
 
-  it.skipIf(MODE === 'record')('opens the shared slash menu from plus with only Command candidates', async () => {
+  it.skipIf(MODE === 'record')('opens the shared slash menu from plus with only Goal and Plan modes', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-command-menu-launcher'))
     const launcher = page.getByRole('button', { name: 'Commands' })
     await launcher.click()
@@ -72,7 +72,11 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
     await menu.waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(COMMAND_MENU_EXPECTED, snapshot, MODE)
-    expect(snapshot).toContain('text: Commands')
+    expect(await menu.getByRole('option').allTextContents()).toEqual([
+      'Goal modeSet or view the goal for a long-running task',
+      'Plan modeEnter or leave plan mode',
+    ])
+    expect(snapshot).not.toContain('text: Commands')
     expect(snapshot).not.toContain('text: Skills')
     expect(snapshot).not.toContain('text: Subagents')
     const launchedBox = await menu.boundingBox()
@@ -110,7 +114,7 @@ describe('web e2e: lifecycle & chrome (workspace flow / reload / dark mode)', ()
       await activePage.getByRole('button', { name: 'Commands' }).click()
       const menu = activePage.getByRole('listbox', { name: 'Trigger suggestions' })
       await menu.waitFor({ timeout: 10_000 })
-      await menu.getByRole('option', { name: 'plan Enter or leave plan mode' }).click()
+      await menu.getByRole('option', { name: 'Plan mode Enter or leave plan mode' }).click()
       await expect.poll(() => input.inputValue()).toBe('/plan ')
       await input.press('Enter')
       const planButton = activePage.getByRole('button', { name: 'Plan mode on, press to turn off' })

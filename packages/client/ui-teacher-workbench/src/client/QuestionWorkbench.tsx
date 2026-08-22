@@ -56,6 +56,7 @@ export interface QuestionWorkbenchProps {
 type BusyTask = 'pdf' | 'cut' | 'document' | 'assign' | 'temporary' | 'student' | 'folder' | null
 
 const HIERARCHY_CLICK_WINDOW_MS = 260
+const LIBRARY_NAME_VISIBLE_CHARACTERS = 7
 
 interface EditorRequest {
   readonly target: TeacherQuestionImageTarget
@@ -978,9 +979,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
           <span className={css.legacyStatusDot} aria-hidden="true" />
           <h2>{t('questions.referenceTitle')}</h2>
         </div>
-        <div className={css.legacyTopCenter} title={activeBatch?.name}>
-          {activeBatch?.name ?? t('questions.newPaper')}
-        </div>
         <div className={css.legacyTopActions}>
           <div ref={skillMenuRef} className={css.legacySkillMenuWrap}>
             <TopAction icon={<Grid2X2Plus size={18} />} label={t('questions.skillLibrary')} expanded={skillMenuOpen} onClick={() => { setSkillMenuOpen(value => !value) }} />
@@ -1146,10 +1144,11 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                   type="button"
                   className={row.folder.id === activeLibraryFolderId ? css.legacyFolderButtonActive : css.legacyFolderButton}
                   aria-expanded={row.expanded}
+                  aria-label={`${libraryFolderMarker(row)}${row.folder.name}`}
                   title={t('questions.libraryFolderClickHint')}
                   onClick={() => { handleLibraryHierarchyClick(row.folder) }}
                 >
-                  <span>{row.hasChildren ? row.expanded ? '▾ ' : '▸ ' : '· '}{row.folder.name}</span>
+                  <span title={row.folder.name}>{libraryFolderMarker(row)}{truncateLibraryName(row.folder.name)}</span>
                   <small>{libraryFolderImageCount(row.folder.id, state.questionLibraryFolders, state.questionBatches)}</small>
                 </button>
                 <button
@@ -1161,8 +1160,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
               </div>
             ) : (
               <div key={`batch:${row.batch.id}`} className={css.legacyFolderRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
-                <button type="button" className={row.batch.id === activeBatchId ? css.legacyFolderButtonActive : css.legacyFolderButton} onClick={() => { openBatch(row.batch.id) }}>
-                  <span>{row.batch.name}</span><small>{row.batch.images.length}</small>
+                <button type="button" className={row.batch.id === activeBatchId ? css.legacyFolderButtonActive : css.legacyFolderButton} aria-label={`${row.batch.name} ${String(row.batch.images.length)}`} onClick={() => { openBatch(row.batch.id) }}>
+                  <span title={row.batch.name}>{truncateLibraryName(row.batch.name)}</span><small>{row.batch.images.length}</small>
                 </button>
                 <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteBatch(row.batch.id, row.batch.name) }}><X size={13} /></button>
               </div>
@@ -1634,6 +1633,18 @@ function toggleSet(current: ReadonlySet<string>, value: string): Set<string> {
 function displayStudentName(value: string): string {
   const name = value.trim()
   return name.length > 4 ? `${name.slice(0, 4)}…` : name
+}
+
+function truncateLibraryName(value: string): string {
+  const characters = Array.from(value)
+  return characters.length <= LIBRARY_NAME_VISIBLE_CHARACTERS
+    ? value
+    : `${characters.slice(0, LIBRARY_NAME_VISIBLE_CHARACTERS).join('')}…`
+}
+
+function libraryFolderMarker(row: Extract<LibraryHierarchyRow, { kind: 'folder' }>): string {
+  if (!row.hasChildren) return ''
+  return row.expanded ? '▾ ' : '▸ '
 }
 
 interface FolderPickedImage {

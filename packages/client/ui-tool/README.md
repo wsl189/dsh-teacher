@@ -2,13 +2,15 @@
 
 English | [中文](README.zh.md)
 
-Client Tool presentation plugin. `ui-conversation` dispatches each ordered `tool-call` Conversation Node through the matching key of `conversation.chat.node`; this package renders its root and Code Dispatch children, then dispatches every atomic call through the keyed `tool.call.toolview` slot. Unregistered Tool names use the generic card.
+Client Tool presentation plugin. `ui-conversation` partitions ordered `tool-call` Conversation Nodes into maximal consecutive runs and dispatches each run through `conversation.chat.toolGroup`; this package renders their roots and Code Dispatch children, then dispatches every atomic call through the keyed `tool.call.toolview` slot. Unregistered Tool names use the generic card.
 
 Business UI packages register only their wire Tool names and atomic views. They do not pair Session events, rebuild the transcript, or own root/subcall topology. The Runtime remains authoritative for call/result pairing, lifecycle, and recursive `subCalls` projection; the conversation view remains authoritative for ChatFlow placement.
 
 ## Rendering contract
 
-`ToolCallTree` receives one root `ToolCallBlock` that already contains recursive `subCalls`, selection state, the session `cwd`, and Host callbacks for opening files and inspecting calls. It recursively walks the standard call blocks and sends the root and children at every depth through the same atomic dispatch path, without subscribing to a separate parent-to-children map.
+`ToolCallGroup` receives the ordered Chat Node keys for one consecutive run, selection state, the session `cwd`, and Host callbacks for opening files and inspecting calls. A single root without children remains an ordinary Tool row. Two or more calls, counting recursive Code Dispatch children, render as one collapsed action summary; activating that row expands the original root trees. The summary groups edit, read, search, command, code, and generic actions in first-occurrence order, adds `×N` for repeats, and retains running, failed, and stopped state. Unknown Tool names use verb-token classification only for this summary and still use their registered or Generic atomic renderer after expansion.
+
+Each root `ToolCallBlock` already contains recursive `subCalls`. The renderer walks those standard blocks at every depth through the same atomic dispatch path without subscribing to a separate parent-to-children map. Conversation owns consecutive-run membership and the outer flow anchor; Tool owns summary wording, disclosure state, and recursive presentation.
 
 Each root and child wrapper preserves the `data-chat-anchor-key="call:<id>"` and `data-chat-call-id` DOM contract used for paging and selection.
 

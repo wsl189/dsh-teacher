@@ -8,6 +8,9 @@
 import { Context } from '@deepseek-ai/cordis'
 import { act, cleanup, fireEvent, render, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+
+vi.mock('pdfjs-dist', () => ({ getDocument: vi.fn() }))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: {} }))
 import {
   ConversationEventRegistry, ConversationNodeAssembler, SlotRegistry,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -73,10 +76,10 @@ const produced = (...values: ReadonlyArray<readonly [seq: number, path: string]>
 function tailOwner(
   data: DeliverablesTurnData | undefined,
   seq: number,
-  openFile: (path: string) => void = () => {},
+  previewFile: (path: string) => void = () => {},
   turn = 1,
 ): TurnTailOwnerProps {
-  return { seq, openFile, turn: turnLocation(turn, data) }
+  return { seq, openFile: () => {}, previewFile, turn: turnLocation(turn, data) }
 }
 
 interface TimelineSnapshot {
@@ -309,6 +312,7 @@ describe('ProducedFiles row', () => {
   it('keeps one measured line, updates on resize, and opens a file or the workspace folder', () => {
     const paths = ['deep/a.html', 'b.css', 'c.ts', 'd.ts', 'e.ts', 'f.ts', 'g.ts']
     const openFile = vi.fn<(path: string) => void>()
+    const previewFile = vi.fn<(path: string) => void>()
     let available = 226
     let resize: ResizeObserverCallback | undefined
     const disconnect = vi.fn()
@@ -337,7 +341,7 @@ describe('ProducedFiles row', () => {
       })
 
     const view = render(
-      <ProducedFiles matched={paths} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={paths} openFile={openFile} previewFile={previewFile} {...capability(true)} t={t} />,
     )
     expect(view.getByText('产物')).toBeTruthy()
     const row = view.container.querySelector('[data-produced-files-row]')
@@ -345,12 +349,12 @@ describe('ProducedFiles row', () => {
     // The third probe is 100px: two chips plus the remainder fit, three do not.
     expect(within(row).getAllByRole('button')).toHaveLength(2)
     expect(within(row).getByText('+ 5 个文件')).toBeTruthy()
-    const chip = view.getByRole('button', { name: '打开 deep/a.html' })
+    const chip = view.getByRole('button', { name: '预览 deep/a.html' })
     expect(chip.textContent).toBe('a.html')
     expect(chip.getAttribute('title')).toBe('deep/a.html')
-    expect(view.queryByRole('button', { name: '打开 g.ts' })).toBeNull()
+    expect(view.queryByRole('button', { name: '预览 g.ts' })).toBeNull()
     fireEvent.click(chip)
-    expect(openFile).toHaveBeenCalledWith('deep/a.html')
+    expect(previewFile).toHaveBeenCalledWith('deep/a.html')
 
     const showFolder = view.getByRole('button', { name: '在文件夹中显示' })
     fireEvent.click(showFolder)
@@ -371,7 +375,7 @@ describe('ProducedFiles row', () => {
     // shrinks; the replacement observer must skip those stale slots.
     observeNode.mockClear()
     view.rerender(
-      <ProducedFiles matched={paths.slice(0, 1)} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={paths.slice(0, 1)} openFile={openFile} previewFile={previewFile} {...capability(true)} t={t} />,
     )
     expect(within(row).getAllByRole('button')).toHaveLength(1)
     expect(observeNode).toHaveBeenCalledTimes(3)
@@ -384,12 +388,12 @@ describe('ProducedFiles row', () => {
   it('keeps the folder action absent without overflow or a local native opener', () => {
     const openFile = vi.fn<(path: string) => void>()
     const view = render(
-      <ProducedFiles matched={['a.md']} openFile={openFile} {...capability(true)} t={t} />,
+      <ProducedFiles matched={['a.md']} openFile={openFile} previewFile={() => {}} {...capability(true)} t={t} />,
     )
     const overflowing = ['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']
     expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
     for (const unavailable of [capability(false), capability(true, false), capability(undefined)]) {
-      view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} {...unavailable} t={t} />)
+      view.rerender(<ProducedFiles matched={overflowing} openFile={openFile} previewFile={() => {}} {...unavailable} t={t} />)
       expect(view.queryByRole('button', { name: '在文件夹中显示' })).toBeNull()
     }
   })
@@ -399,6 +403,7 @@ describe('ProducedFiles row', () => {
       <ProducedFiles
         matched={['a.md', 'b.md', 'c.md', 'd.md', 'e.md', 'f.md', 'g.md']}
         openFile={() => {}}
+        previewFile={() => {}}
         {...capability(false)}
         t={makeTranslate(en)}
       />,
@@ -458,11 +463,17 @@ describe('plugin registration', () => {
     // The owning view's child declaration, stood up by a bench root entry.
     ctx.slots.register({
       name: 'root',
-      children: { 'conversation.chat.turnTail': { kind: 'chain', scope: 'session' } },
+      children: {
+        'conversation.chat.turnTail': { kind: 'chain', scope: 'session' },
+        'conversation.details.file': { kind: 'single', scope: 'session' },
+      },
     } as never, () => null)
     const hostDescription = { getSnapshot: () => undefined, subscribe: () => () => {} }
     ctx.provide('connection', {
-      api: { settings: {} },
+      api: {
+        settings: {},
+        sessions: { previewFile: vi.fn() },
+      },
       isLoopback: false,
       hostDescription,
     } as never)
@@ -476,6 +487,7 @@ describe('plugin registration', () => {
     const [entry] = ctx.slots.entries('conversation.chat.turnTail')
     expect(entry).toBeDefined()
     expect(entry?.inject?.()).toEqual({ isLoopback: false, hooks: { hostDescription } })
+    expect(ctx.slots.entries('conversation.details.file')).toHaveLength(1)
 
     // The prose face is live while the plugin is: a produced turn yields a
     // resolver whose matches open through the owner-supplied opener.
@@ -494,6 +506,7 @@ describe('plugin registration', () => {
 
     await fiber.dispose()
     expect(ctx.slots.entries('conversation.chat.turnTail')).toHaveLength(0)
+    expect(ctx.slots.entries('conversation.details.file')).toHaveLength(0)
     // Fiber teardown retracts the service: the consumer's ctx.get sees the off state.
     expect((ctx as unknown as { get(name: string): unknown }).get('chatFileMentions')).toBeUndefined()
   })

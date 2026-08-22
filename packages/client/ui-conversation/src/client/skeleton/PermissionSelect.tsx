@@ -45,20 +45,28 @@ function permissionGlyph(value: string): ReactNode | undefined {
   return permissionGlyphs[value]
 }
 
-/**
- * Display transform: kebab-case machine names render as title-case labels
- * (`workspace-write` → `Workspace Write`); non-kebab host-configured names
- * pass through. Full access intentionally overrides the machine-name
- * transform so both permission surfaces use the product label `Full access`;
- * the warning body remains locale-aware.
- */
+/** Fallback display transform for host-configured values outside the localized design set. */
 function displayName(name: string): string {
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) return name
   return name.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
-function optionLabel(option: PermissionSelectValue['options'][number]): string {
-  return option.value === FULL_ACCESS ? 'Full access' : displayName(option.name)
+interface OptionCopy {
+  label: string
+  description: string | undefined
+}
+
+function optionCopy(option: PermissionSelectValue['options'][number], t: ComposerBarProps['t']): OptionCopy {
+  switch (option.value) {
+    case 'read-only':
+      return { label: t('access.option.readOnly'), description: t('access.option.readOnlyDescription') }
+    case 'workspace-write':
+      return { label: t('access.option.workspaceWrite'), description: t('access.option.workspaceWriteDescription') }
+    case FULL_ACCESS:
+      return { label: t('access.option.fullAccess'), description: t('access.option.fullAccessDescription') }
+    default:
+      return { label: displayName(option.name), description: option.description }
+  }
 }
 
 export interface PermissionSelectProps {
@@ -86,13 +94,21 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
 
   const currentValue = pick ?? value.currentValue
   const current = value.options.find(option => option.value === currentValue)
+  const currentCopy = current === undefined ? undefined : optionCopy(current, t)
   const busy = pick !== null || confirmation !== null
 
   const items: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')
     .map((option) => {
       const icon = permissionGlyph(option.value)
-      return { id: option.value, label: optionLabel(option), ...icon === undefined ? {} : { icon } }
+      const copy = optionCopy(option, t)
+      const label = (
+        <span className={css.optionCopy}>
+          <span className={css.optionLabel}>{copy.label}</span>
+          {copy.description !== undefined && <span className={css.optionDescription}>{copy.description}</span>}
+        </span>
+      )
+      return { id: option.value, label, ...icon === undefined ? {} : { icon } }
     })
 
   const submit = (id: string): void => {
@@ -138,15 +154,15 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
           <button
             type="button"
             className={css.trigger}
-            aria-label={t('input.accessMode', { name: current === undefined ? displayName(currentValue) : optionLabel(current) })}
-            title={current?.description}
+            aria-label={t('input.accessMode', { name: currentCopy?.label ?? displayName(currentValue) })}
+            title={currentCopy?.description}
             disabled={locked || busy}
             onClick={() => { setOpen(!open) }}
           >
             {permissionGlyph(currentValue) !== undefined && (
               <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
             )}
-            <span className={css.triggerLabel}>{current === undefined ? displayName(currentValue) : optionLabel(current)}</span>
+            <span className={css.triggerLabel}>{currentCopy?.label ?? displayName(currentValue)}</span>
             {/* Same glyph + open rotation as the sibling ModelSelect trigger. */}
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
               <IconChevronDownOutline14 />

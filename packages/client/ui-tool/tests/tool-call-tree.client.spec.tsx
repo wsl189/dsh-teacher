@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 /** ToolCallTree-owned root/subcall markers and selection projection. */
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, render } from '@testing-library/react'
+import { cleanup, fireEvent, render } from '@testing-library/react'
 import type { HostDescription } from '@deepseek-ai/dsh-client-connection/client'
 import type { ConversationSnapshot, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
-import type { ToolTreeProps } from '../src/client/contract/slots.ts'
-import { ToolCallTree } from '../src/client/tool/ToolCallTree.tsx'
+import type { ToolGroupProps, ToolTreeProps } from '../src/client/contract/slots.ts'
+import { ToolCallGroup, ToolCallTree } from '../src/client/tool/ToolCallTree.tsx'
 import { zh } from '@deepseek-ai/dsh-client-ui-conversation/src/client/locales.ts'
 
 afterEach(cleanup)
@@ -51,6 +51,42 @@ function props(
   } as unknown as ToolTreeProps
 }
 
+function groupProps(blocks: readonly ToolResultNode[]): ToolGroupProps {
+  const nodes = blocks.map(block => ({
+    key: `tool:${block.callId}`,
+    kind: 'tool-call' as const,
+    id: block.callId,
+    target: 'chat' as const,
+    anchorSeq: block.seq,
+    location: { kind: 'session' as const },
+    visibility: 'visible' as const,
+    data: { root: block },
+  }))
+  const byKey = new Map(nodes.map(node => [node.key, node]))
+  const snapshot = {
+    chat: {
+      nodes: {
+        get: (key: string) => byKey.get(key),
+        values: () => nodes,
+      },
+    },
+  } as unknown as ConversationSnapshot
+  const useSession = ((selector: (value: ConversationSnapshot) => unknown) => selector(snapshot)) as ToolGroupProps['useSession']
+  const renderSlot = ((_key: string, _owner: object, options?: { fallback?: React.ReactNode }) =>
+    options?.fallback ?? null) as unknown as ToolGroupProps['renderSlot']
+  return {
+    useSession,
+    renderSlot,
+    nodeKeys: nodes.map(node => node.key),
+    openFile: vi.fn(),
+    inspectCall: vi.fn(),
+    forkAt: vi.fn(),
+    fileMentions: vi.fn(),
+    useHostDescription: (selector => selector(undefined)) as ToolGroupProps['useHostDescription'],
+    t,
+  } as unknown as ToolGroupProps
+}
+
 describe('ToolCallTree', () => {
   it('owns the root marker, generic fallback, and selected state for a window-truncated call', () => {
     const block = root('w1', null)
@@ -88,5 +124,33 @@ describe('ToolCallTree', () => {
       version: '0', cwd: '/tmp', attachedSessions: 0, home: '/h', canOpenPath: false,
     })} />)
     expect(view.getByText('~/docs/a.ts')).toBeTruthy()
+  })
+})
+
+describe('ToolCallGroup', () => {
+  it('summarizes repeated domain actions in one row and expands the original calls', () => {
+    const blocks = Array.from({ length: 10 }, (_, index) => index % 2 === 0
+      ? root(`edit-${index}`, {
+        name: 'teacher_question_workbench.erase_image_regions', argsRaw: '{}',
+      })
+      : root(`read-${index}`, {
+        name: 'teacher_question_image_read.batch', argsRaw: '{}',
+      }))
+    const view = render(<ToolCallGroup {...groupProps(blocks)} />)
+    const disclosure = view.getByRole('button', { name: '编辑了文件 ×5、读取了内容 ×5' })
+    expect(view.container.querySelectorAll('[data-chat-call-id]')).toHaveLength(0)
+    expect(disclosure.getAttribute('aria-expanded')).toBe('false')
+
+    fireEvent.click(disclosure)
+
+    expect(disclosure.getAttribute('aria-expanded')).toBe('true')
+    expect(view.container.querySelectorAll('[data-chat-call-id]')).toHaveLength(10)
+  })
+
+  it('collapses recursive Code Dispatch work even when it has one root', () => {
+    const child = root('root:code:1', { name: 'read', argsRaw: '{"path":"a.ts"}' })
+    const block = { ...root('root', { name: 'run_code', argsRaw: '{"code":"return 1"}' }), subCalls: [child] }
+    const view = render(<ToolCallGroup {...groupProps([block])} />)
+    expect(view.getByRole('button', { name: '运行了代码、读取了内容' })).toBeTruthy()
   })
 })

@@ -29,8 +29,8 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
     'image.openOriginal': '查看原图',
     'image.scrollLeft': '向左滚动图片',
     'image.scrollRight': '向右滚动图片',
-    'image.dropBlocked': '当前无法添加图片',
-    'image.dropTitle': '图片拖动到此处即可添加',
+    'image.dropBlocked': '当前无法添加文件夹或图片',
+    'image.dropTitle': '将文件夹或图片拖到此处',
   }
   if (key === 'image.remove') {
     const name = params?.name
@@ -39,7 +39,7 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
   if (key === 'image.dropDesc') {
     const count = params?.count
     const size = params?.size
-    return `最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
+    return `文件夹仅添加路径；图片最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
   }
   return messages[key] ?? key
 }) as ComposerAttachmentsProps['t']
@@ -58,6 +58,7 @@ function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): Composer
     attachments: [],
     canAcceptDrop: true,
     onAddImages: () => {},
+    onAddDirectories: () => {},
     onRemoveImage: () => {},
     t,
     ...overrides,
@@ -80,15 +81,69 @@ describe('ComposerAttachments', () => {
     expect(view.queryByRole('status')).toBeNull()
 
     const image = attachment('dropped').file
-    const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
+    const dataTransfer = { types: ['Files'], files: [image], items: [], dropEffect: 'none' }
     expect(fireEvent.dragEnter(document.body, { dataTransfer })).toBe(false)
-    expect(view.getByRole('status').textContent).toContain('图片拖动到此处即可添加')
-    expect(view.getByRole('status').textContent).toContain('最多 20 张，每张 5MB')
+    expect(view.getByRole('status').textContent).toContain('将文件夹或图片拖到此处')
+    expect(view.getByRole('status').textContent).toContain('文件夹仅添加路径；图片最多 20 张，每张 5MB')
     expect(fireEvent.dragOver(document.body, { dataTransfer })).toBe(false)
     expect(dataTransfer.dropEffect).toBe('copy')
     expect(fireEvent.drop(document.body, { dataTransfer })).toBe(false)
     expect(onAddImages).toHaveBeenCalledWith([image])
     expect(view.queryByRole('status')).toBeNull()
+  })
+
+  it('routes directory paths without enumerating their contents and keeps mixed images separate', () => {
+    const onAddDirectories = vi.fn()
+    const onAddImages = vi.fn()
+    const createReader = vi.fn()
+    render(<ComposerAttachments {...props({ onAddDirectories, onAddImages })} />)
+    const image = attachment('mixed').file
+    const dataTransfer = {
+      types: ['Files'],
+      files: [image],
+      items: [
+        {
+          kind: 'file',
+          getAsFile: () => null,
+          webkitGetAsEntry: () => ({
+            isDirectory: true,
+            name: 'design notes',
+            fullPath: '/workspace/design notes',
+            createReader,
+          }),
+        },
+        {
+          kind: 'file',
+          getAsFile: () => image,
+          webkitGetAsEntry: () => ({ isDirectory: false, name: image.name, fullPath: `/${image.name}` }),
+        },
+      ],
+      dropEffect: 'none',
+    }
+
+    fireEvent.drop(document.body, { dataTransfer })
+    expect(onAddDirectories).toHaveBeenCalledWith(['workspace/design notes'])
+    expect(onAddImages).toHaveBeenCalledWith([image])
+    expect(createReader).not.toHaveBeenCalled()
+  })
+
+  it('prefers a native dropped directory path when the client exposes one', () => {
+    const onAddDirectories = vi.fn()
+    render(<ComposerAttachments {...props({ onAddDirectories })} />)
+    const directory = new File([], 'source')
+    Object.defineProperty(directory, 'path', { value: 'C:\\work\\source' })
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [],
+        items: [{
+          kind: 'file',
+          getAsFile: () => directory,
+          webkitGetAsEntry: () => ({ isDirectory: true, name: 'source', fullPath: '/source' }),
+        }],
+      },
+    })
+    expect(onAddDirectories).toHaveBeenCalledWith(['C:/work/source'])
   })
 
   it('tracks nested file drags and clears an aborted drag', () => {
@@ -119,15 +174,17 @@ describe('ComposerAttachments', () => {
 
   it('shows a blocked drop without forwarding its files', () => {
     const onAddImages = vi.fn()
-    const view = render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddImages })} />)
+    const onAddDirectories = vi.fn()
+    const view = render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddImages, onAddDirectories })} />)
     const image = attachment('blocked').file
     const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'copy' }
     fireEvent.dragEnter(document.body, { dataTransfer })
-    expect(view.getByRole('status').textContent).toBe('当前无法添加图片')
+    expect(view.getByRole('status').textContent).toBe('当前无法添加文件夹或图片')
     fireEvent.dragOver(document.body, { dataTransfer })
     expect(dataTransfer.dropEffect).toBe('none')
     fireEvent.drop(document.body, { dataTransfer })
     expect(onAddImages).not.toHaveBeenCalled()
+    expect(onAddDirectories).not.toHaveBeenCalled()
     expect(view.queryByRole('status')).toBeNull()
   })
 

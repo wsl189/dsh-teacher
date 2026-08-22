@@ -31,7 +31,7 @@ import {
   accessEn, accessZh, en, zh,
 } from './locales.ts'
 import {
-  displayPermissionPreset, FULL_ACCESS_PRESET,
+  FULL_ACCESS_PRESET, permissionPresetCopy,
 } from './presentation.ts'
 import { PermissionPresetSettingsController } from './settings-store.ts'
 
@@ -54,23 +54,26 @@ function selectOf(session: SessionFace | undefined): PermissionSelect | undefine
 function optionsOf(value: PermissionSelect, t: (key: string) => string): SelectOption[] {
   return value.options
     .filter(option => option.value !== 'custom')
-    .map(option => ({
-      id: option.value,
-      label: displayPermissionPreset(option.value, option.name),
-      ...(option.description !== undefined ? { detail: option.description } : {}),
-      ...(option.value === value.currentValue ? { active: true } : {}),
-      ...(option.value === FULL_ACCESS_PRESET
-        ? {
-          confirmation: {
-            title: t('confirm.title'),
-            description: t('confirm.description'),
-            acknowledgeLabel: t('confirm.acknowledge'),
-            cancelLabel: t('confirm.cancel'),
-            confirmLabel: t('confirm.enable'),
-          },
-        }
-        : {}),
-    }))
+    .map((option) => {
+      const copy = permissionPresetCopy(option.value, option.name, option.description, t)
+      return {
+        id: option.value,
+        label: copy.label,
+        ...(copy.description !== undefined ? { detail: copy.description } : {}),
+        ...(option.value === value.currentValue ? { active: true } : {}),
+        ...(option.value === FULL_ACCESS_PRESET
+          ? {
+            confirmation: {
+              title: t('confirm.title'),
+              description: t('confirm.description'),
+              acknowledgeLabel: t('confirm.acknowledge'),
+              cancelLabel: t('confirm.cancel'),
+              confirmLabel: t('confirm.enable'),
+            },
+          }
+          : {}),
+      }
+    })
 }
 
 /**
@@ -86,20 +89,8 @@ export function apply(ctx: ClientContext): void {
   /* jscpd:ignore-start */
   ctx.effect(() => {
     const disposers = [
-      ctx.locale.register(ACCESS_NS, 'zh', {
-        'confirm.title': accessZh['confirm.title'],
-        'confirm.description': accessZh['confirm.description'],
-        'confirm.acknowledge': accessZh['confirm.acknowledge'],
-        'confirm.cancel': accessZh['confirm.cancel'],
-        'confirm.enable': accessZh['confirm.enable'],
-      }),
-      ctx.locale.register(ACCESS_NS, 'en', {
-        'confirm.title': accessEn['confirm.title'],
-        'confirm.description': accessEn['confirm.description'],
-        'confirm.acknowledge': accessEn['confirm.acknowledge'],
-        'confirm.cancel': accessEn['confirm.cancel'],
-        'confirm.enable': accessEn['confirm.enable'],
-      }),
+      ctx.locale.register(ACCESS_NS, 'zh', accessZh),
+      ctx.locale.register(ACCESS_NS, 'en', accessEn),
     ]
     return () => { for (const dispose of disposers) dispose() }
   }, 'ui-permission: Full access confirmation dictionaries')

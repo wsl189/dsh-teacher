@@ -2,11 +2,10 @@
 // Code Mode sub-call acceptance on the REAL machinery stack (same bench as
 // chat-toolview-slot.spec): a run_code result renders the 'code' variant row
 // (description summary, program body), its logged sub-dispatches render as
-// always-visible nested rows through the SAME keyed toolview hole — the bash
-// sub-call lands in the bash sample plugin's registration exactly like a
-// top-level bash row, unregistered sub-tools fall back to GenericToolCard —
-// and a file sub-row click opens the host path. Running parents
-// (runningCalls) nest their so-far dispatches the same way.
+// nested rows through the SAME keyed toolview hole after the action summary is
+// expanded — bash lands in the sample registration exactly like a top-level
+// row, unregistered sub-tools use GenericToolCard, and a file sub-row opens the
+// host path. Running parents nest their so-far dispatches the same way.
 
 import { Context } from '@deepseek-ai/cordis'
 import { stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
@@ -165,6 +164,8 @@ async function bench(snapshot: ConversationSnapshot) {
   } as never)
   // ui-theme's Appearance row binds a durable scope through these two.
   ctx.provide('remote', { $on: () => () => {} } as never)
+  ctx.provide('remote.ocr', { extract: vi.fn() } as never)
+  ctx.provide('remote.teacherWorkbench', {} as never)
   ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const locale = new LocaleRuntime(ctx)
   ctx.provide('locale', locale)
@@ -190,6 +191,11 @@ function mountApp(slots: SlotRegistry) {
   return render(<>{slots.renderSlot('root', {})}</>)
 }
 
+function expandToolGroup(view: ReturnType<typeof mountApp>): void {
+  const toggle = view.container.querySelector('[data-tool-group] [role="button"]')
+  if (toggle !== null) fireEvent.click(toggle)
+}
+
 describe('run_code sub-calls through the real chat machinery', () => {
   it('renders the code-variant parent row with the description summary and nested sub-rows', async () => {
     const parent = 'call-64'
@@ -199,6 +205,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
 
     // Parent row: the code variant with the model-authored description.
     const codeRoot = view.container.querySelector('[data-variant="code"]')
@@ -206,10 +213,8 @@ describe('run_code sub-calls through the real chat machinery', () => {
     expect(view.getByText('Code')).toBeTruthy()
     expect(view.getByText('List the notes directory')).toBeTruthy()
 
-    // Nested rows are ALWAYS visible (no parent expand needed): the bash
-    // sub-call landed in the bash sample plugin's keyed registration — Bash ·
-    // description chrome, same as a top-level bash row — and the unregistered
-    // sub-tool fell back to GenericToolCard at the same render site.
+    // Expanded nested rows use the same atomic dispatch as top-level calls:
+    // bash lands in the sample registration and mystery uses Generic fallback.
     const nest = view.container.querySelector('[data-subcalls]')
     expect(nest).not.toBeNull()
     expect(nest!.querySelector('[data-sample="bash"]')).not.toBeNull()
@@ -227,6 +232,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
     const nest = view.container.querySelector('[data-subcalls]')!
 
     // Each run-control verb names its act and shows the package id; without the
@@ -262,6 +268,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
     const nested = view.container.querySelector('[data-subcalls] [data-variant][data-state="error"]')
     expect(nested).not.toBeNull()
   })
@@ -274,6 +281,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([codeResult(10, parent)], subCalls))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
     view.getByText('notes/demo.txt').click()
     expect(b.layout.openDetails).not.toHaveBeenCalled()
     await vi.waitFor(() => {
@@ -290,6 +298,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     ]
     const b = await bench(snapshotWith([], subCalls, [runningCode(parent)]))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
     const running = view.container.querySelector('[data-variant="code"][data-state="running"]')
     expect(running).not.toBeNull()
     const nest = view.container.querySelector('[data-subcalls]')
@@ -305,6 +314,7 @@ describe('run_code sub-calls through the real chat machinery', () => {
     }
     const b = await bench(snapshotWith([], [runningSub], [runningCode(parent)]))
     const view = mountApp(b.slots)
+    expandToolGroup(view)
     // The nested row derives 'running' from the RunningToolCall shape — the
     // same data-state chrome (row sweep) a native in-flight row wears.
     const nested = view.container.querySelector('[data-subcalls] [data-variant][data-state="running"]')

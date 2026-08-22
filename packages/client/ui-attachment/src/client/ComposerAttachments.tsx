@@ -14,9 +14,52 @@ interface ComposerRailItem extends AttachmentRailItem {
   attachment: ComposerAttachment
 }
 
-/** Draft-image rail, document drop target, and original-image preview slot entry. */
+/** Directory metadata exposed by Chromium's drag-and-drop entry API. */
+interface DroppedEntry {
+  readonly isDirectory: boolean
+  readonly fullPath?: string
+  readonly name: string
+}
+
+/** A dropped batch split without enumerating directory contents. */
+interface DroppedBatch {
+  readonly directories: readonly string[]
+  readonly files: readonly File[]
+}
+
+/** Resolve a directory path from native-client metadata or the browser-relative entry. */
+function droppedDirectoryPath(entry: DroppedEntry, file: File | null): string | undefined {
+  const nativePath: unknown = file === null ? undefined : Reflect.get(file, 'path')
+  const native = typeof nativePath === 'string' && nativePath !== ''
+  const raw = native ? nativePath : entry.fullPath ?? entry.name
+  const normalized = raw.replaceAll('\\', '/').replace(/\/+$/u, '')
+  const path = native ? normalized : normalized.replace(/^\/+/u, '')
+  return path === '' ? undefined : path
+}
+
+/** Split dropped files from directory paths without traversing a directory tree. */
+function droppedBatch(dataTransfer: DataTransfer): DroppedBatch {
+  const items = [...dataTransfer.items]
+  if (items.length === 0) return { directories: [], files: [...dataTransfer.files] }
+  const directories: string[] = []
+  const files: File[] = []
+  for (const item of items) {
+    if (item.kind !== 'file') continue
+    const file = item.getAsFile()
+    const entry = item.webkitGetAsEntry() as DroppedEntry | null
+    if (entry?.isDirectory === true) {
+      const path = droppedDirectoryPath(entry, file)
+      if (path !== undefined) directories.push(path)
+    } else if (file !== null) {
+      files.push(file)
+    }
+  }
+  return { directories, files }
+}
+
+/** Draft-image rail, file/folder drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onRemoveImage, dropLimits, t,
+  attachments, canAcceptDrop, onAddImages, onAddDirectories, onRemoveImage, dropLimits, t,
 }: ComposerAttachmentsProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
@@ -62,7 +105,10 @@ export function ComposerAttachments({
       if (dataTransfer === null) return
       event.preventDefault()
       reset()
-      if (canAcceptDrop) onAddImages([...dataTransfer.files])
+      if (!canAcceptDrop) return
+      const dropped = droppedBatch(dataTransfer)
+      onAddDirectories(dropped.directories)
+      onAddImages(dropped.files)
     }
     document.addEventListener('dragenter', onDragEnter)
     document.addEventListener('dragover', onDragOver)
@@ -76,7 +122,7 @@ export function ComposerAttachments({
       document.removeEventListener('drop', onDrop)
       window.removeEventListener('dragend', reset)
     }
-  }, [canAcceptDrop, onAddImages])
+  }, [canAcceptDrop, onAddDirectories, onAddImages])
 
   const railItems = useMemo<ComposerRailItem[]>(() => attachments.map(attachment => ({
     id: attachment.id,

@@ -389,6 +389,40 @@ describe('programmatic source launcher', () => {
     expect(controller.launcher.getSnapshot()).toBeNull()
   })
 
+  it('filters, orders, and relabels launcher candidates without replacing their pick identity', async () => {
+    const command = readySource('/', 'command', [
+      { name: 'compact', description: 'Compact history' },
+      { name: 'plan', description: 'Raw plan copy' },
+      { name: 'goal', description: 'Raw goal copy' },
+    ])
+    const { controller } = controllerBench([command.source])
+    const hit = {
+      trigger: '/' as const,
+      query: '',
+      quoted: false,
+      position: 'leading' as const,
+      span: { start: 0, end: 0, draftRev: 1 },
+    }
+
+    controller.toggleSource('command', hit, [
+      { name: 'goal', label: '目标模式', description: '设置或查看长期任务目标' },
+      { name: 'plan', label: '计划模式', description: '进入或退出计划模式' },
+    ])
+    await tick()
+
+    expect(controller.menu.getSnapshot().groups).toMatchObject([{
+      source: 'command',
+      showGroupTitle: false,
+      status: 'ready',
+      items: [
+        { name: 'goal', label: '目标模式', description: '设置或查看长期任务目标' },
+        { name: 'plan', label: '计划模式', description: '进入或退出计划模式' },
+      ],
+    }])
+    controller.pick('command', 0)
+    expect(command.picks[0]!.candidate.name).toBe('goal')
+  })
+
   it('toggles closed, and typed tracking returns to the full trigger roster', async () => {
     const command = readySource('/', 'command', [{ name: 'goal' }])
     const skill = readySource('/', 'skill', [{ name: 'review' }])

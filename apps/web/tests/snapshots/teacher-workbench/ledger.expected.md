@@ -16,6 +16,7 @@
       - /placeholder: "0.00"
     - text: 发生时间
     - textbox "发生时间"
+    - button "设置截止时间与提醒"
     - button "添加明细" [disabled]
     - text: 这个分类还没有账目
   - article "水电燃气":
@@ -31,6 +32,7 @@
       - /placeholder: "0.00"
     - text: 发生时间
     - textbox "发生时间"
+    - button "设置截止时间与提醒"
     - button "添加明细" [disabled]
     - text: 这个分类还没有账目
   - article "其他账目":
@@ -46,6 +48,7 @@
       - /placeholder: "0.00"
     - text: 发生时间
     - textbox "发生时间"
+    - button "设置截止时间与提醒"
     - button "添加明细" [disabled]
     - text: 这个分类还没有账目
   - article "住房费用":
@@ -61,6 +64,7 @@
       - /placeholder: "0.00"
     - text: 发生时间
     - textbox "发生时间"
+    - button "设置截止时间与提醒"
     - button "添加明细" [disabled]
     - article:
       - button "八月物业费 2026-08-20 {{clock}}":

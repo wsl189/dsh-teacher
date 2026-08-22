@@ -31,7 +31,10 @@ export type PickVia = 'menu' | 'space' | 'enter'
 
 /** One menu candidate. Pure display data — zero behavior declaration. */
 export interface InputTriggerCandidate {
+  /** Source-owned identity used for pick dispatch. */
   readonly name: string
+  /** Optional presentation label; programmatic launchers may localize it without replacing {@link name}. */
+  readonly label?: string
   readonly description?: string
   readonly icon?: string
   readonly hint?: string
@@ -39,6 +42,16 @@ export interface InputTriggerCandidate {
   readonly section?: string
   /** Opaque source-owned pick payload. */
   readonly value?: string
+}
+
+/** Ordered candidate presentation accepted by a programmatic source launcher. */
+export interface InputTriggerLauncherCandidate {
+  /** Source-owned candidate name to retain. */
+  readonly name: string
+  /** Launcher-specific display label. */
+  readonly label: string
+  /** Launcher-specific supporting copy. */
+  readonly description?: string
 }
 
 /** Pick-moment snapshot of the trigger token span. CAS: stale draftRev ⇒ the whole action no-ops. */

@@ -50,6 +50,25 @@
   white-space: nowrap;
 }
 
+.optionCopy {
+  display: flex;
+  flex-direction: column;
+  width: min(300px, calc(100vw - 64px));
+  white-space: normal;
+}
+
+.optionLabel {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.optionDescription {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .chevron {
   /* inline-flex, not inline: an inline seat reserves baseline descent under
      the svg and floats the glyph off-center in the 28px trigger. */

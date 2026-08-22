@@ -13,7 +13,8 @@ import { detectTrigger } from '../core/detect.ts'
 import { MENU_CLOSED, menuReduce, seedGroups } from '../core/menu.ts'
 import type { MenuEvent, MenuState, TriggerHit } from '../core/contract.ts'
 import type {
-  ArbitrateKey, ArbitrateOutcome, ClientSessionContext, PickOutcome, InputTriggerSource, SubmitEnvelope, TriggerChar, TriggerGuard,
+  ArbitrateKey, ArbitrateOutcome, ClientSessionContext, InputTriggerLauncherCandidate, PickOutcome, InputTriggerSource,
+  SubmitEnvelope, TriggerChar, TriggerGuard,
 } from '../types.ts'
 
 /** Roster access the controller borrows from the root service (registration order preserved). */
@@ -125,8 +126,9 @@ export class InputTriggerController {
    * mutation pipeline.
    * @param source - registered source name under `hit.trigger`.
    * @param hit - synthetic hit carrying position and pick-time draft CAS.
+   * @param candidates - optional ordered allowlist with launcher-only labels and descriptions.
    */
-  toggleSource(source: string, hit: TriggerHit): void {
+  toggleSource(source: string, hit: TriggerHit, candidates?: readonly InputTriggerLauncherCandidate[]): void {
     if (this.disposed) return
     if (this.launcher.getSnapshot() === source && this.menu.getSnapshot().open) {
       this.dismiss()
@@ -140,9 +142,12 @@ export class InputTriggerController {
     this.stopFetch()
     this.hit = hit
     this.launcher.set(source)
-    this.menu.set(seedGroups(this.menu.getSnapshot(), [match]))
+    const seeded = seedGroups(this.menu.getSnapshot(), [match])
+    this.menu.set(candidates === undefined
+      ? seeded
+      : { ...seeded, groups: seeded.groups.map(group => ({ ...group, showGroupTitle: false })) })
     this.reduce({ type: 'hit', hit })
-    this.fetchCandidates(hit, [match])
+    this.fetchCandidates(hit, [match], candidates)
   }
 
   /**
@@ -364,7 +369,11 @@ export class InputTriggerController {
   }
 
   /** Launch the candidate fetch for one hit generation, superseding the previous one. */
-  private fetchCandidates(hit: TriggerHit, roster: readonly InputTriggerSource[]): void {
+  private fetchCandidates(
+    hit: TriggerHit,
+    roster: readonly InputTriggerSource[],
+    launcherCandidates?: readonly InputTriggerLauncherCandidate[],
+  ): void {
     this.stopFetch()
     const controller = new AbortController()
     this.fetch = controller
@@ -381,7 +390,13 @@ export class InputTriggerController {
         .then(
           (items) => {
             if (controller.signal.aborted) return
-            this.reduce({ type: 'source-settled', generation, source: source.name, items })
+            const settled = launcherCandidates === undefined
+              ? items
+              : launcherCandidates.flatMap((presentation) => {
+                const item = items.find(candidate => candidate.name === presentation.name)
+                return item === undefined ? [] : [{ ...item, ...presentation }]
+              })
+            this.reduce({ type: 'source-settled', generation, source: source.name, items: settled })
           },
           (error: unknown) => {
             if (controller.signal.aborted) return

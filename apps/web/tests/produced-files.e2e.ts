@@ -4,6 +4,8 @@
 // The folder request is intercepted so one real browser click can exercise
 // the full client carrier without launching a native application in CI.
 import { fileURLToPath } from 'node:url'
+import { writeFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
@@ -11,12 +13,14 @@ import { CallId, createAssistantMessage, createToolResultMessage, createUserMess
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
 import {
-  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
+  captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
+  webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
 const OVERLAY = fileURLToPath(new URL('./produced-files.overlay.yml', import.meta.url))
+const PREVIEW_EXPECTED = fileURLToPath(new URL('./snapshots/produced-files/markdown-preview.expected.md', import.meta.url))
 const SEED_ID = 'produced-files-web-e2e'
 const DONE = 'PRODUCED_FILES_DONE'
 
@@ -111,6 +115,7 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY })
+    await writeFile(join(scaffold.workspaceCwd, PRODUCED[0]), '# Workspace preview\n\nRendered beside the conversation.\n')
     await seedSession(scaffold, producedFixture(), SEED_ID)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -118,8 +123,16 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
     // the assertion itself narrows the conversation after navigation.
     await page.setViewportSize({ width: 1280, height: 900 })
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
-    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    const navigation = await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    try {
+      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    } catch (error: unknown) {
+      const text = (await page.locator('body').innerText()).slice(0, 1_000)
+      throw new Error(
+        `Web frame did not mount (HTTP ${String(navigation?.status())}): ${text}; ${tripwire.pageErrors.map(String).join(' | ')}`,
+        { cause: error },
+      )
+    }
   }, 120_000)
 
   afterAll(async () => {
@@ -173,6 +186,17 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
       clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
     }))
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
+
+    await page.setViewportSize({ width: 1400, height: 900 })
+    const [previewResponse] = await Promise.all([
+      page.waitForResponse(response => new URL(response.url()).pathname === '/api/session.previewFile'),
+      chips.nth(0).click(),
+    ])
+    expect(previewResponse.status()).toBe(200)
+    await page.locator('[data-file-preview="关于我.md"]').waitFor({ timeout: 15_000 })
+    await page.getByRole('heading', { name: 'Workspace preview', exact: true }).waitFor()
+    const preview = await captureStableAria(page, '[data-file-preview]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(PREVIEW_EXPECTED, preview, MODE)
 
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

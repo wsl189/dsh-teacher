@@ -1,0 +1,3 @@
+- listbox "触发候选建议":
+  - option "目标模式 设置或查看长期任务目标" [selected]
+  - option "计划模式 进入或退出计划模式"

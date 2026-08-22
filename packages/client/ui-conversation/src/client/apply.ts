@@ -359,7 +359,18 @@ export function apply(ctx: Context): void {
               quoted: false,
               position: snapshot.draft.slice(0, selection.start).trim() === '' ? 'leading' : 'inline',
               span: { ...selection, draftRev: snapshot.draftRev },
-            })
+            }, [
+              {
+                name: 'goal',
+                label: t('input.mode.goal'),
+                description: t('input.mode.goalDescription'),
+              },
+              {
+                name: 'plan',
+                label: t('input.mode.plan'),
+                description: t('input.mode.planDescription'),
+              },
+            ])
           },
         stop: () => {
           scopedConversation(sessions, sessionId).cancel().catch(() => {
@@ -403,6 +414,7 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.chat.node': { kind: 'keyed', scope: 'session', inject: CHAT_NODE_INJECT },
+      'conversation.chat.toolGroup': { kind: 'single', scope: 'session' },
       'conversation.message.images': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
@@ -412,6 +424,10 @@ export function apply(ctx: Context): void {
       return {
         openDetails: (target) => {
           actions.select(target)
+          layout.openDetails()
+        },
+        previewFile: (path) => {
+          actions.preview(path)
           layout.openDetails()
         },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
@@ -471,10 +487,15 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
+      'conversation.details.file': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
-    inject: (): DetailsInjected => ({
+    inject: (sessionId: SessionId): DetailsInjected => ({
       closeDetails: () => { layout.closeDetails() },
+      openFile: (path) => {
+        const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
+        return workspaces.openPath(resolveWorkspacePath(cwd, path))
+      },
     }),
   }, DetailsPanel)
 

@@ -10,3 +10,61 @@
   padding-left: 8px;
   border-left: 1px solid var(--dsw-alias-border-l2);
 }
+
+.group {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+
+.groupRow {
+  position: relative;
+}
+
+.group[data-state='running'] .groupRow::after {
+  content: '';
+  position: absolute;
+  inset-block: 0;
+  left: 0;
+  width: 300px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    color-mix(in srgb, var(--dsw-alias-bg-base) 60%, transparent) 55%,
+    transparent 100%
+  );
+  animation: dsh-tool-group-sweep 2.6s ease-out infinite;
+  pointer-events: none;
+}
+
+.groupTitle {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.groupChevron {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.groupCalls {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin: 4px 0 2px 22px;
+  padding-left: 8px;
+  border-left: 1px solid var(--dsw-alias-border-l2);
+}
+
+@keyframes dsh-tool-group-sweep {
+  0% { left: -300px; }
+  90%, 100% { left: 100%; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .group[data-state='running'] .groupRow::after {
+    display: none;
+  }
+}

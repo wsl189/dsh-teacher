@@ -40,6 +40,9 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`@jridgewell/gen-mapping`](https://github.com/jridgewell/sourcemaps) | MIT |
 | [`@modelcontextprotocol/sdk`](https://github.com/modelcontextprotocol/typescript-sdk) | MIT |
 | [`@napi-rs/canvas`](https://github.com/Brooooooklyn/canvas) | MIT |
+| [`@office-kit/pptx`](https://github.com/office-kit/pptx) | MIT |
+| [`@office-kit/pptx-preview`](https://github.com/office-kit/pptx) | MIT |
+| [`@office-kit/xlsx`](https://github.com/office-kit/xlsx) | MIT |
 | [`@openai/codex`](https://github.com/openai/codex) | Apache-2.0 |
 | [`@opentelemetry/api`](https://github.com/open-telemetry/opentelemetry-js) | Apache-2.0 |
 | [`@opentelemetry/api-logs`](https://github.com/open-telemetry/opentelemetry-js) | Apache-2.0 |
@@ -59,6 +62,8 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`commander`](https://github.com/tj/commander.js) | MIT |
 | [`diff`](https://github.com/kpdecker/jsdiff) | BSD-3-Clause |
 | [`docx`](https://github.com/dolanmiu/docx) | MIT |
+| [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) | Apache-2.0 |
+| [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
 | [`e2b`](https://github.com/e2b-dev/e2b) | MIT |
 | [`eventsource-parser`](https://github.com/rexxars/eventsource-parser) | MIT |
 | [`fflate`](https://github.com/101arrowz/fflate) | MIT |

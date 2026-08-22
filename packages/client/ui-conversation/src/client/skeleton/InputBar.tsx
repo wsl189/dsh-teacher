@@ -12,6 +12,7 @@ import clsx from 'clsx'
 import {
   IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
 // composer reads a host-computed value; the domain owns the key).
 import type {} from '@deepseek-ai/dsh-plan-mode/client'
@@ -640,7 +641,28 @@ export function InputBar({
     if (rejected !== null) showToast(rejected)
   }, [addImages, attachments, imageLimits, showToast, t])
 
-  const canAcceptDrop = !locked && !machineBusy && addImages !== undefined
+  const intakeDirectories = useCallback((paths: readonly string[]): void => {
+    if (keyboard === undefined || locked || machineBusy || paths.length === 0) return
+    const mentions = paths.flatMap((path) => {
+      const mention = formatFileMention({ path, kind: 'directory' }, false)
+      if (mention === undefined) return []
+      // Picker completion deliberately leaves a quoted directory open so the
+      // user can descend. A drop is already a complete reference.
+      return [mention.startsWith('@"') ? `${mention}"` : mention]
+    })
+    if (mentions.length !== paths.length) showToast(t('folder.dropUnsupported'))
+    if (mentions.length === 0) return
+    const current = keyboard.snapshot.draft
+    const prefix = current === '' || /\s$/u.test(current) ? '' : ' '
+    const inserted = `${prefix}${mentions.join(' ')}`
+    const next = current + inserted
+    keyboard.setDraft(next, { start: current.length, end: current.length, insertedLength: inserted.length })
+    keyboard.track(next, next.length)
+    const el = inputRef.current
+    if (el !== null) restoreCaret(el, next.length)
+  }, [keyboard, locked, machineBusy, showToast, t])
+
+  const canAcceptDrop = !locked && !machineBusy
 
   const onSelect = (e: React.SyntheticEvent<HTMLTextAreaElement>): void => {
     // Any caret/selection gesture ends a live paste attempt (the machine
@@ -852,6 +874,7 @@ export function InputBar({
           attachments,
           canAcceptDrop,
           onAddImages: intakeImages,
+          onAddDirectories: intakeDirectories,
           onRemoveImage: (id) => { removeImage?.(id) },
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,

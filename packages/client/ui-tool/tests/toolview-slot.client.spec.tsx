@@ -10,7 +10,7 @@
 // the declaration then land through slots.inject when the chat entry appears.
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { cleanup } from '@testing-library/react'
+import { cleanup, fireEvent } from '@testing-library/react'
 import type { ISession, SessionId, ToolResultNode } from '@deepseek-ai/dsh-client-runtime/client'
 import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotTestRuntime, stubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
@@ -71,6 +71,8 @@ async function bench(nodes: ToolResultNode[]) {
   })
   // ui-theme's Appearance row binds a durable scope through these two.
   runtime.provide('remote', { $on: () => () => {} })
+  runtime.provide('remote.ocr', { extract: vi.fn() })
+  runtime.provide('remote.teacherWorkbench', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   runtime.provide('layout', layout)
@@ -99,6 +101,7 @@ describe('keyed toolview hole through the real machinery', () => {
       toolResult(4, 'c2', 'mystery', '{"n":1}'),
     ])
     const view = b.runtime.renderRoot()
+    fireEvent.click(view.container.querySelector('[data-tool-group] [role="button"]')!)
     // bash: the sample plugin's keyed registration took the row (root
     // session → global arm, decided inside the component off useSessions).
     expect(view.container.querySelector('[data-sample="bash"]')).not.toBeNull()
@@ -117,6 +120,7 @@ describe('keyed toolview hole through the real machinery', () => {
       toolResult(6, 'cordis-4', 'cordis_undefine', '{"id":"dyn-2"}'),
     ])
     const view = b.runtime.renderRoot()
+    fireEvent.click(view.container.querySelector('[data-tool-group] [role="button"]')!)
 
     // Every one of these rows is user-visible on each model define/run, so each
     // names its act and carries the package id rather than falling back to the
@@ -214,6 +218,8 @@ describe('registrant declaration injection', () => {
     })
     // ui-theme's Appearance row binds a durable scope through these two.
     runtime.provide('remote', { $on: () => () => {} })
+    runtime.provide('remote.ocr', { extract: vi.fn() })
+    runtime.provide('remote.teacherWorkbench', {})
     runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     const locale = new LocaleRuntime(runtime.ctx)

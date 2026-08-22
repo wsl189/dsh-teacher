@@ -6,13 +6,13 @@ Status: implemented
 
 ## 问题
 
-Web 输入框已有可复用的斜杠命令／引用触发流水线，但它的 `@` source 只是不会产生实际作用的 subagent 标签文本。Web 需要由宿主提供工作区路径发现和结构化跨会话快照，同时避免在浏览器中扫描宿主文件系统或把会话身份绑定到显示标签。
+Web 输入框已有可复用的斜杠命令／引用触发流水线，但它的 `@` source 只是不会产生实际作用的 subagent 标签文本。Web 需要由宿主提供工作区路径发现、直接目录拖放引用和结构化跨会话快照，同时避免在浏览器中扫描宿主文件系统、隐式读取拖入目录或把会话身份绑定到显示标签。
 
 ## 决策
 
 Web 通过 `@deepseek-ai/dsh-client-ui-reference` 暴露一个合并的 `@file` 与 `@session` 菜单。每次处理未加引号的查询时，它会并发启动两项 Remote 发现调用，以确定性顺序把文件排在会话之前，并使用注册在 locale 字典中的标签；不可选择的文件与会话分组标题会区分两个连续的候选分组，且不会进入键盘选择索引。该 source 在加载和已结算状态下都会隐藏原始组标题，因为可见分组由这些分组标题拥有。尚未闭合的带引号 token 只搜索文件。任一候选领域都可以独立失败，不会隐藏另一领域成功返回的行。
 
-文件功能遵循由三个包构成的 seam：`@deepseek-ai/dsh-file-reference` 拥有 `ctx.fileReferences`、共享 `@path` token 语法、候选形状和稳定的模型指引；`@deepseek-ai/dsh-file-reference-local` 拥有每个 agent（智能体）有界的宿主文件系统索引、失效处理和作用域内的提示词安装；`dsh-client-ui-reference` 消费生成的 Remote 命名空间与共享语法。选择文件会创建带文件图标与文件名的原子输入框引用，其序列化形式仍只是路径提示词文本。目录保持为带文件夹图标的可编辑路径文本，并在尾部斜杠后重新触发补全。
+文件功能遵循由三个包构成的 seam：`@deepseek-ai/dsh-file-reference` 拥有 `ctx.fileReferences`、共享 `@path` token 语法、候选形状和稳定的模型指引；`@deepseek-ai/dsh-file-reference-local` 拥有每个 agent（智能体）有界的宿主文件系统索引、失效处理和作用域内的提示词安装；`dsh-client-ui-reference` 消费生成的 Remote 命名空间与共享语法。选择文件会创建带文件图标与文件名的原子输入框引用，其序列化形式仍只是路径提示词文本。从补全中选择目录后，目录保持为带文件夹图标的可编辑路径文本，并在尾部斜杠后重新触发补全。把目录拖到页面上会以相同语法创建完整 `@path/` 草稿引用：附件呈现只读取拖放条目的路径元数据，从不打开目录 reader，并把规范化路径委托给 conversation 持有方。原生客户端可以暴露绝对 `File.path`；标准浏览器只暴露相对于拖放根的 `fullPath`，因此该写法继续相对于会话工作区。混合拖放会在图片准入前把目录路径与普通文件分开。
 
 选择会话会创建一个结构化输入框引用。可见形式使用聊天气泡图标与业务色会话标题，不使用胶囊容器；剪贴板和模型形式则是宿主生成的规范 `@[label](dsh-session:…)` mention。完整的 `@label` 展示文本会保留在透明 textarea 中，同尺寸 backdrop 会为这段范围着色，并把开头的 marker 替换为对应领域图标。因此宽度、换行、选择区与光标位置都由原生字形度量决定，不会截断。occurrence 范围会保留引用身份以供序列化；在边界按 Backspace 或 Delete 会整段删除引用，在范围内部编辑则会把剩余字符转为普通文本。普通 `session.prompt` 投递会原样携带规范 mention。session-reference 服务会在 `agent/pre-step` 解析已接受的直接用户消息，捕获每个源，在保留直接消息 id 的同时把规范 mention 替换为可读文本，并把冻结快照插入到该消息紧后。召回上下文行使用同一个聊天图标，其他上下文保留文档图标。API Proxy 不包含引用专用路由、依赖或错误码。
 
@@ -22,6 +22,7 @@ Web 通过 `@deepseek-ai/dsh-client-ui-reference` 暴露一个合并的 `@file` 
 
 ```text
 type @ → parallel file/session Remote calls → pick folder text or atomic file/session reference
+drop directory → read path metadata only → append complete @path/ draft text
        → serialize draft → ordinary session.prompt enqueue
        → agent/pre-step parses mentions → capture sources → readable prompt + context
 ```
@@ -42,8 +43,8 @@ type @ → parallel file/session Remote calls → pick folder text or atomic fil
 
 ## 验证
 
-包（package）测试固定共享文件语法和排序、缓存失效及生命周期清理、Web 并行查询、带引号的路径、候选项独立失败、取消、在 pending 与 ready 状态下隐藏 source 标题、不改变候选项索引的分组标题、文件／目录继续补全、结构化文件与会话引用、完整行内标签、领域图标、禁用状态下的层级归属、跨重新挂载的规范草稿持久化、相邻引用及相邻文本条件下的引用投影、无扩展名文件与句末标点渲染、codec 无损往返、生成的 Remote 类型推断、pre-step 中直接消息先于召回的准备、下游拒绝，以及多词与连续标签的后继召回关联。无密钥的装配 Web 快照会在不显示原始 source 标题的情况下渲染可用的引用分组，通过真实客户端组合依次选择文件和会话引用，并按直接消息先于召回的顺序回放多词会话标签。
+包（package）测试固定共享文件语法和排序、缓存失效及生命周期清理、Web 并行查询、带引号的路径、候选项独立失败、取消、在 pending 与 ready 状态下隐藏 source 标题、不改变候选项索引的分组标题、文件／目录继续补全、不枚举内容的仅路径目录拖放、原生与浏览器相对拖放元数据、目录／图片混合拖放分流、结构化文件与会话引用、完整行内标签、领域图标、禁用状态下的层级归属、跨重新挂载的规范草稿持久化、相邻引用及相邻文本条件下的引用投影、无扩展名文件与句末标点渲染、codec 无损往返、生成的 Remote 类型推断、pre-step 中直接消息先于召回的准备、下游拒绝，以及多词与连续标签的后继召回关联。无密钥的装配 Web 快照会在不显示原始 source 标题的情况下渲染可用的引用分组，通过真实客户端组合选择文件和会话引用，把拖入目录变成完整的仅路径文件夹引用，并按直接消息先于召回的顺序回放多词会话标签。
 
 ## 后果
 
-Web 现在使用共享的 `@file` 发现 seam 和结构化会话引用身份，宿主服务仍然是文件系统与会话访问的权威来源。文件和会话发现都是所属服务上的一元 Remote 契约，因此生成的客户端类型会替代手写 RPC 接口，浏览器 bundle 中也不包含 Node API。候选查询失败仍会让菜单静默降级。引用准备失败发生在提示词已接受之后，并会结束 agent 轮次。文件引用只产生路径文本和稳定的条件式指引成本，而会话引用仍保留 `dsh-session-reference` 所拥有的有界快照开销与信任限定文本。
+Web 使用共享的 `@file` 发现 seam 和结构化会话引用身份，宿主服务仍然是文件系统与会话访问的权威来源。文件和会话发现都是所属服务上的一元 Remote 契约，因此生成的客户端类型会替代手写 RPC 接口，浏览器 bundle 中也不包含 Node API。候选查询失败仍会让菜单静默降级。引用准备失败发生在提示词已接受之后，并会结束 agent 轮次。包括拖入目录在内的文件引用只产生路径文本和稳定的条件式指引成本，且永远不会授予文件系统访问权。标准浏览器无法通过拖放保留操作系统绝对目录路径；原生客户端可以保留，Web 则把暴露的相对路径视为相对于工作区。会话引用仍保留 `dsh-session-reference` 所拥有的有界快照开销与信任限定文本。

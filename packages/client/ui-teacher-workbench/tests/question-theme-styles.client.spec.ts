@@ -22,7 +22,13 @@ describe('question workbench theme styles', () => {
     expect(referenceShell).toMatch(/\.legacyStudentAdd \{[^}]*position: absolute;[^}]*white-space: nowrap;/su)
     expect(referenceShell).toContain('.legacyStudentRow > .legacyHoverDelete')
     expect(referenceShell).toMatch(
-      /\.legacyBankImagesBesideClass \{[^}]*left: calc\(var\(--legacy-left\) \+ min\(30%, 390px\) \+ 22px\);[^}]*width: auto;/su,
+      /\.legacyClassDrawer \{[^}]*left: 0;[^}]*width: min\(30%, 390px\);/su,
+    )
+    expect(referenceShell).toMatch(
+      /\.legacyBankImagesBesideClass \{[^}]*left: calc\(min\(30%, 390px\) \+ 8px\);[^}]*width: auto;/su,
+    )
+    expect(referenceShell).toMatch(
+      /\.legacyStudentImages \{[^}]*left: calc\(min\(30%, 390px\) \+ 8px\);[^}]*width: min\(44%, 680px\);/su,
     )
   })
 })

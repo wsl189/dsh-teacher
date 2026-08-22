@@ -75,6 +75,8 @@ async function bench(nodes: ToolResultNode[]) {
   })
   // ui-theme's Appearance row binds a durable scope through these two.
   runtime.provide('remote', { $on: () => () => {} })
+  runtime.provide('remote.ocr', { extract: vi.fn() })
+  runtime.provide('remote.teacherWorkbench', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
   const locale = new LocaleRuntime(runtime.ctx)
@@ -136,6 +138,8 @@ describe('terminal card assembly', () => {
       bashResult(4, 'c-fallback', { call: { name: 'fx-bash', argsRaw: '{"command":"ls -la"}' } }),
     ])
     const view = runtime.renderRoot()
+
+    fireEvent.click(view.container.querySelector('[data-tool-group] [role="button"]')!)
 
     // Keyed BashRow: collapsed by default, the whole summary row is the toggle.
     const keyedRow = view.container.querySelector('[data-sample="bash"]')

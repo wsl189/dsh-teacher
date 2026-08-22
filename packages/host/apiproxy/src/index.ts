@@ -16,7 +16,9 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type {} from '@deepseek-ai/dsh-agent-default-model'
 import type { ApiProxy } from './api/index.ts'
-import { createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './api-proxy.ts'
+import {
+  createApiProxy, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES, DEFAULT_PREVIEW_FILE_MAX_BYTES,
+} from './api-proxy.ts'
 import {
   DEFAULT_SESSION_LOG_COMPRESSION_LEVEL,
   type SessionLogCompressionLevel,
@@ -59,6 +61,12 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
+  /**
+   * Maximum complete file size returned to the browser preview. Zero disables
+   * preview reads without removing the produced-files UI.
+   * @default 41943040
+   */
+  previewFileMaxBytes?: number
 }
 
 /**
@@ -68,7 +76,7 @@ export interface Config {
  */
 export class ApiProxyService extends Service implements ApiProxy {
   static inject = [
-    'agentDefaultModel', 'agents', 'attachments', 'directoryPicker', 'llm', 'sessions', 'subagents', 'sessionQuery',
+    'agentDefaultModel', 'agents', 'attachments', 'directoryPicker', 'fs', 'llm', 'sessions', 'subagents', 'sessionQuery',
     'tools', 'userQuestions', 'workspaceRegistry',
   ]
 
@@ -77,6 +85,7 @@ export class ApiProxyService extends Service implements ApiProxy {
     sessionExportCompressionLevel: z.number().step(1).min(0).max(9)
       .default(DEFAULT_SESSION_LOG_COMPRESSION_LEVEL) as z<SessionLogCompressionLevel>,
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
+    previewFileMaxBytes: z.natural().default(DEFAULT_PREVIEW_FILE_MAX_BYTES),
   })
 
   readonly sessions: ApiProxy['sessions']
@@ -106,6 +115,9 @@ export class ApiProxyService extends Service implements ApiProxy {
       ...(config.coldBlankProbeMaxBytes === undefined
         ? {}
         : { coldBlankProbeMaxBytes: config.coldBlankProbeMaxBytes }),
+      ...(config.previewFileMaxBytes === undefined
+        ? {}
+        : { previewFileMaxBytes: config.previewFileMaxBytes }),
     })
     this.sessions = api.sessions
     this.subagents = api.subagents

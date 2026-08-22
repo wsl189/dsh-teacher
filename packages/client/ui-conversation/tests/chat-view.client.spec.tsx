@@ -153,6 +153,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   const { set, source } = makeSource(init)
   const openDetails = vi.fn<(t: SelectionTarget) => void>()
   const openFile = vi.fn<(path: string) => Promise<void>>().mockResolvedValue(undefined)
+  const previewFile = vi.fn<(path: string) => void>()
   const loadOlder = vi.fn()
   const inspectCall = vi.fn<(callId: string) => void>()
   // In-memory scroll memory matching the apply.ts per-session map contract.
@@ -282,6 +283,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
     SessionProvider: SessionProviderStub,
     openDetails,
     openFile,
+    previewFile,
     loadOlder,
     loadImage: vi.fn(() => Promise.reject(new Error('not used'))),
     inspectCall,
@@ -294,7 +296,7 @@ function makeHarness(init?: Partial<ConversationSnapshot>) {
   }
   const setSelection = (next: SelectionTarget | null): void => { chat.actions.select(next) }
   return {
-    set, ChatView, props, openDetails, openFile, loadOlder, inspectCall,
+    set, ChatView, props, openDetails, openFile, previewFile, loadOlder, inspectCall,
     chatScroll, forkAt, setSelection, toolOwners,
   }
 }
@@ -418,7 +420,7 @@ describe('ChatView', () => {
     expect(scroller.scrollTop).toBe(590) // latest 90 + the anchored row's 500px prepend shift
   })
 
-  it('renders the fixture main line as independently keyed business nodes', () => {
+  it('places consecutive Tool nodes in one flow group without losing call anchors', () => {
     const h = makeHarness({
       nodes: [user(1, 'do the thing'), assistant(2, 'running tools'), toolResult(3, 'a'), toolResult(4, 'b')],
     })
@@ -433,15 +435,14 @@ describe('ChatView', () => {
     }))).toEqual([
       { key: 'fixture:user:1', kind: 'user' },
       { key: 'fixture:assistant:2', kind: 'assistant-step' },
-      { key: 'fixture:tool:a', kind: 'tool-call' },
-      { key: 'fixture:tool:b', kind: 'tool-call' },
+      { key: 'fixture:tool:a', kind: 'tool-group' },
     ])
     expect([...view.container.querySelectorAll('[data-chat-call-id]')].map(row => row.getAttribute('data-chat-call-id')))
       .toEqual(['a', 'b'])
     expect([...view.container.querySelectorAll('[data-chat-anchor-key]')].map(row => row.getAttribute('data-chat-anchor-key')))
       .toEqual([
         'fixture:user:1', 'fixture:assistant:2',
-        'fixture:tool:a', 'call:a', 'fixture:tool:b', 'call:b',
+        'fixture:tool:a', 'call:a', 'call:b',
       ])
   })
 
@@ -844,9 +845,9 @@ describe('ChatView', () => {
     // Count renderSlot invocations: the memo boundary holds when CallRow does
     // not re-render, so the row's renderSlot call count freezes during chunks.
     let rowRenders = 0
-    h.props.renderSlot = ((key: string, owner: object) => {
+    h.props.renderSlot = ((key: string, owner: object, opts?: { fallback?: React.ReactNode }) => {
       if (key !== 'conversation.chat.node'
-        || (owner as RoutedChatNodeOwner).node.kind !== 'tool-call') return null
+        || (owner as RoutedChatNodeOwner).node.kind !== 'tool-call') return opts?.fallback ?? null
       rowRenders += 1
       return <div data-testid="counting-row" />
     })
@@ -950,7 +951,7 @@ describe('ChatView', () => {
     expect(status.textContent).toMatch(/^Deep diving\.\.\.2分0\d秒$/)
   })
 
-  it('hands each ordered root call to the keyed business-node slot', () => {
+  it('hands each ordered Tool run to the group slot and retains the business-node fallback', () => {
     const block = toolResult(3, 'a')
     const h = makeHarness({ nodes: [block] })
     const calls: { key: string; owner: object; entryKey?: string }[] = []
@@ -959,13 +960,17 @@ describe('ChatView', () => {
       return opts?.fallback ?? null
     })
     render(<h.ChatView {...h.props} />)
-    expect(calls).toHaveLength(1)
+    expect(calls).toHaveLength(2)
     expect(calls[0]).toMatchObject({
+      key: 'conversation.chat.toolGroup',
+      owner: { nodeKeys: ['fixture:tool:a'], selectedCallId: undefined },
+    })
+    expect(calls[1]).toMatchObject({
       key: 'conversation.chat.node',
       owner: { node: { kind: 'tool-call' }, selectedCallId: undefined },
       entryKey: 'tool-call',
     })
-    const owner = calls[0]?.owner as RoutedChatNodeOwner
+    const owner = calls[1]?.owner as RoutedChatNodeOwner
     expect((owner.node.data as { readonly root: ToolCallBlock }).root).toBe(block)
     expect(owner.openFile).not.toBe(h.openFile)
     owner.openFile('src/a.ts')

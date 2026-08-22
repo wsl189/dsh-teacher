@@ -2,7 +2,7 @@
 import type { HostDescriptionSource } from '@deepseek-ai/dsh-client-connection/client'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ToolCallBlock } from '@deepseek-ai/dsh-client-runtime/client'
-import type {} from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { ChatNode } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -54,11 +54,14 @@ export type ToolHostDescriptionInjected = {
   }
 }
 
-/** Full props of the Tool call-tree renderer registered as a `tool-call` Chat Node. */
-export type ToolTreeProps = PropsRuntime<'conversation.chat.node', 'tool-call'>
+/** Full props of the renderer for one consecutive Tool run in Chat order. */
+export type ToolGroupProps = PropsRuntime<'conversation.chat.toolGroup'>
   & PropsRenderSlots<'tool.call.toolview'>
   & PropsLocale<'conversation'>
   & InjectFace<ToolHostDescriptionInjected>
+
+/** Direct single-tree props retained for the package's pure component tests. */
+export type ToolTreeProps = Omit<ToolGroupProps, 'nodeKeys'> & { readonly node: ChatNode<'tool-call'> }
 
 /** Full props of the selected Tool output renderer in the details panel. */
 export type ToolDetailsProps = PropsRuntime<'conversation.details.tool'>

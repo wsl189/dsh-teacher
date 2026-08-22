@@ -120,6 +120,9 @@ export class FakeApiClient implements IApiClient {
     fork: (payload: unknown) => this.record('session.fork', payload, this.onFork(payload)),
     prompt: (payload: unknown) => this.record('session.prompt', payload, this.onPrompt(payload)),
     attachment: (payload: unknown) => this.record('session.attachment', payload, this.onAttachment(payload)),
+    previewFile: (payload: unknown) => this.record(
+      'session.previewFile', payload, Promise.resolve(ok({ dataBase64: '', size: 0 })),
+    ),
     updateQueue: (payload: unknown) => this.record('session.updateQueue', payload, this.onUpdateQueue(payload)),
     cancel: (payload: unknown) => this.record('session.cancel', payload, this.onCancel(payload)),
   }

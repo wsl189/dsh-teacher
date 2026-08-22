@@ -1,8 +1,9 @@
 // ChatView: the default conversation view — one stable keyed parent list over
 // final business Nodes, plus paging, pending steering and bottom-follow.
-// Each row dispatches through 'conversation.chat.node'; ui-tool owns the
-// tool-call renderer and its recursive root/subcall composition. A Host
-// open-path refusal from the injected opener is an in-page dialog here.
+// Ordinary rows dispatch through 'conversation.chat.node'. Consecutive Tool
+// Nodes dispatch as one run through 'conversation.chat.toolGroup'; ui-tool
+// owns summary and recursive root/subcall presentation. A Host open-path
+// refusal from the injected opener is an in-page dialog here.
 //
 // Scroll: when nested under `[data-conversation-scroll]` (active conversation
 // column), that host is the scrollport and this view is flow content; when
@@ -10,13 +11,14 @@
 // prepend anchoring always target the resolved scrollport.
 //
 // Render economics: order changes only when rows enter, leave or move. Each
-// ChatNodeSeat subscribes to one Node key, so Assistant deltas and Tool
-// lifecycle updates replace only their own row without remounting it.
+// ChatNodeSeat and ui-tool's grouped seats subscribe by Node key, so Assistant
+// deltas and Tool lifecycle updates replace only their own row without
+// remounting it.
 
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import type { ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ConversationSnapshot, ConversationTimelineSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import { Button, IconChevronDownOutline14, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { ChatViewSlotProps, RenderMessageImages } from '../contract/slots.ts'
+import type { ChatNodeOwnerProps, ChatViewSlotProps, RenderMessageImages, ToolGroupOwnerProps } from '../contract/slots.ts'
 import { PendingSteeringBubble } from './MessageItem.tsx'
 import { ChatNodeSeat } from './ChatNodeSeat.tsx'
 import { formatRunDuration } from './message-chrome.ts'
@@ -115,6 +117,94 @@ function runningTurnStartTime(timeline: ConversationTimelineSnapshot): number | 
   return latest
 }
 
+type ChatFlowGroup =
+  | { readonly kind: 'node'; readonly key: string }
+  | { readonly kind: 'tools'; readonly key: string; readonly nodeKeys: readonly string[] }
+
+/** Partition Chat order into ordinary Nodes and maximal consecutive Tool runs. */
+function groupChatFlow(
+  order: readonly string[],
+  nodes: ConversationSnapshot['chat']['nodes'],
+): readonly ChatFlowGroup[] {
+  const groups: ChatFlowGroup[] = []
+  for (let index = 0; index < order.length;) {
+    const key = order[index]
+    if (key === undefined) break
+    if (nodes.get(key)?.kind !== 'tool-call') {
+      groups.push({ kind: 'node', key })
+      index += 1
+      continue
+    }
+    const nodeKeys: string[] = []
+    while (index < order.length) {
+      const candidate = order[index]
+      if (candidate === undefined || nodes.get(candidate)?.kind !== 'tool-call') break
+      nodeKeys.push(candidate)
+      index += 1
+    }
+    groups.push({ kind: 'tools', key, nodeKeys })
+  }
+  return groups
+}
+
+interface ToolGroupSeatProps extends ChatNodeOwnerProps {
+  readonly nodeKeys: readonly string[]
+  readonly useSession: ChatViewSlotProps['useSession']
+  readonly renderSlot: ChatViewSlotProps['renderSlot']
+  readonly t: ChatViewSlotProps['t']
+}
+
+/** Place one Tool run through its presentation slot with per-Node fallback. */
+function ToolGroupSeat({
+  nodeKeys, selectedCallId, cwd, openFile, previewFile, inspectCall, forkAt,
+  renderMessageImages, fileMentions, useSession, renderSlot, t,
+}: ToolGroupSeatProps) {
+  const owner: ToolGroupOwnerProps = useMemo(() => ({
+    nodeKeys,
+    selectedCallId,
+    cwd,
+    openFile,
+    previewFile,
+    inspectCall,
+    forkAt,
+    renderMessageImages,
+    fileMentions,
+  }), [
+    nodeKeys, selectedCallId, cwd, openFile, previewFile, inspectCall, forkAt, renderMessageImages, fileMentions,
+  ])
+  const firstKey = nodeKeys[0]
+  if (firstKey === undefined) return null
+  return (
+    <div
+      className={css.flowItem}
+      data-chat-anchor-key={firstKey}
+      data-chat-flow-key={firstKey}
+      data-chat-flow-kind={nodeKeys.length === 1 ? 'tool-call' : 'tool-group'}
+    >
+      {renderSlot('conversation.chat.toolGroup', owner, {
+        fallback: nodeKeys.map(nodeKey => (
+          <ChatNodeSeat
+            key={nodeKey}
+            bare
+            nodeKey={nodeKey}
+            useSession={useSession}
+            selectedCallId={selectedCallId}
+            cwd={cwd}
+            openFile={openFile}
+            previewFile={previewFile}
+            inspectCall={inspectCall}
+            forkAt={forkAt}
+            renderMessageImages={renderMessageImages}
+            fileMentions={fileMentions}
+            renderSlot={renderSlot}
+            t={t}
+          />
+        )),
+      })}
+    </div>
+  )
+}
+
 /** Turn-level model activity label retained across first-token, tool, and streaming phases. */
 function TurnStatus({ startTime, t }: {
   /** The running turn's logged `turn/start` time; null falls back to mount
@@ -156,7 +246,7 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, renderSlot, sessionId, openFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
+  useSession, useSessions, useStore, renderSlot, sessionId, openFile, previewFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
   fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
@@ -210,6 +300,7 @@ export function ChatView({
     () => inbox.filter(item => item.placement === 'steering'),
     [inbox],
   )
+  const flowGroups = useMemo(() => groupChatFlow(order, nodeStore), [order, nodeStore])
   const renderMessageImages = useCallback<RenderMessageImages>(
     owner => renderSlot('conversation.message.images', { ...owner, loadImage }),
     [loadImage, renderSlot],
@@ -429,14 +520,31 @@ export function ChatView({
               </button>
             </div>
           )}
-          {order.map(nodeKey => (
+          {flowGroups.map(group => group.kind === 'node' ? (
             <ChatNodeSeat
-              key={nodeKey}
-              nodeKey={nodeKey}
+              key={group.key}
+              nodeKey={group.key}
               useSession={useSession}
               selectedCallId={selectedCallId}
               cwd={cwd}
               openFile={requestOpenFile}
+              previewFile={previewFile}
+              inspectCall={inspectCall}
+              forkAt={forkAt}
+              renderMessageImages={renderMessageImages}
+              fileMentions={fileMentions}
+              renderSlot={renderSlot}
+              t={t}
+            />
+          ) : (
+            <ToolGroupSeat
+              key={`tools:${group.key}`}
+              nodeKeys={group.nodeKeys}
+              useSession={useSession}
+              selectedCallId={selectedCallId}
+              cwd={cwd}
+              openFile={requestOpenFile}
+              previewFile={previewFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
               renderMessageImages={renderMessageImages}

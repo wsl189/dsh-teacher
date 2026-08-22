@@ -51,6 +51,7 @@ async function bench() {
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('remote.ocr', { extract: vi.fn() })
+  runtime.provide('remote.teacherWorkbench', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const sessionFake = sessionFakeFor()
   await runtime.sessions.add({
@@ -351,11 +352,11 @@ describe('conversation slot inject API', () => {
 })
 
 describe('details inject API', () => {
-  it('details injects the one layout callback; selection rides the shared store instead', async () => {
+  it('details injects panel closing and native file opening; selection rides the shared store', async () => {
     const b = await bench()
     const entry = b.entryOf('details')
     const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails'])
+    expect(Object.keys(injected)).toEqual(['closeDetails', 'openFile'])
     injected.closeDetails()
     expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
     // The shared handle: details resolves the SAME instance conversation writes.

@@ -3397,13 +3397,20 @@
   gap: 10px;
 }
 
-.reminderGrid label {
+.reminderGrid label,
+.reminderAmountField {
   display: flex;
   flex-direction: column;
   gap: 5px;
   min-width: 0;
   color: var(--dsw-alias-label-secondary);
   font-size: 11px;
+}
+
+.reminderAmountControls {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, 0.42fr);
+  gap: 8px;
 }
 
 .fieldLabel {
@@ -3991,23 +3998,6 @@
   animation: legacyPulse 2s ease-in-out infinite;
 }
 
-.legacyTopCenter {
-  position: absolute;
-  left: 50%;
-  overflow: hidden;
-  width: min(34%, 440px);
-  padding: 8px 12px;
-  transform: translateX(-50%);
-  border: 1px solid var(--legacy-line);
-  border-radius: 10px;
-  background: var(--legacy-panel-soft);
-  color: var(--legacy-text);
-  font-size: 13px;
-  text-align: center;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .legacyTopActions {
   display: flex;
   min-width: 220px;
@@ -4338,7 +4328,7 @@
 }
 
 .legacyClassDrawer {
-  left: calc(var(--legacy-left) + 14px);
+  left: 0;
   width: min(30%, 390px);
 }
 
@@ -4486,7 +4476,7 @@
 
 .legacyBankImagesBesideClass {
   right: min(25%, 330px);
-  left: calc(var(--legacy-left) + min(30%, 390px) + 22px);
+  left: calc(min(30%, 390px) + 8px);
   width: auto;
 }
 
@@ -4501,7 +4491,7 @@
 }
 
 .legacyStudentImages {
-  left: calc(var(--legacy-left) + min(30%, 390px) + 22px);
+  left: calc(min(30%, 390px) + 8px);
   width: min(44%, 680px);
   z-index: 58;
 }
@@ -4974,10 +4964,6 @@
     --legacy-left: 180px;
   }
 
-  .legacyTopCenter {
-    display: none;
-  }
-
   .legacyHierarchyForm {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4992,8 +4978,8 @@
   }
 
   .legacyStudentImages {
-    left: calc(var(--legacy-left) + 250px);
-    width: calc(100% - var(--legacy-left) - 264px);
+    left: calc(min(30%, 390px) + 8px);
+    width: calc(100% - min(30%, 390px) - 22px);
   }
 }
 
@@ -5025,8 +5011,6 @@
   }
 
   .legacyAddStudentDrawer,
-  .legacyClassDrawer,
-  .legacyStudentImages,
   .legacyBankFolders,
   .legacyBankImages,
   .legacySettingsDrawer,
@@ -5034,6 +5018,13 @@
     right: 0;
     left: var(--legacy-left);
     width: calc(100% - var(--legacy-left));
+  }
+
+  .legacyClassDrawer,
+  .legacyStudentImages {
+    right: 0;
+    left: 0;
+    width: 100%;
   }
 
   .legacyHierarchyForm,

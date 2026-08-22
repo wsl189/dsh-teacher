@@ -135,7 +135,13 @@ describe('daily todo panel', () => {
     const enable = await within(dialog).findByRole('checkbox', { name: '发送手机机器人提醒' })
     fireEvent.click(enable)
     fireEvent.change(within(dialog).getByLabelText('提醒方式'), { target: { value: 'repeat' } })
-    fireEvent.change(within(dialog).getByLabelText('提醒频率（分钟）'), { target: { value: '15' } })
+    const frequency = within(dialog).getByLabelText<HTMLInputElement>('提醒频率')
+    fireEvent.change(frequency, { target: { value: '4' } })
+    expect(within(dialog).getByRole('button', { name: '保存' })).toHaveProperty('disabled', true)
+    fireEvent.change(frequency, { target: { value: '' } })
+    expect(frequency.value).toBe('')
+    fireEvent.change(within(dialog).getByLabelText('时间单位'), { target: { value: 'hours' } })
+    fireEvent.change(frequency, { target: { value: '2' } })
     fireEvent.change(within(dialog).getByLabelText('机器人'), { target: { value: 'bot-secondary' } })
     fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
     fireEvent.click(within(todayCard).getByRole('button', { name: '添加待办' }))
@@ -150,7 +156,7 @@ describe('daily todo panel', () => {
           channel: 'telegram',
           botId: 'bot-secondary',
           botLabel: 'Secondary Bot',
-          rule: { kind: 'repeat', everyMinutes: 15 },
+          rule: { kind: 'repeat', everyMinutes: 120 },
         },
       })
     })
@@ -197,7 +203,7 @@ describe('daily todo panel', () => {
     fireEvent.change(within(editor).getByLabelText('截止时间'), { target: { value: '2026-08-22T13:20' } })
     expect(enable).toHaveProperty('disabled', false)
     fireEvent.click(enable)
-    expect(within(editor).getByLabelText<HTMLInputElement>('提前分钟数').value).toBe('8')
+    expect(within(editor).getByLabelText<HTMLInputElement>('提前时间').value).toBe('8')
     expect(within(editor).getByRole('button', { name: '保存' })).toHaveProperty('disabled', false)
     await act(async () => {
       fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
@@ -392,6 +398,12 @@ describe('memos panel', () => {
     fireEvent.change(within(editor).getByLabelText('备忘录内容'), { target: { value: '联系家长' } })
     fireEvent.change(within(editor).getByLabelText('提醒截止时间'), { target: { value: '2099-08-22T18:00' } })
     fireEvent.click(await within(editor).findByRole('checkbox', { name: '发送手机机器人提醒' }))
+    const lead = within(editor).getByLabelText<HTMLInputElement>('提前时间')
+    fireEvent.change(lead, { target: { value: '' } })
+    expect(lead.value).toBe('')
+    expect(within(editor).getByRole('button', { name: '保存' })).toHaveProperty('disabled', true)
+    fireEvent.change(within(editor).getByLabelText('时间单位'), { target: { value: 'days' } })
+    fireEvent.change(lead, { target: { value: '2' } })
     fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
 
     await waitFor(() => {
@@ -402,7 +414,7 @@ describe('memos panel', () => {
           channel: 'weixin',
           botId: 'memo-bot',
           botLabel: '备忘机器人',
-          rule: { kind: 'once', minutesBefore: 30 },
+          rule: { kind: 'once', minutesBefore: 2_880 },
         },
       })
     })

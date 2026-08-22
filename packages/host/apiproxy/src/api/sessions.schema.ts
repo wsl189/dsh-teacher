@@ -337,6 +337,18 @@ export const sessionAttachmentValueSchema = z.object({
   data: z.string(),
 }) satisfies z.ZodType<Wire<ResponseValue<'session.attachment'>>>
 
+/** session.previewFile request payload: a non-empty workspace-relative or contained absolute path. */
+export const sessionPreviewFileRequestSchema = z.object({
+  sessionId: sessionIdSchema,
+  path: z.string().trim().min(1),
+}) satisfies z.ZodType<Wire<RequestPayload<'session.previewFile'>>>
+
+/** session.previewFile response value: complete bounded bytes encoded for the JSON carrier. */
+export const sessionPreviewFileValueSchema = z.object({
+  dataBase64: z.string(),
+  size: z.number().int().nonnegative(),
+}) satisfies z.ZodType<Wire<ResponseValue<'session.previewFile'>>>
+
 /** session.updateQueue request payload. */
 export const sessionUpdateQueueRequestSchema = z.object({
   sessionId: sessionIdSchema,

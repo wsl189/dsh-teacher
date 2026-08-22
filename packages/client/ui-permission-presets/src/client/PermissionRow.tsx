@@ -12,7 +12,7 @@ import {
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
 import type { PermissionSettingsKey } from './locales.ts'
-import { FULL_ACCESS_PRESET } from './presentation.ts'
+import { FULL_ACCESS_PRESET, permissionPresetCopy } from './presentation.ts'
 import css from './PermissionRow.module.css'
 
 /** Registration-side business face for the host-backed preference. */
@@ -58,7 +58,12 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
   if (state.status === 'unavailable') return null
   const selected = state.options.find(option => option.id === state.currentValue)
   const busy = state.status === 'loading' || state.status === 'saving' || confirmingFullAccess
-  const label = selected?.label
+  const label = selected === undefined ? undefined : permissionPresetCopy(selected.id, selected.label, undefined, t).label
+  const displayOptions = state.options.map(option => ({
+    id: option.id,
+    label: permissionPresetCopy(option.id, option.label, undefined, t).label,
+  }))
+  const selectedLabel = label
     ?? (busy ? t('loading') : t('unavailable'))
   const description: string = state.error ?? t('description')
 
@@ -72,7 +77,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
         <Menu
           open={open}
           onClose={() => { setOpen(false) }}
-          items={state.options.map(option => ({ id: option.id, label: option.label }))}
+          items={displayOptions}
           selectedId={state.currentValue}
           onSelect={(id) => {
             setOpen(false)
@@ -95,7 +100,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
               disabled={busy || !state.writable || state.options.length === 0}
               onClick={() => { setOpen(value => !value) }}
             >
-              {label}
+              {selectedLabel}
               <IconChevronDownOutline14 className={css.chevron} />
             </button>
           )}

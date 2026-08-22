@@ -25,6 +25,7 @@ async function bench() {
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('remote.ocr', { extract: vi.fn() })
+  runtime.provide('remote.teacherWorkbench', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   await runtime.sessions.add({ id: ROOT, summary: { title: 'R', displayTitle: 'R' } }, { current: false })
   await runtime.sessions.add(
@@ -58,7 +59,7 @@ describe('apply wiring', () => {
     await b.runtime.dispose()
   })
 
-  it('registers the chat view and its keyed business-node seat', async () => {
+  it('registers the chat view with business-node and consecutive-Tool seats', async () => {
     const b = await bench()
     const entries = b.slots.entries('conversation.view')
     expect(entries.map(e => e.options.id)).toEqual(['chat'])
@@ -70,6 +71,7 @@ describe('apply wiring', () => {
     const nodeSlot = b.slots.spec('conversation.chat.node')
     expect(nodeSlot).toMatchObject({ kind: 'keyed', scope: 'session' })
     expect(nodeSlot?.inject?.hooks?.turnData).toBeTypeOf('function')
+    expect(b.slots.spec('conversation.chat.toolGroup')).toEqual({ kind: 'single', scope: 'session' })
     await b.runtime.dispose()
   })
 
@@ -108,6 +110,7 @@ describe('apply wiring', () => {
     // one search row registers under both grep and glob; the web rows register
     // one component under both web tool names.
     expect(b.slots.entries('conversation.chat.node').map(entry => entry.options.key)).not.toContain('tool-call')
+    expect(b.slots.entries('conversation.chat.toolGroup')).toHaveLength(0)
     // Stats stick with the composer (not inside ChatView).
     expect(b.slots.entries('conversation.composer.dock').map(e => e.options.id)).toEqual(['stats'])
     await b.runtime.dispose()
@@ -122,6 +125,7 @@ describe('apply wiring', () => {
     expect(b.slots.entries('conversation.view')).toHaveLength(0)
     expect(b.slots.entries('conversation.chat.node')).toHaveLength(0)
     expect(b.slots.spec('conversation.chat.node')).toBeUndefined()
+    expect(b.slots.spec('conversation.chat.toolGroup')).toBeUndefined()
     expect(b.slots.entries('details')).toHaveLength(0)
     expect(b.slots.entries('settings.general.item')).toHaveLength(0)
     expect(b.runtime.ctx.get('conversation')).toBeUndefined()

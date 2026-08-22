@@ -31,6 +31,7 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/reference-composer', imp
 const MENU_EXPECTED = join(SNAPSHOT_DIR, 'menu.expected.md')
 const ORDER_EXPECTED = join(SNAPSHOT_DIR, 'order.expected.md')
 const CARET_EXPECTED = join(SNAPSHOT_DIR, 'caret-edits.expected.md')
+const DIRECTORY_DROP_EXPECTED = join(SNAPSHOT_DIR, 'directory-drop.expected.md')
 const MODE = webSnapshotMode()
 const SOURCE_SESSION_ID = 'reference-source-session'
 const TARGET_SESSION_ID = 'reference-order-target-session'
@@ -228,6 +229,37 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     expect(tripwire.warnings).toEqual([])
   })
 
+  it('drops a directory as path-only draft text', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-directory-drop-reference'))
+    const input = page.locator('textarea').first()
+    await input.fill('')
+    await page.evaluate(() => {
+      const dataTransfer = {
+        types: ['Files'],
+        files: [],
+        items: [{
+          kind: 'file',
+          getAsFile: () => null,
+          webkitGetAsEntry: () => ({
+            isDirectory: true,
+            name: 'design notes',
+            fullPath: '/workspace/design notes',
+          }),
+        }],
+        dropEffect: 'none',
+      }
+      for (const type of ['dragenter', 'dragover', 'drop']) {
+        const event = new Event(type, { bubbles: true, cancelable: true })
+        Object.defineProperty(event, 'dataTransfer', { value: dataTransfer })
+        document.body.dispatchEvent(event)
+      }
+    })
+    await expect.poll(() => input.inputValue()).toBe('@"workspace/design notes/"')
+    await compareOrRefreshGolden(DIRECTORY_DROP_EXPECTED, await composerSegments(page), MODE)
+    expect(tripwire.pageErrors).toEqual([])
+    expect(tripwire.warnings).toEqual([])
+  })
+
   it('renders the durable direct-message then recall order', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-reference-order'))
     const group = page.getByRole('treeitem', { name: /Ungrouped/ })
@@ -244,6 +276,8 @@ describe.skipIf(MODE === 'record')('web e2e: file and session references through
     expect(snapshot.indexOf('Research notes what changed?')).toBeLessThan(snapshot.indexOf('Session recall Research notes'))
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
-    await assertFixtureInventory(SNAPSHOT_DIR, ['caret-edits.expected.md', 'menu.expected.md', 'order.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'caret-edits.expected.md', 'directory-drop.expected.md', 'menu.expected.md', 'order.expected.md',
+    ])
   })
 })

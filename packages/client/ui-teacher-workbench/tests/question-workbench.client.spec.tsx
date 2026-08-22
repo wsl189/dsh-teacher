@@ -123,6 +123,7 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.getByRole('button', { name: '添加学生' })).toBeTruthy()
     expect(screen.getByRole('button', { name: '上传 PDF' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '设置' })).toBeNull()
+    expect(screen.queryByTitle('期中试卷')).toBeNull()
     expect(screen.getByLabelText('学生目录')).toBeTruthy()
     expect(screen.queryByRole('button', { name: '高二第一节' })).toBeNull()
     expect(screen.queryByText('错题分析')).toBeNull()
@@ -176,6 +177,33 @@ describe('QuestionWorkbench reference shell', () => {
     vi.stubGlobal('confirm', vi.fn(() => true))
     fireEvent.click(within(library).getByRole('button', { name: '删除目录“高考模拟”' }))
     await waitFor(() => { expect(c.deleteQuestionLibraryFolder).toHaveBeenCalledWith(libraryFolderId) })
+  })
+
+  it('limits question-library folder and batch labels to seven visible characters', async () => {
+    const libraryState: TeacherWorkbenchState = {
+      ...state,
+      questionLibraryFolders: [{
+        id: libraryFolderId, name: '高考模拟专题训练', createdAt: 1, updatedAt: 1,
+      }, {
+        id: nestedLibraryFolderId, name: '月考', createdAt: 2, updatedAt: 2,
+      }],
+      questionBatches: state.questionBatches.map(batch => ({
+        ...batch,
+        name: '2025—2026学年第二学期',
+        folderId: libraryFolderId,
+      })),
+    }
+    render(<QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={commands()} t={t} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
+    const library = screen.getByRole('complementary', { name: '试题图片库' })
+    expect(within(library).getByTitle('高考模拟专题训练').textContent).toBe('▸ 高考模拟专题训…')
+    expect(within(library).getByTitle('月考').textContent).toBe('月考')
+    expect(within(library).getByRole('button', { name: '月考' })).toBeTruthy()
+    fireEvent.click(within(library).getByRole('button', { name: '▸ 高考模拟专题训练' }))
+    await waitFor(() => {
+      expect(within(library).getByTitle('2025—2026学年第二学期').textContent).toBe('2025—20…')
+    })
   })
 
   it('offers existing nested library directories after a PDF is uploaded', async () => {

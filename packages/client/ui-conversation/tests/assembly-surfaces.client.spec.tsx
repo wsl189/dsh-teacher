@@ -54,6 +54,7 @@ async function bench(opts?: { blank?: boolean }) {
   // The plugin injects both; these specs exercise no settings path.
   runtime.provide('remote', { $on: () => () => {} })
   runtime.provide('remote.ocr', { extract: vi.fn() })
+  runtime.provide('remote.teacherWorkbench', {})
   runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
   const locale = new LocaleRuntime(runtime.ctx)
@@ -83,6 +84,7 @@ describe('resident composer', () => {
     // The plugin injects both; these specs exercise no settings path.
     runtime.provide('remote', { $on: () => () => {} })
     runtime.provide('remote.ocr', { extract: vi.fn() })
+    runtime.provide('remote.teacherWorkbench', {})
     runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     const locale = new LocaleRuntime(runtime.ctx)
@@ -114,6 +116,7 @@ describe('resident composer', () => {
     // The plugin injects both; these specs exercise no settings path.
     runtime.provide('remote', { $on: () => () => {} })
     runtime.provide('remote.ocr', { extract: vi.fn() })
+    runtime.provide('remote.teacherWorkbench', {})
     runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     const locale = new LocaleRuntime(runtime.ctx)
@@ -184,6 +187,7 @@ describe('prompt rejection through the assembled composer', () => {
     // The plugin injects both; these specs exercise no settings path.
     runtime.provide('remote', { $on: () => () => {} })
     runtime.provide('remote.ocr', { extract: vi.fn() })
+    runtime.provide('remote.teacherWorkbench', {})
     runtime.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
     runtime.provide('layout', { openDetails: vi.fn(), closeDetails: vi.fn() })
     const locale = new LocaleRuntime(runtime.ctx)

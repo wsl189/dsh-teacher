@@ -12,6 +12,7 @@ import type { ClientContext } from '@deepseek-ai/dsh-client-runtime/client'
 import type { ChatFileMentions } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import { ProducedFiles } from './ProducedFiles.tsx'
+import { FilePreview, type FilePreviewInjected } from './preview/FilePreview.tsx'
 import { en, NS, zh, type DeliverablesKey } from './locales.ts'
 import {
   deliverablesDefinition, producedFileMentions, selectProducedFiles,
@@ -50,6 +51,20 @@ export function apply(ctx: ClientContext): void {
       }),
     }, ProducedFiles),
   )
+  ctx.slots.inject(
+    'conversation.details.file',
+    () => ctx.slots.register({
+      name: 'conversation.details.file',
+      locale: NS,
+      inject: (sessionId): FilePreviewInjected => ({
+        loadPreview: async (path, signal) => {
+          const response = await connection.api.sessions.previewFile({ sessionId, path }, signal)
+          if (!response.result.ok) throw new Error(response.result.error.message)
+          return response.result.value
+        },
+      }),
+    }, FilePreview),
+  )
   // The prose side of the same vocabulary: the chat view reaches this face
   // via ctx.get, so its absence — this plugin composed out — is the off state.
   const t = ctx.locale.bind(NS)
@@ -59,7 +74,7 @@ export function apply(ctx: ClientContext): void {
       // no vocabulary — the two surfaces agree by construction.
       const paths = selectProducedFiles(owner)
       if (paths === null) return undefined
-      return producedFileMentions(paths, owner.openFile, path => t('produced.open', { name: path }))
+      return producedFileMentions(paths, owner.previewFile, path => t('produced.open', { name: path }))
     },
   }
   ctx.provide('chatFileMentions', mentions)

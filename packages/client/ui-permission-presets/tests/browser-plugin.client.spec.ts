@@ -127,8 +127,9 @@ describe('ui-permission browser plugin', () => {
     b.values.set(sid('s1'), SELECT)
     const again = await c.ui.options(proj, new AbortController().signal)
     expect(again.find(option => option.id === 'workspace-write')?.active).toBe(true)
-    expect(again.find(option => option.id === 'read-only')?.detail).toBe('Reads only.')
-    // Kebab-case names title-case; non-kebab host-configured names pass through.
+    expect(again.find(option => option.id === 'read-only')?.detail)
+      .toBe('Always ask before editing external files or using the internet')
+    // Product presets use locale copy; non-kebab host-configured names pass through.
     expect(again.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
     expect(again.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
       title: 'Enable Full access?',

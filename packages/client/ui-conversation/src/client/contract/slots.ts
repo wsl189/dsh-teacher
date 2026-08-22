@@ -35,10 +35,12 @@ export interface ComposerAttachment {
 export interface ComposerAttachmentsOwnerProps {
   /** Browser-owned draft images in input order. */
   attachments: readonly ComposerAttachment[]
-  /** Whether a document-level file drop may add images now. */
+  /** Whether a document-level file drop may add images or directory paths now. */
   canAcceptDrop: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
+  /** Append dropped directory paths to the draft without reading their contents. */
+  onAddDirectories: (paths: readonly string[]) => void
   /** Remove one draft image through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
   /** Display-ready limits for the drop invitation. */
@@ -121,6 +123,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
       hookContext: string
       inject: ChatNodeTurnDataInjected
     }
+    /**
+     * One maximal consecutive run of Tool Chat Nodes. The conversation view
+     * owns grouping and flow placement; the Tool presentation plugin decides
+     * whether to summarize the run or render its atomic rows directly.
+     */
+    'conversation.chat.toolGroup': { kind: 'single'; scope: 'session'; owner: ToolGroupOwnerProps }
     /** Optional renderer for one consecutive group of durable message images. */
     'conversation.message.images': { kind: 'single'; scope: 'session'; owner: MessageImagesOwnerProps }
     /**
@@ -162,6 +170,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * instead; this one is the whole panel.
      */
     'conversation.details.tool': { kind: 'single'; scope: 'session'; owner: DetailsToolOwnerProps }
+    /** Body renderer for a produced file selected in the shared details store. */
+    'conversation.details.file': { kind: 'single'; scope: 'session'; owner: DetailsFileOwnerProps }
     /**
      * The composer takeover chain: entries are selector-routed replacements
      * of the default InputBar. Declared by this package's 'conversation'
@@ -389,6 +399,8 @@ export interface TurnTailOwnerProps {
    * view resolves relative paths against the session cwd).
    */
   openFile: (path: string) => void
+  /** Select a produced file and open the in-product preview panel. */
+  previewFile: (path: string) => void
 }
 
 /**
@@ -420,11 +432,18 @@ export interface ChatNodeOwnerProps {
   /** Session workspace root; Tool summaries display paths relative to it. */
   cwd?: string | undefined
   openFile: (path: string) => void
+  previewFile: (path: string) => void
   inspectCall: (callId: CallId) => void
   forkAt: (seq: number) => void
   /** Render a historical image group through the attachment slot. */
   renderMessageImages: RenderMessageImages
   fileMentions: (owner: TurnTailOwnerProps) => MarkdownFileMentions | undefined
+}
+
+/** Stable Tool-node identities for one consecutive run in Chat order. */
+export interface ToolGroupOwnerProps extends ChatNodeOwnerProps {
+  /** Ordered `tool-call` Node keys; every key remains owned by the Chat snapshot. */
+  readonly nodeKeys: readonly string[]
 }
 
 /** Full props of one registered keyed Chat business renderer. */
@@ -437,6 +456,14 @@ export interface DetailsToolOwnerProps {
   block: ToolCallBlock
   /** Session workspace root for card cwd and relative-path display. */
   cwd?: string | undefined
+}
+
+/** Owner currency of the selected produced-file preview renderer. */
+export interface DetailsFileOwnerProps {
+  /** Path as recorded by the producing Tool. */
+  path: string
+  /** Open the same path through the Host operating system. */
+  openFile: (path: string) => Promise<void>
 }
 
 /**
@@ -764,6 +791,8 @@ export interface ChatViewInjected {
    * hand the path off (the chat view shows that reason and a retry).
    */
   openFile: (path: string) => Promise<void>
+  /** Select a produced file in the shared details store and open the right panel. */
+  previewFile: (path: string) => void
   loadOlder: () => void
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
@@ -794,7 +823,7 @@ export interface ChatViewInjected {
 /** Full chat-view component props: runtime & its Tool/command/tail render shares & store & injected & locale seat. */
 export type ChatViewSlotProps =
   PropsRuntime<'conversation.view'>
-  & PropsRenderSlots<'conversation.chat.node' | 'conversation.message.images'>
+  & PropsRenderSlots<'conversation.chat.node' | 'conversation.chat.toolGroup' | 'conversation.message.images'>
   & PropsStore<ChatStore> & ChatViewInjected & PropsLocale<'conversation'>
 
 /** Full props of the attachment plugin's composer entry. */
@@ -811,10 +840,13 @@ export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & P
 export interface DetailsInjected {
   /** Close the details panel (layout geometry stays with ctx.layout). */
   closeDetails: () => void
+  /** Open a previewed path through the Host operating system. */
+  openFile: (path: string) => Promise<void>
 }
 
 /** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
+export type DetailsSlotProps = PropsRuntime<'details'>
+  & PropsRenderSlots<'conversation.details.tool' | 'conversation.details.file'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */
