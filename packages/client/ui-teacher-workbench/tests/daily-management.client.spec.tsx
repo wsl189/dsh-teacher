@@ -8,6 +8,7 @@ import type {
   TeacherLedgerCategoryId,
   TeacherLedgerEntryId,
   TeacherQuickNoteId,
+  TeacherMobileBotId,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../src/settings.ts'
@@ -31,12 +32,14 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+  questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+  noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
+    listNotificationTargets: vi.fn(async () => []),
     saveDailyTodo: action(), toggleDailyTodo: action(), deleteDailyTodo: action(),
     saveQuickNote: action(), deleteQuickNote: action(),
     saveLedgerCategory: action(), deleteLedgerCategory: action(),
@@ -51,7 +54,8 @@ function commands(): TeacherWorkbenchCommands {
     deleteTimetableEntry: action(),
     importTimetableEntries: action(),
     saveClass: action(), deleteClass: action(), saveStudent: action(), importStudents: action(),
-    deleteStudent: action(), createQuestionFolder: action(), deleteQuestionFolder: action(),
+    deleteStudent: action(), createQuestionLibraryFolder: action(), renameQuestionLibraryFolder: action(),
+    deleteQuestionLibraryFolder: action(), createQuestionFolder: action(), deleteQuestionFolder: action(),
     saveResource: action(), deleteResource: action(), saveTemplate: action(),
     deleteTemplate: action(), saveRecord: action(), toggleRecord: action(), deleteRecord: action(),
     saveNoticeTemplate: action(), deleteNoticeTemplate: action(), saveNotice: action(), deleteNotice: action(),
@@ -104,6 +108,116 @@ afterEach(() => {
 })
 
 describe('daily todo panel', () => {
+  it('configures a repeated reminder for one selected mobile bot', async () => {
+    const c = commands()
+    vi.mocked(c.listNotificationTargets).mockResolvedValue([
+      {
+        channel: 'telegram',
+        botId: 'bot-primary' as TeacherMobileBotId,
+        label: 'Primary Bot',
+        connected: true,
+      },
+      {
+        channel: 'telegram',
+        botId: 'bot-secondary' as TeacherMobileBotId,
+        label: 'Secondary Bot',
+        connected: true,
+      },
+    ])
+    render(
+      <DailyTodoPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+    )
+    const todayCard = screen.getByRole('region', { name: '今日待办' })
+    fireEvent.change(within(todayCard).getByLabelText('新增今日待办'), { target: { value: '提交周报' } })
+    fireEvent.click(within(todayCard).getByRole('button', { name: '截止时间' }))
+    const dialog = screen.getByRole('dialog', { name: '设置截止时间与提醒' })
+    fireEvent.change(within(dialog).getByLabelText('截止时间'), { target: { value: '2099-08-22T18:00' } })
+    const enable = await within(dialog).findByRole('checkbox', { name: '发送手机机器人提醒' })
+    fireEvent.click(enable)
+    fireEvent.change(within(dialog).getByLabelText('提醒方式'), { target: { value: 'repeat' } })
+    fireEvent.change(within(dialog).getByLabelText('提醒频率（分钟）'), { target: { value: '15' } })
+    fireEvent.change(within(dialog).getByLabelText('机器人'), { target: { value: 'bot-secondary' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    fireEvent.click(within(todayCard).getByRole('button', { name: '添加待办' }))
+
+    await waitFor(() => {
+      expect(c.saveDailyTodo).toHaveBeenCalledWith({
+        title: '提交周报',
+        dueAt: '2099-08-22T18:00',
+        category: 'today',
+        color: 'blue',
+        reminder: {
+          channel: 'telegram',
+          botId: 'bot-secondary',
+          botLabel: 'Secondary Bot',
+          rule: { kind: 'repeat', everyMinutes: 15 },
+        },
+      })
+    })
+  })
+
+  it('explains an overdue deadline and chooses a valid lead for a near future reminder', async () => {
+    vi.spyOn(Date, 'now').mockReturnValue(new Date(2026, 7, 22, 13, 11).getTime())
+    const c = commands()
+    vi.mocked(c.listNotificationTargets).mockResolvedValue([{
+      channel: 'weixin',
+      botId: 'home-bot' as TeacherMobileBotId,
+      label: '微信机器人',
+      connected: true,
+    }])
+    const todoId = 'overdue-reminder' as TeacherDailyTodoId
+    render(
+      <DailyTodoPanel
+        state={{
+          ...emptyState(),
+          dailyTodos: [{
+            id: todoId,
+            title: '学习（每天中午12点）',
+            dueAt: '2026-08-22T12:00',
+            completed: false,
+            category: 'today',
+            color: 'blue',
+            createdAt: 1,
+            updatedAt: 1,
+          }],
+        }}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={c}
+        t={t}
+      />,
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: '编辑' }))
+    const editor = screen.getByRole('dialog', { name: '编辑待办' })
+    const enable = await within(editor).findByRole('checkbox', { name: '发送手机机器人提醒' })
+    expect(enable).toHaveProperty('disabled', true)
+    expect(within(editor).getByText('截止时间已过，请先修改为未来时间，才能开启提醒。')).toBeTruthy()
+    expect(within(editor).getByRole('button', { name: '保存' })).toHaveProperty('disabled', false)
+
+    fireEvent.change(within(editor).getByLabelText('截止时间'), { target: { value: '2026-08-22T13:20' } })
+    expect(enable).toHaveProperty('disabled', false)
+    fireEvent.click(enable)
+    expect(within(editor).getByLabelText<HTMLInputElement>('提前分钟数').value).toBe('8')
+    expect(within(editor).getByRole('button', { name: '保存' })).toHaveProperty('disabled', false)
+    await act(async () => {
+      fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
+    })
+    expect(c.saveDailyTodo).toHaveBeenCalledWith({
+      id: todoId,
+      title: '学习（每天中午12点）',
+      dueAt: '2026-08-22T13:20',
+      completed: false,
+      category: 'today',
+      color: 'blue',
+      reminder: {
+        channel: 'weixin',
+        botId: 'home-bot',
+        botLabel: '微信机器人',
+        rule: { kind: 'once', minutesBefore: 8 },
+      },
+    })
+  })
+
   it('adds by speech, edits, completes, and deletes deadline-aware tasks', async () => {
     vi.stubGlobal('SpeechRecognition', RecognitionMock)
     vi.stubGlobal('confirm', vi.fn(() => true))
@@ -118,7 +232,10 @@ describe('daily todo panel', () => {
       lang: 'zh-CN', continuous: false, interimResults: false, maxAlternatives: 1,
     })
     act(() => { RecognitionMock.instances[0]!.emitFinal('批改作业') })
-    fireEvent.change(within(todayCard).getByLabelText('截止时间'), { target: { value: '2026-08-18T18:30' } })
+    fireEvent.click(within(todayCard).getByRole('button', { name: '截止时间' }))
+    const timingDialog = screen.getByRole('dialog', { name: '设置截止时间与提醒' })
+    fireEvent.change(within(timingDialog).getByLabelText('截止时间'), { target: { value: '2026-08-18T18:30' } })
+    fireEvent.click(within(timingDialog).getByRole('button', { name: '保存' }))
     fireEvent.click(within(todayCard).getByRole('button', { name: '添加待办' }))
     await waitFor(() => {
       expect(c.saveDailyTodo).toHaveBeenCalledWith({
@@ -147,12 +264,12 @@ describe('daily todo panel', () => {
     fireEvent.change(screen.getByLabelText('事项'), { target: { value: '批改试卷' } })
     const editor = screen.getByRole('dialog', { name: '编辑待办' })
     fireEvent.change(within(editor).getByLabelText('截止时间'), { target: { value: '' } })
-    fireEvent.click(within(editor).getByRole('radio', { name: '重要事项' }))
+    expect(within(editor).queryByRole('radiogroup', { name: '事项分类' })).toBeNull()
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => {
       expect(c.saveDailyTodo).toHaveBeenLastCalledWith({
         id: todoId, title: '批改试卷', dueAt: '', completed: false,
-        category: 'important', color: 'blue',
+        category: 'today', color: 'blue',
       })
     })
 
@@ -231,6 +348,7 @@ describe('daily todo panel', () => {
     const pastRow = within(todayCard).getByText('已逾期').closest('article')!
     fireEvent.click(within(pastRow).getByRole('button', { name: '编辑' }))
     const editor = screen.getByRole('dialog', { name: '编辑待办' })
+    expect(within(editor).queryByRole('radiogroup', { name: '事项分类' })).toBeNull()
     fireEvent.click(within(editor).getByRole('button', { name: '开始语音输入' }))
     act(() => { RecognitionMock.instances[0]!.emitFinal('补充') })
     expect(within(editor).getByLabelText<HTMLInputElement>('事项').value).toBe('已逾期 补充')
@@ -258,7 +376,38 @@ describe('daily todo panel', () => {
   })
 })
 
-describe('quick notes panel', () => {
+describe('memos panel', () => {
+  it('configures a mobile reminder for a memo', async () => {
+    const c = commands()
+    vi.mocked(c.listNotificationTargets).mockResolvedValue([{
+      channel: 'weixin',
+      botId: 'memo-bot' as TeacherMobileBotId,
+      label: '备忘机器人',
+      connected: true,
+    }])
+    render(<QuickNotesPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '添加备忘录' }))
+    const editor = screen.getByRole('dialog', { name: '添加备忘录' })
+    fireEvent.change(within(editor).getByLabelText('备忘录内容'), { target: { value: '联系家长' } })
+    fireEvent.change(within(editor).getByLabelText('提醒截止时间'), { target: { value: '2099-08-22T18:00' } })
+    fireEvent.click(await within(editor).findByRole('checkbox', { name: '发送手机机器人提醒' }))
+    fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
+
+    await waitFor(() => {
+      expect(c.saveQuickNote).toHaveBeenCalledWith({
+        content: '联系家长',
+        remindAt: '2099-08-22T18:00',
+        reminder: {
+          channel: 'weixin',
+          botId: 'memo-bot',
+          botLabel: '备忘机器人',
+          rule: { kind: 'once', minutesBefore: 30 },
+        },
+      })
+    })
+  })
+
   it('creates a speech draft and edits or deletes each note', async () => {
     vi.stubGlobal('SpeechRecognition', RecognitionMock)
     vi.stubGlobal('confirm', vi.fn(() => true))
@@ -269,7 +418,7 @@ describe('quick notes panel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
     act(() => { RecognitionMock.instances[0]!.emitFinal('记录课堂观察') })
-    expect(screen.getByLabelText<HTMLTextAreaElement>('随记内容').value).toBe('记录课堂观察')
+    expect(screen.getByLabelText<HTMLTextAreaElement>('备忘录内容').value).toBe('记录课堂观察')
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => { expect(c.saveQuickNote).toHaveBeenCalledWith({ content: '记录课堂观察' }) })
 
@@ -286,7 +435,7 @@ describe('quick notes panel', () => {
       />,
     )
     fireEvent.click(screen.getByRole('button', { name: '编辑' }))
-    fireEvent.change(screen.getByLabelText('随记内容'), { target: { value: '调整课堂节奏' } })
+    fireEvent.change(screen.getByLabelText('备忘录内容'), { target: { value: '调整课堂节奏' } })
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => {
       expect(c.saveQuickNote).toHaveBeenLastCalledWith({ id: noteId, content: '调整课堂节奏' })
@@ -306,8 +455,8 @@ describe('quick notes panel', () => {
         state={{
           ...emptyState(),
           quickNotes: [
-            { id: oldId, content: '较早随记', createdAt: 1, updatedAt: 1 },
-            { id: newId, content: '较新随记', createdAt: 2, updatedAt: 2 },
+            { id: oldId, content: '较早备忘录', createdAt: 1, updatedAt: 1 },
+            { id: newId, content: '较新备忘录', createdAt: 2, updatedAt: 2 },
           ],
         }}
         settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
@@ -315,11 +464,11 @@ describe('quick notes panel', () => {
         t={t}
       />,
     )
-    expect(screen.getAllByRole('button').filter(button => ['较新随记', '较早随记'].some(text => button.textContent?.includes(text))).map(button => button.textContent?.includes('较新随记'))).toEqual([true, false])
+    expect(screen.getAllByRole('button').filter(button => ['较新备忘录', '较早备忘录'].some(text => button.textContent?.includes(text))).map(button => button.textContent?.includes('较新备忘录'))).toEqual([true, false])
 
-    fireEvent.click(screen.getByRole('button', { name: '添加随记' }))
-    const editor = screen.getByRole('dialog', { name: '添加随记' })
-    const content = within(editor).getByLabelText<HTMLTextAreaElement>('随记内容')
+    fireEvent.click(screen.getByRole('button', { name: '添加备忘录' }))
+    const editor = screen.getByRole('dialog', { name: '添加备忘录' })
+    const content = within(editor).getByLabelText<HTMLTextAreaElement>('备忘录内容')
     fireEvent.change(content, { target: { value: '手动记录  ' } })
     fireEvent.click(within(editor).getByRole('button', { name: '开始语音输入' }))
     act(() => { RecognitionMock.instances[0]!.emitFinal('语音补充') })
@@ -327,21 +476,21 @@ describe('quick notes panel', () => {
     vi.mocked(c.saveQuickNote).mockResolvedValueOnce(failure)
     fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
     await waitFor(() => { expect(c.saveQuickNote).toHaveBeenCalledWith({ content: '手动记录\n语音补充' }) })
-    expect(screen.getByRole('dialog', { name: '添加随记' })).toBeTruthy()
+    expect(screen.getByRole('dialog', { name: '添加备忘录' })).toBeTruthy()
     fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
-    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '添加随记' })).toBeNull() })
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '添加备忘录' })).toBeNull() })
 
-    fireEvent.click(screen.getByRole('button', { name: '添加随记' }))
-    const emptyEditor = screen.getByRole('dialog', { name: '添加随记' })
+    fireEvent.click(screen.getByRole('button', { name: '添加备忘录' }))
+    const emptyEditor = screen.getByRole('dialog', { name: '添加备忘录' })
     fireEvent.click(within(emptyEditor).getByRole('button', { name: '开始语音输入' }))
     act(() => { RecognitionMock.instances[1]!.emitFinal('纯语音记录') })
-    expect(within(emptyEditor).getByLabelText<HTMLTextAreaElement>('随记内容').value).toBe('纯语音记录')
+    expect(within(emptyEditor).getByLabelText<HTMLTextAreaElement>('备忘录内容').value).toBe('纯语音记录')
     fireEvent.click(within(emptyEditor).getByRole('button', { name: '取消' }))
 
-    fireEvent.click(screen.getByText('较新随记'))
-    expect(screen.getByRole('dialog', { name: '编辑随记' })).toBeTruthy()
+    fireEvent.click(screen.getByText('较新备忘录'))
+    expect(screen.getByRole('dialog', { name: '编辑备忘录' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '取消' }))
-    const oldRow = screen.getByText('较早随记').closest('article')!
+    const oldRow = screen.getByText('较早备忘录').closest('article')!
     fireEvent.click(within(oldRow).getByRole('button', { name: '删除' }))
     expect(c.deleteQuickNote).not.toHaveBeenCalled()
     fireEvent.click(within(oldRow).getByRole('button', { name: '删除' }))
@@ -351,6 +500,57 @@ describe('quick notes panel', () => {
 })
 
 describe('ledger panel', () => {
+  it('configures a mobile reminder while adding a ledger entry', async () => {
+    const c = commands()
+    vi.mocked(c.listNotificationTargets).mockResolvedValue([{
+      channel: 'weixin',
+      botId: 'ledger-bot' as TeacherMobileBotId,
+      label: '账本机器人',
+      connected: true,
+    }])
+    const categoryId = 'ledger-category-reminder' as TeacherLedgerCategoryId
+    render(
+      <LedgerPanel
+        state={{
+          ...emptyState(),
+          ledgerCategories: [{ id: categoryId, name: '保险保费', createdAt: 1 }],
+        }}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={c}
+        expanded
+        onExpand={vi.fn()}
+        onCollapse={vi.fn()}
+        t={t}
+      />,
+    )
+    const category = screen.getByRole('article', { name: '保险保费' })
+    fireEvent.change(within(category).getByLabelText('账目说明'), { target: { value: '续交车险' } })
+    fireEvent.change(within(category).getByLabelText('金额（元）'), { target: { value: '1200' } })
+    fireEvent.change(within(category).getByLabelText('发生时间'), { target: { value: '2099-08-01T10:00' } })
+    fireEvent.click(within(category).getByRole('button', { name: '设置截止时间与提醒' }))
+    const editor = screen.getByRole('dialog', { name: '设置截止时间与提醒' })
+    fireEvent.change(within(editor).getByLabelText('提醒截止时间'), { target: { value: '2099-08-22T18:00' } })
+    fireEvent.click(await within(editor).findByRole('checkbox', { name: '发送手机机器人提醒' }))
+    fireEvent.click(within(editor).getByRole('button', { name: '应用' }))
+    fireEvent.click(within(category).getByRole('button', { name: '添加明细' }))
+
+    await waitFor(() => {
+      expect(c.saveLedgerEntry).toHaveBeenCalledWith({
+        categoryId,
+        description: '续交车险',
+        amountCents: 120_000,
+        occurredAt: '2099-08-01T10:00',
+        remindAt: '2099-08-22T18:00',
+        reminder: {
+          channel: 'weixin',
+          botId: 'ledger-bot',
+          botLabel: '账本机器人',
+          rule: { kind: 'once', minutesBefore: 30 },
+        },
+      })
+    })
+  })
+
   it('opens from the compact card and manages category entries with voice and time', async () => {
     vi.stubGlobal('SpeechRecognition', RecognitionMock)
     vi.stubGlobal('confirm', vi.fn(() => true))

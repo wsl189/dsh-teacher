@@ -1245,11 +1245,21 @@
   align-items: center;
   justify-content: center;
   overflow: hidden;
+  padding: 0;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 6px;
   background: var(--dsw-specific-input-major);
   color: var(--dsw-alias-label-secondary);
   cursor: pointer;
+}
+
+.reminderBadge {
+  position: absolute;
+  right: 1px;
+  bottom: 1px;
+  padding: 1px;
+  border-radius: 50%;
+  background: var(--dsw-specific-input-major);
 }
 
 .todoDeadlinePicker:hover {
@@ -1406,7 +1416,7 @@
   display: grid;
   padding: 10px;
   align-items: end;
-  grid-template-columns: minmax(0, 1.35fr) minmax(100px, 0.55fr) 48px auto;
+  grid-template-columns: minmax(0, 1.35fr) minmax(100px, 0.55fr) 48px auto auto;
   gap: 7px;
   border-bottom: 1px solid var(--dsw-alias-border-l2);
 }
@@ -1442,6 +1452,38 @@
   width: 32px;
   min-width: 32px;
   padding: 0;
+}
+
+.ledgerReminderButton {
+  position: relative;
+  display: inline-flex;
+  width: 32px;
+  min-width: 32px;
+  min-height: 32px;
+  padding: 0;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: transparent;
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+
+.ledgerReminderButton:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+
+.ledgerReminderButton i {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 6px;
+  height: 6px;
+  border: 1px solid var(--dsw-alias-bg-primary);
+  border-radius: 50%;
+  background: var(--dsw-alias-brand-primary);
 }
 
 .ledgerEntryList {
@@ -1480,6 +1522,9 @@
 }
 
 .ledgerEntryMain time {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   line-height: 15px;
@@ -1653,6 +1698,9 @@
 }
 
 .todoCopy span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   overflow: hidden;
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
@@ -1725,6 +1773,9 @@
 }
 
 .noteMain small {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   color: var(--dsw-alias-label-tertiary);
   font-size: 10px;
   line-height: 15px;
@@ -2325,7 +2376,7 @@
 .calendarAgendaItem,
 .calendarTodoItem {
   display: grid;
-  grid-template-columns: 20px minmax(0, 1fr) 32px 32px;
+  grid-template-columns: 20px minmax(0, 1fr) 32px 32px 32px;
   align-items: center;
   gap: 5px;
   min-height: 40px;
@@ -2363,6 +2414,12 @@
 .calendarTodoItem time {
   color: var(--dsw-alias-label-tertiary);
   font-size: 11px;
+}
+
+.calendarAgendaMain span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
 }
 
 .calendarTodoItem {
@@ -3292,36 +3349,61 @@
   grid-column: 1 / -1;
 }
 
-.todoCategoryField {
-  gap: 7px;
-}
-
-.todoCategoryOptions {
+.reminderFields {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
+  grid-column: 1 / -1;
+  flex-direction: column;
+  gap: 9px;
+  min-width: 0;
+  margin: 0;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
 }
 
-.todoCategoryOption {
+.reminderFields legend {
+  padding: 0 5px;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+}
+
+.reminderFields p {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+}
+
+.reminderFields .reminderError {
+  color: var(--dsw-alias-label-error);
+}
+
+.reminderEnable {
   display: inline-flex;
-  min-height: 34px;
-  padding: 0 10px;
-  box-sizing: border-box;
   align-items: center;
   gap: 7px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 6px;
-  color: var(--dsw-alias-label-primary);
   font-size: 13px;
-  cursor: pointer;
 }
 
-.editorDialog .todoCategoryOption input {
+.editorDialog .reminderEnable input {
   width: 16px;
   height: 16px;
   min-height: 0;
   padding: 0;
-  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.reminderGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.reminderGrid label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+  color: var(--dsw-alias-label-secondary);
+  font-size: 11px;
 }
 
 .fieldLabel {
@@ -4225,13 +4307,6 @@
   font-size: 12px;
 }
 
-.legacyTemporaryCount {
-  margin-left: auto;
-  color: var(--dsw-alias-state-success-primary);
-  font-size: 12px;
-  white-space: nowrap;
-}
-
 .legacyAddStudentDrawer {
   left: calc(var(--legacy-left) + 14px);
   width: min(74%, 1020px);
@@ -4373,6 +4448,16 @@
   transform: translateY(-50%);
 }
 
+.legacyLibraryDelete {
+  color: var(--dsw-alias-state-error-primary) !important;
+}
+
+.legacyQuestionShell .legacyLibraryDelete:hover:not(:disabled),
+.legacyQuestionShell .legacyLibraryDelete:focus-visible:not(:disabled) {
+  border-color: var(--dsw-alias-state-error-secondary);
+  background: var(--dsw-alias-interactive-bg-hover-danger);
+}
+
 .legacyStudentRow > .legacyHoverDelete {
   right: auto;
   left: 6px;
@@ -4382,6 +4467,15 @@
   right: 0;
   width: min(25%, 330px);
   z-index: 57;
+}
+
+.legacyBankFolders .legacyDrawerHeader h2,
+.legacyBankFolders .legacyDrawerHeader button {
+  white-space: nowrap;
+}
+
+.legacyBankFolders .legacyDrawerHeader button {
+  padding-inline: 7px;
 }
 
 .legacyBankImages {
@@ -4493,6 +4587,14 @@
   flex: 1;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.legacyImageHistory {
+  margin-top: 6px;
+  color: var(--legacy-muted);
+  font-size: 11px;
+  line-height: 17px;
+  text-align: left;
 }
 
 .legacyImageMeta label,

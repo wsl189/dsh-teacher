@@ -55,7 +55,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
   const settings = props.useTeacherSettings(state => state.value ?? DEFAULT_TEACHER_WORKBENCH_SETTINGS)
   useEffect(() => {
     if (open) void props.ensure()
-  }, [open, props.ensure])
+  }, [active, open, props.ensure])
   useEffect(
     () => props.subscribeSessionNavigation(() => { props.actions.close() }),
     [props.actions, props.subscribeSessionNavigation],
@@ -64,6 +64,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
   if (!open) return null
 
   const commands: TeacherWorkbenchCommands = {
+    listNotificationTargets: props.listNotificationTargets,
     saveDailyTodo: props.saveDailyTodo,
     toggleDailyTodo: props.toggleDailyTodo,
     deleteDailyTodo: props.deleteDailyTodo,
@@ -89,6 +90,9 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     importStudents: props.importStudents,
     deleteStudent: props.deleteStudent,
     createQuestionFolder: props.createQuestionFolder,
+    createQuestionLibraryFolder: props.createQuestionLibraryFolder,
+    renameQuestionLibraryFolder: props.renameQuestionLibraryFolder,
+    deleteQuestionLibraryFolder: props.deleteQuestionLibraryFolder,
     deleteQuestionFolder: props.deleteQuestionFolder,
     saveResource: props.saveResource,
     deleteResource: props.deleteResource,

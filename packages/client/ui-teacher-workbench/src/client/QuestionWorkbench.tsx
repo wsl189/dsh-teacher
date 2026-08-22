@@ -9,7 +9,6 @@ import {
   Image as ImageIcon,
   Presentation,
   Scissors,
-  Settings as SettingsIcon,
   Trash2,
   Upload,
   UserPlus,
@@ -27,6 +26,8 @@ import type {
   TeacherQuestionFolderId,
   TeacherQuestionImage,
   TeacherQuestionImageTarget,
+  TeacherQuestionLibraryFolder,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionUploadedDocumentRequest,
   TeacherStudent,
   TeacherStudentId,
@@ -83,6 +84,14 @@ interface FolderPrompt {
   readonly parent?: TeacherQuestionFolder
 }
 
+type LibraryFolderPrompt =
+  | { readonly mode: 'create'; readonly parent?: TeacherQuestionLibraryFolder }
+  | { readonly mode: 'rename'; readonly folder: TeacherQuestionLibraryFolder }
+
+type LibraryHierarchyRow =
+  | { readonly kind: 'folder'; readonly folder: TeacherQuestionLibraryFolder; readonly depth: number; readonly hasChildren: boolean; readonly expanded: boolean }
+  | { readonly kind: 'batch'; readonly batch: TeacherWorkbenchState['questionBatches'][number]; readonly depth: number }
+
 interface QuestionBankSaveTarget {
   readonly studentId: TeacherStudentId
   readonly folderId: TeacherQuestionFolderId | ''
@@ -123,21 +132,25 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const skillFolderInputRef = useRef<HTMLInputElement | null>(null)
   const skillMenuRef = useRef<HTMLDivElement | null>(null)
   const hierarchyClickRef = useRef<HierarchyClickState>({ key: '', count: 0, timer: null })
+  const libraryHierarchyClickRef = useRef<HierarchyClickState>({ key: '', count: 0, timer: null })
   const [busy, setBusy] = useState<BusyTask>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [pendingPdf, setPendingPdf] = useState<File | null>(null)
   const [pdfPageCount, setPdfPageCount] = useState(0)
   const [pageRange, setPageRange] = useState('')
+  const [pageRangeFolderId, setPageRangeFolderId] = useState<TeacherQuestionLibraryFolderId | ''>('')
   const [pageRangeOpen, setPageRangeOpen] = useState(false)
   const [cutFailure, setCutFailure] = useState<string | null>(null)
   const [skillMenuOpen, setSkillMenuOpen] = useState(false)
   const [pendingSkillKind, setPendingSkillKind] = useState<'word' | 'ppt' | null>(null)
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([fallbackYear]))
   const [expandedHierarchy, setExpandedHierarchy] = useState<Set<string>>(() => new Set())
+  const [expandedLibraryFolders, setExpandedLibraryFolders] = useState<Set<TeacherQuestionLibraryFolderId>>(() => new Set())
   const [activeClassId, setActiveClassId] = useState<TeacherClassId | ''>(() => classes[0]?.id ?? '')
   const [activeStudentId, setActiveStudentId] = useState<TeacherStudentId | ''>(() => state.students[0]?.id ?? '')
   const [activeFolderId, setActiveFolderId] = useState<TeacherQuestionFolderId | ''>('')
   const [activeBatchId, setActiveBatchId] = useState<TeacherQuestionBatchId | ''>(() => state.questionBatches.at(-1)?.id ?? '')
+  const [activeLibraryFolderId, setActiveLibraryFolderId] = useState<TeacherQuestionLibraryFolderId | ''>('')
   const [selectedBatchImageIds, setSelectedBatchImageIds] = useState<Set<string>>(() => new Set())
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(() => new Set())
   const [temporarySelections, setTemporarySelections] = useState<ReadonlyMap<TeacherStudentId, number>>(() => new Map())
@@ -146,7 +159,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const [questionBankOpen, setQuestionBankOpen] = useState(false)
   const [batchImagesOpen, setBatchImagesOpen] = useState(false)
   const [studentImagesOpen, setStudentImagesOpen] = useState(false)
-  const [settingsDrawerOpen, setSettingsDrawerOpen] = useState(false)
   const [batchWordOpen, setBatchWordOpen] = useState(false)
   const [officeDialog, setOfficeDialog] = useState<OfficeDialog | null>(null)
   const [editor, setEditor] = useState<EditorRequest | null>(null)
@@ -158,6 +170,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const [pendingStudent, setPendingStudent] = useState<PendingStudent | null>(null)
   const [folderPrompt, setFolderPrompt] = useState<FolderPrompt | null>(null)
   const [folderName, setFolderName] = useState('')
+  const [libraryFolderPrompt, setLibraryFolderPrompt] = useState<LibraryFolderPrompt | null>(null)
+  const [libraryFolderName, setLibraryFolderName] = useState('')
   const [batchWordRows, setBatchWordRows] = useState<readonly BatchWordRow[]>([])
   const [batchBulkTitle, setBatchBulkTitle] = useState('')
 
@@ -180,6 +194,14 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const hierarchyRows = useMemo(
     () => buildStudentHierarchyRows(classStudents, state.questionFolders, expandedHierarchy),
     [classStudents, expandedHierarchy, state.questionFolders],
+  )
+  const libraryRows = useMemo(
+    () => buildQuestionLibraryRows(state.questionLibraryFolders, state.questionBatches, expandedLibraryFolders),
+    [expandedLibraryFolders, state.questionBatches, state.questionLibraryFolders],
+  )
+  const libraryFolderOptions = useMemo(
+    () => buildQuestionLibraryFolderOptions(state.questionLibraryFolders),
+    [state.questionLibraryFolders],
   )
   const classHierarchy = useMemo(() => {
     const groups = new Map<string, TeacherClass[]>()
@@ -216,6 +238,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   useEffect(() => () => {
     const timer = hierarchyClickRef.current.timer
     if (timer !== null) clearTimeout(timer)
+    const libraryTimer = libraryHierarchyClickRef.current.timer
+    if (libraryTimer !== null) clearTimeout(libraryTimer)
   }, [])
 
   useEffect(() => {
@@ -289,10 +313,11 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setQuestionBankOpen(false)
     setBatchImagesOpen(false)
     setStudentImagesOpen(false)
-    setSettingsDrawerOpen(false)
     setBatchWordOpen(false)
     setFolderPrompt(null)
     setFolderName('')
+    setLibraryFolderPrompt(null)
+    setLibraryFolderName('')
   }
 
   const choosePdf = async (file: File | null): Promise<void> => {
@@ -305,6 +330,9 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       setPendingPdf(file)
       setPdfPageCount(count)
       setPageRange('')
+      setPageRangeFolderId(state.questionLibraryFolders.some(folder => folder.id === activeLibraryFolderId)
+        ? activeLibraryFolderId
+        : '')
       setPageRangeOpen(true)
     } catch (cause) {
       setToast(errorMessage(cause, t('questions.pdfReadFailed')))
@@ -353,6 +381,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
         for (const images of parts) {
           const saved = await commands.saveQuestionBatch({
             ...(savedBatchId === undefined ? {} : { appendToBatchId: savedBatchId }),
+            ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
             name: baseName,
             sourceName: pendingPdf.name,
             pageRange: selectedRange,
@@ -368,6 +397,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       setToast(t('questions.cutSaved', { count: savedCount }))
       setPendingPdf(null)
       setPageRange('')
+      setPageRangeFolderId('')
       if (fileInputRef.current !== null) fileInputRef.current.value = ''
     } catch (cause) {
       const message = errorMessage(cause, t('questions.cutFailed'))
@@ -528,6 +558,66 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setToast(t('questions.folderCreated', { name }))
   }
 
+  const requestLibraryFolderCreate = (parent?: TeacherQuestionLibraryFolder): void => {
+    setLibraryFolderName('')
+    setLibraryFolderPrompt(parent === undefined ? { mode: 'create' } : { mode: 'create', parent })
+  }
+
+  const requestLibraryFolderRename = (folder: TeacherQuestionLibraryFolder): void => {
+    setLibraryFolderName(folder.name)
+    setLibraryFolderPrompt({ mode: 'rename', folder })
+  }
+
+  const saveLibraryFolderPrompt = async (): Promise<void> => {
+    if (libraryFolderPrompt === null || libraryFolderName.trim() === '' || busy !== null) return
+    const name = libraryFolderName.trim()
+    const parentId = libraryFolderPrompt.mode === 'create'
+      ? libraryFolderPrompt.parent?.id
+      : libraryFolderPrompt.folder.parentId
+    const duplicate = state.questionLibraryFolders.some(folder => folder.parentId === parentId
+      && (libraryFolderPrompt.mode === 'create' || folder.id !== libraryFolderPrompt.folder.id)
+      && folder.name.normalize('NFKC').toLowerCase() === name.normalize('NFKC').toLowerCase())
+    if (duplicate) {
+      setToast(t('questions.folderExists'))
+      return
+    }
+    setBusy('folder')
+    const result = libraryFolderPrompt.mode === 'create'
+      ? await commands.createQuestionLibraryFolder({
+        ...(parentId === undefined ? {} : { parentId }),
+        name,
+      })
+      : await commands.renameQuestionLibraryFolder(libraryFolderPrompt.folder.id, name)
+    setBusy(null)
+    if (!result.ok) {
+      setToast(result.error.message)
+      return
+    }
+    if (libraryFolderPrompt.mode === 'create' && parentId !== undefined) {
+      setExpandedLibraryFolders(current => new Set([...current, parentId]))
+    }
+    setLibraryFolderPrompt(null)
+    setLibraryFolderName('')
+    setToast(libraryFolderPrompt.mode === 'create'
+      ? t('questions.folderCreated', { name })
+      : t('questions.folderRenamed', { name }))
+  }
+
+  const deleteLibraryFolder = async (folder: TeacherQuestionLibraryFolder): Promise<void> => {
+    if (!globalThis.confirm(t('questions.confirmDeleteLibraryFolder', { name: folder.name }))) return
+    setBusy('folder')
+    const result = await commands.deleteQuestionLibraryFolder(folder.id)
+    setBusy(null)
+    if (result.ok) {
+      const removed = questionLibraryFolderDescendants(state.questionLibraryFolders, folder.id)
+      setExpandedLibraryFolders(current => new Set([...current].filter(id => !removed.has(id))))
+      if (removed.has(activeLibraryFolderId as TeacherQuestionLibraryFolderId)) {
+        setActiveLibraryFolderId(folder.parentId ?? '')
+      }
+    }
+    setToast(result.ok ? t('questions.deleted') : result.error.message)
+  }
+
   const deleteFolder = async (folder: TeacherQuestionFolder): Promise<void> => {
     if (!globalThis.confirm(t('questions.confirmDeleteFolder', { name: folder.name }))) return
     const result = await commands.deleteQuestionFolder(folder.id)
@@ -551,6 +641,36 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setSelectedBatchImageIds(new Set())
     setStudentImagesOpen(false)
     setBatchImagesOpen(true)
+  }
+
+  const toggleLibraryFolder = (folder: TeacherQuestionLibraryFolder): void => {
+    setActiveLibraryFolderId(folder.id)
+    setBatchImagesOpen(false)
+    setExpandedLibraryFolders((current) => {
+      const next = new Set(current)
+      if (next.has(folder.id)) next.delete(folder.id)
+      else next.add(folder.id)
+      return next
+    })
+  }
+
+  const handleLibraryHierarchyClick = (folder: TeacherQuestionLibraryFolder): void => {
+    const current = libraryHierarchyClickRef.current
+    if (current.key !== folder.id) {
+      if (current.timer !== null) clearTimeout(current.timer)
+      current.key = folder.id
+      current.count = 0
+    }
+    current.count += 1
+    if (current.timer !== null) clearTimeout(current.timer)
+    current.timer = setTimeout(() => {
+      const count = current.count
+      current.count = 0
+      current.timer = null
+      if (count <= 1) toggleLibraryFolder(folder)
+      else if (count === 2) requestLibraryFolderCreate(folder)
+      else if (count >= 3) requestLibraryFolderRename(folder)
+    }, HIERARCHY_CLICK_WINDOW_MS)
   }
 
   const requestCloseClassDrawer = (): void => {
@@ -848,16 +968,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
-  const openDshSettings = (): void => {
-    const buttons = [...document.querySelectorAll<HTMLButtonElement>('button[aria-haspopup="dialog"]')]
-    const trigger = buttons.find(button => /设置|settings/iu.test(button.textContent))
-    setSettingsDrawerOpen(false)
-    if (trigger === undefined) setToast(t('questions.settingsHint'))
-    else trigger.click()
-  }
-
   const anyDrawerOpen = addStudentOpen || classDrawerOpen || questionBankOpen || batchImagesOpen
-    || studentImagesOpen || settingsDrawerOpen || batchWordOpen
+    || studentImagesOpen || batchWordOpen
 
   return (
     <div className={css.legacyQuestionShell} data-question-workbench data-reference-question-shell>
@@ -882,7 +994,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
           <TopAction icon={<FolderOpen size={18} />} label={t('questions.library')} onClick={() => { openQuestionBank() }} />
           <TopAction icon={<UserPlus size={18} />} label={t('questions.addStudent')} onClick={openAddStudent} />
           <TopAction icon={<Upload size={18} />} label={t('questions.uploadPdf')} disabled={busy !== null} onClick={() => { fileInputRef.current?.click() }} />
-          <TopAction icon={<SettingsIcon size={18} />} label={t('questions.settings')} onClick={() => { setSettingsDrawerOpen(true) }} />
           <input
             ref={fileInputRef}
             className={css.legacyHiddenInput}
@@ -1024,15 +1135,36 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
 
       {questionBankOpen && (
         <aside className={`${css.legacyDrawer} ${css.legacyBankFolders}`} aria-label={t('questions.library')}>
-          <DrawerHeader title={t('questions.library')} onClose={() => { setQuestionBankOpen(false); setBatchImagesOpen(false) }} t={t} />
+          <DrawerHeader title={t('questions.library')} onClose={() => { setQuestionBankOpen(false); setBatchImagesOpen(false) }} t={t}>
+            <button type="button" onClick={() => { requestLibraryFolderCreate() }}>{t('questions.newFolder')}</button>
+          </DrawerHeader>
           <div className={css.legacyFolderList}>
-            {state.questionBatches.length === 0 && <div className={css.legacyDrawerState}>{t('questions.emptyBatch')}</div>}
-            {[...state.questionBatches].reverse().map(batch => (
-              <div key={batch.id} className={css.legacyFolderRow}>
-                <button type="button" className={batch.id === activeBatchId ? css.legacyFolderButtonActive : css.legacyFolderButton} onClick={() => { openBatch(batch.id) }}>
-                  <span>{batch.name}</span><small>{batch.images.length}</small>
+            {libraryRows.length === 0 && <div className={css.legacyDrawerState}>{t('questions.emptyBatch')}</div>}
+            {libraryRows.map(row => row.kind === 'folder' ? (
+              <div key={`folder:${row.folder.id}`} className={css.legacyFolderRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
+                <button
+                  type="button"
+                  className={row.folder.id === activeLibraryFolderId ? css.legacyFolderButtonActive : css.legacyFolderButton}
+                  aria-expanded={row.expanded}
+                  title={t('questions.libraryFolderClickHint')}
+                  onClick={() => { handleLibraryHierarchyClick(row.folder) }}
+                >
+                  <span>{row.hasChildren ? row.expanded ? '▾ ' : '▸ ' : '· '}{row.folder.name}</span>
+                  <small>{libraryFolderImageCount(row.folder.id, state.questionLibraryFolders, state.questionBatches)}</small>
                 </button>
-                <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteBatch(batch.id, batch.name) }}><X size={13} /></button>
+                <button
+                  type="button"
+                  className={`${css.legacyStudentAdd} ${css.legacyLibraryDelete}`}
+                  aria-label={t('questions.deleteLibraryFolder', { name: row.folder.name })}
+                  onClick={() => { void deleteLibraryFolder(row.folder) }}
+                ><X size={13} /></button>
+              </div>
+            ) : (
+              <div key={`batch:${row.batch.id}`} className={css.legacyFolderRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
+                <button type="button" className={row.batch.id === activeBatchId ? css.legacyFolderButtonActive : css.legacyFolderButton} onClick={() => { openBatch(row.batch.id) }}>
+                  <span>{row.batch.name}</span><small>{row.batch.images.length}</small>
+                </button>
+                <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteBatch(row.batch.id, row.batch.name) }}><X size={13} /></button>
               </div>
             ))}
           </div>
@@ -1078,9 +1210,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             <button type="button" disabled={selectedAssignmentIds.size === 0 || busy !== null} onClick={() => { void saveTemporarySelection() }}>
               {t('questions.tempSave')}
             </button>
-            {(temporarySelections.get(activeStudent.id) ?? 0) > 0 && (
-              <span className={css.legacyTemporaryCount}>{t('questions.tempCount', { count: temporarySelections.get(activeStudent.id) ?? 0 })}</span>
-            )}
             <button type="button" onClick={() => { openQuestionBank(activeStudent, activeFolderId) }}>{t('questions.library')}</button>
           </div>
           <div className={css.legacyImageScroll}>
@@ -1090,6 +1219,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                 key={assignment.id}
                 target={{ kind: 'assignment', id: assignment.id }}
                 meta={assignment}
+                temporarySaveCount={assignment.temporarySaveCount}
+                {...(assignment.lastTemporarySavedAt === undefined ? {} : { lastTemporarySavedAt: assignment.lastTemporarySavedAt })}
                 label={assignment.fileName}
                 checked={selectedAssignmentIds.has(assignment.id)}
                 commands={commands}
@@ -1099,19 +1230,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                 onDelete={() => { void deleteImage({ kind: 'assignment', id: assignment.id }) }}
               />
             ))}
-          </div>
-        </aside>
-      )}
-
-      {settingsDrawerOpen && (
-        <aside className={`${css.legacyDrawer} ${css.legacySettingsDrawer}`} aria-label={t('questions.settings')}>
-          <DrawerHeader title={t('questions.settings')} onClose={() => { setSettingsDrawerOpen(false) }} t={t} />
-          <div className={css.legacySettingsRows}>
-            <FormField label={t('questions.academicYear')}><input readOnly value={fallbackYear} /></FormField>
-            <FormField label={t('settings.questionRenderScale')}><input readOnly value={settings.questionRenderScale} /></FormField>
-            <FormField label={t('settings.questionCropPadding')}><input readOnly value={settings.questionCropPadding} /></FormField>
-            <p>{t('questions.settingsMigrated')}</p>
-            <button type="button" onClick={openDshSettings}><SettingsIcon size={15} />{t('questions.openDshSettings')}</button>
           </div>
         </aside>
       )}
@@ -1174,6 +1292,15 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             <p>{t('questions.totalPages', { count: pdfPageCount })}</p>
             <p className={css.legacyMuted}>{t('questions.pageRangeHint')}</p>
             <input value={pageRange} onChange={(event) => { setPageRange(event.target.value) }} placeholder={t('questions.pageRangePlaceholder')} />
+            <FormField label={t('questions.saveDirectory')}>
+              <select
+                value={pageRangeFolderId}
+                onChange={(event) => { setPageRangeFolderId(event.target.value as TeacherQuestionLibraryFolderId | '') }}
+              >
+                <option value="">{t('questions.libraryRoot')}</option>
+                {libraryFolderOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
+              </select>
+            </FormField>
             <div className={css.legacySheetActions}><button type="button" onClick={() => { void cutPdf() }}>{t('questions.confirmCut')}</button></div>
           </section>
         </>
@@ -1197,6 +1324,39 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             <div>
               <button type="button" onClick={() => { setFolderPrompt(null); setFolderName('') }}>{t('cancel')}</button>
               <button type="button" disabled={folderName.trim() === '' || busy !== null} onClick={() => { void createFolder() }}>{t('add')}</button>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {libraryFolderPrompt !== null && (
+        <div
+          className={css.legacyDialogLayer}
+          role="dialog"
+          aria-modal="true"
+          aria-label={libraryFolderPrompt.mode === 'create' ? t('questions.newFolder') : t('questions.renameFolder')}
+        >
+          <button type="button" className={css.legacyEditorMask} aria-label={t('close')} onClick={() => { setLibraryFolderPrompt(null); setLibraryFolderName('') }} />
+          <section className={`${css.legacyFailureDialog} ${css.legacyFolderDialog}`}>
+            <h3>{libraryFolderPrompt.mode === 'rename'
+              ? t('questions.renameFolder')
+              : libraryFolderPrompt.parent === undefined ? t('questions.newFolder') : t('questions.createFolder')}</h3>
+            {libraryFolderPrompt.mode === 'create' && libraryFolderPrompt.parent !== undefined
+              && <p>{t('questions.createFolderBelow', { name: libraryFolderPrompt.parent.name })}</p>}
+            <FormField label={t('questions.folderName')}>
+              <input
+                maxLength={80}
+                value={libraryFolderName}
+                onChange={(event) => { setLibraryFolderName(event.target.value) }}
+                onKeyDown={(event) => { if (event.key === 'Enter') void saveLibraryFolderPrompt() }}
+                placeholder={t('questions.folderPlaceholder')}
+              />
+            </FormField>
+            <div>
+              <button type="button" onClick={() => { setLibraryFolderPrompt(null); setLibraryFolderName('') }}>{t('cancel')}</button>
+              <button type="button" disabled={libraryFolderName.trim() === '' || busy !== null} onClick={() => { void saveLibraryFolderPrompt() }}>
+                {libraryFolderPrompt.mode === 'create' ? t('add') : t('save')}
+              </button>
             </div>
           </section>
         </div>
@@ -1263,6 +1423,8 @@ interface StoredQuestionTileProps {
     | Pick<TeacherQuestionAssignment, 'fileName' | 'mediaType' | 'width' | 'height' | 'updatedAt'>
   readonly label: string
   readonly checked: boolean
+  readonly temporarySaveCount?: number
+  readonly lastTemporarySavedAt?: number
   readonly commands: Pick<TeacherWorkbenchCommands, 'readQuestionImage'>
   readonly t: TeacherWorkbenchTranslate
   readonly onToggle: () => void
@@ -1290,8 +1452,102 @@ function StoredQuestionTile(props: StoredQuestionTileProps) {
         <span>{props.meta.fileName}</span>
         <label><input type="checkbox" checked={props.checked} onChange={props.onToggle} />{props.t('questions.select')}</label>
       </div>
+      {props.temporarySaveCount !== undefined && (
+        <div className={css.legacyImageHistory}>
+          {props.temporarySaveCount === 0 || props.lastTemporarySavedAt === undefined
+            ? props.t('questions.tempNever')
+            : props.t('questions.tempHistory', {
+              count: props.temporarySaveCount,
+              time: formatTemporarySavedAt(props.lastTemporarySavedAt),
+            })}
+        </div>
+      )}
     </article>
   )
+}
+
+function buildQuestionLibraryRows(
+  folders: readonly TeacherQuestionLibraryFolder[],
+  batches: TeacherWorkbenchState['questionBatches'],
+  expanded: ReadonlySet<TeacherQuestionLibraryFolderId>,
+): LibraryHierarchyRow[] {
+  const rows: LibraryHierarchyRow[] = []
+  const append = (parentId: TeacherQuestionLibraryFolderId | undefined, depth: number): void => {
+    const children = folders.filter(folder => folder.parentId === parentId)
+      .toSorted((left, right) => left.createdAt - right.createdAt)
+    for (const folder of children) {
+      const hasChildren = folders.some(candidate => candidate.parentId === folder.id)
+        || batches.some(batch => batch.folderId === folder.id)
+      const isExpanded = expanded.has(folder.id)
+      rows.push({ kind: 'folder', folder, depth, hasChildren, expanded: isExpanded })
+      if (isExpanded) append(folder.id, depth + 1)
+    }
+    const papers = batches.filter(batch => batch.folderId === parentId)
+      .toSorted((left, right) => right.createdAt - left.createdAt)
+    for (const batch of papers) rows.push({ kind: 'batch', batch, depth })
+  }
+  append(undefined, 0)
+  return rows
+}
+
+function libraryFolderImageCount(
+  folderId: TeacherQuestionLibraryFolderId,
+  folders: readonly TeacherQuestionLibraryFolder[],
+  batches: TeacherWorkbenchState['questionBatches'],
+): number {
+  const included = new Set<TeacherQuestionLibraryFolderId>([folderId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of folders) {
+      if (folder.parentId === undefined || !included.has(folder.parentId) || included.has(folder.id)) continue
+      included.add(folder.id)
+      changed = true
+    }
+  }
+  return batches.reduce((total, batch) => batch.folderId !== undefined && included.has(batch.folderId)
+    ? total + batch.images.length
+    : total, 0)
+}
+
+function buildQuestionLibraryFolderOptions(
+  folders: readonly TeacherQuestionLibraryFolder[],
+): readonly { readonly id: TeacherQuestionLibraryFolderId; readonly label: string }[] {
+  const options: { id: TeacherQuestionLibraryFolderId; label: string }[] = []
+  const append = (parentId: TeacherQuestionLibraryFolderId | undefined, ancestors: readonly string[]): void => {
+    const children = folders.filter(folder => folder.parentId === parentId)
+      .toSorted((left, right) => left.name.localeCompare(right.name, 'zh-CN', { numeric: true, sensitivity: 'base' }))
+    for (const folder of children) {
+      const path = [...ancestors, folder.name]
+      options.push({ id: folder.id, label: path.join(' / ') })
+      append(folder.id, path)
+    }
+  }
+  append(undefined, [])
+  return options
+}
+
+function questionLibraryFolderDescendants(
+  folders: readonly TeacherQuestionLibraryFolder[],
+  rootId: TeacherQuestionLibraryFolderId,
+): Set<TeacherQuestionLibraryFolderId> {
+  const removed = new Set<TeacherQuestionLibraryFolderId>([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of folders) {
+      if (folder.parentId === undefined || !removed.has(folder.parentId) || removed.has(folder.id)) continue
+      removed.add(folder.id)
+      changed = true
+    }
+  }
+  return removed
+}
+
+function formatTemporarySavedAt(value: number): string {
+  return new Intl.DateTimeFormat('zh-CN', {
+    year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+  }).format(new Date(value))
 }
 
 function hierarchyKey(studentId: TeacherStudentId, folderId?: TeacherQuestionFolderId): string {

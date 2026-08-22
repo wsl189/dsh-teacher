@@ -18,6 +18,7 @@ import {
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/teacher-workbench', import.meta.url))
+const SIDEBAR_EXPECTED = join(SNAPSHOT_DIR, 'sidebar.expected.md')
 const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
 const DAILY_EXPECTED = join(SNAPSHOT_DIR, 'daily.expected.md')
 const LEDGER_EXPECTED = join(SNAPSHOT_DIR, 'ledger.expected.md')
@@ -112,7 +113,22 @@ describe('web e2e: durable teacher workbench', () => {
     await new Promise<void>((resolve) => { minerUServer?.close(() => { resolve() }) })
   })
 
-  it('persists daily tasks, quick notes, and dated calendar items', async () => {
+  it('places Workbench in the first sidebar action row without a New Session capsule', async () => {
+    const newSession = page.getByRole('button', { name: '新建会话', exact: true })
+    const workbench = page.getByRole('button', { name: '打开工作台', exact: true })
+    expect(await newSession.count()).toBe(1)
+    expect(await workbench.evaluate((button) => {
+      const primary = button.closest('[class*="primarySections"]')
+      return primary?.previousElementSibling?.getAttribute('class')?.includes('logoRow') ?? false
+    })).toBe(true)
+    await compareOrRefreshGolden(
+      SIDEBAR_EXPECTED,
+      await captureStableAria(page, '[data-sidebar-root]', scaffold.workspaceCwd),
+      MODE,
+    )
+  })
+
+  it('persists daily tasks, memos, and dated calendar items', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-daily'))
     await openModule('日常管理')
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
@@ -130,7 +146,11 @@ describe('web e2e: durable teacher workbench', () => {
     expect(deadlinePickerWidths).toHaveLength(3)
     expect(deadlinePickerWidths.every(width => Math.abs(width - 32) < 1)).toBe(true)
     await todayCard.getByLabel('新增今日待办').fill('批改一班作业')
-    await todayCard.getByLabel('截止时间').fill('2026-08-18T18:30')
+    await todayCard.getByRole('button', { name: '截止时间' }).click()
+    const deadlineEditor = page.getByRole('dialog', { name: '设置截止时间与提醒' })
+    await deadlineEditor.getByLabel('截止时间').fill('2026-08-18T18:30')
+    await deadlineEditor.getByRole('button', { name: '保存' }).click()
+    await deadlineEditor.waitFor({ state: 'hidden', timeout: 10_000 })
     await todayCard.getByRole('button', { name: '添加待办' }).click()
     await todayCard.getByText('批改一班作业', { exact: true }).waitFor({ timeout: 10_000 })
 
@@ -144,9 +164,9 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await todayCard.getByRole('button', { name: /颜色标记/ }).count()).toBe(0)
 
     const notesPanel = workbench.locator('section[aria-labelledby="daily-notes-title"]')
-    await notesPanel.getByRole('button', { name: '添加随记' }).click()
-    const noteEditor = page.getByRole('dialog', { name: '添加随记' })
-    await noteEditor.getByLabel('随记内容').fill('下节课增加小组讨论')
+    await notesPanel.getByRole('button', { name: '添加备忘录' }).click()
+    const noteEditor = page.getByRole('dialog', { name: '添加备忘录' })
+    await noteEditor.getByLabel('备忘录内容').fill('下节课增加小组讨论')
     await noteEditor.getByRole('button', { name: '保存' }).click()
     await noteEditor.waitFor({ state: 'hidden', timeout: 10_000 })
 
@@ -600,6 +620,14 @@ describe('web e2e: durable teacher workbench', () => {
       imageIds: batch.images.map(image => image.id),
     })
     expect(assignedToFolder.ok).toBe(true)
+    const assignedDocument = await scaffold.ctx.teacherWorkbench.read({})
+    const temporarySaved = await scaffold.ctx.teacherWorkbench.saveTemporaryQuestionSelection({
+      studentId: student.id,
+      assignmentIds: assignedDocument.value.state.questionAssignments
+        .filter(item => item.studentId === student.id)
+        .map(item => item.id),
+    })
+    expect(temporarySaved.ok).toBe(true)
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await openModule('试题切割')
@@ -611,6 +639,7 @@ describe('web e2e: durable teacher workbench', () => {
     await studentImages.waitFor({ timeout: 10_000 })
     await studentImages.getByRole('button', { name: '第1题.png', exact: true }).nth(1).waitFor({ timeout: 10_000 })
     expect(await studentImages.getByRole('button', { name: '第1题.png', exact: true }).count()).toBe(2)
+    expect(await studentImages.getByText(/已保存 1 次 · 最近：/u).count()).toBe(2)
     await studentButton.dblclick()
     await folderButton.waitFor({ timeout: 10_000 })
     await studentImages.getByRole('button', { name: '试题图片库' }).click()
@@ -618,6 +647,25 @@ describe('web e2e: durable teacher workbench', () => {
     await bankFolders.waitFor({ timeout: 10_000 })
     expect(await page.getByRole('complementary', { name: '试题库图片' }).count()).toBe(0)
     expect(await studentImages.count()).toBe(0)
+    expect(await page.locator('[data-question-workbench]').getByRole('button', { name: '设置', exact: true }).count()).toBe(0)
+
+    await bankFolders.getByRole('button', { name: '新建文件夹' }).click()
+    let libraryFolderDialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await libraryFolderDialog.getByLabel('目录名').fill('模拟题库')
+    await libraryFolderDialog.getByRole('button', { name: '新建' }).click()
+    const libraryFolder = bankFolders.getByRole('button', { name: /^· 模拟题库/u })
+    await libraryFolder.waitFor({ timeout: 10_000 })
+    await libraryFolder.dblclick()
+    libraryFolderDialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await libraryFolderDialog.getByLabel('目录名').fill('八月')
+    await libraryFolderDialog.getByRole('button', { name: '新建' }).click()
+    const nestedLibraryFolder = bankFolders.getByRole('button', { name: /^· 八月/u })
+    await nestedLibraryFolder.waitFor({ timeout: 10_000 })
+    await nestedLibraryFolder.click({ clickCount: 3 })
+    const renameFolderDialog = page.getByRole('dialog', { name: '重命名目录' })
+    await renameFolderDialog.getByLabel('目录名').fill('八月题库')
+    await renameFolderDialog.getByRole('button', { name: '保存' }).click()
+    await bankFolders.getByRole('button', { name: /^· 八月题库/u }).waitFor({ timeout: 10_000 })
 
     const batchButton = bankFolders.getByRole('button', { name: /布局验证试卷/u })
     await batchButton.click()
@@ -627,6 +675,8 @@ describe('web e2e: durable teacher workbench', () => {
     const [classDrawerBox, bankImagesBox] = await Promise.all([classDrawer.boundingBox(), bankImages.boundingBox()])
     if (classDrawerBox === null || bankImagesBox === null) throw new Error('question drawers have no layout box')
     expect(classDrawerBox.x + classDrawerBox.width).toBeLessThanOrEqual(bankImagesBox.x)
+    await classDrawer.getByRole('button', { name: '关闭工作台' }).click()
+    await classDrawer.waitFor({ state: 'hidden', timeout: 10_000 })
     await compareOrRefreshGolden(
       QUESTION_DRAWERS_EXPECTED,
       await captureStableAria(page, '[data-question-workbench]', scaffold.workspaceCwd),

@@ -2395,7 +2395,14 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             }
             const durable = await durablePromptContent(ctx, content)
             for (const document of contexts) {
-              const framing = `Uploaded document ${JSON.stringify(document.name)}${document.truncated ? ' (truncated by OCR output limit)' : ''}:\n\n${document.markdown}`
+              const source = document.sourceId === undefined
+                ? ''
+                : `\nWorkbench source: ${JSON.stringify({
+                  sourceId: document.sourceId,
+                  name: document.name,
+                  mediaType: document.sourceMediaType ?? 'application/octet-stream',
+                })}`
+              const framing = `Uploaded document ${JSON.stringify(document.name)}${document.truncated ? ' (truncated by OCR output limit)' : ''}:${source}\n\n${document.markdown}`
               agent.inject(createUserMessage({
                 content: [{ type: 'text', text: framing }],
                 source: {

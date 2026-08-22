@@ -37,6 +37,7 @@
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`、`ctx.workflowEngine`、`ctx.subagents`、`ctx.systemPrompt`、`a calling Agent (exec.agent parents every fresh round)` | `tool/call`、`tool/result`、`workflow and child session events during execution` | - | 固定的前台工作流会在每个 Round 启动一个全新的结构化子级；模型只能选择不可变目标和可选的 Round 上限。 |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`、`ctx.agents`、`ctx.skills` | `tool/call`、`tool/result`、`user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`、`session_event_search`、`session_event_trace`、`session_search`、`session_trace` | `ctx.tools`、`ctx.systemPrompt`、`ctx.sessionQuery`、`a calling Agent for workspace authority` | `tool/call`、`tool/result` | - | 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。 |
+| `@deepseek-ai/dsh-tool-teacher-workbench` | `teacher_daily_management`、`teacher_question_image_read`、`teacher_question_workbench`、`teacher_score_analysis`、`teacher_student_roster`、`teacher_timetable`、`teacher_workbench_read` | `ctx.tools`、`ctx.fs`、`ctx.teacherWorkbench`、`用于读取已存图片的 ctx.attachments 和支持图片输入的路由`、`用于 PDF 分割的 ctx.ocr` | `tool/call`、`teacher_workbench storage-domain document`、`question media and generated Office files`、`持久附件（teacher_question_image_read）`、`tool/result` | - | 随产品发布的 Web 组合提供权威 Host 服务、持久附件与 MinerU 支持的 OCR。PDF 上传携带私有 Host 来源 id；其他导入表格以已记录 OCR 上下文进入。读取已存试题图片要求当前模型路由声明图片输入能力。 |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`、`ctx.subagents`、`ctx.systemPrompt` | `tool/call`、`tool/result`、`child session events through the chosen provider` | `subagent`、`subagent_fork` | 注册的工具名称取决于加载时 `toolName` 配置（默认为 `subagent`）；上述 schema 对应默认值。随产品发布的组合会为每个 subagent 后端加载一次该包，因此模型还会看到绑定到 fork 后端的 `subagent_fork`。每个实例的描述、`run_in_background` 参数与 system prompt 策略取决于它自己的 `backgroundMode` 和 `enableRunInBackground`，因此两个随附 schema 并不相同：`subagent` 为 `continuable`，省略参数时默认后台运行，并由 runtime 自动投递结束结果；`subagent_fork` 保持 `one-shot`，省略参数时默认前台运行。详见 `packages/bundle/base/cordis.patch.yml` 和 `examples/acp-agent/cordis.yml`。 |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`、`list_agents`、`send_message` | `ctx.tools`、`ctx.subagents`、`ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`、`tool/result`、`child session events through ctx.subagents` | - | 这些是控制可继续后台 subagent 的全局命名工具：绑定提供方的 `tool-subagent` 实例注册不同的委派工具；本包注册一次 `send_message` 和 `interrupt_agent`，另由 `list_agents` 通过单独加载的 `/list-agents` 插件提供，其目录行使用 sessionProjections 和实时 Agent 注册表。 |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`、`ctx.systemPrompt`、`a live continuable in-process child Agent` | `tool/call`、`tool/result`、`a user-role message in the direct parent session` | - | 按可继续的进程内子级注册，而非全局注册，因此该 schema 仅在这种子级内部可见，并且不受其全局 `toolFilter` 影响。同一份贡献还会安装子级作用域的 `tool:report` 系统提示词 section，本目录不渲染该 section。面向父级的 `send_message` 工具单独安装。 |
@@ -1523,6 +1524,243 @@ lsp 工具将提供方选择和语言服务器子进程置于 ctx.lsp 之后，�
 来源：[`packages/session-query/tool-session-query/src/index.ts`](../packages/session-query/tool-session-query/src/index.ts)
 
 这 5 个只读工具会隐藏提供方游标，并根据不可变的调用 agent 会话为每个结果授权。该包需要选择启用；需要强制截止时间或限制行内输出的组合还会挂载通用超时或 spill 策略。
+
+<a id="deepseek-aidsh-tool-teacher-workbench"></a>
+
+## `@deepseek-ai/dsh-tool-teacher-workbench`
+
+### `teacher_daily_management`
+
+创建、编辑、删除、完成、改期或导入日常管理数据。先调用 teacher_workbench_read。Action：save_todo、delete_todo、save_note、delete_note、save_ledger_category、delete_ledger_category、save_ledger_entry、delete_ledger_entry、save_calendar_item、delete_calendar_item、import_calendar_items。载荷：save_todo {id?,title,dueAt?,completed?,color?,reminder?}；save_note {id?,content,remindAt?,reminder?}；save_ledger_category {id?,name}；save_ledger_entry {id?,categoryId,description,amountCents,occurredAt,remindAt?,reminder?}；save_calendar_item {id?,date,time?,title,details?,reminder?}；import_calendar_items {items:[calendar fields]}；删除 action 使用 {id}。只能按当前用户请求中的字面词路由：“备忘”“备忘录”或 memo 表示 save_note；“今日”“待办”、today 或 todo 表示在今日列表中 save_todo；“紧急”或 urgent 表示在紧急列表中 save_todo；“重要”或 important 表示在重要列表中 save_todo；“账单”“账本”“保险”“保费”“水费”“电费”“燃气费”、bill、insurance 或 premium 表示匹配的账本分类或账目 action；“日历”或 calendar 表示日历 action。Host 会用用户原文校验每个新条目的 action 与去向，因此不得替换成另一 action 或虚构路由词。新条目没有路由词时，应询问用户去向，不得修改工作台。不得从内容、截止时间、语气或后果推断去向。编辑已有条目时保留其去向。用户要求手机提醒时，使用 reminder {channel,botId,rule:{kind:'once',minutesBefore}|{kind:'repeat',everyMinutes}}，其中 channel 与 botId 必须完全匹配 teacher_workbench_read daily 返回的 notificationTargets；不得虚构机器人 id。备忘录和账目使用 remindAt 作为提醒截止时间。将 reminder 设为 null 可移除提醒。省略 reminder 时，只有截止时间未变才保留已有提醒。金额使用人民币整数分，本地日期时间使用 YYYY-MM-DDTHH:mm。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_todo",
+        "delete_todo",
+        "save_note",
+        "delete_note",
+        "save_ledger_category",
+        "delete_ledger_category",
+        "save_ledger_entry",
+        "delete_ledger_entry",
+        "save_calendar_item",
+        "delete_calendar_item",
+        "import_calendar_items"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "description": "Action fields described by the selected action.",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_question_image_read`
+
+读取一张已存试题切割图片并返回栅格图。先用 section questions 调用 teacher_workbench_read，以获得批次或分发图片 id。结果会说明 crop_image 和 erase_image_regions 使用的来源尺寸。当前模型路由必须支持图片输入。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "batch",
+        "assignment"
+      ]
+    },
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "id"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_question_workbench`
+
+分割上传 PDF、编辑或删除试题图片、管理学生目录与分发，并生成 Word 或 PowerPoint 文件。使用已存工作台状态的 action 需先调用 teacher_workbench_read。Action：segment_pdf、create_folder、delete_folder、delete_batch、delete_image、rotate_image、crop_image、erase_image_regions、assign_questions、generate_folder_document、generate_document、generate_student_documents。segment_pdf 使用上传文档上下文中的 {sourceId,sourceName,pageRange?,batchName?,padding?}。图片 action 使用 {kind:batch|assignment,id}；选择来源像素坐标前，先用 teacher_question_image_read 查看已存栅格图。rotate_image 增加 degrees 90|180|270；crop_image 增加 left、top、width、height；erase_image_regions 增加 regions:[{left,top,width,height}]，并用采样到的周围背景替换每个矩形。裁剪和消除都会覆盖已存图片。assign_questions 使用 {studentId,folderId?,imageIds}。generate_folder_document 接受普通本地图片目录的 {kind:word|ppt,directoryPath}，无需分配学生，也无需调用 teacher_workbench_read。generate_document 接受 kind word|ppt 和有序的已存 targets [{kind:batch|assignment,id}]。需要复现试题切割的班级 Word 或 PowerPoint 输出时，使用 generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}；省略字段与浏览器默认值一致：source 为 temporary、标题留空且不显示姓名和日期。只有用户要求全部已分发图片时才把 source 设为 assigned。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "segment_pdf",
+        "create_folder",
+        "delete_folder",
+        "delete_batch",
+        "delete_image",
+        "rotate_image",
+        "crop_image",
+        "erase_image_regions",
+        "assign_questions",
+        "generate_folder_document",
+        "generate_document",
+        "generate_student_documents"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_score_analysis`
+
+根据上传 OCR 内容创建、替换或删除考试及其学科成绩。先调用 teacher_workbench_read。Action：save_exam、delete_exam。save_exam 使用 {id?,classId,name,date?,entries:[{studentId?|studentNumber?|studentName?,scores:{subject:number}}]}；delete_exam 使用 {id}。每条记录必须在班级内准确标识一名学生。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_exam",
+        "delete_exam"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_student_roster`
+
+根据上传 OCR 内容创建、编辑、删除或批量导入名册班级与学生。先调用 teacher_workbench_read。Action：save_class、delete_class、save_student、delete_student、import_students。save_class 使用 {id?,name,grade?,subject?,academicYear?}；save_student 使用 {id?,classId,name,studentNumber?,gender?,guardian?,relation?,phone?,address?,extras?}；import_students 使用 {classId,students:[student fields]}；删除使用 {id}。import_students 先按 studentNumber 合并，编号为空时再按姓名合并。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_class",
+        "delete_class",
+        "save_student",
+        "delete_student",
+        "import_students"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_timetable`
+
+创建、编辑、删除或批量导入班级与课程表记录。先调用 teacher_workbench_read。Action：save_class、delete_class、save_entry、delete_entry、import_entries。每个保存或导入载荷都必须包含 view: week|grade。本周课表、今日课程、单个班级的周课表、早读或晚自习使用 view=week；只有用户明确要求覆盖多个班级的年级课表时才使用 view=grade。高三等年级名称不代表 view=grade。不得复用属于另一视图的班级 id；应省略 classId 并提供 className，以创建平行班级目录记录。save_class 使用 {view,id?,name,grade?,subject?}；save_entry 使用 {view,id?,classId?,className,grade?,kind,weekday,period,startTime?,endTime?,subject,teacherName?,location?}；import_entries 使用 {view,entries:[...]}；删除使用 {id}。weekday 中 1=星期一、7=星期日；kind 为 lesson、morningStudy 或 eveningStudy。period 是当天唯一的节次序号：如果下午标签从 1 重新开始，应接在上午节次之后，不得提交重复时段。成功结果包含写后读回确认，并明确指出 week 或 grade 视图。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_class",
+        "delete_class",
+        "save_entry",
+        "delete_entry",
+        "import_entries"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_workbench_read`
+
+编辑前读取权威教师工作台，返回修改工具所需的稳定 id。
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "section": {
+      "type": "string",
+      "description": "daily | timetable | roster | scores | questions",
+      "enum": [
+        "daily",
+        "timetable",
+        "roster",
+        "scores",
+        "questions"
+      ]
+    },
+    "class_id": {
+      "type": "string",
+      "description": "Optional roster or timetable class id used to filter rows."
+    }
+  },
+  "required": [
+    "section"
+  ]
+}
+```
+
+来源：[`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+随产品发布的 Web 组合提供权威 Host 服务、持久附件与 MinerU 支持的 OCR。PDF 上传携带私有 Host 来源 id；其他导入表格以已记录 OCR 上下文进入。读取已存试题图片要求当前模型路由声明图片输入能力。
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 

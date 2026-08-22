@@ -1,9 +1,9 @@
 /**
  * Sidebar slot contract: the registrant-side props composition for the
  * layout-owned `sidebar` slot, plus the holes this shell declares. The shell
- * owns column geometry (fold state machine, brand row, New Session);
- * everything between the section header and the list bottom is the
- * `sidebar.workspaces` registrant's (ui-workspace), and the foot is the
+ * owns column geometry (fold state machine and brand-row New Session shortcut);
+ * primary sections register between the brand row and the workspace browser;
+ * `sidebar.workspaces` owns the browser below them, and the foot is the
  * `sidebar.settings` registrant's (ui-settings), followed by optional footer
  * actions in `sidebar.footer.action`.
  */
@@ -26,6 +26,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * package's `sidebar` entry; the shell supplies a generic text fallback.
      */
     'sidebar.brand.name': { kind: 'single'; scope: 'root'; owner: SidebarBrandNameOwnerProps }
+    /**
+     * Optional primary sections between the brand row and the workspace browser.
+     * Entries receive the column state and may request expansion from the rail.
+     */
+    'sidebar.primary.section': { kind: 'list'; scope: 'root'; owner: SidebarPrimarySectionOwnerProps }
     /**
      * The workspace/session browsing region: section header, search, the
      * grouped/flat session list, and every workspace dialog. Declared by this
@@ -59,6 +64,14 @@ export interface SidebarBrandNameOwnerProps {
   children?: never
 }
 
+/** Column state supplied to primary sections above the workspace browser. */
+export interface SidebarPrimarySectionOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+  /** Expand the sidebar when a rail control needs to reveal its content. */
+  expandSidebar: () => void
+}
+
 /**
  * Owner share of the browser hole — the only facts crossing the shell/region
  * boundary. Business data and actions arrive through the region's own inject.
@@ -88,7 +101,7 @@ export interface SidebarFooterActionOwnerProps {
 /**
  * Registrant-private injected share (arrives via the register inject
  * factory). The shell keeps only its own controls: starting a Session from
- * the New Session button and toggling the column.
+ * the brand shortcut and toggling the column.
  */
 export type SidebarRootInjected = {
   /**
@@ -111,6 +124,7 @@ export type SidebarRootComponentProps =
   & PropsRenderSlots<
     | 'sidebar.brand.mark'
     | 'sidebar.brand.name'
+    | 'sidebar.primary.section'
     | 'sidebar.workspaces'
     | 'sidebar.settings'
     | 'sidebar.footer.action'

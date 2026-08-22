@@ -29,6 +29,11 @@ import type {
   TeacherNoticeId,
   TeacherNoticeTemplate,
   TeacherNoticeTemplateId,
+  TeacherNotificationTarget,
+  TeacherReminder,
+  TeacherReminderRule,
+  TeacherMobileBotId,
+  TeacherMobileChannel,
   TeacherRecord,
   TeacherRecordId,
   TeacherRecordStatus,
@@ -48,6 +53,8 @@ import type {
   TeacherQuestionDocumentResult,
   TeacherQuestionFolder,
   TeacherQuestionFolderId,
+  TeacherQuestionLibraryFolder,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionImageDeleteRequest,
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
@@ -83,6 +90,10 @@ export interface TeacherWorkbenchRemote {
     expectedRevision: number
     state: TeacherWorkbenchState
   }) => Promise<RemoteResult<TeacherWorkbenchWriteResult>>
+  /** List configured dsh-im bots without credentials. */
+  listNotificationTargets: (
+    request: Record<never, never>,
+  ) => Promise<RemoteResult<readonly TeacherNotificationTarget[]>>
   /**
    * Persist one complete rendered paper batch.
    * @param request - batch metadata and reviewed raster payloads.
@@ -186,6 +197,14 @@ export interface TeacherQuestionFolderInput {
   studentId: TeacherStudentId
   /** Parent directory; omission creates a folder directly below the student. */
   parentId?: TeacherQuestionFolderId
+  /** Teacher-facing directory name. */
+  name: string
+}
+
+/** Nested library-folder data accepted by {@link TeacherWorkbenchController.createQuestionLibraryFolder}. */
+export interface TeacherQuestionLibraryFolderInput {
+  /** Parent directory; omission creates a folder at the library root. */
+  parentId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing directory name. */
   name: string
 }
@@ -300,6 +319,20 @@ export interface TeacherDailyTodoInput {
   category?: TeacherDailyTodoCategory
   /** Stable color marker retained while editing. */
   color?: TeacherDailyTodoColor
+  /** Replacement reminder, null to clear, or omission to preserve it while the deadline is unchanged. */
+  reminder?: TeacherReminderInput | null
+}
+
+/** Mobile reminder fields accepted from workbench item editors. */
+export interface TeacherReminderInput {
+  /** Selected mobile platform. */
+  channel: TeacherMobileChannel
+  /** Selected bot within that platform. */
+  botId: TeacherMobileBotId
+  /** Bot label retained for offline display. */
+  botLabel: string
+  /** One-shot lead time or repeated interval. */
+  rule: TeacherReminderRule
 }
 
 /** Quick-note form data. */
@@ -308,6 +341,10 @@ export interface TeacherQuickNoteInput {
   id?: TeacherQuickNoteId
   /** Note content. */
   content: string
+  /** Optional local ISO reminder deadline. */
+  remindAt?: string
+  /** Replacement reminder, null to clear, or omission to preserve it while the deadline is unchanged. */
+  reminder?: TeacherReminderInput | null
 }
 
 /** Ledger-category form data. */
@@ -330,6 +367,10 @@ export interface TeacherLedgerEntryInput {
   amountCents: number
   /** Required local ISO date and time. */
   occurredAt: string
+  /** Optional local ISO reminder deadline. */
+  remindAt?: string
+  /** Replacement reminder, null to clear, or omission to preserve it while the deadline is unchanged. */
+  reminder?: TeacherReminderInput | null
 }
 
 /** Calendar-item form data. */
@@ -344,6 +385,8 @@ export interface TeacherCalendarItemInput {
   title: string
   /** Optional details. */
   details: string
+  /** Replacement reminder, null to clear, or omission to preserve it while the deadline is unchanged. */
+  reminder?: TeacherReminderInput | null
 }
 
 /** One recognized calendar row accepted by a bulk import. */
@@ -464,6 +507,19 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
+   * Read the currently configured dsh-im bot roster.
+   * @returns credential-free targets, or an empty list when mobile integration is unavailable.
+   */
+  async listNotificationTargets(): Promise<readonly TeacherNotificationTarget[]> {
+    try {
+      const carried = await this.remote.listNotificationTargets({})
+      return carried.ok ? carried.value : []
+    } catch {
+      return []
+    }
+  }
+
+  /**
    * Re-read behind queued mutations after a connection reset.
    * @returns the settled read result.
    */
@@ -489,6 +545,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
         completed: input.completed ?? existing?.completed ?? false,
         category: input.category ?? existing?.category ?? 'today',
         color: input.color ?? existing?.color ?? 'blue',
+        ...resolveReminder(input.reminder, existing?.reminder, input.dueAt, now),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       }
@@ -525,7 +582,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
-   * Save a new or existing quick note.
+   * Save a new or existing memo.
    * @param input - note content and optional identity.
    * @returns the settled persistence result.
    */
@@ -535,9 +592,12 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
         ? undefined
         : state.quickNotes.find(item => item.id === input.id)
       const now = this.now()
+      const remindAt = input.remindAt ?? existing?.remindAt ?? ''
       const item: TeacherQuickNote = {
         id: input.id ?? this.id() as TeacherQuickNoteId,
         content: input.content.trim(),
+        ...(remindAt === '' ? {} : { remindAt }),
+        ...resolveReminder(input.reminder, existing?.reminder, remindAt, now),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       }
@@ -546,7 +606,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
-   * Delete one quick note.
+   * Delete one memo.
    * @param id - note identity.
    * @returns the settled persistence result.
    */
@@ -600,12 +660,15 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
         ? undefined
         : state.ledgerEntries.find(item => item.id === input.id)
       const now = this.now()
+      const remindAt = input.remindAt ?? existing?.remindAt ?? ''
       const item: TeacherLedgerEntry = {
         id: input.id ?? this.id() as TeacherLedgerEntryId,
         categoryId: input.categoryId,
         description: input.description.trim(),
         amountCents: input.amountCents,
         occurredAt: input.occurredAt,
+        ...(remindAt === '' ? {} : { remindAt }),
+        ...resolveReminder(input.reminder, existing?.reminder, remindAt, now),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       }
@@ -642,6 +705,12 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
         time: input.time,
         title: input.title.trim(),
         details: input.details.trim(),
+        ...resolveReminder(
+          input.reminder,
+          existing?.reminder,
+          input.time === '' ? '' : `${input.date}T${input.time}`,
+          now,
+        ),
         createdAt: existing?.createdAt ?? now,
         updatedAt: now,
       }
@@ -1115,6 +1184,67 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
+   * Create one durable nested directory in the question library.
+   * @param input - optional parent and display name.
+   * @returns the settled persistence result.
+   */
+  createQuestionLibraryFolder(input: TeacherQuestionLibraryFolderInput): Promise<TeacherWorkbenchActionResult> {
+    const name = input.name.trim()
+    if (name === '') return Promise.resolve({ ok: false, error: { code: 'invalid-state', message: '目录名不能为空' } })
+    return this.mutate((state) => {
+      const now = this.now()
+      const item: TeacherQuestionLibraryFolder = {
+        id: this.id() as TeacherQuestionLibraryFolderId,
+        ...(input.parentId === undefined ? {} : { parentId: input.parentId }),
+        name,
+        createdAt: now,
+        updatedAt: now,
+      }
+      return { ...state, questionLibraryFolders: [...state.questionLibraryFolders, item] }
+    })
+  }
+
+  /**
+   * Rename one durable question-library directory.
+   * @param id - directory identity to update.
+   * @param value - replacement display name.
+   * @returns the settled persistence result.
+   */
+  renameQuestionLibraryFolder(
+    id: TeacherQuestionLibraryFolderId,
+    value: string,
+  ): Promise<TeacherWorkbenchActionResult> {
+    const name = value.trim()
+    if (name === '') return Promise.resolve({ ok: false, error: { code: 'invalid-state', message: '目录名不能为空' } })
+    return this.mutate(state => ({
+      ...state,
+      questionLibraryFolders: state.questionLibraryFolders.map(folder => folder.id === id
+        ? { ...folder, name, updatedAt: this.now() }
+        : folder),
+    }))
+  }
+
+  /**
+   * Delete one question-library directory hierarchy and move its batches to the parent.
+   * @param id - root directory identity to remove.
+   * @returns the settled persistence result.
+   */
+  deleteQuestionLibraryFolder(id: TeacherQuestionLibraryFolderId): Promise<TeacherWorkbenchActionResult> {
+    return this.mutate((state) => {
+      const root = state.questionLibraryFolders.find(folder => folder.id === id)
+      if (root === undefined) return state
+      const removed = questionLibraryFolderDescendants(state.questionLibraryFolders, id)
+      return {
+        ...state,
+        questionLibraryFolders: state.questionLibraryFolders.filter(folder => !removed.has(folder.id)),
+        questionBatches: state.questionBatches.map(batch => batch.folderId !== undefined && removed.has(batch.folderId)
+          ? root.parentId === undefined ? omitQuestionBatchFolder(batch) : { ...batch, folderId: root.parentId }
+          : batch),
+      }
+    })
+  }
+
+  /**
    * Delete one nested directory, all descendants, and their assigned image copies.
    * @param id - root folder identity to remove.
    * @returns the settled persistence result.
@@ -1210,9 +1340,10 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   ): Promise<TeacherQuestionTemporarySaveResult> {
     try {
       const carried = await this.remote.saveTemporaryQuestionSelection(request)
-      return carried.ok
-        ? carried.value
-        : { ok: false, error: { code: 'storage-failure', message: carried.error.message } }
+      if (!carried.ok) return { ok: false, error: { code: 'storage-failure', message: carried.error.message } }
+      if (!carried.value.ok) return carried.value
+      this.publish({ status: 'ready', document: carried.value.value.document, error: null })
+      return carried.value
     } catch (error) {
       return transportQuestionFailure(error)
     }
@@ -1400,6 +1531,71 @@ function upsert<T extends { id: string }>(items: readonly T[], item: T): T[] {
   const next = [...items]
   next[index] = item
   return next
+}
+
+function questionLibraryFolderDescendants(
+  folders: readonly TeacherQuestionLibraryFolder[],
+  rootId: TeacherQuestionLibraryFolderId,
+): Set<TeacherQuestionLibraryFolderId> {
+  const removed = new Set<TeacherQuestionLibraryFolderId>([rootId])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const folder of folders) {
+      if (folder.parentId === undefined || !removed.has(folder.parentId) || removed.has(folder.id)) continue
+      removed.add(folder.id)
+      changed = true
+    }
+  }
+  return removed
+}
+
+function omitQuestionBatchFolder(
+  batch: TeacherWorkbenchState['questionBatches'][number],
+): TeacherWorkbenchState['questionBatches'][number] {
+  const { folderId: _folderId, ...rootBatch } = batch
+  return rootBatch
+}
+
+function resolveReminder(
+  input: TeacherReminderInput | null | undefined,
+  existing: TeacherReminder | undefined,
+  localDeadline: string,
+  now: number,
+): { reminder?: TeacherReminder } {
+  if (input === null || localDeadline === '') return {}
+  const deadline = new Date(localDeadline)
+  if (Number.isNaN(deadline.getTime())) return {}
+  const dueAtUtc = deadline.toISOString()
+  if (input === undefined) {
+    return existing?.dueAtUtc === dueAtUtc ? { reminder: existing } : {}
+  }
+  if (existing !== undefined
+    && existing.channel === input.channel
+    && existing.botId === input.botId
+    && existing.botLabel === input.botLabel
+    && existing.dueAtUtc === dueAtUtc
+    && sameReminderRule(existing.rule, input.rule)) {
+    return { reminder: existing }
+  }
+  return {
+    reminder: {
+      channel: input.channel,
+      botId: input.botId,
+      botLabel: input.botLabel,
+      dueAtUtc,
+      rule: input.rule,
+      configuredAt: now,
+      lastOccurrenceAt: '',
+    },
+  }
+}
+
+function sameReminderRule(left: TeacherReminderRule, right: TeacherReminderRule): boolean {
+  if (left.kind !== right.kind) return false
+  return left.kind === 'once'
+    ? left.minutesBefore === (right as Extract<TeacherReminderRule, { kind: 'once' }>).minutesBefore
+    : left.everyMinutes === (right as Extract<TeacherReminderRule, { kind: 'repeat' }>).everyMinutes
 }
 
 function upsertBy<T>(items: readonly T[], item: T, key: (value: T) => unknown): T[] {

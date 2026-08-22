@@ -58,6 +58,7 @@ import Lsp from '@deepseek-ai/dsh-lsp'
 import * as ToolLsp from '@deepseek-ai/dsh-tool-lsp'
 import * as ToolSkill from '@deepseek-ai/dsh-tool-skill'
 import * as ToolSessionQuery from '@deepseek-ai/dsh-tool-session-query'
+import * as ToolTeacherWorkbench from '@deepseek-ai/dsh-tool-teacher-workbench'
 import * as ToolTasks from '@deepseek-ai/dsh-tool-jobs'
 import type TeamService from '@deepseek-ai/dsh-experimental-agent-team'
 import * as ToolTeam from '@deepseek-ai/dsh-experimental-tool-agent-team'
@@ -453,6 +454,21 @@ const TOOL_PACKAGES: ToolPackage[] = [
     },
     note:
       'The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.',
+  },
+  {
+    pkg: '@deepseek-ai/dsh-tool-teacher-workbench',
+    dir: 'tool-teacher-workbench',
+    source: 'packages/host/teacher-workbench/src/agent-tools.ts',
+    requires: ['ctx.tools', 'ctx.fs', 'ctx.teacherWorkbench', 'ctx.attachments + an image-capable route for stored-image reads', 'ctx.ocr for PDF segmentation'],
+    writes: ['tool/call', 'teacher_workbench storage-domain document', 'question media and generated Office files', 'durable attachment (teacher_question_image_read)', 'tool/result'],
+    async mount(ctx) {
+      await ctx.plugin(LocalFileSystem)
+      await ctx.plugin(CatalogAttachmentStore)
+      ctx.provide('teacherWorkbench', {} as never)
+      await ctx.plugin(ToolTeacherWorkbench)
+    },
+    note:
+      'The shipped Web composition provides the authoritative Host service, durable attachments, and MinerU-backed OCR. PDF uploads carry a private Host source id; other imported tables arrive as logged OCR context. Stored question-image reads require the current model route to declare image input.',
   },
   {
     pkg: '@deepseek-ai/dsh-tool-subagent',

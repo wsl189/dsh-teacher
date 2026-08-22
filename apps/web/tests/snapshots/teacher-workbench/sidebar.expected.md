@@ -1,0 +1,23 @@
+- button "新建会话"
+- button "收起侧边栏":
+  - img
+- button "打开工作台":
+  - img
+  - text: 工作台
+  - img
+- text: 工作区
+- button "搜索会话":
+  - img
+- textbox "搜索会话…"
+- button "视图选项":
+  - img
+- button "添加工作区":
+  - img
+- tree "会话":
+  - treeitem "document-upload" [expanded]:
+    - img
+    - text: document-upload
+  - treeitem "新会话" [selected]
+- button "设置":
+  - img
+  - text: 设置

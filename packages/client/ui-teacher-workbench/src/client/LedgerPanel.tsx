@@ -1,7 +1,7 @@
 /** Expandable daily ledger with teacher-defined categories and voice entry. */
 
 import { useMemo, useState } from 'react'
-import { Calendar, Maximize2, Minimize2, Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
+import { Bell, Calendar, Maximize2, Minimize2, Pencil, Plus, ReceiptText, Trash2 } from 'lucide-react'
 import type {
   TeacherLedgerCategory,
   TeacherLedgerCategoryId,
@@ -10,6 +10,8 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
+import type { TeacherReminderInput } from './controller.ts'
+import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
 import { EditorModal, FormField, IconAction, type TeacherWorkbenchTranslate } from './shared.tsx'
 import { VoiceInputButton } from './SpeechInput.tsx'
 import css from './TeacherWorkbench.module.css'
@@ -142,19 +144,25 @@ function LedgerCategoryCard(props: {
   const [description, setDescription] = useState('')
   const [amount, setAmount] = useState('')
   const [occurredAt, setOccurredAt] = useState('')
+  const [remindAt, setRemindAt] = useState('')
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(null)
+  const [editingReminder, setEditingReminder] = useState(false)
   const amountCents = parseAmountCents(amount)
   const save = async (): Promise<void> => {
-    if (description.trim() === '' || amountCents === null || occurredAt === '') return
+    if (description.trim() === '' || amountCents === null || occurredAt === '' || !reminderValid(remindAt, reminder)) return
     const result = await props.commands.saveLedgerEntry({
       categoryId: props.category.id,
       description,
       amountCents,
       occurredAt,
+      ...(remindAt === '' && reminder === null ? {} : { remindAt, reminder }),
     })
     if (result.ok) {
       setDescription('')
       setAmount('')
       setOccurredAt('')
+      setRemindAt('')
+      setReminder(null)
     }
   }
   const categoryTotal = props.entries.reduce((sum, entry) => sum + entry.amountCents, 0)
@@ -212,11 +220,21 @@ function LedgerCategoryCard(props: {
           </label>
         </div>
         <button
+          type="button"
+          className={css.ledgerReminderButton}
+          aria-label={props.t('daily.reminder.configure')}
+          title={props.t('daily.reminder.configure')}
+          onClick={() => { setEditingReminder(true) }}
+        >
+          <Bell size={15} />
+          {reminder !== null && <i aria-hidden="true" />}
+        </button>
+        <button
           type="submit"
           className={`${css.dailyAddButton} ${css.ledgerAddEntryButton}`}
           aria-label={props.t('daily.ledger.addEntry')}
           title={props.t('daily.ledger.addEntry')}
-          disabled={description.trim() === '' || amountCents === null || occurredAt === ''}
+          disabled={description.trim() === '' || amountCents === null || occurredAt === '' || !reminderValid(remindAt, reminder)}
         >
           <Plus size={16} />
         </button>
@@ -228,7 +246,10 @@ function LedgerCategoryCard(props: {
             <article key={entry.id} className={css.ledgerEntry}>
               <button type="button" className={css.ledgerEntryMain} onClick={() => { props.onEdit(entry) }}>
                 <span>{entry.description}</span>
-                <time>{formatLedgerTime(entry.occurredAt)}</time>
+                <time>
+                  {formatLedgerTime(entry.occurredAt)}
+                  {entry.reminder !== undefined && <Bell size={11} aria-label={props.t('daily.reminder.enabled')} />}
+                </time>
               </button>
               <strong>{formatAmount(entry.amountCents)}</strong>
               <button
@@ -252,6 +273,20 @@ function LedgerCategoryCard(props: {
             </article>
           ))}
       </div>
+      {editingReminder && (
+        <LedgerReminderEditor
+          initialRemindAt={remindAt}
+          initialReminder={reminder}
+          commands={props.commands}
+          t={props.t}
+          onApply={(nextRemindAt, nextReminder) => {
+            setRemindAt(nextRemindAt)
+            setReminder(nextReminder)
+            setEditingReminder(false)
+          }}
+          onClose={() => { setEditingReminder(false) }}
+        />
+      )}
     </article>
   )
 }
@@ -287,14 +322,25 @@ function EntryEditor(props: {
   const [description, setDescription] = useState(props.entry.description)
   const [amount, setAmount] = useState((props.entry.amountCents / 100).toFixed(2))
   const [occurredAt, setOccurredAt] = useState(props.entry.occurredAt)
+  const [remindAt, setRemindAt] = useState(props.entry.remindAt ?? '')
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(() => editableReminder(props.entry.reminder))
   const amountCents = parseAmountCents(amount)
   const save = async (): Promise<void> => {
     if (amountCents === null) return
-    const result = await props.commands.saveLedgerEntry({ id: props.entry.id, categoryId, description, amountCents, occurredAt })
+    const result = await props.commands.saveLedgerEntry({
+      id: props.entry.id,
+      categoryId,
+      description,
+      amountCents,
+      occurredAt,
+      ...(remindAt === '' && reminder === null && props.entry.reminder === undefined
+        ? {}
+        : { remindAt, reminder }),
+    })
     if (result.ok) props.onClose()
   }
   return (
-    <EditorModal open title={props.t('daily.ledger.editEntry')} closeLabel={props.t('close')} onClose={props.onClose} onSave={() => { void save() }} saveLabel={props.t('save')} cancelLabel={props.t('cancel')} valid={description.trim() !== '' && amountCents !== null && occurredAt !== ''}>
+    <EditorModal open title={props.t('daily.ledger.editEntry')} closeLabel={props.t('close')} onClose={props.onClose} onSave={() => { void save() }} saveLabel={props.t('save')} cancelLabel={props.t('cancel')} valid={description.trim() !== '' && amountCents !== null && occurredAt !== '' && reminderValid(remindAt, reminder)}>
       <FormField label={props.t('daily.ledger.categoryName')}>
         <select value={categoryId} onChange={(event) => { setCategoryId(event.target.value as TeacherLedgerCategoryId) }}>
           {props.categories.map(category => <option key={category.id} value={category.id}>{category.name}</option>)}
@@ -313,6 +359,39 @@ function EntryEditor(props: {
       <FormField label={props.t('daily.ledger.time')}>
         <input type="datetime-local" value={occurredAt} onChange={(event) => { setOccurredAt(event.target.value) }} />
       </FormField>
+      <FormField label={props.t('daily.reminder.deadline')}>
+        <input type="datetime-local" value={remindAt} onChange={(event) => { setRemindAt(event.target.value) }} />
+      </FormField>
+      <ReminderFields deadline={remindAt} value={reminder} commands={props.commands} t={props.t} onChange={setReminder} />
+    </EditorModal>
+  )
+}
+
+function LedgerReminderEditor(props: {
+  initialRemindAt: string
+  initialReminder: TeacherReminderInput | null
+  commands: TeacherWorkbenchCommands
+  t: TeacherWorkbenchTranslate
+  onApply: (remindAt: string, reminder: TeacherReminderInput | null) => void
+  onClose: () => void
+}) {
+  const [remindAt, setRemindAt] = useState(props.initialRemindAt)
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(props.initialReminder)
+  return (
+    <EditorModal
+      open
+      title={props.t('daily.reminder.configure')}
+      closeLabel={props.t('close')}
+      onClose={props.onClose}
+      onSave={() => { props.onApply(remindAt, reminder) }}
+      saveLabel={props.t('daily.reminder.apply')}
+      cancelLabel={props.t('cancel')}
+      valid={reminderValid(remindAt, reminder)}
+    >
+      <FormField label={props.t('daily.reminder.deadline')}>
+        <input type="datetime-local" value={remindAt} onChange={(event) => { setRemindAt(event.target.value) }} />
+      </FormField>
+      <ReminderFields deadline={remindAt} value={reminder} commands={props.commands} t={props.t} onChange={setReminder} />
     </EditorModal>
   )
 }

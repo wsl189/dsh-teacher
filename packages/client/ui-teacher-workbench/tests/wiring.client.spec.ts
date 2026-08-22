@@ -20,7 +20,8 @@ vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: pdfMoc
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+  questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+  noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 afterEach(() => { vi.unstubAllGlobals() })
@@ -161,7 +162,7 @@ describe('teacher-workbench browser wiring', () => {
 
     apply(ctx as never)
     expect(registrations.map(item => item.entry.name)).toEqual([
-      'sidebar.footer.action', 'shell.overlay', 'settings.general.item',
+      'sidebar.primary.section', 'shell.overlay', 'settings.general.item',
     ])
     expect(ctx.locale.register).toHaveBeenCalledWith('teacherWorkbench', expect.any(Object))
     expect(ctx.settingsScope.bind).toHaveBeenCalledWith({
@@ -180,8 +181,10 @@ describe('teacher-workbench browser wiring', () => {
     stopNavigation()
     expect(navigationListeners).toHaveLength(0)
     await (surface.ensure as () => Promise<unknown>)()
+    await (surface.ensure as () => Promise<unknown>)()
+    expect(read).toHaveBeenCalledTimes(2)
     resetListeners[0]!()
-    await vi.waitFor(() => { expect(read).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(read).toHaveBeenCalledTimes(3) })
 
     const command = async (name: string, ...args: unknown[]): Promise<void> => {
       await (surface[name] as (...values: unknown[]) => Promise<unknown>)(...args)
@@ -189,7 +192,7 @@ describe('teacher-workbench browser wiring', () => {
     await command('saveDailyTodo', { title: '待办', dueAt: '2026-08-18T18:00' })
     await command('toggleDailyTodo', 'todo-a')
     await command('deleteDailyTodo', 'todo-a')
-    await command('saveQuickNote', { content: '随记' })
+    await command('saveQuickNote', { content: '备忘录' })
     await command('deleteQuickNote', 'note-a')
     await command('saveLedgerCategory', { name: '保险保费' })
     await command('saveLedgerEntry', { categoryId: 'ledger-category-a', description: '车险', amountCents: 120000, occurredAt: '2026-08-18T10:00' })

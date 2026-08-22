@@ -28,6 +28,13 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
       },
     },
   }))
+  const stageSource = vi.fn(() => Promise.resolve({
+    ok: true as const,
+    value: {
+      ok: true as const,
+      value: { id: 'sha256:source', name: 'document.pdf', mediaType: 'application/pdf', bytes: 1 },
+    },
+  }))
   await runtime.sessions.add({
     id: 's1',
     session: { prompt, updateQueue, cancel, loadOlder, ...(readAttachment === undefined ? {} : { readAttachment }) },
@@ -39,12 +46,13 @@ async function bench(readAttachment?: SessionFace['readAttachment']) {
     input: hub,
     blocks: new ComposerBlockRegistry(),
     ocr: { extract },
+    workbench: { stageSource },
   })
   await fiber.await()
   const root = runtime.ctx.get('conversation') as ConversationController
   const scoped = runtime.sessions.scope('s1')!.get('conversation') as ConversationController
   const shell = hub.shellFor(runtime.sessions.binding('s1')!)
-  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder, extract }
+  return { runtime, fiber, root, scoped, hub, shell, prompt, updateQueue, cancel, loadOlder, extract, stageSource }
 }
 
 describe('ConversationController', () => {
@@ -169,6 +177,36 @@ describe('ConversationController', () => {
     await b.runtime.dispose()
   })
 
+  it('retains an uploaded PDF and injects only its workbench source reference with OCR text', async () => {
+    const b = await bench()
+    const session = b.runtime.sessions.behavior('s1')
+    b.root.addDraftDocuments(session.sessionId, [new File([Uint8Array.of(37, 80, 68, 70)], 'paper.pdf', {
+      type: 'application/pdf',
+    })])
+    await vi.waitFor(() => {
+      expect(b.root.documentStore(session.sessionId).getSnapshot()[0]?.status).toBe('ready')
+    })
+    await expect(b.root.sendSession(session, '切分试题', [], 'queue')).resolves.toEqual({ kind: 'success' })
+    expect(b.stageSource).toHaveBeenCalledWith(expect.objectContaining({
+      name: 'paper.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: 'JVBERg==',
+    }))
+    expect(b.prompt).toHaveBeenCalledWith(
+      [{ type: 'text', text: '切分试题' }],
+      'queue',
+      undefined,
+      [{
+        name: 'document.pdf',
+        markdown: '# OCR',
+        truncated: false,
+        sourceId: 'sha256:source',
+        sourceMediaType: 'application/pdf',
+      }],
+    )
+    await b.runtime.dispose()
+  })
+
   it('invalidates pending historical image loads when the rendered session is released', async () => {
     const read = Promise.withResolvers<Awaited<ReturnType<SessionFace['readAttachment']>>>()
     const b = await bench(() => read.promise)
@@ -195,6 +233,7 @@ describe('ConversationController', () => {
       input: new InputHub(bare, makeTranslate(zh, {})),
       blocks: new ComposerBlockRegistry(),
       ocr: { extract: vi.fn() },
+      workbench: { stageSource: vi.fn() },
     }).await()
     const orphan = bare.get('conversation') as ConversationController
     await expect(orphan.send('x')).rejects.toThrow(/sessions service unavailable/)

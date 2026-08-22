@@ -18,9 +18,12 @@ import type {
   TeacherLedgerEntryId,
   TeacherNoticeId,
   TeacherNoticeTemplateId,
+  TeacherMobileBotId,
+  TeacherMobileChannel,
   TeacherQuickNoteId,
   TeacherQuestionAssignmentId,
   TeacherQuestionBatchId,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionFolderId,
   TeacherQuestionImageId,
   TeacherRecordId,
@@ -67,6 +70,35 @@ const dailyTodoCategory = z.union([
   z.literal('important'),
   z.literal('urgent'),
 ]) satisfies z.ZodType<TeacherDailyTodoCategory>
+const mobileChannel = z.union([
+  z.literal('weixin'),
+  z.literal('feishu'),
+  z.literal('dingtalk'),
+  z.literal('wecom'),
+  z.literal('qq'),
+  z.literal('slack'),
+  z.literal('telegram'),
+  z.literal('discord'),
+  z.literal('whatsapp'),
+]) satisfies z.ZodType<TeacherMobileChannel>
+const utcInstant = text.regex(
+  /^\d{4}-\d{2}-\d{2}T(?:[01]\d|2[0-3]):[0-5]\d:[0-5]\d\.\d{3}Z$/,
+  'time must be a canonical UTC instant',
+).refine(value => !Number.isNaN(Date.parse(value)) && new Date(Date.parse(value)).toISOString() === value,
+  'time must be a real UTC instant')
+const optionalUtcInstant = z.union([z.literal(''), utcInstant])
+const teacherReminderSchema = z.object({
+  channel: mobileChannel,
+  botId: identity<TeacherMobileBotId>(),
+  botLabel: text.trim().min(1).max(120),
+  dueAtUtc: utcInstant,
+  rule: z.union([
+    z.object({ kind: z.literal('once'), minutesBefore: z.number().int().min(0).max(525_600) }),
+    z.object({ kind: z.literal('repeat'), everyMinutes: z.number().int().min(5).max(525_600) }),
+  ]),
+  configuredAt: epochMilliseconds,
+  lastOccurrenceAt: optionalUtcInstant,
+})
 const teacherWeekday = z.union([
   z.literal(1),
   z.literal(2),
@@ -202,16 +234,22 @@ export const teacherDailyTodoSchema = z.object({
   completed: z.boolean(),
   category: dailyTodoCategory,
   color: dailyTodoColor,
+  reminder: teacherReminderSchema.optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
 })
 
-/** Runtime schema for one quick note. */
+/** Runtime schema for one memo stored under the existing persisted field. */
 export const teacherQuickNoteSchema = z.object({
   id: identity<TeacherQuickNoteId>(),
   content: text.trim().min(1),
+  remindAt: optionalLocalDateTime.optional(),
+  reminder: teacherReminderSchema.optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
+}).refine(item => item.reminder === undefined || (item.remindAt !== undefined && item.remindAt !== ''), {
+  path: ['remindAt'],
+  message: 'memo reminder requires a local deadline',
 })
 
 /** Runtime schema for one ledger category. */
@@ -228,8 +266,13 @@ export const teacherLedgerEntrySchema = z.object({
   description: text.trim().min(1).max(500),
   amountCents: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
   occurredAt: optionalLocalDateTime.refine(value => value !== '', 'ledger time is required'),
+  remindAt: optionalLocalDateTime.optional(),
+  reminder: teacherReminderSchema.optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
+}).refine(item => item.reminder === undefined || (item.remindAt !== undefined && item.remindAt !== ''), {
+  path: ['remindAt'],
+  message: 'ledger reminder requires a local deadline',
 })
 
 /** Runtime schema for one calendar item. */
@@ -239,6 +282,7 @@ export const teacherCalendarItemSchema = z.object({
   time: optionalLocalTime,
   title: text.trim().min(1),
   details: text,
+  reminder: teacherReminderSchema.optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
 })
@@ -274,11 +318,21 @@ export const teacherQuestionImageSchema = z.object({
 /** Runtime schema for one paper batch. */
 export const teacherQuestionBatchSchema = z.object({
   id: identity<TeacherQuestionBatchId>(),
+  folderId: identity<TeacherQuestionLibraryFolderId>().optional(),
   name: text.trim().min(1).max(200),
   sourceName: safeFileName,
   pageRange: text.max(200),
   createdAt: epochMilliseconds,
   images: z.array(teacherQuestionImageSchema),
+})
+
+/** Runtime schema for one nested question-library folder. */
+export const teacherQuestionLibraryFolderSchema = z.object({
+  id: identity<TeacherQuestionLibraryFolderId>(),
+  parentId: identity<TeacherQuestionLibraryFolderId>().optional(),
+  name: text.trim().min(1).max(80).refine(value => !/[\\/\u0000-\u001f:*?"<>|]/u.test(value), 'folder name contains invalid characters'),
+  createdAt: epochMilliseconds,
+  updatedAt: epochMilliseconds,
 })
 
 /** Runtime schema for one nested directory below a roster student. */
@@ -302,6 +356,8 @@ export const teacherQuestionAssignmentSchema = z.object({
   mediaType: questionMediaType,
   width: z.number().int().min(1).max(100_000),
   height: z.number().int().min(1).max(100_000),
+  temporarySaveCount: z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER),
+  lastTemporarySavedAt: epochMilliseconds.optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
 })
@@ -324,6 +380,7 @@ export const teacherWorkbenchStateSchema = z.object({
   seatingLayouts: z.array(teacherSeatingLayoutSchema),
   exams: z.array(teacherExamSchema),
   questionBatches: z.array(teacherQuestionBatchSchema),
+  questionLibraryFolders: z.array(teacherQuestionLibraryFolderSchema),
   questionFolders: z.array(teacherQuestionFolderSchema).default([]),
   questionAssignments: z.array(teacherQuestionAssignmentSchema),
 }).superRefine((state, ctx) => {
@@ -343,6 +400,7 @@ export const teacherWorkbenchStateSchema = z.object({
   uniqueIds(state.notices, 'notices', ctx)
   uniqueIds(state.exams, 'exams', ctx)
   uniqueIds(state.questionBatches, 'questionBatches', ctx)
+  uniqueIds(state.questionLibraryFolders, 'questionLibraryFolders', ctx)
   uniqueIds(state.questionFolders, 'questionFolders', ctx)
   const questionImageIds = new Set<string>()
   state.questionBatches.forEach((batch, batchIndex) => {
@@ -350,6 +408,32 @@ export const teacherWorkbenchStateSchema = z.object({
       if (questionImageIds.has(image.id)) issue(ctx, ['questionBatches', batchIndex, 'images', imageIndex, 'id'], 'duplicate question image')
       questionImageIds.add(image.id)
     })
+  })
+  const libraryFolderById = new Map(state.questionLibraryFolders.map(folder => [folder.id, folder] as const))
+  const librarySiblingNames = new Set<string>()
+  state.questionLibraryFolders.forEach((folder, index) => {
+    const parent = folder.parentId === undefined ? undefined : libraryFolderById.get(folder.parentId)
+    if (folder.parentId !== undefined && parent === undefined) {
+      issue(ctx, ['questionLibraryFolders', index, 'parentId'], 'unknown parent library folder')
+    }
+    const siblingKey = `${folder.parentId ?? ''}\u0000${folder.name.normalize('NFKC').toLocaleLowerCase()}`
+    if (librarySiblingNames.has(siblingKey)) issue(ctx, ['questionLibraryFolders', index, 'name'], 'duplicate sibling library folder')
+    librarySiblingNames.add(siblingKey)
+    const ancestors = new Set<string>([folder.id])
+    let cursor = parent
+    while (cursor !== undefined) {
+      if (ancestors.has(cursor.id)) {
+        issue(ctx, ['questionLibraryFolders', index, 'parentId'], 'library folder hierarchy contains a cycle')
+        break
+      }
+      ancestors.add(cursor.id)
+      cursor = cursor.parentId === undefined ? undefined : libraryFolderById.get(cursor.parentId)
+    }
+  })
+  state.questionBatches.forEach((batch, index) => {
+    if (batch.folderId !== undefined && !libraryFolderById.has(batch.folderId)) {
+      issue(ctx, ['questionBatches', index, 'folderId'], 'unknown question-library folder')
+    }
   })
   uniqueIds(state.questionAssignments, 'questionAssignments', ctx)
 
@@ -515,6 +599,7 @@ export const INITIAL_TEACHER_WORKBENCH_STATE: TeacherWorkbenchState = Object.fre
   seatingLayouts: Object.freeze([]),
   exams: Object.freeze([]),
   questionBatches: Object.freeze([]),
+  questionLibraryFolders: Object.freeze([]),
   questionFolders: Object.freeze([]),
   questionAssignments: Object.freeze([]),
 })
@@ -528,7 +613,7 @@ export const INITIAL_TEACHER_WORKBENCH_DOCUMENT: TeacherWorkbenchDocument = Obje
 /** Durable singleton owned by the workbench service. */
 export const teacherWorkbenchDomainSpec = defineDomain({
   name: 'teacher_workbench',
-  version: 8,
+  version: 10,
   global: {
     schema: teacherWorkbenchDocumentSchema,
     initial: INITIAL_TEACHER_WORKBENCH_DOCUMENT,

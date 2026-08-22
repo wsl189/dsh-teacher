@@ -22,6 +22,7 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
+    listNotificationTargets: vi.fn(async () => []),
     saveDailyTodo: action(), toggleDailyTodo: action(), deleteDailyTodo: action(),
     saveQuickNote: action(), deleteQuickNote: action(), saveLedgerCategory: action(), deleteLedgerCategory: action(),
     saveLedgerEntry: action(), deleteLedgerEntry: action(), saveCalendarItem: action(), deleteCalendarItem: action(),
@@ -31,6 +32,7 @@ function commands(): TeacherWorkbenchCommands {
     segmentQuestions: vi.fn(async () => ({ ok: false, error: { code: 'tool-model-unavailable', message: 'unavailable' } } as const)),
     importCalendarItems: action(), saveTimetableEntry: action(), deleteTimetableEntry: action(), importTimetableEntries: action(),
     saveClass: action(), deleteClass: action(), saveStudent: action(), importStudents: action(), deleteStudent: action(),
+    createQuestionLibraryFolder: action(), renameQuestionLibraryFolder: action(), deleteQuestionLibraryFolder: action(),
     createQuestionFolder: action(), deleteQuestionFolder: action(),
     saveResource: action(), deleteResource: action(), saveTemplate: action(), deleteTemplate: action(),
     saveRecord: action(), toggleRecord: action(), deleteRecord: action(), saveExam: action(), deleteExam: action(),
@@ -62,7 +64,8 @@ function state(): TeacherWorkbenchState {
   return {
     dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], students: [],
     resources: [], templates: [], records: [], exams: [],
-    questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+    questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+    noticeTemplates: [], notices: [], seatingLayouts: [],
     classes: [
       { id: classA, usage: 'timetable', name: '高一（1）班', grade: '高一', subject: '数学' },
       { id: classB, usage: 'timetable', name: '高一（2）班', grade: '高一', subject: '物理' },

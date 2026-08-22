@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from 'vitest'
 import type {
   TeacherClassId,
+  TeacherMobileBotId,
   TeacherQuestionBatchId,
+  TeacherQuestionLibraryFolderId,
   TeacherStudentId,
   TeacherWorkbenchDocument,
   TeacherWorkbenchState,
@@ -15,7 +17,8 @@ import {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+  questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+  noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 type FakeOptions = {
@@ -47,6 +50,70 @@ function fakeRemote(options: FakeOptions = {}) {
 }
 
 describe('TeacherWorkbenchController', () => {
+  it('stores credential-free reminder rules against the current deadline', async () => {
+    const fake = fakeRemote()
+    const controller = new TeacherWorkbenchController(fake.remote, { id: () => 'todo-reminder', now: () => 42 })
+    const botId = 'bot-primary' as TeacherMobileBotId
+    await controller.saveDailyTodo({
+      title: '提交周报',
+      dueAt: '2099-08-22T18:00',
+      reminder: {
+        channel: 'telegram',
+        botId,
+        botLabel: 'Primary Bot',
+        rule: { kind: 'repeat', everyMinutes: 15 },
+      },
+    })
+
+    const saved = controller.getSnapshot().document!.state.dailyTodos[0]!
+    expect(saved.reminder).toEqual({
+      channel: 'telegram',
+      botId,
+      botLabel: 'Primary Bot',
+      dueAtUtc: new Date('2099-08-22T18:00').toISOString(),
+      rule: { kind: 'repeat', everyMinutes: 15 },
+      configuredAt: 42,
+      lastOccurrenceAt: '',
+    })
+
+    await controller.saveDailyTodo({ id: saved.id, title: saved.title, dueAt: '2099-08-23T18:00' })
+    expect(controller.getSnapshot().document!.state.dailyTodos[0]!.reminder).toBeUndefined()
+  })
+
+  it('stores reminders for memos and ledger entries against their reminder deadlines', async () => {
+    const fake = fakeRemote()
+    const ids = ['memo-reminder', 'ledger-category', 'ledger-reminder']
+    const controller = new TeacherWorkbenchController(fake.remote, { id: () => ids.shift() ?? 'extra', now: () => 42 })
+    const reminder = {
+      channel: 'telegram' as const,
+      botId: 'bot-primary' as TeacherMobileBotId,
+      botLabel: 'Primary Bot',
+      rule: { kind: 'once' as const, minutesBefore: 10 },
+    }
+
+    await controller.saveQuickNote({ content: '联系家长', remindAt: '2099-08-22T18:00', reminder })
+    await controller.saveLedgerCategory({ name: '保险保费' })
+    const categoryId = controller.getSnapshot().document!.state.ledgerCategories[0]!.id
+    await controller.saveLedgerEntry({
+      categoryId,
+      description: '续交车险',
+      amountCents: 120_000,
+      occurredAt: '2099-08-01T10:00',
+      remindAt: '2099-08-23T18:00',
+      reminder,
+    })
+
+    const state = controller.getSnapshot().document!.state
+    expect(state.quickNotes[0]).toMatchObject({
+      remindAt: '2099-08-22T18:00',
+      reminder: { dueAtUtc: new Date('2099-08-22T18:00').toISOString() },
+    })
+    expect(state.ledgerEntries[0]).toMatchObject({
+      remindAt: '2099-08-23T18:00',
+      reminder: { dueAtUtc: new Date('2099-08-23T18:00').toISOString() },
+    })
+  })
+
   it('persists family notices, headteacher templates, and one seating layout per class', async () => {
     const fake = fakeRemote()
     const ids = ['class-a', 'student-a', 'notice-template-a', 'notice-a']
@@ -318,6 +385,69 @@ describe('TeacherWorkbenchController', () => {
     ])
     await controller.deleteQuestionFolder(rootId)
     expect(controller.getSnapshot().document!.state.questionFolders).toEqual([])
+  })
+
+  it('persists nested question-library folders', async () => {
+    const fake = fakeRemote()
+    const ids = ['library-root', 'library-child']
+    const controller = new TeacherWorkbenchController(fake.remote, { id: () => ids.shift() ?? 'extra', now: () => 42 })
+    await controller.ensure()
+    await controller.createQuestionLibraryFolder({ name: '模拟卷' })
+    const rootId = controller.getSnapshot().document!.state.questionLibraryFolders[0]!.id
+    await controller.createQuestionLibraryFolder({ parentId: rootId, name: '五月' })
+    expect(controller.getSnapshot().document!.state.questionLibraryFolders).toMatchObject([
+      { id: 'library-root', name: '模拟卷', createdAt: 42, updatedAt: 42 },
+      { id: 'library-child', parentId: 'library-root', name: '五月' },
+    ])
+    await controller.renameQuestionLibraryFolder(rootId, '联考试卷')
+    expect(controller.getSnapshot().document!.state.questionLibraryFolders[0]).toMatchObject({
+      id: 'library-root', name: '联考试卷', updatedAt: 42,
+    })
+    await controller.deleteQuestionLibraryFolder(rootId)
+    expect(controller.getSnapshot().document!.state.questionLibraryFolders).toEqual([])
+  })
+
+  it('moves batches to the parent when deleting a question-library hierarchy', async () => {
+    const fake = fakeRemote()
+    fake.setDocument({
+      revision: 1,
+      state: {
+        ...emptyState(),
+        questionLibraryFolders: [
+          { id: 'library-parent' as TeacherQuestionLibraryFolderId, name: '模拟卷', createdAt: 1, updatedAt: 1 },
+          {
+            id: 'library-root' as TeacherQuestionLibraryFolderId,
+            parentId: 'library-parent' as TeacherQuestionLibraryFolderId,
+            name: '五月',
+            createdAt: 2,
+            updatedAt: 2,
+          },
+          {
+            id: 'library-child' as TeacherQuestionLibraryFolderId,
+            parentId: 'library-root' as TeacherQuestionLibraryFolderId,
+            name: '第一周',
+            createdAt: 3,
+            updatedAt: 3,
+          },
+        ],
+        questionBatches: [{
+          id: 'batch-a' as TeacherQuestionBatchId,
+          folderId: 'library-child' as TeacherQuestionLibraryFolderId,
+          name: '试卷',
+          sourceName: '试卷.pdf',
+          pageRange: '全部页',
+          createdAt: 1,
+          images: [],
+        }],
+      },
+    })
+    const controller = new TeacherWorkbenchController(fake.remote)
+    await controller.ensure()
+    await controller.deleteQuestionLibraryFolder('library-root' as TeacherQuestionLibraryFolderId)
+    expect(controller.getSnapshot().document!.state.questionLibraryFolders.map(folder => folder.id)).toEqual(['library-parent'])
+    expect(controller.getSnapshot().document!.state.questionBatches[0]).toMatchObject({
+      id: 'batch-a', folderId: 'library-parent',
+    })
   })
 
   it('updates existing identities and name-only roster imports', async () => {

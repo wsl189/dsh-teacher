@@ -258,12 +258,18 @@ describe('sessions domain schemas', () => {
       sessionId: 's1',
       mode: 'queue',
       content: [{ type: 'text', text: 'hi' }],
-      contexts: [{ name: 'roster.xlsx', markdown: '| name |', truncated: false }],
+      contexts: [{
+        name: 'roster.xlsx', markdown: '| name |', truncated: false,
+        sourceId: 'sha256:source', sourceMediaType: 'application/pdf',
+      }],
       clientTimeZone: 'Asia/Shanghai',
     })
     expect(prompt.mode).toBe('queue')
     expect(prompt.clientTimeZone).toBe('Asia/Shanghai')
-    expect(prompt.contexts).toEqual([{ name: 'roster.xlsx', markdown: '| name |', truncated: false }])
+    expect(prompt.contexts).toEqual([{
+      name: 'roster.xlsx', markdown: '| name |', truncated: false,
+      sourceId: 'sha256:source', sourceMediaType: 'application/pdf',
+    }])
     expect(sessionPromptRequestSchema.parse({
       sessionId: 's1', mode: 'queue', content: [],
     }).clientTimeZone).toBeUndefined()

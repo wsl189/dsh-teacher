@@ -3,6 +3,7 @@
 import { useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import {
+  Bell,
   CalendarDays,
   ChevronLeft,
   ChevronRight,
@@ -18,9 +19,11 @@ import {
 import type { TeacherCalendarItem, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
 import { Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
+import type { TeacherReminderInput } from './controller.ts'
 import { parseSchoolCalendar, type CalendarImportDraft } from './calendar-import.ts'
 import { buildTeacherCalendarMonth, formatLocalDate, parseLocalDate } from './calendar-data.ts'
 import { EditorModal, FormField, IconAction, confirmDelete, type TeacherWorkbenchTranslate } from './shared.tsx'
+import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
 import css from './TeacherWorkbench.module.css'
 
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日'] as const
@@ -216,8 +219,12 @@ export function CalendarPanel(props: CalendarPanelProps) {
                   <Clock3 size={15} />
                   <button type="button" className={css.calendarAgendaMain} onClick={() => { setEditing(item) }}>
                     <strong>{item.title}</strong>
-                    <span>{item.time || props.t('daily.calendar.allDay')}{item.details === '' ? '' : ` · ${item.details}`}</span>
+                    <span>
+                      {item.time || props.t('daily.calendar.allDay')}{item.details === '' ? '' : ` · ${item.details}`}
+                      {item.reminder !== undefined && <Bell size={12} aria-label={props.t('daily.reminder.enabled')} />}
+                    </span>
                   </button>
+                  <IconAction label={props.t('daily.reminder.configure')} onClick={() => { setEditing(item) }}><Bell size={15} /></IconAction>
                   <IconAction label={props.t('edit')} onClick={() => { setEditing(item) }}><Pencil size={15} /></IconAction>
                   <IconAction label={props.t('delete')} danger onClick={() => { if (confirmDelete(props.t)) void props.commands.deleteCalendarItem(item.id) }}><Trash2 size={15} /></IconAction>
                 </article>
@@ -371,6 +378,7 @@ function CalendarItemEditor(props: {
   const [time, setTime] = useState(props.item?.time ?? '')
   const [title, setTitle] = useState(props.item?.title ?? '')
   const [details, setDetails] = useState(props.item?.details ?? '')
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(() => editableReminder(props.item?.reminder))
   const save = async (): Promise<void> => {
     const result = await props.commands.saveCalendarItem({
       ...(props.item === undefined ? {} : { id: props.item.id }),
@@ -378,6 +386,7 @@ function CalendarItemEditor(props: {
       time,
       title,
       details,
+      ...(reminder === null && props.item?.reminder === undefined ? {} : { reminder }),
     })
     if (result.ok) props.onClose()
   }
@@ -390,12 +399,19 @@ function CalendarItemEditor(props: {
       onSave={() => { void save() }}
       saveLabel={props.t('save')}
       cancelLabel={props.t('cancel')}
-      valid={date !== '' && title.trim() !== ''}
+      valid={date !== '' && title.trim() !== '' && reminderValid(time === '' ? '' : `${date}T${time}`, reminder)}
     >
       <FormField label={props.t('date')}><input type="date" value={date} min="1900-01-01" max="2100-12-31" onChange={(event) => { setDate(event.target.value) }} /></FormField>
       <FormField label={props.t('daily.calendar.time')}><input type="time" value={time} onChange={(event) => { setTime(event.target.value) }} /></FormField>
       <FormField label={props.t('daily.calendar.itemTitle')} wide><input autoFocus maxLength={120} value={title} onChange={(event) => { setTitle(event.target.value) }} /></FormField>
       <FormField label={props.t('daily.calendar.details')} wide><textarea rows={5} maxLength={2000} value={details} onChange={(event) => { setDetails(event.target.value) }} /></FormField>
+      <ReminderFields
+        deadline={time === '' ? '' : `${date}T${time}`}
+        value={reminder}
+        commands={props.commands}
+        t={props.t}
+        onChange={setReminder}
+      />
     </EditorModal>
   )
 }

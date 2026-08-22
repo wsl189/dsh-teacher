@@ -139,6 +139,18 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
     expect(result).toMatchObject({ ok: true })
     const evidence = {
       modelCalls: adapter.requests.length,
+      ordinaryConversationTools: scaffold.ctx.tools.schemas()
+        .map(tool => tool.name)
+        .filter(name => name.startsWith('teacher_'))
+        .sort(),
+      questionToolDescription: scaffold.ctx.tools.schemas()
+        .find(tool => tool.name === 'teacher_question_workbench')?.description,
+      questionImageToolDescription: scaffold.ctx.tools.schemas()
+        .find(tool => tool.name === 'teacher_question_image_read')?.description,
+      dailyToolDescription: scaffold.ctx.tools.schemas()
+        .find(tool => tool.name === 'teacher_daily_management')?.description,
+      timetableToolDescription: scaffold.ctx.tools.schemas()
+        .find(tool => tool.name === 'teacher_timetable')?.description,
       exposedTools: {
         source: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('question_layout_'))),
         submission: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('submit_question_boundaries_'))),

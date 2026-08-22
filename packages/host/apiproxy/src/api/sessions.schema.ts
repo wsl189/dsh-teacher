@@ -290,6 +290,8 @@ export const promptDocumentContextSchema = z.object({
   name: z.string().min(1).max(256),
   markdown: z.string().min(1).max(500_000),
   truncated: z.boolean(),
+  sourceId: z.string().min(1).max(80).optional(),
+  sourceMediaType: z.string().min(1).max(200).optional(),
 })
 
 /** session.prompt request payload, including optional browser-local request provenance. */

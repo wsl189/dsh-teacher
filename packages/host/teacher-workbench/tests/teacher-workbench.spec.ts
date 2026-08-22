@@ -1,12 +1,21 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import sharp from 'sharp'
+import { PDFDocument } from 'pdf-lib'
 import { Context } from '@deepseek-ai/cordis'
+import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import type { Agent } from '@deepseek-ai/dsh-agent'
+import type { ImageAttachmentRef, SaveImageAttachment } from '@deepseek-ai/dsh-attachment'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime from '@deepseek-ai/dsh-tools'
+import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import * as ToolTeacherWorkbench from '../../tool-teacher-workbench/src/index.ts'
 import {
   MemoryMediaPool,
   MemoryStorageBackend,
@@ -15,6 +24,7 @@ import TeacherWorkbenchService, {
   INITIAL_TEACHER_WORKBENCH_STATE,
   teacherWorkbenchStateSchema,
 } from '../src/index.ts'
+import type { MobileNotificationGateway } from '../src/mobile-reminders.ts'
 import type {
   TeacherCalendarItemId,
   TeacherClass,
@@ -37,6 +47,9 @@ import type {
 
 async function harness(pool = new MemoryMediaPool(), config?: ConstructorParameters<typeof TeacherWorkbenchService>[1]) {
   const ctx = new Context()
+  await ctx.plugin(SystemPrompt)
+  await ctx.plugin(ToolRuntime)
+  await ctx.plugin(LocalFileSystem, { cwd: process.cwd() })
   await ctx.plugin(Storage)
   ctx.storage.backend.register('memory', new MemoryStorageBackend(pool))
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
@@ -45,8 +58,67 @@ async function harness(pool = new MemoryMediaPool(), config?: ConstructorParamet
   const fiber = config === undefined
     ? await ctx.plugin(TeacherWorkbenchService)
     : await ctx.plugin(TeacherWorkbenchService, config)
+  ctx.provide('attachments', {
+    imageLimits: {
+      maxImageBytes: 32 * 1024 * 1024,
+      maxImagesPerMessage: 8,
+      maxMessageImageBytes: 32 * 1024 * 1024,
+      maxImagePixels: 16_000_000,
+      maxImageDimension: 8_000,
+      mediaTypes: ['image/png', 'image/jpeg', 'image/webp', 'image/gif'],
+    },
+    async saveImage(input: SaveImageAttachment): Promise<ImageAttachmentRef> {
+      const metadata = await sharp(input.data).metadata()
+      return {
+        attachmentId: 'question-image-test' as never,
+        mediaType: input.mediaType,
+        bytes: input.data.byteLength,
+        width: metadata.width,
+        height: metadata.height,
+        ...input.name === undefined ? {} : { name: input.name },
+      }
+    },
+  } as never)
+  ctx.provide('llm', {
+    resolveModelInfo: (_provider: string, model: string) => Promise.resolve({
+      inputModalities: model === 'text-only' ? ['text'] : ['text', 'image'],
+    }),
+  } as never)
+  await ctx.plugin(ToolTeacherWorkbench)
   return { ctx, fiber, pool, service: ctx.teacherWorkbench }
 }
+
+async function callTool(
+  ctx: Context,
+  name: string,
+  arguments_: unknown,
+  agent?: { readonly id: string; readonly session?: Agent['session'] },
+) {
+  return ctx.tools.execute({
+    callId: CallId(`teacher-${randomCallId++}`),
+    name,
+    arguments: arguments_,
+    signal: new AbortController().signal,
+    ...(agent === undefined ? {} : { agent: agent as never }),
+  })
+}
+
+function promptAgent(text: string): Agent {
+  const session = Session.create(SessionId(`teacher-prompt-${String(randomCallId)}`))
+  session.append('turn/start', { turn: 1 })
+  session.append('user/message', createUserMessage({
+    content: [{ type: 'text', text }],
+    source: { kind: 'user' },
+  }), { surfaceOp: 'append' })
+  return { id: session.id, session } as Agent
+}
+
+function imageAgent(model = 'vision'): Agent {
+  const session = Session.create(SessionId(`teacher-image-${String(randomCallId)}`))
+  return { id: session.id, session, options: { provider: 'test', model } } as Agent
+}
+
+let randomCallId = 0
 
 const contexts: Context[] = []
 const temporaryRoots: string[] = []
@@ -66,6 +138,450 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
+  it('registers ordinary-conversation tools and applies daily, timetable, roster, and score mutations', async () => {
+    const b = await harness()
+    contexts.push(b.ctx)
+    expect(b.ctx.tools.schemas().map(tool => tool.name)).toEqual(expect.arrayContaining([
+      'teacher_workbench_read',
+      'teacher_daily_management',
+      'teacher_timetable',
+      'teacher_student_roster',
+      'teacher_score_analysis',
+      'teacher_question_workbench',
+      'teacher_question_image_read',
+    ]))
+
+    const rosterClass = await callTool(b.ctx, 'teacher_student_roster', {
+      action: 'save_class', data: { name: '高一（1）班', grade: '高一', subject: '数学' },
+    })
+    expect(rosterClass.isError).toBe(false)
+    const rosterClassId = (rosterClass.value as { createdIds: string[] }).createdIds[0]!
+    const imported = await callTool(b.ctx, 'teacher_student_roster', {
+      action: 'import_students',
+      data: {
+        classId: rosterClassId,
+        students: [
+          { name: '张三', studentNumber: '001', gender: '男', extras: { 特长: '绘画' } },
+          { name: '李四', studentNumber: '002' },
+        ],
+      },
+    })
+    const studentIds = (imported.value as { createdIds: string[] }).createdIds
+    expect(studentIds).toHaveLength(2)
+    const temporaryStudent = await callTool(b.ctx, 'teacher_student_roster', {
+      action: 'save_student', data: { classId: rosterClassId, name: '临时学生', studentNumber: '003' },
+    })
+    const temporaryStudentId = (temporaryStudent.value as { createdIds: string[] }).createdIds[0]!
+    await callTool(b.ctx, 'teacher_student_roster', {
+      action: 'save_student', data: { id: temporaryStudentId, classId: rosterClassId, name: '临时学生（已核对）', studentNumber: '003' },
+    })
+    await callTool(b.ctx, 'teacher_student_roster', { action: 'delete_student', data: { id: temporaryStudentId } })
+    await callTool(b.ctx, 'teacher_score_analysis', {
+      action: 'save_exam',
+      data: {
+        classId: rosterClassId,
+        name: '期中考试',
+        date: '2026-08-22',
+        entries: [
+          { studentNumber: '001', scores: { 数学: 98 } },
+          { studentName: '李四', scores: { 数学: 91 } },
+        ],
+      },
+    })
+    const timetableClass = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'save_class', data: { view: 'week', name: '高一（1）班', grade: '高一' },
+    })
+    expect(timetableClass.value).toMatchObject({ confirmation: { section: 'timetable', view: 'week' } })
+    const timetableClassId = (timetableClass.value as { createdIds: string[] }).createdIds[0]!
+    const timetableImport = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'import_entries',
+      data: {
+        view: 'week',
+        entries: [{
+          classId: timetableClassId,
+          className: '高一（1）班',
+          kind: 'lesson', weekday: 1, period: 1, subject: '语文', teacherName: '王老师',
+        }],
+      },
+    })
+    expect(timetableImport.value).toMatchObject({
+      summary: 'Imported 1 week timetable entries',
+      confirmation: { view: 'week', classIds: [timetableClassId] },
+    })
+    const savedEntry = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'save_entry',
+      data: {
+        view: 'grade', className: '高一年级', kind: 'morningStudy',
+        weekday: 2, period: 1, subject: '英语早读', startTime: '07:30', endTime: '08:00',
+      },
+    })
+    expect(savedEntry.value).toMatchObject({ confirmation: { view: 'grade' } })
+    const savedEntryId = (savedEntry.value as { createdIds: string[] }).createdIds.at(-1)!
+    const autoTimetableClassId = (savedEntry.value as { createdIds: string[] }).createdIds[0]!
+    await callTool(b.ctx, 'teacher_timetable', { action: 'delete_entry', data: { id: savedEntryId } })
+    await callTool(b.ctx, 'teacher_timetable', { action: 'delete_class', data: { id: autoTimetableClassId } })
+    const todo = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo',
+      data: { title: '批改作业', dueAt: '2026-08-22T18:30', color: 'orange' },
+    }, promptAgent('重要：批改作业'))
+    const todoId = (todo.value as { createdIds: string[] }).createdIds[0]!
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { id: todoId, title: '批改数学作业', completed: true },
+    })
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_calendar_item', data: { date: '2026-08-23', time: '09:00', title: '教研会' },
+    }, promptAgent('日历：8月23日教研会'))
+    const note = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note', data: { content: '联系家长' },
+    }, promptAgent('备忘录：联系家长'))
+    const noteId = (note.value as { createdIds: string[] }).createdIds[0]!
+    const category = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_ledger_category', data: { name: '班费' },
+    }, promptAgent('账单：新增班费分类'))
+    const categoryId = (category.value as { createdIds: string[] }).createdIds[0]!
+    const ledger = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_ledger_entry',
+      data: { categoryId, description: '打印材料', amountCents: 1250, occurredAt: '2026-08-22T10:00' },
+    }, promptAgent('账单：打印材料12.5元'))
+    const ledgerId = (ledger.value as { createdIds: string[] }).createdIds[0]!
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'import_calendar_items',
+      data: { items: [{ date: '2026-08-24', title: '升旗仪式' }, { date: '2026-08-25', time: '14:00', title: '集体备课' }] },
+    }, promptAgent('日历：导入升旗仪式和集体备课'))
+    const read = await callTool(b.ctx, 'teacher_workbench_read', { section: 'scores', class_id: rosterClassId })
+    expect(read.value).toMatchObject({
+      classes: [{ id: rosterClassId }],
+      students: [{ name: '张三' }, { name: '李四' }],
+      exams: [{ name: '期中考试', entries: [{ scores: { 数学: 98 } }, { scores: { 数学: 91 } }] }],
+    })
+    const daily = await callTool(b.ctx, 'teacher_workbench_read', { section: 'daily' })
+    const calendarId = (daily.value as { calendarItems: Array<{ id: string; title: string }> }).calendarItems.find(item => item.title === '教研会')!.id
+    await callTool(b.ctx, 'teacher_daily_management', { action: 'delete_calendar_item', data: { id: calendarId } })
+    await callTool(b.ctx, 'teacher_daily_management', { action: 'delete_ledger_entry', data: { id: ledgerId } })
+    await callTool(b.ctx, 'teacher_daily_management', { action: 'delete_ledger_category', data: { id: categoryId } })
+    await callTool(b.ctx, 'teacher_daily_management', { action: 'delete_note', data: { id: noteId } })
+    await callTool(b.ctx, 'teacher_daily_management', { action: 'delete_todo', data: { id: todoId } })
+    const examId = (read.value as { exams: Array<{ id: string }> }).exams[0]!.id
+    await callTool(b.ctx, 'teacher_score_analysis', { action: 'delete_exam', data: { id: examId } })
+    await callTool(b.ctx, 'teacher_timetable', { action: 'delete_class', data: { id: timetableClassId } })
+    await callTool(b.ctx, 'teacher_student_roster', { action: 'delete_class', data: { id: rosterClassId } })
+  })
+
+  it('validates every new daily destination against the current user message', async () => {
+    const b = await harness()
+    contexts.push(b.ctx)
+    const tool = b.ctx.tools.schemas().find(candidate => candidate.name === 'teacher_daily_management')
+    expect(tool?.description).toContain('If a new item has no routing word')
+
+    const unclassified = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { title: '明天必须处理', category: 'urgent' },
+    }, promptAgent('明天必须处理'))
+    expect(unclassified.isError).toBe(true)
+
+    const legacyNoteKeyword = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note', data: { content: '旧关键词' },
+    }, promptAgent('随记：旧关键词'))
+    expect(legacyNoteKeyword.isError).toBe(true)
+
+    const speechConfusion = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note', data: { content: '语音误识别' },
+    }, promptAgent('随机：语音误识别'))
+    expect(speechConfusion.isError).toBe(true)
+
+    const noteAsTodo = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { title: '买牛奶' },
+    }, promptAgent('备忘录：买牛奶'))
+    expect(noteAsTodo.isError).toBe(true)
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note', data: { content: '买牛奶' },
+    }, promptAgent('备忘录：买牛奶'))
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note', data: { content: '联系家长' },
+    }, promptAgent('备忘：联系家长'))
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { title: '明确今日待办' },
+    }, promptAgent('待办：明确今日待办'))
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { title: '明确紧急事项' },
+    }, promptAgent('紧急：明确紧急事项'))
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { title: '明确重要事项' },
+    }, promptAgent('重要：明确重要事项'))
+
+    expect((await b.service.read({})).value.state.dailyTodos.map(item => item.category)).toEqual([
+      'today', 'urgent', 'important',
+    ])
+    expect((await b.service.read({})).value.state.quickNotes.map(item => item.content)).toEqual(['买牛奶', '联系家长'])
+  })
+
+  it('persists agent-created reminders only for notification targets returned by the daily read', async () => {
+    const b = await harness()
+    contexts.push(b.ctx)
+    const gateway: MobileNotificationGateway = {
+      listTargets: async () => [{
+        channel: 'weixin',
+        botId: 'weixin-primary' as never,
+        label: '家用微信机器人',
+        connected: true,
+      }],
+      send: async () => undefined,
+    }
+    b.ctx.provide('mobileNotifications', gateway)
+
+    const before = await callTool(b.ctx, 'teacher_workbench_read', { section: 'daily' })
+    expect(before.value).toMatchObject({
+      notificationTargets: [{ channel: 'weixin', botId: 'weixin-primary', label: '家用微信机器人' }],
+    })
+
+    const saved = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo',
+      data: {
+        title: '吃饭',
+        dueAt: '2099-08-22T12:45',
+        reminder: {
+          channel: 'weixin',
+          botId: 'weixin-primary',
+          rule: { kind: 'once', minutesBefore: 0 },
+        },
+      },
+    }, promptAgent('待办：吃饭，并用微信机器人提醒'))
+    expect(saved.isError).toBe(false)
+    const todoId = (saved.value as { createdIds: string[] }).createdIds[0]!
+    expect((await b.service.read({})).value.state.dailyTodos).toMatchObject([{
+      id: todoId,
+      reminder: {
+        channel: 'weixin',
+        botId: 'weixin-primary',
+        botLabel: '家用微信机器人',
+        dueAtUtc: new Date('2099-08-22T12:45').toISOString(),
+        rule: { kind: 'once', minutesBefore: 0 },
+      },
+    }])
+
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_note',
+      data: {
+        content: '联系家长',
+        remindAt: '2099-08-22T18:00',
+        reminder: {
+          channel: 'weixin',
+          botId: 'weixin-primary',
+          rule: { kind: 'once', minutesBefore: 10 },
+        },
+      },
+    }, promptAgent('备忘录：联系家长，并用微信机器人提醒'))
+    const categoryId = (await b.service.read({})).value.state.ledgerCategories[0]!.id
+    await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_ledger_entry',
+      data: {
+        categoryId,
+        description: '续交车险',
+        amountCents: 120_000,
+        occurredAt: '2099-08-01T10:00',
+        remindAt: '2099-08-23T18:00',
+        reminder: {
+          channel: 'weixin',
+          botId: 'weixin-primary',
+          rule: { kind: 'repeat', everyMinutes: 60 },
+        },
+      },
+    }, promptAgent('账本：记录续交车险，并用微信机器人重复提醒'))
+    expect((await b.service.read({})).value.state).toMatchObject({
+      quickNotes: [{
+        remindAt: '2099-08-22T18:00',
+        reminder: { botId: 'weixin-primary', rule: { kind: 'once', minutesBefore: 10 } },
+      }],
+      ledgerEntries: [{
+        remindAt: '2099-08-23T18:00',
+        reminder: { botId: 'weixin-primary', rule: { kind: 'repeat', everyMinutes: 60 } },
+      }],
+    })
+
+    const invented = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_calendar_item',
+      data: {
+        date: '2099-08-23',
+        time: '09:00',
+        title: '体检',
+        reminder: {
+          channel: 'weixin',
+          botId: 'weixin-bot',
+          rule: { kind: 'once', minutesBefore: 30 },
+        },
+      },
+    }, promptAgent('日历：体检，并用微信机器人提醒'))
+    expect(invented.isError).toBe(true)
+    expect((await b.service.read({})).value.state.calendarItems).toEqual([])
+  })
+
+  it('keeps weekly and grade timetable catalogs distinct and rejects duplicate imported slots', async () => {
+    const b = await harness()
+    contexts.push(b.ctx)
+    const gradeClass = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'save_class', data: { view: 'grade', name: '高三（11）班', grade: '高三' },
+    })
+    const gradeClassId = (gradeClass.value as { createdIds: string[] }).createdIds[0]!
+
+    const crossed = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'save_entry',
+      data: {
+        view: 'week', classId: gradeClassId, className: '高三（11）班', kind: 'lesson',
+        weekday: 1, period: 1, subject: '数学',
+      },
+    })
+    expect(crossed.isError).toBe(true)
+
+    const duplicate = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'import_entries',
+      data: {
+        view: 'week',
+        entries: [
+          { className: '高三（11）班', kind: 'lesson', weekday: 1, period: 1, subject: '数学', startTime: '08:00' },
+          { className: '高三（11）班', kind: 'lesson', weekday: 1, period: 1, subject: '语文', startTime: '14:00' },
+        ],
+      },
+    })
+    expect(duplicate.isError).toBe(true)
+
+    const imported = await callTool(b.ctx, 'teacher_timetable', {
+      action: 'import_entries',
+      data: {
+        view: 'week',
+        entries: [
+          { className: '高三（11）班', kind: 'lesson', weekday: 1, period: 1, subject: '数学', startTime: '08:00' },
+          { className: '高三（11）班', kind: 'lesson', weekday: 1, period: 5, subject: '语文', startTime: '14:00' },
+        ],
+      },
+    })
+    expect(imported.value).toMatchObject({
+      summary: 'Imported 2 week timetable entries',
+      confirmation: { section: 'timetable', view: 'week', entryIds: [expect.any(String), expect.any(String)] },
+    })
+    const document = (await b.service.read({})).value
+    expect(document.state.classes.filter(item => item.name === '高三（11）班')).toMatchObject([
+      { id: gradeClassId, usage: 'gradeTimetable' },
+      { usage: 'timetable' },
+    ])
+    const weekClass = document.state.classes.find(item => item.name === '高三（11）班' && item.usage === 'timetable')!
+    expect(document.state.timetableEntries.filter(item => item.classId === weekClass.id).map(item => item.period)).toEqual([1, 5])
+  })
+
+  it('stages uploaded PDFs as verified content-addressed workbench sources', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-workbench-source-'))
+    temporaryRoots.push(root)
+    const b = await harness(undefined, {
+      geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
+      geocodingCacheEntries: 16,
+      segmentsRoot: join(root, 'segments'),
+      studentsRoot: join(root, 'students'),
+      sourcesRoot: join(root, 'sources'),
+      generatedRoot: join(root, 'generated'),
+      maxSourceDocumentBytes: 8 * 1024 * 1024,
+      maxQuestionImageBytes: 1024 * 1024,
+      maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxTimetableSourceCharacters: 120_000,
+      maxTimetableEntries: 1_000,
+      timetableAgentTimeoutMs: 120_000,
+      timetableVisionAgentTimeoutMs: 45_000,
+      maxQuestionLayoutPages: 50,
+      questionSegmentationBatchPages: 20,
+      maxQuestionLayoutElements: 5_000,
+      maxQuestionSourceChunkCharacters: 18_000,
+      maxSegmentedQuestions: 300,
+      maxQuestionBoundarySubmissions: 3,
+      questionSegmentationAgentTimeoutMs: 120_000,
+    })
+    contexts.push(b.ctx)
+    const bytes = Uint8Array.of(37, 80, 68, 70, 45, 49)
+    const result = await b.service.stageSource({
+      name: '试卷.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: Buffer.from(bytes).toString('base64'),
+    })
+    expect(result).toMatchObject({ ok: true, value: { name: '试卷.pdf', bytes: bytes.length } })
+    if (!result.ok) throw new Error(result.error.message)
+    const hash = String(result.value.id).slice('sha256:'.length)
+    await expect(readFile(join(root, 'sources', 'objects', hash.slice(0, 2), hash))).resolves.toEqual(Buffer.from(bytes))
+  })
+
+  it('cuts a staged PDF through MinerU geometry and persists rendered question images', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-workbench-segment-source-'))
+    temporaryRoots.push(root)
+    const config: ConstructorParameters<typeof TeacherWorkbenchService>[1] = {
+      geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
+      geocodingCacheEntries: 16,
+      segmentsRoot: join(root, 'segments'),
+      studentsRoot: join(root, 'students'),
+      sourcesRoot: join(root, 'sources'),
+      generatedRoot: join(root, 'generated'),
+      maxSourceDocumentBytes: 8 * 1024 * 1024,
+      maxQuestionImageBytes: 8 * 1024 * 1024,
+      maxQuestionBatchBytes: 16 * 1024 * 1024,
+      maxTimetableSourceCharacters: 120_000,
+      maxTimetableEntries: 1_000,
+      timetableAgentTimeoutMs: 120_000,
+      timetableVisionAgentTimeoutMs: 45_000,
+      maxQuestionLayoutPages: 50,
+      questionSegmentationBatchPages: 20,
+      maxQuestionLayoutElements: 5_000,
+      maxQuestionSourceChunkCharacters: 18_000,
+      maxSegmentedQuestions: 300,
+      maxQuestionBoundarySubmissions: 3,
+      questionSegmentationAgentTimeoutMs: 120_000,
+    }
+    const b = await harness(undefined, config)
+    contexts.push(b.ctx)
+    const pdf = await PDFDocument.create()
+    pdf.addPage([200, 300]).drawText('1. question', { x: 20, y: 260, size: 16 })
+    const bytes = await pdf.save()
+    const staged = await b.service.stageSource({
+      name: 'paper.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(bytes).toString('base64'),
+    })
+    if (!staged.ok) throw new Error(staged.error.message)
+    b.ctx.provide('ocr', {
+      layoutLimits: () => ({ ok: true, value: { maxFileBytes: 8 * 1024 * 1024, maxPagesPerRequest: 4 } }),
+      layout: () => Promise.resolve({
+        ok: true,
+        value: {
+          name: 'paper.pdf', provider: 'mineru',
+          pages: [{ pageIndex: 0, width: 200, height: 300, elements: [{ type: 'text', text: '1. question', bbox: [20, 20, 180, 80] }] }],
+        },
+      }),
+    } as never)
+    vi.spyOn(b.service, 'segmentQuestions').mockResolvedValue({
+      ok: true,
+      value: {
+        groupCount: 1,
+        maxSaveBatchBytes: 16 * 1024 * 1024,
+        questions: [{
+          questionNo: 1,
+          headPageIndex: 0,
+          groupIndex: 0,
+          regions: [{ pageIndex: 0, left: 0, top: 0, right: 200, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+        }],
+      },
+    })
+    const cut = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'segment_pdf',
+      data: {
+        sourceId: staged.value.id,
+        sourceName: 'paper.pdf',
+        pageRange: '1',
+        batchName: '自动切题',
+        padding: 8,
+      },
+    }, { id: 'session-1' })
+    expect(cut.isError).toBe(false)
+    const result = cut.value as { batchId: TeacherQuestionBatchId; questionCount: number; groupCount: number }
+    expect(result).toMatchObject({ questionCount: 1, groupCount: 1 })
+    const document = (await b.service.read({})).value
+    expect(document.state.questionBatches).toMatchObject([{
+      id: result.batchId,
+      name: '自动切题',
+      images: [{ questionNo: 1, mediaType: 'image/png' }],
+    }])
+  })
+
   it('ships the reference headteacher templates and rejects cross-class seating occupants', () => {
     expect(INITIAL_TEACHER_WORKBENCH_STATE.noticeTemplates).toHaveLength(8)
     expect(INITIAL_TEACHER_WORKBENCH_STATE.templates.filter(item => item.kind === 'class')).toHaveLength(3)
@@ -108,6 +624,9 @@ describe('TeacherWorkbenchService', () => {
       geocodingCacheEntries: 16,
       segmentsRoot: join(root, 'segments'),
       studentsRoot: join(root, 'students'),
+      sourcesRoot: join(root, 'sources'),
+      generatedRoot: join(root, 'generated'),
+      maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
       maxTimetableSourceCharacters: 120_000,
@@ -352,6 +871,7 @@ describe('TeacherWorkbenchService', () => {
         entries: [{ studentId, scores: { '数学': 90 } }],
       }],
       questionBatches: [],
+      questionLibraryFolders: [],
       questionFolders: [],
       questionAssignments: [],
     }
@@ -396,6 +916,9 @@ describe('TeacherWorkbenchService', () => {
       geocodingCacheEntries: 16,
       segmentsRoot: join(root, 'segments'),
       studentsRoot: join(root, 'students'),
+      sourcesRoot: join(root, 'sources'),
+      generatedRoot: join(root, 'generated'),
+      maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
       maxTimetableSourceCharacters: 120_000,
@@ -413,6 +936,34 @@ describe('TeacherWorkbenchService', () => {
     contexts.push(b.ctx)
     const owningClass = { ...classItem('class-a', '高一（1）班'), academicYear: '2026' }
     const studentId = 'student-a' as TeacherStudentId
+    const sourceImages = await Promise.all([
+      { questionNo: 10, color: '#0000ff' },
+      { questionNo: 2, color: '#00ff00' },
+      { questionNo: 1, color: '#ff0000' },
+    ].map(async item => ({
+      ...item,
+      bytes: await sharp({ create: { width: 24, height: 16, channels: 3, background: item.color } }).png().toBuffer(),
+    })))
+    const bytes = sourceImages[0]!.bytes
+    const desktopFolder = join(root, '桌面图片')
+    await mkdir(join(desktopFolder, '子目录'), { recursive: true })
+    await writeFile(join(desktopFolder, '第10题.png'), sourceImages[0]!.bytes)
+    await writeFile(join(desktopFolder, '子目录', '第2题.png'), sourceImages[1]!.bytes)
+    const generatedFolder = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'generate_folder_document',
+      data: { kind: 'ppt', directoryPath: desktopFolder },
+    })
+    expect(generatedFolder.value).toMatchObject({ summary: 'Generated folder document' })
+    const generatedFolderPath = (generatedFolder.value as { outputPath: string }).outputPath
+    expect(generatedFolderPath).toContain('桌面图片.pptx')
+    const generatedFolderParts = unzipSync(await readFile(generatedFolderPath))
+    expect(Object.keys(generatedFolderParts).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(2)
+    const generatedFolderColors = await Promise.all([1, 2].map(async (slideNo) => {
+      const stats = await sharp(Buffer.from(generatedFolderParts[`ppt/media/image-${String(slideNo)}-1.png`]!)).stats()
+      return stats.channels.slice(0, 3).map(channel => Math.round(channel.mean))
+    }))
+    expect(generatedFolderColors).toEqual([[0, 255, 0], [0, 0, 255]])
+
     const seeded = await b.service.write({
       expectedRevision: 0,
       state: {
@@ -428,15 +979,6 @@ describe('TeacherWorkbenchService', () => {
       },
     })
     expect(seeded.ok).toBe(true)
-    const sourceImages = await Promise.all([
-      { questionNo: 10, color: '#0000ff' },
-      { questionNo: 2, color: '#00ff00' },
-      { questionNo: 1, color: '#ff0000' },
-    ].map(async item => ({
-      ...item,
-      bytes: await sharp({ create: { width: 24, height: 16, channels: 3, background: item.color } }).png().toBuffer(),
-    })))
-    const bytes = sourceImages[0]!.bytes
     const saved = await b.service.saveQuestionBatch({
       name: '期中试卷',
       sourceName: 'math.pdf',
@@ -452,24 +994,95 @@ describe('TeacherWorkbenchService', () => {
     })
     expect(saved.ok).toBe(true)
     if (!saved.ok) throw new Error(saved.error.message)
+    const textMark = await sharp({ create: { width: 2, height: 3, channels: 3, background: '#000000' } }).png().toBuffer()
+    const editableBytes = await sharp({ create: { width: 20, height: 16, channels: 3, background: '#ffffff' } })
+      .composite([{ input: textMark, left: 9, top: 7 }])
+      .png()
+      .toBuffer()
+    const editable = await b.service.saveQuestionBatch({
+      name: '图片编辑测试',
+      sourceName: 'edit.png',
+      pageRange: '',
+      images: [{
+        questionNo: 1,
+        fileName: '编辑题.png',
+        mediaType: 'image/png',
+        width: 20,
+        height: 16,
+        contentBase64: editableBytes.toString('base64'),
+      }],
+    })
+    if (!editable.ok) throw new Error(editable.error.message)
+    const editableBatchId = editable.value.batchId
+    if (editableBatchId === undefined) throw new Error('editable question batch id was not returned')
+    const editableBatch = editable.value.document.state.questionBatches.find(item => item.id === editableBatchId)!
+    const editableImage = editableBatch.images[0]!
+    const refusedInspection = await callTool(b.ctx, 'teacher_question_image_read', {
+      kind: 'batch', id: editableImage.id,
+    }, imageAgent('text-only'))
+    expect(refusedInspection.isError).toBe(true)
+    expect(refusedInspection.content.find(block => block.type === 'text')?.text)
+      .toContain('does not declare image input')
+    const inspected = await callTool(b.ctx, 'teacher_question_image_read', {
+      kind: 'batch', id: editableImage.id,
+    }, imageAgent())
+    expect(inspected).toMatchObject({
+      isError: false,
+      value: { source: { fileName: '编辑题.png', width: 20, height: 16 } },
+      content: [{ type: 'text' }, { type: 'image', attachment: { width: 20, height: 16 } }],
+    })
+    const invalidErase = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'erase_image_regions',
+      data: { kind: 'batch', id: editableImage.id, regions: [{ left: 18, top: 12, width: 4, height: 4 }] },
+    })
+    expect(invalidErase.isError).toBe(true)
+    await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: editableImage.id } }))
+      .resolves.toMatchObject({ ok: true, value: { contentBase64: editableBytes.toString('base64') } })
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'erase_image_regions',
+      data: { kind: 'batch', id: editableImage.id, regions: [{ left: 7, top: 5, width: 6, height: 8 }] },
+    })).resolves.toMatchObject({ isError: false })
+    const erasedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: editableImage.id } })
+    if (!erasedImage.ok) throw new Error(erasedImage.error.message)
+    const erasedStats = await sharp(Buffer.from(erasedImage.value.contentBase64, 'base64'))
+      .extract({ left: 7, top: 5, width: 6, height: 8 })
+      .stats()
+    expect(erasedStats.channels.slice(0, 3).every(channel => channel.mean > 250)).toBe(true)
     const batch = saved.value.document.state.questionBatches[0]!
     const image = batch.images[0]!
     await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: image.id } }))
       .resolves.toMatchObject({ ok: true, value: { width: 24, height: 16 } })
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'rotate_image', data: { kind: 'batch', id: image.id, degrees: 90 },
+    })).resolves.toMatchObject({ isError: false })
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'crop_image', data: { kind: 'batch', id: image.id, left: 0, top: 0, width: 12, height: 12 },
+    })).resolves.toMatchObject({ isError: false })
 
     const folderId = 'folder-a' as TeacherQuestionFolderId
+    const editedDocument = (await b.service.read({})).value
     const withFolder = await b.service.write({
-      expectedRevision: saved.value.document.revision,
+      expectedRevision: editedDocument.revision,
       state: {
-        ...saved.value.document.state,
+        ...editedDocument.state,
         questionFolders: [{ id: folderId, studentId, name: '第一次作业', createdAt: 2, updatedAt: 2 }],
       },
     })
     expect(withFolder.ok).toBe(true)
+    const nestedFolder = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'create_folder', data: { studentId, parentId: folderId, name: '错题' },
+    })
+    const nestedFolderId = (nestedFolder.value as { createdIds: string[] }).createdIds[0]!
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'delete_folder', data: { id: nestedFolderId },
+    })).resolves.toMatchObject({ isError: false })
     const assigned = await b.service.assignQuestions({ studentId, folderId, imageIds: batch.images.map(item => item.id) })
     expect(assigned.ok).toBe(true)
     if (!assigned.ok) throw new Error(assigned.error.message)
     expect(assigned.value.document.state.questionAssignments).toHaveLength(3)
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'assign_questions', data: { studentId, folderId, imageIds: [image.id] },
+    })).resolves.toMatchObject({ isError: false })
     const nestedAssignment = assigned.value.document.state.questionAssignments[0]!
     expect(nestedAssignment.folderId).toBe(folderId)
     expect(nestedAssignment.relativePath.split(/[\\/]/u).slice(0, 4)).toEqual(['2026', '高一(1)班', '张同学', '第一次作业'])
@@ -479,11 +1092,14 @@ describe('TeacherWorkbenchService', () => {
       assignmentIds: [nestedAssignment.id],
     })
     expect(staged).toMatchObject({ ok: true, value: { studentId, imageCount: 1 } })
+    if (!staged.ok) throw new Error(staged.error.message)
+    const stagedAssignment = staged.value.document.state.questionAssignments.find(item => item.id === nestedAssignment.id)
+    expect(stagedAssignment).toMatchObject({ temporarySaveCount: 1 })
+    expect(stagedAssignment?.lastTemporarySavedAt).toEqual(expect.any(Number))
     await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId] }))
       .resolves.toMatchObject({ ok: true, value: [{ studentId, imageCount: 1 }] })
     const temporaryPpt = await b.service.generateStudentDocuments({
       kind: 'ppt',
-      source: 'temporary',
       students: [{ studentId, title: '', includeName: false, includeDate: false }],
     })
     expect(temporaryPpt).toMatchObject({ ok: true, value: { artifacts: [{ fileName: '张同学.pptx' }], skipped: [] } })
@@ -598,6 +1214,7 @@ describe('TeacherWorkbenchService', () => {
     expect(uploaded).toMatchObject({ ok: true, value: { fileName: '本地题目.docx' } })
     const documents = await b.service.generateStudentDocuments({
       kind: 'word',
+      source: 'assigned',
       students: [{ studentId, title: '课后练习', includeName: true, includeDate: true }],
     })
     expect(documents).toMatchObject({
@@ -607,10 +1224,42 @@ describe('TeacherWorkbenchService', () => {
     if (!documents.ok) throw new Error(documents.error.message)
     expect(Buffer.from(documents.value.artifacts[0]!.contentBase64, 'base64').subarray(0, 2).toString()).toBe('PK')
 
-    const deleted = await b.service.deleteQuestionBatch({ batchId: batch.id })
-    expect(deleted).toMatchObject({
-      ok: true,
-      value: { document: { state: { questionBatches: [], questionAssignments: [] } } },
+    const generated = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'generate_document',
+      data: { kind: 'word', title: '工具生成', targets: [{ kind: 'batch', id: image.id }] },
+    })
+    expect(generated.value).toMatchObject({ summary: 'Generated question document' })
+    expect((generated.value as { outputPath: string }).outputPath).toContain('generated')
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [nestedAssignment.id] }))
+      .resolves.toMatchObject({ ok: true, value: { studentId, imageCount: 1 } })
+    const generatedTemporaryStudents = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'generate_student_documents',
+      data: { kind: 'word', students: [{ studentId }] },
+    })
+    const generatedTemporaryPath = (generatedTemporaryStudents.value as { outputPaths: string[] }).outputPaths[0]!
+    const generatedTemporaryParts = unzipSync(await readFile(generatedTemporaryPath))
+    const generatedTemporaryXml = Buffer.from(generatedTemporaryParts['word/document.xml']!).toString('utf8')
+    expect([...generatedTemporaryXml.matchAll(/r:embed=/gu)]).toHaveLength(1)
+    expect(generatedTemporaryXml).not.toContain('张同学')
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [] })
+    const generatedStudents = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'generate_student_documents',
+      data: { kind: 'ppt', source: 'assigned', students: [{ studentId }] },
+    })
+    expect((generatedStudents.value as { outputPaths: string[] }).outputPaths[0]).toContain('generated')
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'delete_image', data: { kind: 'assignment', id: nestedAssignment.id },
+    })).resolves.toMatchObject({ isError: false })
+
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'delete_batch', data: { batchId: batch.id },
+    })).resolves.toMatchObject({ isError: false })
+    await expect(callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'delete_batch', data: { batchId: editableBatch.id },
+    })).resolves.toMatchObject({ isError: false })
+    await expect(b.service.read({})).resolves.toMatchObject({
+      value: { state: { questionBatches: [], questionAssignments: [] } },
     })
   })
 
@@ -621,6 +1270,38 @@ describe('TeacherWorkbenchService', () => {
 })
 
 describe('teacher workbench schema relationships', () => {
+  it('rejects memo and ledger reminders without their own local deadline', () => {
+    const reminder = {
+      channel: 'weixin' as const,
+      botId: 'bot-a' as never,
+      botLabel: '机器人',
+      dueAtUtc: '2099-08-22T10:00:00.000Z',
+      rule: { kind: 'once' as const, minutesBefore: 0 },
+      configuredAt: 1,
+      lastOccurrenceAt: '',
+    }
+    const categoryId = 'ledger-category-a' as TeacherLedgerCategoryId
+    const result = teacherWorkbenchStateSchema.safeParse({
+      ...INITIAL_TEACHER_WORKBENCH_STATE,
+      quickNotes: [{
+        id: 'note-a', content: '联系家长', reminder, createdAt: 1, updatedAt: 1,
+      }],
+      ledgerCategories: [{ id: categoryId, name: '保险保费', createdAt: 1 }],
+      ledgerEntries: [{
+        id: 'ledger-a', categoryId, description: '续交车险', amountCents: 120_000,
+        occurredAt: '2099-08-01T10:00', reminder, createdAt: 1, updatedAt: 1,
+      }],
+    })
+
+    expect(result.success).toBe(false)
+    if (!result.success) {
+      expect(result.error.issues.map(issue => issue.message)).toEqual(expect.arrayContaining([
+        'memo reminder requires a local deadline',
+        'ledger reminder requires a local deadline',
+      ]))
+    }
+  })
+
   it('rejects duplicate identities and cross-class exam entries', () => {
     const classA = classItem('class-a', 'A班')
     const classB = classItem('class-b', 'B班')
@@ -676,7 +1357,7 @@ describe('teacher workbench schema relationships', () => {
       id: 'todo-a', title: '待办', dueAt: '', completed: false,
       category: 'today', color: 'blue', createdAt: 0, updatedAt: 0,
     }
-    const note = { id: 'note-a', content: '随记', createdAt: 0, updatedAt: 0 }
+    const note = { id: 'note-a', content: '备忘录', createdAt: 0, updatedAt: 0 }
     const ledgerCategory = { id: 'ledger-category-a', name: '保险保费', createdAt: 0 }
     const ledgerEntry = {
       id: 'ledger-entry-a', categoryId: 'missing-category', description: '车险', amountCents: 100,
@@ -704,6 +1385,7 @@ describe('teacher workbench schema relationships', () => {
       seatingLayouts: [],
       exams: [exam, exam],
       questionBatches: [],
+      questionLibraryFolders: [],
       questionFolders: [],
       questionAssignments: [],
     })
@@ -773,6 +1455,7 @@ describe('teacher workbench schema relationships', () => {
       students: [student('student-a'), student('student-b')],
       questionBatches: [{
         id: 'batch-a',
+        folderId: 'missing-library-folder',
         name: '试卷',
         sourceName: 'paper.pdf',
         pageRange: '',
@@ -782,6 +1465,13 @@ describe('teacher workbench schema relationships', () => {
           width: 1, height: 1, createdAt: 0, updatedAt: 0,
         }],
       }],
+      questionLibraryFolders: [
+        { id: 'library-orphan', parentId: 'missing-library-parent', name: '孤立', createdAt: 0, updatedAt: 0 },
+        { id: 'library-duplicate-a', name: '模拟卷', createdAt: 0, updatedAt: 0 },
+        { id: 'library-duplicate-b', name: '模拟卷', createdAt: 0, updatedAt: 0 },
+        { id: 'library-cycle-a', parentId: 'library-cycle-b', name: '循环A', createdAt: 0, updatedAt: 0 },
+        { id: 'library-cycle-b', parentId: 'library-cycle-a', name: '循环B', createdAt: 0, updatedAt: 0 },
+      ],
       questionFolders: [
         folder('folder-unknown-student', 'missing-student', '未知学生'),
         folder('folder-orphan', 'student-a', '孤立', 'missing-parent'),
@@ -795,11 +1485,11 @@ describe('teacher workbench schema relationships', () => {
       questionAssignments: [{
         id: 'assignment-a', studentId: 'student-a', sourceImageId: 'image-a', folderId: 'folder-b',
         fileName: '1.png', relativePath: 'student-a/1.png', mediaType: 'image/png',
-        width: 1, height: 1, createdAt: 0, updatedAt: 0,
+        width: 1, height: 1, temporarySaveCount: 0, createdAt: 0, updatedAt: 0,
       }, {
         id: 'assignment-b', studentId: 'student-a', sourceImageId: 'image-a', folderId: 'missing-folder',
         fileName: '1.png', relativePath: 'student-a/2.png', mediaType: 'image/png',
-        width: 1, height: 1, createdAt: 0, updatedAt: 0,
+        width: 1, height: 1, temporarySaveCount: 0, createdAt: 0, updatedAt: 0,
       }],
     })
     expect(result.success).toBe(false)
@@ -812,6 +1502,10 @@ describe('teacher workbench schema relationships', () => {
         'folder hierarchy contains a cycle',
         'question folder belongs to another student',
         'unknown question folder',
+        'unknown parent library folder',
+        'duplicate sibling library folder',
+        'library folder hierarchy contains a cycle',
+        'unknown question-library folder',
       ]))
     }
   })

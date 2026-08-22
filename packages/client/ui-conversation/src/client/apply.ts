@@ -49,7 +49,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr', 'settingsScope',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr',
+  'remote.teacherWorkbench', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
 
@@ -451,7 +452,12 @@ export function apply(ctx: Context): void {
   // registers itself as `conversation` and lives on its own child fiber.
   // Presentation registrants depend directly on their slot declarations;
   // this service remains only where conversation actions are required.
-  ctx.plugin(ConversationController, { input: inputHub, blocks: composerBlocks, ocr: ctx.remote.ocr })
+  ctx.plugin(ConversationController, {
+    input: inputHub,
+    blocks: composerBlocks,
+    ocr: ctx.remote.ocr,
+    workbench: ctx.remote.teacherWorkbench,
+  })
 
   // The plan strip rides the input dock above the queue rows (same posture).
   ctx.plugin(todoDockEntry)

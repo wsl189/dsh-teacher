@@ -102,6 +102,8 @@ interface PromptDocumentContext {
   readonly name: string
   readonly markdown: string
   readonly truncated: boolean
+  readonly sourceId?: string
+  readonly sourceMediaType?: string
 }
 
 /** Generated OCR Remote subset consumed by conversation uploads. */
@@ -111,6 +113,21 @@ export interface ConversationOcrRemote {
     mediaType: string
     contentBase64: string
   }): Promise<RemoteResult<OcrExtractResult>>
+}
+
+/** Generated teacher-workbench Remote subset used to retain source PDFs. */
+export interface ConversationWorkbenchRemote {
+  stageSource(request: {
+    name: string
+    mediaType: string
+    contentBase64: string
+  }): Promise<RemoteResult<{
+    ok: true
+    value: { id: string; name: string; mediaType: string; bytes: number }
+  } | {
+    ok: false
+    error: { code: string; message: string }
+  }>>
 }
 
 /** Unsupported browser-declared image type, localized by the UI boundary. */
@@ -151,6 +168,7 @@ export class ConversationController extends Service implements IConversation {
     input: SessionInputResolver
     blocks: ComposerBlocks
     ocr: ConversationOcrRemote
+    workbench: ConversationWorkbenchRemote
   }) {
     super(ctx, 'conversation')
     this.input = config.input
@@ -499,11 +517,21 @@ export class ConversationController extends Service implements IConversation {
 
   private async extractDocument(id: DraftDocumentId, entry: DraftDocumentEntry): Promise<void> {
     try {
-      const carried = await this.config.ocr.extract({
-        name: entry.file.name,
-        mediaType: entry.file.type,
-        contentBase64: bytesToBase64(new Uint8Array(await entry.file.arrayBuffer())),
-      })
+      const contentBase64 = bytesToBase64(new Uint8Array(await entry.file.arrayBuffer()))
+      const [carried, staged] = await Promise.all([
+        this.config.ocr.extract({
+          name: entry.file.name,
+          mediaType: entry.file.type,
+          contentBase64,
+        }),
+        isPdf(entry.file)
+          ? this.config.workbench.stageSource({
+            name: entry.file.name,
+            mediaType: entry.file.type || 'application/pdf',
+            contentBase64,
+          })
+          : Promise.resolve(undefined),
+      ])
       const result = carried.ok
         ? carried.value
         : { ok: false as const, error: { message: carried.error.message } }
@@ -512,7 +540,27 @@ export class ConversationController extends Service implements IConversation {
         entry.public = { ...entry.public, status: 'error', error: result.error.message }
       } else {
         const { name, markdown, truncated } = result.value
-        entry.context = { name, markdown, truncated }
+        let source: { id: string; name: string; mediaType: string; bytes: number } | undefined
+        if (staged !== undefined) {
+          if (!staged.ok) {
+            entry.public = { ...entry.public, status: 'error', error: staged.error.message }
+            this.publishDocuments(entry.sessionId)
+            return
+          }
+          const stagedResult = staged.value
+          if (!stagedResult.ok) {
+            entry.public = { ...entry.public, status: 'error', error: stagedResult.error.message }
+            this.publishDocuments(entry.sessionId)
+            return
+          }
+          source = stagedResult.value
+        }
+        entry.context = {
+          name,
+          markdown,
+          truncated,
+          ...(source === undefined ? {} : { sourceId: source.id, sourceMediaType: source.mediaType }),
+        }
         entry.public = { ...entry.public, name, status: 'ready', truncated }
       }
     } catch (error) {
@@ -525,6 +573,10 @@ export class ConversationController extends Service implements IConversation {
     }
     this.publishDocuments(entry.sessionId)
   }
+}
+
+function isPdf(file: File): boolean {
+  return file.type === 'application/pdf' || file.name.toLocaleLowerCase().endsWith('.pdf')
 }
 
 function imageMediaType(value: string): ImageMediaType {

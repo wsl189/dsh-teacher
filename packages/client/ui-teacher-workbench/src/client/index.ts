@@ -90,11 +90,12 @@ export function apply(ctx: ClientContext): void {
 
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
     hooks: { workbench: controller, teacherSettings: settings },
-    ensure: () => controller.ensure(),
+    ensure: () => controller.refresh(),
     subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),
     loadWeather: (location, signal) => fetchTeacherWeather(location, ctx.remote.teacherWorkbench, signal),
+    listNotificationTargets: () => controller.listNotificationTargets(),
     saveDailyTodo: input => controller.saveDailyTodo(input),
     toggleDailyTodo: id => controller.toggleDailyTodo(id),
     deleteDailyTodo: id => controller.deleteDailyTodo(id),
@@ -177,6 +178,9 @@ export function apply(ctx: ClientContext): void {
     importStudents: (classId, rows) => controller.importStudents(classId, rows),
     deleteStudent: id => controller.deleteStudent(id),
     createQuestionFolder: input => controller.createQuestionFolder(input),
+    createQuestionLibraryFolder: input => controller.createQuestionLibraryFolder(input),
+    renameQuestionLibraryFolder: (id, name) => controller.renameQuestionLibraryFolder(id, name),
+    deleteQuestionLibraryFolder: id => controller.deleteQuestionLibraryFolder(id),
     deleteQuestionFolder: id => controller.deleteQuestionFolder(id),
     saveResource: input => controller.saveResource(input),
     deleteResource: id => controller.deleteResource(id),
@@ -209,8 +213,8 @@ export function apply(ctx: ClientContext): void {
     setSetting: (field, value) => settings.set(field, value),
   })
 
-  ctx.slots.inject('sidebar.footer.action', () => ctx.slots.register({
-    name: 'sidebar.footer.action',
+  ctx.slots.inject('sidebar.primary.section', () => ctx.slots.register({
+    name: 'sidebar.primary.section',
     id: 'teacher-workbench',
     order: 10,
     locale: NS,

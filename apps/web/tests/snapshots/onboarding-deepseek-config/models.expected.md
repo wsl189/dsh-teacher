@@ -19,6 +19,9 @@
     - text: 关闭
   - heading "模型" [level=2]
   - paragraph: 填入各提供方的 API 密钥即可使用其模型。
+  - text: 工具模型
+  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
+  - combobox "工具模型"
   - list:
     - listitem:
       - text: DeepSeek
@@ -40,7 +43,7 @@
           - textbox "显示名称 1":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Pro
-          - button "容量 1":
+          - button "模型详情 1":
             - img
           - button "删除模型 1":
             - img
@@ -50,7 +53,7 @@
           - textbox "显示名称 2":
             - /placeholder: 显示名称
             - text: DeepSeek-V4-Flash-Vision-Exp
-          - button "容量 2":
+          - button "模型详情 2":
             - img
           - button "删除模型 2":
             - img
@@ -60,7 +63,7 @@
           - textbox "显示名称 3":
             - /placeholder: 显示名称
             - text: Private Preview
-          - button "容量 3" [expanded]:
+          - button "模型详情 3" [expanded]:
             - img
           - button "删除模型 3":
             - img

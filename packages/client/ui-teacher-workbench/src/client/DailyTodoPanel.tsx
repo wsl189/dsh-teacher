@@ -1,7 +1,7 @@
 /** Independent daily-todo cards with color markers and voice entry. */
 
 import { useMemo, useRef, useState } from 'react'
-import { Calendar, Check, Pencil, Plus, Trash2 } from 'lucide-react'
+import { Bell, Calendar, Check, Pencil, Plus, Trash2 } from 'lucide-react'
 import { useDismissOnOutsidePointer } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   TeacherDailyTodo,
@@ -11,6 +11,8 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
+import type { TeacherReminderInput } from './controller.ts'
+import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
 import { EditorModal, FormField, IconAction, confirmDelete, type TeacherWorkbenchTranslate } from './shared.tsx'
 import { VoiceInputButton } from './SpeechInput.tsx'
 import css from './TeacherWorkbench.module.css'
@@ -76,19 +78,26 @@ function TodoCard(props: {
 }) {
   const [title, setTitle] = useState('')
   const [dueAt, setDueAt] = useState('')
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(null)
+  const [timingDraft, setTimingDraft] = useState<{
+    dueAt: string
+    reminder: TeacherReminderInput | null
+  } | null>(null)
   const [editing, setEditing] = useState<TeacherDailyTodo | null>(null)
   const openCount = props.tasks.filter(task => !task.completed).length
   const add = async (): Promise<void> => {
-    if (title.trim() === '') return
+    if (title.trim() === '' || !reminderValid(dueAt, reminder)) return
     const result = await props.commands.saveDailyTodo({
       title,
       dueAt,
+      ...(reminder === null ? {} : { reminder }),
       category: props.view,
       color: 'blue',
     })
     if (!result.ok) return
     setTitle('')
     setDueAt('')
+    setReminder(null)
   }
   const headingId = todoHeadingId(props.view)
   return (
@@ -114,23 +123,20 @@ function TodoCard(props: {
           value={title}
           onChange={(event) => { setTitle(event.target.value) }}
         />
-        <label
+        <button
+          type="button"
           className={css.todoDeadlinePicker}
           data-has-value={dueAt !== ''}
           data-todo-deadline-picker
+          aria-label={props.t('daily.todo.deadline')}
           title={dueAt === ''
             ? props.t('daily.todo.deadline')
             : `${props.t('daily.todo.deadline')}: ${formatLocalDateTime(dueAt)}`}
+          onClick={() => { setTimingDraft({ dueAt, reminder }) }}
         >
           <Calendar size={17} aria-hidden="true" />
-          <input
-            className={css.todoDeadlineInput}
-            type="datetime-local"
-            aria-label={props.t('daily.todo.deadline')}
-            value={dueAt}
-            onChange={(event) => { setDueAt(event.target.value) }}
-          />
-        </label>
+          {reminder !== null && <Bell size={11} className={css.reminderBadge} aria-hidden="true" />}
+        </button>
         <VoiceInputButton
           language={props.settings.speechLanguage}
           onTranscript={(transcript) => { setTitle(current => joinSpeech(current, transcript)) }}
@@ -141,11 +147,42 @@ function TodoCard(props: {
           className={css.dailyAddButton}
           aria-label={props.t('daily.todo.add')}
           title={props.t('daily.todo.add')}
-          disabled={title.trim() === ''}
+          disabled={title.trim() === '' || !reminderValid(dueAt, reminder)}
         >
           <Plus size={17} />
         </button>
       </form>
+      {timingDraft !== null && (
+        <EditorModal
+          open
+          title={props.t('daily.reminder.configure')}
+          closeLabel={props.t('close')}
+          onClose={() => { setTimingDraft(null) }}
+          onSave={() => {
+            setDueAt(timingDraft.dueAt)
+            setReminder(timingDraft.reminder)
+            setTimingDraft(null)
+          }}
+          saveLabel={props.t('save')}
+          cancelLabel={props.t('cancel')}
+          valid={reminderValid(timingDraft.dueAt, timingDraft.reminder)}
+        >
+          <FormField label={props.t('daily.todo.deadline')} wide>
+            <input
+              type="datetime-local"
+              value={timingDraft.dueAt}
+              onChange={(event) => { setTimingDraft(current => current === null ? null : { ...current, dueAt: event.target.value }) }}
+            />
+          </FormField>
+          <ReminderFields
+            deadline={timingDraft.dueAt}
+            value={timingDraft.reminder}
+            commands={props.commands}
+            t={props.t}
+            onChange={(value) => { setTimingDraft(current => current === null ? null : { ...current, reminder: value }) }}
+          />
+        </EditorModal>
+      )}
       <div className={css.todoList}>
         {props.tasks.length === 0
           ? <div className={css.dailyEmpty}>{todoEmptyLabel(props.t, props.view)}</div>
@@ -167,6 +204,7 @@ function TodoCard(props: {
                 <strong>{task.title}</strong>
                 <span className={task.dueAt !== '' && isPast(task.dueAt) && !task.completed ? css.todoOverdue : undefined}>
                   {task.dueAt === '' ? props.t('daily.todo.noDeadline') : props.t('daily.todo.due', { value: formatLocalDateTime(task.dueAt) })}
+                  {task.reminder !== undefined && <Bell size={12} aria-label={props.t('daily.reminder.enabled')} />}
                 </span>
               </div>
               <div className={css.dailyRowActions}>
@@ -207,15 +245,16 @@ function TodoEditor(props: {
 }) {
   const [title, setTitle] = useState(props.task.title)
   const [dueAt, setDueAt] = useState(props.task.dueAt)
-  const [category, setCategory] = useState<TeacherDailyTodoCategory>(props.task.category)
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(() => editableReminder(props.task.reminder))
   const save = async (): Promise<void> => {
     const result = await props.commands.saveDailyTodo({
       id: props.task.id,
       title,
       dueAt,
       completed: props.task.completed,
-      category,
+      category: props.task.category,
       color: props.task.color,
+      ...(reminder === null && props.task.reminder === undefined ? {} : { reminder }),
     })
     if (result.ok) props.onClose()
   }
@@ -228,7 +267,7 @@ function TodoEditor(props: {
       onSave={() => { void save() }}
       saveLabel={props.t('save')}
       cancelLabel={props.t('cancel')}
-      valid={title.trim() !== ''}
+      valid={title.trim() !== '' && reminderValid(dueAt, reminder)}
     >
       <div className={css.fieldWide}>
         <span className={css.fieldLabel}>{props.t('daily.todo.item')}</span>
@@ -244,38 +283,7 @@ function TodoEditor(props: {
       <FormField label={props.t('daily.todo.deadline')} wide>
         <input type="datetime-local" value={dueAt} onChange={(event) => { setDueAt(event.target.value) }} />
       </FormField>
-      <div className={`${css.fieldWide} ${css.todoCategoryField}`}>
-        <span className={css.fieldLabel}>{props.t('daily.todo.classification')}</span>
-        <div className={css.todoCategoryOptions} role="radiogroup" aria-label={props.t('daily.todo.classification')}>
-          <label className={css.todoCategoryOption}>
-            <input
-              type="radio"
-              name="todo-category"
-              checked={category === 'today'}
-              onChange={() => { setCategory('today') }}
-            />
-            <span>{props.t('daily.todo.title')}</span>
-          </label>
-          <label className={css.todoCategoryOption}>
-            <input
-              type="radio"
-              name="todo-category"
-              checked={category === 'important'}
-              onChange={() => { setCategory('important') }}
-            />
-            <span>{props.t('daily.todo.important')}</span>
-          </label>
-          <label className={css.todoCategoryOption}>
-            <input
-              type="radio"
-              name="todo-category"
-              checked={category === 'urgent'}
-              onChange={() => { setCategory('urgent') }}
-            />
-            <span>{props.t('daily.todo.urgent')}</span>
-          </label>
-        </div>
-      </div>
+      <ReminderFields deadline={dueAt} value={reminder} commands={props.commands} t={props.t} onChange={setReminder} />
     </EditorModal>
   )
 }

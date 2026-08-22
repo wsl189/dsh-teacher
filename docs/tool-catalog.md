@@ -33,6 +33,7 @@ This table connects model-visible tool names to the plugin package and service s
 | `@deepseek-ai/dsh-tool-ralph` | `ralph` | `ctx.tools`, `ctx.workflowEngine`, `ctx.subagents`, `ctx.systemPrompt`, `a calling Agent (exec.agent parents every fresh round)` | `tool/call`, `tool/result`, `workflow and child session events during execution` | - | A fixed foreground workflow starts one fresh structured child per round; the model selects only the immutable objective and an optional round cap. |
 | `@deepseek-ai/dsh-tool-skill` | `skill` | `ctx.tools`, `ctx.agents`, `ctx.skills` | `tool/call`, `tool/result`, `user/message replacement catalogs via agent.inject()` | - | - |
 | `@deepseek-ai/dsh-tool-session-query` | `session_event_read`, `session_event_search`, `session_event_trace`, `session_search`, `session_trace` | `ctx.tools`, `ctx.systemPrompt`, `ctx.sessionQuery`, `a calling Agent for workspace authority` | `tool/call`, `tool/result` | - | The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies. |
+| `@deepseek-ai/dsh-tool-teacher-workbench` | `teacher_daily_management`, `teacher_question_image_read`, `teacher_question_workbench`, `teacher_score_analysis`, `teacher_student_roster`, `teacher_timetable`, `teacher_workbench_read` | `ctx.tools`, `ctx.fs`, `ctx.teacherWorkbench`, `ctx.attachments + an image-capable route for stored-image reads`, `ctx.ocr for PDF segmentation` | `tool/call`, `teacher_workbench storage-domain document`, `question media and generated Office files`, `durable attachment (teacher_question_image_read)`, `tool/result` | - | The shipped Web composition provides the authoritative Host service, durable attachments, and MinerU-backed OCR. PDF uploads carry a private Host source id; other imported tables arrive as logged OCR context. Stored question-image reads require the current model route to declare image input. |
 | `@deepseek-ai/dsh-tool-subagent` | `subagent` | `ctx.tools`, `ctx.subagents`, `ctx.systemPrompt` | `tool/call`, `tool/result`, `child session events through the chosen provider` | `subagent`, `subagent_fork` | The registered tool name is the load-time `toolName` config (default `subagent`); the schema above is that default. The shipped compositions load this package once per subagent backend, so the model additionally sees `subagent_fork` bound to the fork backend. Each instance's description, `run_in_background` parameter, and system-prompt policy follow its own `backgroundMode` and `enableRunInBackground`, so the two shipped schemas are not identical: `subagent` is `continuable` and defaults omitted calls to background with automatic settlement delivery, while `subagent_fork` stays `one-shot` and defaults them to foreground — see `packages/bundle/base/cordis.patch.yml` and `examples/acp-agent/cordis.yml`. |
 | `@deepseek-ai/dsh-tool-subagent-control` | `interrupt_agent`, `list_agents`, `send_message` | `ctx.tools`, `ctx.subagents`, `ctx.agents and ctx.sessionProjections (list_agents only)` | `tool/call`, `tool/result`, `child session events through ctx.subagents` | - | The globally named control tools over continuable background subagents: provider-bound `tool-subagent` instances register distinct delegation tools, while this package registers `send_message` and `interrupt_agent` once, plus `list_agents` from its separately loaded `/list-agents` plugin (whose catalog rows use the sessionProjections and live Agent registries). |
 | `@deepseek-ai/dsh-tool-subagent-report` | `report` | `ctx.subagents`, `ctx.systemPrompt`, `a live continuable in-process child Agent` | `tool/call`, `tool/result`, `a user-role message in the direct parent session` | - | Registered per continuable in-process child rather than globally, so this schema is visible only inside such a child and survives its global `toolFilter`. The same contribution installs the child-scoped `tool:report` prompt section, which this catalog does not render. The parent-facing `send_message` tool is installed independently. |
@@ -1517,6 +1518,243 @@ Read the authorized session lineage around one session, including complete visib
 Source: [`packages/session-query/tool-session-query/src/index.ts`](../packages/session-query/tool-session-query/src/index.ts)
 
 The five read-only tools hide provider cursors and authorize every result from the immutable calling agent session. The package is opt-in; compositions that need enforced deadlines or bounded inline output also mount the generic timeout or spill policies.
+
+<a id="deepseek-aidsh-tool-teacher-workbench"></a>
+
+## `@deepseek-ai/dsh-tool-teacher-workbench`
+
+### `teacher_daily_management`
+
+Create, edit, delete, complete, reschedule, or import daily-management data. Call teacher_workbench_read first. Actions: save_todo, delete_todo, save_note, delete_note, save_ledger_category, delete_ledger_category, save_ledger_entry, delete_ledger_entry, save_calendar_item, delete_calendar_item, import_calendar_items. Payloads: save_todo {id?,title,dueAt?,completed?,color?,reminder?}; save_note {id?,content,remindAt?,reminder?}; save_ledger_category {id?,name}; save_ledger_entry {id?,categoryId,description,amountCents,occurredAt,remindAt?,reminder?}; save_calendar_item {id?,date,time?,title,details?,reminder?}; import_calendar_items {items:[calendar fields]}; delete actions use {id}. Route only from literal words in the current user request: 备忘, 备忘录, or memo means save_note; 今日, 待办, today, or todo means save_todo; 紧急 or urgent means save_todo in Urgent; 重要 or important means save_todo in Important; 账单, 账本, 保险, 保费, 水费, 电费, 燃气费, bill, insurance, or premium means the matching ledger category or entry action; 日历 or calendar means a calendar action. The host validates every new item's action and destination against the original user message, so never substitute another action or invent a routing keyword. If a new item has no routing word, ask the user where it belongs and do not mutate the workbench. Never infer a destination from the content, deadline, tone, or consequences. Existing item edits retain their destination. For a requested mobile reminder, use reminder {channel,botId,rule:{kind:'once',minutesBefore}|{kind:'repeat',everyMinutes}} with the exact channel and botId from notificationTargets returned by teacher_workbench_read daily; never invent a bot id. Memos and ledger entries use remindAt as their reminder deadline. Set reminder to null to remove it. Omission preserves an existing reminder only while its deadline is unchanged. Amounts use integer CNY cents; local date-times use YYYY-MM-DDTHH:mm.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_todo",
+        "delete_todo",
+        "save_note",
+        "delete_note",
+        "save_ledger_category",
+        "delete_ledger_category",
+        "save_ledger_entry",
+        "delete_ledger_entry",
+        "save_calendar_item",
+        "delete_calendar_item",
+        "import_calendar_items"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "description": "Action fields described by the selected action.",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_question_image_read`
+
+Read one stored Question Cutting image and return the raster itself. Call teacher_workbench_read with section questions first to obtain a batch or assignment image id. The result states the source dimensions used by crop_image and erase_image_regions. Requires the current model route to accept image input.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "kind": {
+      "type": "string",
+      "enum": [
+        "batch",
+        "assignment"
+      ]
+    },
+    "id": {
+      "type": "string"
+    }
+  },
+  "required": [
+    "kind",
+    "id"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_question_workbench`
+
+Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: segment_pdf, create_folder, delete_folder, delete_batch, delete_image, rotate_image, crop_image, erase_image_regions, assign_questions, generate_folder_document, generate_document, generate_student_documents. segment_pdf uses {sourceId,sourceName,pageRange?,batchName?,padding?} from uploaded-document context. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "segment_pdf",
+        "create_folder",
+        "delete_folder",
+        "delete_batch",
+        "delete_image",
+        "rotate_image",
+        "crop_image",
+        "erase_image_regions",
+        "assign_questions",
+        "generate_folder_document",
+        "generate_document",
+        "generate_student_documents"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_score_analysis`
+
+Create, replace, or delete an exam and its subject scores from uploaded OCR content. Call teacher_workbench_read first. Actions: save_exam, delete_exam. save_exam {id?,classId,name,date?,entries:[{studentId?|studentNumber?|studentName?,scores:{subject:number}}]}; delete_exam {id}. Each entry must identify exactly one student within the class.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_exam",
+        "delete_exam"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_student_roster`
+
+Create, edit, delete, or bulk-import roster classes and students from uploaded OCR content. Call teacher_workbench_read first. Actions: save_class, delete_class, save_student, delete_student, import_students. save_class {id?,name,grade?,subject?,academicYear?}; save_student {id?,classId,name,studentNumber?,gender?,guardian?,relation?,phone?,address?,extras?}; import_students {classId,students:[student fields]}; deletes use {id}. import_students merges by studentNumber, then by name when the number is blank.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_class",
+        "delete_class",
+        "save_student",
+        "delete_student",
+        "import_students"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_timetable`
+
+Create, edit, delete, or bulk-import classes and timetable entries. Call teacher_workbench_read first. Actions: save_class, delete_class, save_entry, delete_entry, import_entries. Every save/import payload requires view: week|grade. Use view=week for 本周课表, 今日课程, one class's weekly schedule, morning study, or evening study; use view=grade only when the user explicitly asks for 年级课表 covering multiple classes. A grade name such as 高三 never implies view=grade. Never reuse a class id whose usage belongs to the other view; omit classId and provide className to create the parallel class catalog entry. save_class {view,id?,name,grade?,subject?}; save_entry uses {view,id?,classId?,className,grade?,kind,weekday,period,startTime?,endTime?,subject,teacherName?,location?}; import_entries uses {view,entries:[...]}; deletes use {id}. Weekday is 1=Monday through 7=Sunday; kind is lesson, morningStudy, or eveningStudy. Period is the unique daily ordinal: if afternoon labels restart at 1, continue them after the morning periods instead of submitting duplicate slots. A success result includes a read-back confirmation naming the exact week or grade view.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "action": {
+      "type": "string",
+      "enum": [
+        "save_class",
+        "delete_class",
+        "save_entry",
+        "delete_entry",
+        "import_entries"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "required": [
+    "action",
+    "data"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+### `teacher_workbench_read`
+
+Read the authoritative teacher workbench before editing it. Returns stable ids needed by mutation tools.
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "section": {
+      "type": "string",
+      "description": "daily | timetable | roster | scores | questions",
+      "enum": [
+        "daily",
+        "timetable",
+        "roster",
+        "scores",
+        "questions"
+      ]
+    },
+    "class_id": {
+      "type": "string",
+      "description": "Optional roster or timetable class id used to filter rows."
+    }
+  },
+  "required": [
+    "section"
+  ]
+}
+```
+
+Source: [`packages/host/teacher-workbench/src/agent-tools.ts`](../packages/host/teacher-workbench/src/agent-tools.ts)
+
+The shipped Web composition provides the authoritative Host service, durable attachments, and MinerU-backed OCR. PDF uploads carry a private Host source id; other imported tables arrive as logged OCR context. Stored question-image reads require the current model route to declare image input.
 
 <a id="deepseek-aidsh-tool-subagent"></a>
 

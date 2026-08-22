@@ -1987,10 +1987,28 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the current revision and state.',
       },
       {
+        signature: '@Remote(\'listNotificationTargets\') listNotificationTargets(_request: Record<never, never>): Promise<readonly TeacherNotificationTarget[]>',
+        description: 'List dsh-im bots that may receive reminder notifications.',
+        parameters: [{ name: '_request', description: 'Empty request object retained for a uniform Remote signature.' }],
+        returns: 'Credential-free platform and bot identities with live connection state.',
+      },
+      {
+        signature: 'listScheduledReminders(): readonly TeacherScheduledReminderTask[]',
+        description: 'Project active workbench reminders for an optional shared scheduled-task list.',
+        parameters: [],
+        returns: 'Credential-free task rows derived from the current durable document.',
+      },
+      {
         signature: '@Remote(\'write\') write(request: TeacherWorkbenchWriteRequest): Promise<TeacherWorkbenchWriteResult>',
         description: 'Replace the complete state after comparing the observed revision.',
         parameters: [{ name: 'request', description: 'observed revision and replacement state.' }],
         returns: 'the committed document or an explicit conflict/validation failure.',
+      },
+      {
+        signature: '@Remote(\'stageSource\') async stageSource(request: TeacherWorkbenchSourceStageRequest): Promise<TeacherWorkbenchSourceStageResult>',
+        description: 'Retain one browser-uploaded document for a later agent workbench operation.',
+        parameters: [{ name: 'request', description: 'original metadata and base64 bytes.' }],
+        returns: 'a durable content-addressed source reference or stable failure.',
       },
       {
         signature: '@Remote(\'weather\') weather(request: TeacherWeatherRequest): Promise<TeacherWeatherResult>',
@@ -2047,7 +2065,7 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the committed document or a stable failure.',
       },
       {
-        signature: '@Remote(\'saveTemporaryQuestionSelection\') async saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>',
+        signature: '@Remote(\'saveTemporaryQuestionSelection\') saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>',
         description: 'Snapshot selected student images into temporary Office-generation storage.',
         parameters: [{ name: 'request', description: 'student identity and ordered assignment ids.' }],
         returns: 'copied-image count or a stable failure.',
@@ -2075,6 +2093,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Build one independent Word or PowerPoint file per selected student.',
         parameters: [{ name: 'request', description: 'output family and independent per-student Word options.' }],
         returns: 'independent artifacts, skipped students, or a stable failure.',
+      },
+      {
+        signature: 'sourceConfig(): TeacherWorkbenchSourceConfig',
+        description: 'Resolve storage policy at call time so settings changes affect later tool operations.',
+        parameters: [],
+        returns: 'the current source-document and generated-output policy.',
+      },
+      {
+        signature: 'questionDocumentLimits(): { readonly maxImageBytes: number; readonly maxBatchBytes: number }',
+        description: 'Resolve source-image limits for conversation-requested Office generation.',
+        parameters: [],
+        returns: 'current per-image and aggregate decoded-byte limits.',
       },
     ],
   },
@@ -4833,7 +4863,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherCalendarItem',
-    declaration: 'export interface TeacherCalendarItem {\n    readonly id: TeacherCalendarItemId;\n    readonly date: string;\n    readonly time: string;\n    readonly title: string;\n    readonly details: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherCalendarItem {\n    readonly id: TeacherCalendarItemId;\n    readonly date: string;\n    readonly time: string;\n    readonly title: string;\n    readonly details: string;\n    readonly reminder?: TeacherReminder;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherCalendarItemId',
@@ -4853,7 +4883,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherDailyTodo',
-    declaration: 'export interface TeacherDailyTodo {\n    readonly id: TeacherDailyTodoId;\n    readonly title: string;\n    readonly dueAt: string;\n    readonly completed: boolean;\n    readonly category: TeacherDailyTodoCategory;\n    readonly color: TeacherDailyTodoColor;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherDailyTodo {\n    readonly id: TeacherDailyTodoId;\n    readonly title: string;\n    readonly dueAt: string;\n    readonly completed: boolean;\n    readonly category: TeacherDailyTodoCategory;\n    readonly color: TeacherDailyTodoColor;\n    readonly reminder?: TeacherReminder;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherDailyTodoCategory',
@@ -4889,7 +4919,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherLedgerEntry',
-    declaration: 'export interface TeacherLedgerEntry {\n    readonly id: TeacherLedgerEntryId;\n    readonly categoryId: TeacherLedgerCategoryId;\n    readonly description: string;\n    readonly amountCents: number;\n    readonly occurredAt: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherLedgerEntry {\n    readonly id: TeacherLedgerEntryId;\n    readonly categoryId: TeacherLedgerCategoryId;\n    readonly description: string;\n    readonly amountCents: number;\n    readonly occurredAt: string;\n    readonly remindAt?: string;\n    readonly reminder?: TeacherReminder;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherLedgerEntryId',
@@ -4908,6 +4938,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherLessonResourceId = Branded<\'TeacherLessonResourceId\'>;',
   },
   {
+    name: 'TeacherMobileBotId',
+    declaration: 'export type TeacherMobileBotId = Branded<\'TeacherMobileBotId\'>;',
+  },
+  {
+    name: 'TeacherMobileChannel',
+    declaration: 'export type TeacherMobileChannel = \'weixin\' | \'feishu\' | \'dingtalk\' | \'wecom\' | \'qq\' | \'slack\' | \'telegram\' | \'discord\' | \'whatsapp\';',
+  },
+  {
     name: 'TeacherNotice',
     declaration: 'export interface TeacherNotice {\n    readonly id: TeacherNoticeId;\n    readonly title: string;\n    readonly content: string;\n    readonly createdAt: number;\n}',
   },
@@ -4924,8 +4962,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherNoticeTemplateId = Branded<\'TeacherNoticeTemplateId\'>;',
   },
   {
+    name: 'TeacherNotificationTarget',
+    declaration: 'export interface TeacherNotificationTarget {\n    readonly channel: TeacherMobileChannel;\n    readonly botId: TeacherMobileBotId;\n    readonly label: string;\n    readonly connected: boolean;\n}',
+  },
+  {
     name: 'TeacherQuestionAssignment',
-    declaration: 'export interface TeacherQuestionAssignment {\n    readonly id: TeacherQuestionAssignmentId;\n    readonly studentId: TeacherStudentId;\n    readonly sourceImageId: TeacherQuestionImageId;\n    readonly folderId?: TeacherQuestionFolderId;\n    readonly fileName: string;\n    readonly relativePath: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherQuestionAssignment {\n    readonly id: TeacherQuestionAssignmentId;\n    readonly studentId: TeacherStudentId;\n    readonly sourceImageId: TeacherQuestionImageId;\n    readonly folderId?: TeacherQuestionFolderId;\n    readonly fileName: string;\n    readonly relativePath: string;\n    readonly mediaType: TeacherQuestionImageMediaType;\n    readonly width: number;\n    readonly height: number;\n    readonly temporarySaveCount: number;\n    readonly lastTemporarySavedAt?: number;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherQuestionAssignmentId',
@@ -4937,7 +4979,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionBatch',
-    declaration: 'export interface TeacherQuestionBatch {\n    readonly id: TeacherQuestionBatchId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly createdAt: number;\n    readonly images: readonly TeacherQuestionImage[];\n}',
+    declaration: 'export interface TeacherQuestionBatch {\n    readonly id: TeacherQuestionBatchId;\n    readonly folderId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly createdAt: number;\n    readonly images: readonly TeacherQuestionImage[];\n}',
   },
   {
     name: 'TeacherQuestionBatchDeleteRequest',
@@ -4961,7 +5003,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionBatchSaveRequest',
-    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly appendToBatchId?: TeacherQuestionBatchId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
+    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly appendToBatchId?: TeacherQuestionBatchId;\n    readonly folderId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
   },
   {
     name: 'TeacherQuestionDocumentImageUpload',
@@ -5052,6 +5094,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionLayoutPage {\n    readonly pageIndex: number;\n    readonly width: number;\n    readonly height: number;\n    readonly elements: readonly TeacherQuestionLayoutElement[];\n}',
   },
   {
+    name: 'TeacherQuestionLibraryFolder',
+    declaration: 'export interface TeacherQuestionLibraryFolder {\n    readonly id: TeacherQuestionLibraryFolderId;\n    readonly parentId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionLibraryFolderId',
+    declaration: 'export type TeacherQuestionLibraryFolderId = Branded<\'TeacherQuestionLibraryFolderId\'>;',
+  },
+  {
     name: 'TeacherQuestionMutationResult',
     declaration: 'export type TeacherQuestionMutationResult = TeacherQuestionMutationSuccess | TeacherQuestionRejected;',
   },
@@ -5113,7 +5163,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionTemporarySaveSuccess',
-    declaration: 'export interface TeacherQuestionTemporarySaveSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionTemporarySelection;\n}',
+    declaration: 'export interface TeacherQuestionTemporarySaveSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionTemporarySelection & {\n        readonly document: TeacherWorkbenchDocument;\n    };\n}',
   },
   {
     name: 'TeacherQuestionTemporarySelection',
@@ -5125,7 +5175,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuickNote',
-    declaration: 'export interface TeacherQuickNote {\n    readonly id: TeacherQuickNoteId;\n    readonly content: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherQuickNote {\n    readonly id: TeacherQuickNoteId;\n    readonly content: string;\n    readonly remindAt?: string;\n    readonly reminder?: TeacherReminder;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherQuickNoteId',
@@ -5154,6 +5204,18 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeacherRecordTemplateKind',
     declaration: 'export type TeacherRecordTemplateKind = \'observation\' | \'teaching\' | \'class\' | \'talk\' | \'summary\';',
+  },
+  {
+    name: 'TeacherReminder',
+    declaration: 'export interface TeacherReminder {\n    readonly channel: TeacherMobileChannel;\n    readonly botId: TeacherMobileBotId;\n    readonly botLabel: string;\n    readonly dueAtUtc: string;\n    readonly rule: TeacherReminderRule;\n    readonly configuredAt: number;\n    readonly lastOccurrenceAt: string;\n}',
+  },
+  {
+    name: 'TeacherReminderRule',
+    declaration: 'export type TeacherReminderRule = {\n    readonly kind: \'once\';\n    readonly minutesBefore: number;\n} | {\n    readonly kind: \'repeat\';\n    readonly everyMinutes: number;\n};',
+  },
+  {
+    name: 'TeacherScheduledReminderTask',
+    declaration: 'export interface TeacherScheduledReminderTask {\n    readonly key: string;\n    readonly owner: \'todo\' | \'memo\' | \'ledger\' | \'calendar\';\n    readonly title: string;\n    readonly deadline: string;\n    readonly nextRun: string;\n    readonly channel: TeacherMobileChannel;\n    readonly botLabel: string;\n    readonly rule: TeacherReminder[\'rule\'];\n}',
   },
   {
     name: 'TeacherSeatingLayout',
@@ -5276,8 +5338,36 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherWorkbenchRevisionConflict {\n    readonly code: \'revision-conflict\';\n    readonly current: TeacherWorkbenchDocument;\n}',
   },
   {
+    name: 'TeacherWorkbenchSourceConfig',
+    declaration: 'export interface TeacherWorkbenchSourceConfig {\n    readonly sourcesRoot: string;\n    readonly generatedRoot: string;\n    readonly maxSourceDocumentBytes: number;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchSourceId',
+    declaration: 'export type TeacherWorkbenchSourceId = Branded<\'TeacherWorkbenchSourceId\'>;',
+  },
+  {
+    name: 'TeacherWorkbenchSourceReference',
+    declaration: 'export interface TeacherWorkbenchSourceReference {\n    readonly id: TeacherWorkbenchSourceId;\n    readonly name: string;\n    readonly mediaType: string;\n    readonly bytes: number;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchSourceStageRejected',
+    declaration: 'export interface TeacherWorkbenchSourceStageRejected {\n    readonly ok: false;\n    readonly error: {\n        readonly code: \'invalid-request\' | \'file-too-large\' | \'storage-failure\';\n        readonly message: string;\n    };\n}',
+  },
+  {
+    name: 'TeacherWorkbenchSourceStageRequest',
+    declaration: 'export interface TeacherWorkbenchSourceStageRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherWorkbenchSourceStageResult',
+    declaration: 'export type TeacherWorkbenchSourceStageResult = TeacherWorkbenchSourceStageSuccess | TeacherWorkbenchSourceStageRejected;',
+  },
+  {
+    name: 'TeacherWorkbenchSourceStageSuccess',
+    declaration: 'export interface TeacherWorkbenchSourceStageSuccess {\n    readonly ok: true;\n    readonly value: TeacherWorkbenchSourceReference;\n}',
+  },
+  {
     name: 'TeacherWorkbenchState',
-    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly ledgerCategories: readonly TeacherLedgerCategory[];\n    readonly ledgerEntries: readonly TeacherLedgerEntry[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly noticeTemplates: readonly TeacherNoticeTemplate[];\n    readonly notices: readonly TeacherNotice[];\n    readonly seatingLayouts: readonly TeacherSeatingLayout[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
+    declaration: 'export interface TeacherWorkbenchState {\n    readonly dailyTodos: readonly TeacherDailyTodo[];\n    readonly quickNotes: readonly TeacherQuickNote[];\n    readonly ledgerCategories: readonly TeacherLedgerCategory[];\n    readonly ledgerEntries: readonly TeacherLedgerEntry[];\n    readonly calendarItems: readonly TeacherCalendarItem[];\n    readonly timetableEntries: readonly TeacherTimetableEntry[];\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly resources: readonly TeacherLessonResource[];\n    readonly templates: readonly TeacherRecordTemplate[];\n    readonly records: readonly TeacherRecord[];\n    readonly noticeTemplates: readonly TeacherNoticeTemplate[];\n    readonly notices: readonly TeacherNotice[];\n    readonly seatingLayouts: readonly TeacherSeatingLayout[];\n    readonly exams: readonly TeacherExam[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
   },
   {
     name: 'TeacherWorkbenchSuccess',

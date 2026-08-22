@@ -1,11 +1,13 @@
-/** Independently editable quick-note panel with manual and voice entry. */
+/** Independently editable memo panel with manual and voice entry. */
 
 import { useMemo, useState } from 'react'
-import { Pencil, Plus, Trash2 } from 'lucide-react'
+import { Bell, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { TeacherQuickNote, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
-import { EditorModal, IconAction, confirmDelete, type TeacherWorkbenchTranslate } from './shared.tsx'
+import type { TeacherReminderInput } from './controller.ts'
+import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
+import { EditorModal, FormField, IconAction, confirmDelete, type TeacherWorkbenchTranslate } from './shared.tsx'
 import { VoiceInputButton } from './SpeechInput.tsx'
 import css from './TeacherWorkbench.module.css'
 
@@ -22,7 +24,7 @@ export interface QuickNotesPanelProps {
 }
 
 /**
- * Render the compact quick-notes panel.
+ * Render the compact memos panel.
  * @param props - durable notes, voice settings, commands, and copy.
  * @returns a note list with manual and speech-recognition entry.
  */
@@ -64,7 +66,10 @@ export function QuickNotesPanel({ state, settings, commands, t }: QuickNotesPane
             <article key={note.id} className={css.noteItem}>
               <button type="button" className={css.noteMain} onClick={() => { setEditing(note) }}>
                 <span>{note.content}</span>
-                <small>{new Date(note.updatedAt).toLocaleString()}</small>
+                <small>
+                  {new Date(note.updatedAt).toLocaleString()}
+                  {note.reminder !== undefined && <Bell size={11} aria-label={t('daily.reminder.enabled')} />}
+                </small>
               </button>
               <div className={css.dailyRowActions}>
                 <IconAction label={t('edit')} onClick={() => { setEditing(note) }}><Pencil size={15} /></IconAction>
@@ -102,10 +107,15 @@ function NoteEditor(props: {
   onClose: () => void
 }) {
   const [content, setContent] = useState(props.initialContent)
+  const [remindAt, setRemindAt] = useState(props.note?.remindAt ?? '')
+  const [reminder, setReminder] = useState<TeacherReminderInput | null>(() => editableReminder(props.note?.reminder))
   const save = async (): Promise<void> => {
     const result = await props.commands.saveQuickNote({
       ...(props.note === undefined ? {} : { id: props.note.id }),
       content,
+      ...(remindAt === '' && reminder === null && props.note?.reminder === undefined
+        ? {}
+        : { remindAt, reminder }),
     })
     if (result.ok) props.onClose()
   }
@@ -118,7 +128,7 @@ function NoteEditor(props: {
       onSave={() => { void save() }}
       saveLabel={props.t('save')}
       cancelLabel={props.t('cancel')}
-      valid={content.trim() !== ''}
+      valid={content.trim() !== '' && reminderValid(remindAt, reminder)}
     >
       <div className={css.fieldWide}>
         <span className={css.fieldLabel}>{props.t('daily.notes.content')}</span>
@@ -141,6 +151,10 @@ function NoteEditor(props: {
           />
         </div>
       </div>
+      <FormField label={props.t('daily.reminder.deadline')}>
+        <input type="datetime-local" value={remindAt} onChange={(event) => { setRemindAt(event.target.value) }} />
+      </FormField>
+      <ReminderFields deadline={remindAt} value={reminder} commands={props.commands} t={props.t} onChange={setReminder} />
     </EditorModal>
   )
 }

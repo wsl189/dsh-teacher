@@ -42,7 +42,7 @@ function state(): TeacherWorkbenchState {
     noticeTemplates: [noticeTemplate],
     notices: [],
     seatingLayouts: [],
-    exams: [], questionBatches: [], questionFolders: [], questionAssignments: [],
+    exams: [], questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
   }
 }
 

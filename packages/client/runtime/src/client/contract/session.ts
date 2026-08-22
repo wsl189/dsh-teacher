@@ -31,6 +31,8 @@ export interface PromptDocumentContext {
   readonly name: string
   readonly markdown: string
   readonly truncated: boolean
+  readonly sourceId?: string
+  readonly sourceMediaType?: string
 }
 
 /** Identity plus the behavior verbs features may invoke on a session. */

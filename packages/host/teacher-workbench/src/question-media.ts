@@ -64,6 +64,13 @@ export interface PersistedQuestionAssignments {
   rollback(): Promise<void>
 }
 
+/** Prepared temporary selection that can restore the previous snapshot until metadata commits. */
+export interface PersistedTemporaryQuestionSelection {
+  readonly selection: TeacherQuestionTemporarySelection
+  commit(): Promise<void>
+  rollback(): Promise<void>
+}
+
 interface DecodedImage {
   readonly bytes: Buffer
   readonly mediaType: TeacherQuestionImageMediaType
@@ -137,6 +144,7 @@ export async function persistQuestionBatch(
     request.name.trim() !== existingBatch.name
     || safeFileName(request.sourceName, '试卷.pdf') !== existingBatch.sourceName
     || request.pageRange.trim() !== existingBatch.pageRange
+    || request.folderId !== existingBatch.folderId
   )) {
     throw new TeacherQuestionMediaError('invalid-request', '追加分片与原试卷信息不一致')
   }
@@ -157,6 +165,7 @@ export async function persistQuestionBatch(
     decoded.push(image)
   }
   const batchId = existingBatch?.id ?? randomUUID() as TeacherQuestionBatchId
+  const folderId = existingBatch?.folderId ?? request.folderId
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
   const temporary = within(root, `.pending-${String(batchId)}-${randomUUID()}`)
   const finalDir = within(root, String(batchId))
@@ -202,6 +211,7 @@ export async function persistQuestionBatch(
   }
   const batch: TeacherQuestionBatch = {
     id: batchId,
+    ...(folderId === undefined ? {} : { folderId }),
     name: existingBatch?.name ?? request.name.trim(),
     sourceName: existingBatch?.sourceName ?? safeFileName(request.sourceName, '试卷.pdf'),
     pageRange: existingBatch?.pageRange ?? request.pageRange.trim(),
@@ -267,6 +277,7 @@ export async function persistQuestionAssignments(
         mediaType: image.mediaType,
         width: image.width,
         height: image.height,
+        temporarySaveCount: 0,
         createdAt: now,
         updatedAt: now,
       })
@@ -288,13 +299,13 @@ export async function persistQuestionAssignments(
  * @param config - current media roots and decoded-byte limits.
  * @param state - authoritative roster and assignment metadata.
  * @param request - student identity and ordered selected assignment ids.
- * @returns the staged student identity and copied-image count.
+ * @returns the prepared selection plus commit and rollback operations.
  */
 export async function saveTemporaryQuestionSelection(
   config: TeacherQuestionMediaConfig,
   state: TeacherWorkbenchState,
   request: TeacherQuestionTemporarySaveRequest,
-): Promise<TeacherQuestionTemporarySelection> {
+): Promise<PersistedTemporaryQuestionSelection> {
   if (request.assignmentIds.length === 0) throw new TeacherQuestionMediaError('invalid-request', '请至少选择一张学生图片')
   if (request.assignmentIds.length > 120) throw new TeacherQuestionMediaError('invalid-request', '一次最多临时保存 120 张图片')
   const student = state.students.find(item => item.id === request.studentId)
@@ -313,7 +324,9 @@ export async function saveTemporaryQuestionSelection(
   const root = temporaryQuestionRoot(config)
   const finalDirectory = within(root, String(student.id))
   const pendingDirectory = within(root, `.pending-${String(student.id)}-${randomUUID()}`)
+  const backupDirectory = within(root, `.backup-${String(student.id)}-${randomUUID()}`)
   const manifestImages: TemporaryQuestionImage[] = []
+  let hasBackup = false
   let aggregateBytes = 0
   try {
     await mkdir(pendingDirectory, { recursive: true })
@@ -345,14 +358,29 @@ export async function saveTemporaryQuestionSelection(
       { encoding: 'utf8', flag: 'wx' },
     )
     await mkdir(root, { recursive: true })
-    await rm(finalDirectory, { recursive: true, force: true })
+    try {
+      await rename(finalDirectory, backupDirectory)
+      hasBackup = true
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+    }
     await rename(pendingDirectory, finalDirectory)
   } catch (error) {
     await rm(pendingDirectory, { recursive: true, force: true })
+    await rename(backupDirectory, finalDirectory).catch(() => {
+      // Preserve the original write failure when no previous selection exists or restoring it also fails.
+    })
     if (error instanceof TeacherQuestionMediaError) throw error
     throw new TeacherQuestionMediaError('storage-failure', '临时保存学生图片失败', { cause: error })
   }
-  return { studentId: student.id, imageCount: manifestImages.length }
+  return {
+    selection: { studentId: student.id, imageCount: manifestImages.length },
+    commit: async () => { await rm(backupDirectory, { recursive: true, force: true }) },
+    rollback: async () => {
+      await rm(finalDirectory, { recursive: true, force: true })
+      if (hasBackup) await rename(backupDirectory, finalDirectory)
+    },
+  }
 }
 
 /**
@@ -556,6 +584,7 @@ export async function generateStudentDocuments(
   const skipped: TeacherQuestionDocumentSkipped[] = []
   const usedNames = new Set<string>()
   const seenStudents = new Set<string>()
+  const source = request.source ?? 'temporary'
   for (const options of request.students) {
     if (seenStudents.has(options.studentId)) {
       throw new TeacherQuestionMediaError('invalid-request', '学生生成列表存在重复项')
@@ -567,14 +596,14 @@ export async function generateStudentDocuments(
       continue
     }
     try {
-      const images = request.source === 'temporary'
+      const images = source === 'temporary'
         ? await loadTemporaryStudentImages(config, student.id)
         : await loadStudentAssignmentImages(config, state, student.id)
       if (images.length === 0) {
         skipped.push({
           studentId: student.id,
           name: student.name,
-          reason: request.source === 'temporary' ? '未找到临时图片' : '未找到试题图片',
+          reason: source === 'temporary' ? '未找到临时图片' : '未找到试题图片',
         })
         continue
       }
@@ -590,7 +619,7 @@ export async function generateStudentDocuments(
       const fileName = uniqueGeneratedName(artifact.fileName, usedNames)
       usedNames.add(fileName)
       artifacts.push({ ...artifact, fileName })
-      if (request.source === 'temporary') {
+      if (source === 'temporary') {
         await deleteTemporaryQuestionSelection(config, student.id).catch(() => {})
       }
     } catch {

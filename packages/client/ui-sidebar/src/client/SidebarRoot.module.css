@@ -64,7 +64,7 @@
    horizontally fixed. Only a live collapse gets .railIn; a cold collapsed
    render stays static. */
 .railIn .iconButton,
-.railIn .newSession,
+.railIn .primarySections,
 .railIn .regionArea {
   animation: rail-in 150ms var(--ds-ease-in-out) backwards;
 }
@@ -224,56 +224,18 @@
   line-height: 16px;
 }
 
-/* New Session: 38px bar, 12px radius (figma 133:7634 geometry, squared-off
-   corners); collapsed it renders as the rail's plain icon control. */
-.newSession {
+/* Primary feature sections occupy the first control row below the brand
+   without consuming the workspace browser's flexible scroll region. */
+.primarySections {
   flex: none;
+  min-width: 0;
+  width: 100%;
+}
+
+.collapsed .primarySections {
   display: flex;
-  align-items: center;
   justify-content: center;
-  gap: 6px;
-  height: 38px;
-  padding: 8px 16px;
-  margin: 0 2px 8px;
-  box-sizing: border-box;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-button-elevated-fill);
-  color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  font-weight: 500;
-  line-height: 22px;
-  cursor: pointer;
-  overflow: hidden;
-}
-
-.newSession:hover {
-  background: var(--dsw-alias-button-floating-hover);
-}
-
-.collapsed .newSession {
-  align-self: flex-start;
-  width: 36px;
-  height: 36px;
-  padding: 0;
-  margin: 0 0 12px;
-  gap: 0;
-  border-color: transparent;
-  background: transparent;
-}
-
-.collapsed .newSession:hover {
-  background: var(--dsw-alias-interactive-bg-hover);
-}
-
-.newSessionLabel {
-  max-width: 200px;
-  overflow: hidden;
-  white-space: nowrap;
-}
-
-.collapsed .newSessionLabel {
-  max-width: 0;
+  width: auto;
 }
 
 /* Region seat: always mounted so the foot never moves. Its trailing margin
@@ -330,7 +292,7 @@
   .wide,
   .fading > *,
   .railIn .iconButton,
-  .railIn .newSession,
+  .railIn .primarySections,
   .railIn .footArea,
   .railIn .regionArea {
     transition: none;

@@ -4,7 +4,7 @@ import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import type { ReactNode } from 'react'
 import type {
   SidebarFooterActionOwnerProps, SidebarRootComponentProps, SidebarSectionOwnerProps,
-  SidebarSettingsOwnerProps,
+  SidebarPrimarySectionOwnerProps, SidebarSettingsOwnerProps,
 } from '../src/client/contract/slots.ts'
 import { SidebarRoot } from '../src/client/SidebarRoot.tsx'
 import { en } from '../src/client/locales.ts'
@@ -27,6 +27,7 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
   const startSession = vi.fn()
   const toggleSidebar = vi.fn()
   let regionOwner: SidebarSectionOwnerProps | undefined
+  let primaryOwner: SidebarPrimarySectionOwnerProps | undefined
   let settingsOwner: SidebarSettingsOwnerProps | undefined
   let footerActionOwner: SidebarFooterActionOwnerProps | undefined
   const brandMark = <span data-testid="custom-brand-mark">M</span>
@@ -39,10 +40,15 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
       startSession={startSession} toggleSidebar={toggleSidebar} t={t}
       renderSlot={((
         key: string,
-        owner: SidebarFooterActionOwnerProps | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
+        owner: SidebarFooterActionOwnerProps | SidebarPrimarySectionOwnerProps
+          | SidebarSectionOwnerProps | SidebarSettingsOwnerProps,
       ) => {
         if (key === 'sidebar.brand.mark') return brandMark
         if (key === 'sidebar.brand.name') return brandName
+        if (key === 'sidebar.primary.section') {
+          primaryOwner = owner as SidebarPrimarySectionOwnerProps
+          return <div data-testid="primary-section-seat" data-wide={owner.wide} />
+        }
         if (key === 'sidebar.settings') {
           settingsOwner = owner
           return <div data-testid="settings-seat" data-wide={owner.wide} />
@@ -64,6 +70,10 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
       if (regionOwner === undefined) throw new Error('region owner not rendered')
       return regionOwner
     },
+    primaryOwner: () => {
+      if (primaryOwner === undefined) throw new Error('primary section owner not rendered')
+      return primaryOwner
+    },
     settingsOwner: () => {
       if (settingsOwner === undefined) throw new Error('settings owner not rendered')
       return settingsOwner
@@ -80,15 +90,14 @@ function mountShell({ collapsed = false, width = 300 }: { collapsed?: boolean; w
 }
 
 describe('SidebarRoot shell', () => {
-  it('routes New Session (capsule + wordmark) and the column toggle', () => {
+  it('routes New Session through the wordmark and keeps the column toggle separate', () => {
     const b = mountShell()
     expect(screen.getByTestId('custom-brand-mark')).toBeTruthy()
     expect(screen.getByTestId('custom-brand-name')).toBeTruthy()
-    // Expanded, both the wordmark and the capsule start a session.
     const starters = screen.getAllByRole('button', { name: 'New session' })
-    expect(starters).toHaveLength(2)
+    expect(starters).toHaveLength(1)
     for (const button of starters) fireEvent.click(button)
-    expect(b.startSession).toHaveBeenCalledTimes(2)
+    expect(b.startSession).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: 'Collapse sidebar' }))
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
   })
@@ -103,7 +112,7 @@ describe('SidebarRoot shell', () => {
         options?.fallback ?? null) as SidebarRootComponentProps['renderSlot']}
     />)
 
-    expect(screen.getByText('DSH Local Build')).toBeTruthy()
+    expect(screen.getByText('DSH')).toBeTruthy()
     expect(screen.getByText('0123456')).toBeTruthy()
     expect(container.querySelector('svg')).not.toBeNull()
   })
@@ -111,11 +120,14 @@ describe('SidebarRoot shell', () => {
   it('hands the region its wide flag and clamps expandSidebar to the collapsed state', () => {
     const b = mountShell()
     expect(b.regionOwner().wide).toBe(true)
+    expect(b.primaryOwner().wide).toBe(true)
     // The settings seat rides the same wide flag (ui-settings renders the row).
     expect(b.settingsOwner().wide).toBe(true)
     expect(b.footerActionOwner().wide).toBe(true)
     // Expanded: the request is a no-op (no accidental collapse).
     b.regionOwner().expandSidebar()
+    expect(b.toggleSidebar).not.toHaveBeenCalled()
+    b.primaryOwner().expandSidebar()
     expect(b.toggleSidebar).not.toHaveBeenCalled()
   })
 
@@ -128,15 +140,19 @@ describe('SidebarRoot shell', () => {
     vi.advanceTimersByTime(200)
     b.rerender({})
     expect(b.regionOwner().wide).toBe(false)
+    expect(b.primaryOwner().wide).toBe(false)
     expect(b.footerActionOwner().wide).toBe(false)
     expect(screen.getByTestId('region')).toBeTruthy()
     b.regionOwner().expandSidebar()
     expect(b.toggleSidebar).toHaveBeenCalledOnce()
+    b.primaryOwner().expandSidebar()
+    expect(b.toggleSidebar).toHaveBeenCalledTimes(2)
   })
 
   it('renders statically collapsed on a cold start (no crossfade classes)', () => {
     const b = mountShell({ collapsed: true })
     expect(b.regionOwner().wide).toBe(false)
+    expect(screen.queryByRole('button', { name: 'New session' })).toBeNull()
     expect(screen.getByRole('button', { name: 'Open sidebar' })).toBeTruthy()
   })
 })

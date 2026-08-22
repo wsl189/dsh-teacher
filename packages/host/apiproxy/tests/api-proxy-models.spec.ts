@@ -145,7 +145,10 @@ describe('Web session model selection', () => {
       sessionId,
       mode: 'queue' as const,
       content: [{ type: 'text' as const, text: '导入学生名册' }],
-      contexts: [{ name: 'roster.xlsx', markdown: '| 姓名 |\n| --- |\n| 张三 |', truncated: false }],
+      contexts: [{
+        name: 'roster.xlsx', markdown: '| 姓名 |\n| --- |\n| 张三 |', truncated: false,
+        sourceId: 'sha256:source', sourceMediaType: 'application/pdf',
+      }],
     }))
 
     expect(result.result.ok).toBe(true)
@@ -157,7 +160,7 @@ describe('Web session model selection', () => {
       },
       content: [{
         type: 'text',
-        text: 'Uploaded document "roster.xlsx":\n\n| 姓名 |\n| --- |\n| 张三 |',
+        text: 'Uploaded document "roster.xlsx":\nWorkbench source: {"sourceId":"sha256:source","name":"roster.xlsx","mediaType":"application/pdf"}\n\n| 姓名 |\n| --- |\n| 张三 |',
       }],
     }))
     const followed = followup.mock.calls[0]?.[0]

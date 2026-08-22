@@ -91,6 +91,9 @@
         geocodingCacheEntries: 256
         segmentsRoot: !!js dshHomePath('teacher-workbench/segments')
         studentsRoot: !!js dshHomePath('teacher-workbench/students')
+        sourcesRoot: !!js dshHomePath('teacher-workbench/sources')
+        generatedRoot: !!js dshHomePath('teacher-workbench/generated')
+        maxSourceDocumentBytes: 104857600
         maxQuestionImageBytes: 26214400
         maxQuestionBatchBytes: 100663296
         maxTimetableSourceCharacters: 500000
@@ -104,6 +107,10 @@
         maxSegmentedQuestions: 300
         maxQuestionBoundarySubmissions: 5
         questionSegmentationAgentTimeoutMs: 3600000
+        reminderRetryMs: 60000
+
+    - id: tool-teacher-workbench
+      name: '@deepseek-ai/dsh-tool-teacher-workbench'
 
     # Browser Session export: `/export` command plus the shared download dialog.
     - id: session-log-download

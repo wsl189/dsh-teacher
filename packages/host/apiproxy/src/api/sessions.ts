@@ -100,6 +100,10 @@ export interface PromptDocumentContext {
   markdown: string
   /** Whether the OCR provider removed trailing content at its output limit. */
   truncated: boolean
+  /** Durable workbench source identity when the browser retained the original file. */
+  sourceId?: string
+  /** Media type paired with {@link sourceId}. */
+  sourceMediaType?: string
 }
 
 /** Complete model selection for one session. */

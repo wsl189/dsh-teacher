@@ -39,7 +39,7 @@ const ClassSummaryIcon: ComponentType<{ size?: number; className?: string }> = p
 
 /** Full sidebar-entry props. */
 export type SidebarWorkbenchProps =
-  PropsRuntime<'sidebar.footer.action'>
+  PropsRuntime<'sidebar.primary.section'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
 

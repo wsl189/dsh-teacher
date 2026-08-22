@@ -24,7 +24,7 @@ export type TeacherNoticeId = Branded<'TeacherNoticeId'>
 export type TeacherExamId = Branded<'TeacherExamId'>
 /** Opaque daily-todo identity. */
 export type TeacherDailyTodoId = Branded<'TeacherDailyTodoId'>
-/** Opaque quick-note identity. */
+/** Opaque memo identity. */
 export type TeacherQuickNoteId = Branded<'TeacherQuickNoteId'>
 /** Opaque ledger-category identity. */
 export type TeacherLedgerCategoryId = Branded<'TeacherLedgerCategoryId'>
@@ -32,16 +32,22 @@ export type TeacherLedgerCategoryId = Branded<'TeacherLedgerCategoryId'>
 export type TeacherLedgerEntryId = Branded<'TeacherLedgerEntryId'>
 /** Opaque calendar-item identity. */
 export type TeacherCalendarItemId = Branded<'TeacherCalendarItemId'>
+/** Opaque dsh-im bot identity retained without credentials. */
+export type TeacherMobileBotId = Branded<'TeacherMobileBotId'>
 /** Opaque timetable-entry identity. */
 export type TeacherTimetableEntryId = Branded<'TeacherTimetableEntryId'>
 /** Opaque segmented-paper batch identity. */
 export type TeacherQuestionBatchId = Branded<'TeacherQuestionBatchId'>
+/** Opaque question-library folder identity. */
+export type TeacherQuestionLibraryFolderId = Branded<'TeacherQuestionLibraryFolderId'>
 /** Opaque segmented-question image identity. */
 export type TeacherQuestionImageId = Branded<'TeacherQuestionImageId'>
 /** Opaque student question-copy identity. */
 export type TeacherQuestionAssignmentId = Branded<'TeacherQuestionAssignmentId'>
 /** Opaque student question-folder identity. */
 export type TeacherQuestionFolderId = Branded<'TeacherQuestionFolderId'>
+/** Opaque content-addressed source-document identity. */
+export type TeacherWorkbenchSourceId = Branded<'TeacherWorkbenchSourceId'>
 /** Opaque identity assigned to one OCR element during a question-segmentation run. */
 export type TeacherQuestionLayoutElementId = Branded<'TeacherQuestionLayoutElementId'>
 
@@ -60,6 +66,53 @@ export type TeacherDailyTodoColor =
 
 /** Mutually exclusive list that owns one daily task. */
 export type TeacherDailyTodoCategory = 'today' | 'important' | 'urgent'
+
+/** Mobile channel identifiers supported by dsh-im. */
+export type TeacherMobileChannel =
+  | 'weixin'
+  | 'feishu'
+  | 'dingtalk'
+  | 'wecom'
+  | 'qq'
+  | 'slack'
+  | 'telegram'
+  | 'discord'
+  | 'whatsapp'
+
+/** Reminder rule selected for one workbench item. */
+export type TeacherReminderRule =
+  | { readonly kind: 'once'; readonly minutesBefore: number }
+  | { readonly kind: 'repeat'; readonly everyMinutes: number }
+
+/** One configured mobile reminder and its latest durable delivery decision. */
+export interface TeacherReminder {
+  /** One supported mobile channel. */
+  readonly channel: TeacherMobileChannel
+  /** Selected bot within the channel. */
+  readonly botId: TeacherMobileBotId
+  /** Last known display label retained when the bot is temporarily offline. */
+  readonly botLabel: string
+  /** Browser-resolved UTC deadline corresponding to the owning local deadline. */
+  readonly dueAtUtc: string
+  /** One-shot lead time or repeated interval. */
+  readonly rule: TeacherReminderRule
+  /** Configuration time in Unix epoch milliseconds; repeated rules start after it. */
+  readonly configuredAt: number
+  /** UTC occurrence most recently accepted by the selected bot, or empty before delivery. */
+  readonly lastOccurrenceAt: string
+}
+
+/** One bot available to receive reminders without exposing its credentials. */
+export interface TeacherNotificationTarget {
+  /** Mobile channel that owns the bot. */
+  readonly channel: TeacherMobileChannel
+  /** Stable bot identity within that channel. */
+  readonly botId: TeacherMobileBotId
+  /** Human-readable bot name. */
+  readonly label: string
+  /** Whether the channel currently has a live bot connection. */
+  readonly connected: boolean
+}
 
 /** Weekday number using Monday as one and Sunday as seven. */
 export type TeacherWeekday = 1 | 2 | 3 | 4 | 5 | 6 | 7
@@ -249,18 +302,24 @@ export interface TeacherDailyTodo {
   readonly category: TeacherDailyTodoCategory
   /** Color marker shown for important and urgent tasks. */
   readonly color: TeacherDailyTodoColor
+  /** Optional mobile reminder; omission means the task never sends a notification. */
+  readonly reminder?: TeacherReminder
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last edit time in Unix epoch milliseconds. */
   readonly updatedAt: number
 }
 
-/** One independently editable quick note. */
+/** One independently editable memo. */
 export interface TeacherQuickNote {
   /** Stable identity. */
   readonly id: TeacherQuickNoteId
   /** Teacher-authored note content. */
   readonly content: string
+  /** Optional local ISO deadline used only by the mobile reminder. */
+  readonly remindAt?: string
+  /** Optional mobile reminder; omission means the memo never sends a notification. */
+  readonly reminder?: TeacherReminder
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last edit time in Unix epoch milliseconds. */
@@ -289,6 +348,10 @@ export interface TeacherLedgerEntry {
   readonly amountCents: number
   /** Local ISO date and time chosen by the teacher. */
   readonly occurredAt: string
+  /** Optional local ISO deadline used only by the mobile reminder. */
+  readonly remindAt?: string
+  /** Optional mobile reminder; omission means the entry never sends a notification. */
+  readonly reminder?: TeacherReminder
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last edit time in Unix epoch milliseconds. */
@@ -307,6 +370,8 @@ export interface TeacherCalendarItem {
   readonly title: string
   /** Optional details. */
   readonly details: string
+  /** Optional mobile reminder; omission means the item never sends a notification. */
+  readonly reminder?: TeacherReminder
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last edit time in Unix epoch milliseconds. */
@@ -368,6 +433,8 @@ export interface TeacherQuestionImage {
 export interface TeacherQuestionBatch {
   /** Stable identity. */
   readonly id: TeacherQuestionBatchId
+  /** Optional library folder containing this paper. */
+  readonly folderId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing batch name. */
   readonly name: string
   /** Original PDF display name. */
@@ -378,6 +445,20 @@ export interface TeacherQuestionBatch {
   readonly createdAt: number
   /** Question images in numeric order. */
   readonly images: readonly TeacherQuestionImage[]
+}
+
+/** One durable folder used to organize paper batches in the question library. */
+export interface TeacherQuestionLibraryFolder {
+  /** Stable identity used by hierarchy interactions and batch destinations. */
+  readonly id: TeacherQuestionLibraryFolderId
+  /** Parent folder; omission places the folder at the library root. */
+  readonly parentId?: TeacherQuestionLibraryFolderId
+  /** Teacher-facing folder name. */
+  readonly name: string
+  /** Creation time in Unix epoch milliseconds. */
+  readonly createdAt: number
+  /** Last metadata update time in Unix epoch milliseconds. */
+  readonly updatedAt: number
 }
 
 /** One durable nested directory below a roster student. */
@@ -416,6 +497,10 @@ export interface TeacherQuestionAssignment {
   readonly width: number
   /** Intrinsic pixel height. */
   readonly height: number
+  /** Number of successful temporary saves that included this image. */
+  readonly temporarySaveCount: number
+  /** Most recent successful temporary-save time, absent before the first save. */
+  readonly lastTemporarySavedAt?: number
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last image edit time in Unix epoch milliseconds. */
@@ -426,7 +511,7 @@ export interface TeacherQuestionAssignment {
 export interface TeacherWorkbenchState {
   /** Daily tasks in creation order. */
   readonly dailyTodos: readonly TeacherDailyTodo[]
-  /** Quick notes in creation order. */
+  /** Memos in creation order. */
   readonly quickNotes: readonly TeacherQuickNote[]
   /** Ledger categories in creation order. */
   readonly ledgerCategories: readonly TeacherLedgerCategory[]
@@ -456,6 +541,8 @@ export interface TeacherWorkbenchState {
   readonly exams: readonly TeacherExam[]
   /** Persisted paper batches available for browsing and assignment. */
   readonly questionBatches: readonly TeacherQuestionBatch[]
+  /** Durable nested folders organizing paper batches. */
+  readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[]
   /** Durable nested folders created below roster students. */
   readonly questionFolders: readonly TeacherQuestionFolder[]
   /** Independent student copies created from batch images. */
@@ -517,6 +604,52 @@ export interface TeacherWorkbenchRejected {
 export type TeacherWorkbenchReadResult = TeacherWorkbenchSuccess
 /** Compare-and-set write result. */
 export type TeacherWorkbenchWriteResult = TeacherWorkbenchSuccess | TeacherWorkbenchRejected
+
+/** Browser upload retained for a later agent-driven workbench operation. */
+export interface TeacherWorkbenchSourceStageRequest {
+  /** Original display name. */
+  readonly name: string
+  /** Browser-declared media type. */
+  readonly mediaType: string
+  /** Canonical base64 source bytes. */
+  readonly contentBase64: string
+}
+
+/** Durable source reference injected into the matching conversation turn. */
+export interface TeacherWorkbenchSourceReference {
+  /** Content-addressed identity accepted by workbench tools. */
+  readonly id: TeacherWorkbenchSourceId
+  /** Original display name. */
+  readonly name: string
+  /** Browser-declared media type. */
+  readonly mediaType: string
+  /** Decoded source size. */
+  readonly bytes: number
+}
+
+/** Successful source-document staging result. */
+export interface TeacherWorkbenchSourceStageSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Durable source reference. */
+  readonly value: TeacherWorkbenchSourceReference
+}
+
+/** Rejected source-document staging result. */
+export interface TeacherWorkbenchSourceStageRejected {
+  /** Failure discriminant. */
+  readonly ok: false
+  /** Stable upload failure. */
+  readonly error: {
+    readonly code: 'invalid-request' | 'file-too-large' | 'storage-failure'
+    readonly message: string
+  }
+}
+
+/** Source-document staging result. */
+export type TeacherWorkbenchSourceStageResult =
+  | TeacherWorkbenchSourceStageSuccess
+  | TeacherWorkbenchSourceStageRejected
 
 /** Destination selected before timetable extraction starts. */
 export type TeacherTimetableNormalizeTarget = 'class' | 'grade' | 'study'
@@ -819,6 +952,8 @@ export interface TeacherQuestionImageUpload {
 export interface TeacherQuestionBatchSaveRequest {
   /** Existing paper batch that receives this bounded continuation part. */
   readonly appendToBatchId?: TeacherQuestionBatchId
+  /** Destination library folder for a new batch. */
+  readonly folderId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing batch name. */
   readonly name: string
   /** Original PDF display name. */
@@ -950,8 +1085,8 @@ export type TeacherQuestionImageReadResult = TeacherQuestionImageReadSuccess | T
 export interface TeacherQuestionTemporarySaveSuccess {
   /** Success discriminant. */
   readonly ok: true
-  /** Stored selection and copied-image count. */
-  readonly value: TeacherQuestionTemporarySelection
+  /** Stored selection, copied-image count, and committed per-image statistics. */
+  readonly value: TeacherQuestionTemporarySelection & { readonly document: TeacherWorkbenchDocument }
 }
 
 /** Temporary-selection save result. */
@@ -1018,7 +1153,7 @@ export interface TeacherQuestionStudentDocumentOptions {
 export interface TeacherQuestionBatchDocumentRequest {
   /** Output document family. */
   readonly kind: 'word' | 'ppt'
-  /** Assigned images by default; temporary selections reproduce the legacy batch workflow. */
+  /** Temporary selections by default; assigned images require an explicit source. */
   readonly source?: 'assigned' | 'temporary'
   /** Students and their independent Word metadata choices. */
   readonly students: readonly TeacherQuestionStudentDocumentOptions[]

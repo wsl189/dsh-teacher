@@ -15,9 +15,8 @@ export const name = 'client-ui-settings-general-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: the settings seam validates and publishes the durable
- * onboarding section, while slot conflicts fail loud in the slot core. The local
- * document action is browser state over typed RPC responses and is covered by
+ * No runtime invariant: slot conflicts fail loud in the slot core. The local
+ * document action and onboarding coordinator are browser state covered by
  * store/component tests rather than a Cordis runtime relationship.
  */
 const install: InvariantInstaller = () => {}

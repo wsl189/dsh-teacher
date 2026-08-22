@@ -30,12 +30,14 @@ const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+  questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+  noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
 function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
+    listNotificationTargets: vi.fn(async () => []),
     saveDailyTodo: action(),
     toggleDailyTodo: action(),
     deleteDailyTodo: action(),
@@ -60,6 +62,9 @@ function commands(): TeacherWorkbenchCommands {
     saveStudent: action(),
     importStudents: action(),
     deleteStudent: action(),
+    createQuestionLibraryFolder: action(),
+    renameQuestionLibraryFolder: action(),
+    deleteQuestionLibraryFolder: action(),
     createQuestionFolder: action(),
     deleteQuestionFolder: action(),
     saveResource: action(),

@@ -11,6 +11,7 @@ import type {
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { rotateQuestionCrop } from './question-segmentation.ts'
+import { sampleBorderColor } from './question-image-background.ts'
 import css from './TeacherWorkbench.module.css'
 
 interface SelectionRect {
@@ -278,31 +279,6 @@ function normalizedRect(rect: SelectionRect, width: number, height: number): { x
     width: Math.max(1, Math.min(Math.round(rect.width), width - x)),
     height: Math.max(1, Math.min(Math.round(rect.height), height - y)),
   }
-}
-
-function sampleBorderColor(
-  context: CanvasRenderingContext2D,
-  rect: { x: number; y: number; width: number; height: number },
-  canvasWidth: number,
-  canvasHeight: number,
-): string {
-  const sampleX = Math.max(0, rect.x - 2)
-  const sampleY = Math.max(0, rect.y - 2)
-  const sampleWidth = Math.max(1, Math.min(rect.width + 4, canvasWidth - sampleX))
-  const sampleHeight = Math.max(1, Math.min(rect.height + 4, canvasHeight - sampleY))
-  const data = context.getImageData(sampleX, sampleY, sampleWidth, sampleHeight).data
-  let red = 0
-  let green = 0
-  let blue = 0
-  let count = 0
-  for (let offset = 0; offset < data.length; offset += 16) {
-    red += data[offset] ?? 255
-    green += data[offset + 1] ?? 255
-    blue += data[offset + 2] ?? 255
-    count += 1
-  }
-  if (count === 0) return '#ffffff'
-  return `rgb(${String(Math.round(red / count))}, ${String(Math.round(green / count))}, ${String(Math.round(blue / count))})`
 }
 
 function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {

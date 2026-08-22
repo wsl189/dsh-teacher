@@ -218,11 +218,31 @@ Host service owning the revisioned workbench document.
 @Remote('read') read(_request: TeacherWorkbenchReadRequest): Promise<TeacherWorkbenchReadResult>
 
 /**
+ * List dsh-im bots that may receive reminder notifications.
+ * @param _request - Empty request object retained for a uniform Remote signature.
+ * @returns Credential-free platform and bot identities with live connection state.
+ */
+@Remote('listNotificationTargets') listNotificationTargets(_request: Record<never, never>): Promise<readonly TeacherNotificationTarget[]>
+
+/**
+ * Project active workbench reminders for an optional shared scheduled-task list.
+ * @returns Credential-free task rows derived from the current durable document.
+ */
+listScheduledReminders(): readonly TeacherScheduledReminderTask[]
+
+/**
  * Replace the complete state after comparing the observed revision.
  * @param request - observed revision and replacement state.
  * @returns the committed document or an explicit conflict/validation failure.
  */
 @Remote('write') write(request: TeacherWorkbenchWriteRequest): Promise<TeacherWorkbenchWriteResult>
+
+/**
+ * Retain one browser-uploaded document for a later agent workbench operation.
+ * @param request - original metadata and base64 bytes.
+ * @returns a durable content-addressed source reference or stable failure.
+ */
+@Remote('stageSource') async stageSource(request: TeacherWorkbenchSourceStageRequest): Promise<TeacherWorkbenchSourceStageResult>
 
 /**
  * Resolve a configured location and fetch validated weather from the Host.
@@ -292,7 +312,7 @@ Host service owning the revisioned workbench document.
  * @param request - student identity and ordered assignment ids.
  * @returns copied-image count or a stable failure.
  */
-@Remote('saveTemporaryQuestionSelection') async saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>
+@Remote('saveTemporaryQuestionSelection') saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>
 
 /**
  * List roster students that currently have temporary Office-generation images.
@@ -321,6 +341,18 @@ Host service owning the revisioned workbench document.
  * @returns independent artifacts, skipped students, or a stable failure.
  */
 @Remote('generateStudentDocuments') async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult>
+
+/**
+ * Resolve storage policy at call time so settings changes affect later tool operations.
+ * @returns the current source-document and generated-output policy.
+ */
+sourceConfig(): TeacherWorkbenchSourceConfig
+
+/**
+ * Resolve source-image limits for conversation-requested Office generation.
+ * @returns current per-image and aggregate decoded-byte limits.
+ */
+questionDocumentLimits(): { readonly maxImageBytes: number; readonly maxBatchBytes: number }
 ```
 
 Source: [`packages/host/teacher-workbench/src/index.ts`](../../packages/host/teacher-workbench/src/index.ts)

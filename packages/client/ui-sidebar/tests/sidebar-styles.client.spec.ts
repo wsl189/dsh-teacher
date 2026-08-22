@@ -44,7 +44,7 @@ describe('SidebarRoot.module.css', () => {
     const animation = 'rail-in 150ms var(--ds-ease-in-out) backwards'
     for (const selector of [
       '.railIn .iconButton',
-      '.railIn .newSession',
+      '.railIn .primarySections',
       '.railIn .regionArea',
     ]) {
       expect(declarations(selector)?.get('animation')).toBe(animation)
@@ -60,8 +60,7 @@ describe('SidebarRoot.module.css', () => {
 
   it('gives shell rail controls the same base anchor for their shared translation', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('align-self')).toBe('flex-start')
-    expect(declarations('.collapsed .newSession')?.get('width')).toBe('36px')
+    expect(declarations('.collapsed .primarySections')?.get('justify-content')).toBe('center')
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {

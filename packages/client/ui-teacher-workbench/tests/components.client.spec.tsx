@@ -20,6 +20,9 @@ import { TeacherWorkbenchSettingsRow } from '../src/client/TeacherWorkbenchSetti
 import { WorkbenchSurface, type WorkbenchSurfaceProps } from '../src/client/WorkbenchSurface.tsx'
 import { formatMetric } from '../src/client/shared.tsx'
 
+vi.mock('pdfjs-dist', () => ({ getDocument: vi.fn() }))
+vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: { setup: vi.fn() } }))
+
 const t: WorkbenchSurfaceProps['t'] = (key, params) => {
   let value: string = zh[key as keyof typeof zh] ?? key
   for (const [name, replacement] of Object.entries(params ?? {})) value = value.replace(`{${name}}`, String(replacement))
@@ -29,10 +32,12 @@ const t: WorkbenchSurfaceProps['t'] = (key, params) => {
 const emptyState = (): TeacherWorkbenchState => ({
   dailyTodos: [], quickNotes: [], ledgerCategories: [], ledgerEntries: [], calendarItems: [], timetableEntries: [],
   classes: [], students: [], resources: [], templates: [], records: [], exams: [],
-  questionBatches: [], questionFolders: [], questionAssignments: [], noticeTemplates: [], notices: [], seatingLayouts: [],
+  questionBatches: [], questionLibraryFolders: [], questionFolders: [], questionAssignments: [],
+  noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
-const globalProps: Pick<SidebarWorkbenchProps, 'useSessions' | 'useWorkspaces'> = {
+const globalProps: Pick<SidebarWorkbenchProps, 'useSessions' | 'useWorkspaces' | 'expandSidebar'> = {
+  expandSidebar: vi.fn(),
   useSessions: (() => undefined) as SidebarWorkbenchProps['useSessions'],
   useWorkspaces: (() => undefined) as SidebarWorkbenchProps['useWorkspaces'],
 }
@@ -456,6 +461,21 @@ describe('WorkbenchSurface', () => {
       })} />)
       expect(screen.getByText(message)).toBeTruthy()
     }
+  })
+
+  it('refreshes the Host document when the open workbench changes modules', async () => {
+    const first = propsFor('daily', {
+      status: 'ready', document: { revision: 1, state: emptyState() }, error: null,
+    })
+    const rendered = render(<WorkbenchSurface {...first} />)
+    await waitFor(() => { expect(first.ensure).toHaveBeenCalledTimes(1) })
+
+    const timetable = propsFor('timetable', {
+      status: 'ready', document: { revision: 1, state: emptyState() }, error: null,
+    })
+    timetable.ensure = first.ensure
+    rendered.rerender(<WorkbenchSurface {...timetable} />)
+    await waitFor(() => { expect(first.ensure).toHaveBeenCalledTimes(2) })
   })
 
   it('does not load while closed and falls back to default settings', () => {

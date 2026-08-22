@@ -15,6 +15,7 @@ import type {
   TeacherLedgerEntryId,
   TeacherNoticeId,
   TeacherNoticeTemplateId,
+  TeacherNotificationTarget,
   TeacherRecordId,
   TeacherRecordTemplateId,
   TeacherQuickNoteId,
@@ -31,6 +32,7 @@ import type {
   TeacherQuestionImageReplaceRequest,
   TeacherQuestionSegmentResult,
   TeacherQuestionFolderId,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionTemporaryListRequest,
   TeacherQuestionTemporaryListResult,
   TeacherQuestionTemporarySaveRequest,
@@ -59,6 +61,7 @@ import type {
   TeacherQuickNoteInput,
   TeacherSeatingLayoutInput,
   TeacherQuestionFolderInput,
+  TeacherQuestionLibraryFolderInput,
   TeacherStudentInput,
   TeacherTimetableEntryInput,
   TeacherTimetableImportInput,
@@ -70,15 +73,17 @@ import type { TeacherWorkbenchExtractOptions } from './extract-document.ts'
 
 /** Semantic commands available to the workbench modules. */
 export interface TeacherWorkbenchCommands {
+  /** List configured dsh-im bots without credentials. */
+  listNotificationTargets: () => Promise<readonly TeacherNotificationTarget[]>
   /** Save a daily task. */
   saveDailyTodo: (input: TeacherDailyTodoInput) => Promise<TeacherWorkbenchActionResult>
   /** Toggle a daily task's completion state. */
   toggleDailyTodo: (id: TeacherDailyTodoId) => Promise<TeacherWorkbenchActionResult>
   /** Delete a daily task. */
   deleteDailyTodo: (id: TeacherDailyTodoId) => Promise<TeacherWorkbenchActionResult>
-  /** Save a quick note. */
+  /** Save a memo. */
   saveQuickNote: (input: TeacherQuickNoteInput) => Promise<TeacherWorkbenchActionResult>
-  /** Delete a quick note. */
+  /** Delete a memo. */
   deleteQuickNote: (id: TeacherQuickNoteId) => Promise<TeacherWorkbenchActionResult>
   /** Save a ledger category. */
   saveLedgerCategory: (input: TeacherLedgerCategoryInput) => Promise<TeacherWorkbenchActionResult>
@@ -125,6 +130,12 @@ export interface TeacherWorkbenchCommands {
   deleteStudent: (id: TeacherStudentId) => Promise<TeacherWorkbenchActionResult>
   /** Create one nested directory below a student or another question folder. */
   createQuestionFolder: (input: TeacherQuestionFolderInput) => Promise<TeacherWorkbenchActionResult>
+  /** Create one nested question-library directory. */
+  createQuestionLibraryFolder: (input: TeacherQuestionLibraryFolderInput) => Promise<TeacherWorkbenchActionResult>
+  /** Rename one question-library directory. */
+  renameQuestionLibraryFolder: (id: TeacherQuestionLibraryFolderId, name: string) => Promise<TeacherWorkbenchActionResult>
+  /** Delete one question-library directory hierarchy while preserving its batches. */
+  deleteQuestionLibraryFolder: (id: TeacherQuestionLibraryFolderId) => Promise<TeacherWorkbenchActionResult>
   /** Delete one nested question directory and all descendants. */
   deleteQuestionFolder: (id: TeacherQuestionFolderId) => Promise<TeacherWorkbenchActionResult>
   /** Save a lesson-preparation resource. */

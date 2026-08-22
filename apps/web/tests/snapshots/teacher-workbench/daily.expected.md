@@ -3,7 +3,7 @@
   - text: 1 项未完成
   - textbox "新增今日待办":
     - /placeholder: 添加今天要做的事
-  - textbox "截止时间"
+  - button "截止时间"
   - button "开始语音输入"
   - button "添加待办" [disabled]
   - article:
@@ -18,7 +18,7 @@
   - text: 1 项未完成
   - textbox "新增重要事项":
     - /placeholder: 添加重要事项
-  - textbox "截止时间"
+  - button "截止时间"
   - button "开始语音输入"
   - button "添加待办" [disabled]
   - article:
@@ -34,17 +34,17 @@
   - text: 0 项未完成
   - textbox "新增紧急事项":
     - /placeholder: 添加紧急事项
-  - textbox "截止时间"
+  - button "截止时间"
   - button "开始语音输入"
   - button "添加待办" [disabled]
   - text: 还没有紧急事项 共 0 项 · 已完成 0 项
-- region "随记":
-  - heading "随记" [level=2]
+- region "备忘录":
+  - heading "备忘录" [level=2]
   - text: 1 条
   - button "开始语音输入"
-  - button "添加随记"
+  - button "添加备忘录"
   - article:
-    - button "下节课增加小组讨论 2026/8/20 {{clock}}"
+    - button "下节课增加小组讨论 2026/8/22 {{clock}}"
     - button "编辑"
     - button "删除"
 - region "账本":
@@ -103,4 +103,4 @@
   - button "2026-09-04，农历丙午（马）年七月廿三，廿三，0 项安排": "4"
   - button "2026-09-05，农历丙午（马）年七月廿四，廿四，0 项安排": "5"
   - button "2026-09-06，农历丙午（马）年七月廿五，廿五，0 项安排": "6"
-  - text: 8月20日星期四
+  - text: 8月22日星期六

@@ -6,7 +6,7 @@ English | [中文](2026-08-06-onboarding-step-owned-takeover-chrome.zh.md)
 
 ## Problem
 
-The settings shell mounted the onboarding takeover chrome — a body-portaled overlay with an opaque `--dsw-alias-bg-layer-1` stage, a blur mask, and `#root` set inert — the moment a `settings.onboarding` step was registered and not yet locally completed. Every step decides whether it actually needs to show by loading a private fact first (WelcomeNotice: the acknowledgement bit through its settings join; DeepSeekOnboardingDialog: credential readiness through the Models join) and renders `null` while that fact is in flight. Rendering `null` could not suppress the chrome, because the opaque stage was painted by the shell around the slot outlet, not by the step.
+The settings shell mounted the onboarding takeover chrome — a body-portaled overlay with an opaque `--dsw-alias-bg-layer-1` stage, a blur mask, and `#root` set inert — the moment a `settings.onboarding` step was registered and not yet locally completed. A step decides whether it actually needs to show by loading its private readiness facts and renders `null` while that load is in flight. Rendering `null` could not suppress the chrome, because the opaque stage was painted by the shell around the slot outlet, not by the step.
 
 On every reload while the hero (blank or no session) was current, the sessions list turning `ready` therefore popped a full-screen opaque layer — white in the light palette — and blocked all interaction for exactly one credential/settings RPC round-trip, after which the already-configured steps self-completed and the layer vanished. Users saw the app flash white each refresh the moment the workspace/session lists landed.
 
@@ -14,13 +14,13 @@ On every reload while the hero (blank or no session) was current, the sessions l
 
 The takeover chrome belongs to the step, not the shell. A new zero-cordis primitive, `OnboardingSurface` (ui-primitives), renders the body-portaled overlay/mask/stage — CSS class names and geometry moved verbatim from `SettingsRoot.module.css` — and holds `#root` inert for exactly its own mount lifetime. Both step components wrap only their **visible** branch in it; their existing `null` branches now paint and block nothing by construction, because the chrome is part of the same render decision.
 
-`SettingsRoot` keeps the coordinator exactly as it was (ordered ledger projection, one mounted step, local completed set, `stepId`/`complete`/`openSection` currency) but renders the elected step bare — no portal, no stage, no inert effect. The `settings.onboarding` slot contract now states that registrants own the surface wrap and must render `null` while their private facts are undecided.
+`SettingsRoot` keeps the coordinator (ordered ledger projection, one mounted step, local completed set, `stepId`/`complete`/`openSection` state) but renders the elected step bare — no portal, no stage, no inert effect. The `settings.onboarding` slot contract states that registrants own the surface wrap and must render `null` while their private facts are undecided.
 
 ## Alternatives considered
 
 **Register steps conditionally (ledger as the has-content signal).** Register the entry only after the private join resolves to "needs intervention". Architecturally clean (publish at the commit point) but a larger change: the join load must move from the dialogs into each plugin's apply, and registration/disposal becomes reactive plumbing in two packages. Rejected as oversized for the defect.
 
-**Convert `settings.onboarding` to a chain with an externalized completed-set store.** The composer-takeover pattern; prototyped and reverted. Selectors can only judge owner props, so the private readiness facts still had to be resolved inside the components — the chain bought routing generality the two current steps do not need, at the cost of a contract change across three packages.
+**Convert `settings.onboarding` to a chain with an externalized completed-set store.** The composer-takeover pattern; prototyped and reverted. Selectors can only judge owner props, so the private readiness facts still had to be resolved inside the components — the chain bought routing generality the current flow does not need, at the cost of a contract change across three packages.
 
 **Detect empty slot output at the render site.** `renderSlot` returns an outlet element unconditionally, so the owner cannot branch on a step's `null`; probing rendered DOM emptiness needs a commit-then-retract dance whose dynamic transitions lose the pre-paint guarantee.
 

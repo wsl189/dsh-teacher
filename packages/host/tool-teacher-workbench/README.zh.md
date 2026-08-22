@@ -1,0 +1,34 @@
+# @deepseek-ai/dsh-tool-teacher-workbench
+
+[English](README.md) | 中文
+
+持久化教师工作台的面向模型 Consumer。插件在 `ctx.teacherWorkbench` 上注册一个权威板块读取工具、一个已存试题图片读取工具和五个语义修改工具。日常管理覆盖待办、备忘录、账本数据与日期事项；课程表覆盖相互独立的本周与年级班级目录及其课程行；学生名册覆盖名册班级与学生；成绩分析覆盖与名册关联的考试；试题切割覆盖已暂存 PDF 分割、试题媒体与目录、分发，以及从已存图片或普通本地图片目录生成 Office 文件。每次状态修改都使用 Host 服务中经 schema 校验且采用比较后写入的文档，不建立并行的 agent 存储。
+
+标准 Web 组合会在 `@deepseek-ai/dsh-host-teacher-workbench` 和 MinerU 支持的 OCR 服务之后挂载本插件。对话 PDF 上传提供私有 Host 来源 id，名册、课程表与成绩导入则使用随用户提示词注入的已记录 OCR Markdown。打开浏览器工作台或切换当前模块都会刷新同一 Host 文档并显示已接受的工具修改。
+
+## 扩展点
+
+本包消费 `ctx.tools`、`ctx.fs` 与 `ctx.teacherWorkbench`。挂载 `ctx.attachments` 时，本包还会注册已存试题图片读取工具，并在执行时解析 `ctx.llm`，要求当前模型路由支持图片输入。本地目录生成通过 `ctx.fs` 解析并读取嵌套图片；PDF 分割还会在执行时解析可选 `ctx.ocr` 服务，并在版面提取不可用时明确失败。本包不提供自身的服务或事件词汇。
+
+## 模型体验
+
+### 普通对话工作台操作
+
+#### 模型所见
+
+模型会收到生成的[工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-teacher-workbench)中的七个 schema。`teacher_workbench_read` 返回一个板块的稳定 id，并在日常管理结果中包含不含凭据的 `notificationTargets`。`teacher_question_image_read` 解析一张已存批次或分发图片，报告来源尺寸，并返回持久图片附件，供支持图片输入的模型选择来源像素坐标。随后，试题切割修改工具可以旋转、裁剪或消除最多 32 个矩形区域；消除时会使用各区域周围采样得到的颜色填充，裁剪和消除只替换所选已存图片，无效或越界区域会在替换前失败。`save_todo`、`save_note`、`save_ledger_entry` 与 `save_calendar_item` 都可接受提醒，其中必须使用列表中完全匹配的平台和机器人 id，并提供一次性或重复规则；备忘录和账目载荷使用 `remindAt` 保存独立提醒截止时间。未知目标和已经过去的提醒时刻会失败且不提交事项。五个修改工具选择明确 action 与对应数据，返回已提交修订号和摘要，并在适用时包含新建 id。课程表保存与导入要求今日、本周和早晚自习使用 `view=week`，仅明确的年级课表使用 `view=grade`；工具会拒绝另一目录的班级 id 和导入载荷内的重复时段，并返回受影响视图的写后读回确认。PDF 分割还会使用随上传 PDF 注入的不透明来源 id；来源字节与 Host 路径不进入模型上下文。`generate_folder_document` 接受本地目录路径且无需分配学生，`generate_document` 使用已存批次或分发目标。`generate_student_documents` 省略可选字段时与试题切割界面一致：使用临时图片、Word 标题留空且不显示姓名和日期；显式使用 `source: 'assigned'` 才读取全部已分发图片。生成的 Word 与 PowerPoint 结果包含私有 Host 输出路径。
+
+#### Token 影响
+
+挂载本 Consumer 的组合会在每次模型请求中增加七个稳定 schema。板块读取和直接修改会增加有界 JSON 工具结果。每次成功读取已存图片还会在工具结果及后续对话历史中增加一个持久图片附件。PDF 分割还会产生 MinerU 版面提取与 Host 持有的题目边界子 agent 调用；Office 生成不会发起额外模型请求。
+
+#### KV Cache 影响
+
+在包或工具呈现方式改变之前，稳定名称、说明与 schema 构成可复用请求前缀。上传 OCR 文本、工作台读取与工具结果在后续请求内容中变化。题目边界子 agent 使用与父对话相互独立的缓存。
+
+## 已知限制与延后工作
+
+- **一个部署全局工作台**：工具共享 Host 服务当前的单文档作用域；逐用户授权需要未来的存储所有权模型。
+- **保留的 PDF 来源需要过期策略**：内容寻址来源对象会去重并校验完整性，但尚未实现自动垃圾回收。
+- **生成的 Office 文件是 Host 路径**：Word 与 PowerPoint 输出会私有保存并报告绝对路径；尚未实现浏览器直接下载交接。
+- **OCR 与模型解释可能出错**：导入表格与语义题目边界在用于重要场景前应在工作台中复核。
