@@ -4229,6 +4229,159 @@
   color: var(--dsw-alias-label-secondary);
 }
 
+.legacyCuttingPanel {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  width: min(760px, calc(100% - 48px));
+  max-height: calc(100% - 48px);
+  padding: 22px;
+  flex-direction: column;
+  gap: 16px;
+  border: 1px solid var(--legacy-line);
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--legacy-panel) 94%, transparent);
+  box-shadow: var(--dsw-shadow-lv2);
+  backdrop-filter: blur(12px);
+}
+
+.legacyCuttingHeader {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+}
+
+.legacyCuttingHeader > svg {
+  color: var(--legacy-orange);
+}
+
+.legacyCuttingHeader > div {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.legacyCuttingHeader strong {
+  color: var(--legacy-text);
+  font-size: 18px;
+}
+
+.legacyCuttingHeader span,
+.legacyCuttingHeader small,
+.legacyCuttingEmpty {
+  color: var(--legacy-muted);
+  font-size: 12px;
+  line-height: 19px;
+}
+
+.legacyCuttingHeader small {
+  white-space: nowrap;
+}
+
+.legacyCuttingEmpty {
+  margin: 8px 0 2px;
+  padding: 30px 16px;
+  border: 1px dashed var(--legacy-line);
+  border-radius: 12px;
+  text-align: center;
+}
+
+.legacyCuttingJobs {
+  display: flex;
+  min-height: 0;
+  padding-right: 3px;
+  overflow-y: auto;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.legacyCuttingJob {
+  display: flex;
+  padding: 13px 14px;
+  flex: none;
+  flex-direction: column;
+  gap: 8px;
+  border: 1px solid var(--legacy-line);
+  border-radius: 12px;
+  background: var(--legacy-panel-soft);
+}
+
+.legacyCuttingJobCompleted {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-success-primary) 48%, var(--legacy-line));
+}
+
+.legacyCuttingJobFailed {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-error-primary) 48%, var(--legacy-line));
+}
+
+.legacyCuttingJobHeading,
+.legacyCuttingMeta {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.legacyCuttingJobHeading strong {
+  overflow: hidden;
+  color: var(--legacy-text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.legacyCuttingJobHeading b {
+  flex: none;
+  color: var(--legacy-orange);
+  font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.legacyCuttingTrack {
+  height: 7px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: var(--legacy-line);
+}
+
+.legacyCuttingTrack > span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--legacy-orange);
+  transition: width 220ms ease;
+}
+
+.legacyCuttingJobCompleted .legacyCuttingTrack > span {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.legacyCuttingJobFailed .legacyCuttingTrack > span {
+  background: var(--dsw-alias-state-error-primary);
+}
+
+.legacyCuttingMeta {
+  justify-content: flex-start;
+  color: var(--legacy-muted);
+  font-size: 11px;
+}
+
+.legacyCuttingMeta time {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.legacyCuttingError {
+  margin: 0;
+  color: var(--dsw-alias-state-error-primary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
 .legacyDrawerMask,
 .legacyEditorMask {
   position: absolute;
@@ -5023,6 +5176,20 @@
     padding: 0 10px;
   }
 
+  .legacyCuttingPanel {
+    width: calc(100% - 24px);
+    max-height: calc(100% - 24px);
+    padding: 14px;
+  }
+
+  .legacyCuttingHeader {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .legacyCuttingHeader > small {
+    grid-column: 1 / -1;
+  }
+
   .legacyTopActions {
     min-width: 0;
   }
@@ -5065,8 +5232,13 @@
 @media (prefers-reduced-motion: reduce) {
   .legacyStatusDot,
   .legacyProgress > span,
+  .legacyCuttingTrack > span,
   .legacyDrawer,
   .legacyTopSheet {
     animation: none;
+  }
+
+  .legacyCuttingTrack > span {
+    transition: none;
   }
 }

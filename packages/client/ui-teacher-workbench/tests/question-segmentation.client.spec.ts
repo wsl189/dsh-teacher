@@ -121,6 +121,7 @@ describe('renderQuestionCrops', () => {
       groupIndex: 0,
       regions: [{ pageIndex: 0, left: 55, top: 40, right: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
     }]
+    const progress = vi.fn()
 
     const uploads = await renderQuestionCrops(
       file,
@@ -128,9 +129,11 @@ describe('renderQuestionCrops', () => {
       questions,
       0.4,
       1,
+      progress,
     )
 
     expect(uploads.map(upload => [upload.width, upload.height])).toEqual([[40, 20], [40, 20]])
+    expect(progress.mock.calls).toEqual([[1, 2], [2, 2]])
     expect(canvases[1]?.context.drawImage).toHaveBeenCalledWith(
       canvases[0], 5, 10, 40, 20, 0, 0, 40, 20,
     )
@@ -193,8 +196,9 @@ describe('extractWorkbenchLayout', () => {
       }),
       extract: vi.fn(),
     } satisfies TeacherWorkbenchOcrRemote
+    const progress = vi.fn()
 
-    await expect(extractWorkbenchLayout(file, remote, [0, 2, 4])).resolves.toEqual({
+    await expect(extractWorkbenchLayout(file, remote, [0, 2, 4], 2, progress)).resolves.toEqual({
       ok: true,
       value: {
         name: 'paper.pdf',
@@ -207,6 +211,7 @@ describe('extractWorkbenchLayout', () => {
       },
     })
     expect(batchSizes).toEqual([2, 1])
+    expect(progress.mock.calls).toEqual([[2, 3], [3, 3]])
   })
 
   it('bisects a copied PDF batch until every upload fits the provider byte limit', async () => {

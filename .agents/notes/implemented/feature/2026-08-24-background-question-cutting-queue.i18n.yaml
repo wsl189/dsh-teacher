@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-24-background-question-cutting-queue.md
+2026-08-24-background-question-cutting-queue.md: dd91f157109431fdaa0fc86a90269ef3e5973b42
+2026-08-24-background-question-cutting-queue.zh.md: 3e8d52cb52f474b1080c76eb899bf58efac40739

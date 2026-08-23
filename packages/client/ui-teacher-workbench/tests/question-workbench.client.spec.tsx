@@ -19,7 +19,11 @@ import type {
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../src/settings.ts'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
 import { zh } from '../src/client/locales.ts'
-import { QuestionWorkbench, type QuestionWorkbenchProps } from '../src/client/QuestionWorkbench.tsx'
+import { EMPTY_QUESTION_CUTTING_VIEW } from '../src/client/question-cutting-controller.ts'
+import {
+  QuestionWorkbench as QuestionWorkbenchComponent,
+  type QuestionWorkbenchProps,
+} from '../src/client/QuestionWorkbench.tsx'
 
 const pdfMocks = vi.hoisted(() => ({ getDocument: vi.fn(), workerHandler: {} }))
 vi.mock('pdfjs-dist', () => ({ getDocument: pdfMocks.getDocument }))
@@ -40,6 +44,10 @@ const t: QuestionWorkbenchProps['t'] = (key, params) => {
   let value: string = zh[key]
   for (const [name, replacement] of Object.entries(params ?? {})) value = value.replace(`{${name}}`, String(replacement))
   return value
+}
+
+function QuestionWorkbench(props: Omit<QuestionWorkbenchProps, 'cutting'>) {
+  return <QuestionWorkbenchComponent {...props} cutting={EMPTY_QUESTION_CUTTING_VIEW} />
 }
 
 const state: TeacherWorkbenchState = {
@@ -112,6 +120,7 @@ function commands(): TeacherWorkbenchCommands {
       value: { fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: 'iVBORw0KGgo=' },
     } as const)),
     browseQuestionMedia: vi.fn(async () => ({ ok: false, error: { code: 'storage-failure', message: 'unavailable' } } as const)),
+    enqueueQuestionCutting: vi.fn(),
   } as unknown as TeacherWorkbenchCommands
 }
 
@@ -135,6 +144,52 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByRole('button', { name: '高二第一节' })).toBeNull()
     expect(screen.queryByText('错题分析')).toBeNull()
     expect(screen.queryByPlaceholderText(/同类题|讲义|PPT/u)).toBeNull()
+    expect(screen.getByLabelText('试题切割进度').textContent).toContain('暂无切割任务')
+  })
+
+  it('starts each elapsed timer when its queued PDF starts processing', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(15_000)
+    render(
+      <QuestionWorkbenchComponent
+        state={state}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={commands()}
+        cutting={{
+          jobs: [{
+            key: 'active',
+            fileName: '正在处理.pdf',
+            stage: 'extracting',
+            progress: 37,
+            queuedAt: 10_000,
+            startedAt: 11_000,
+            savedCount: 0,
+          }, {
+            key: 'queued',
+            fileName: '下一份.pdf',
+            stage: 'queued',
+            progress: 0,
+            queuedAt: 12_000,
+            savedCount: 0,
+          }],
+        }}
+        t={t}
+      />,
+    )
+
+    const progress = screen.getByLabelText('试题切割进度')
+    expect(within(progress).getByRole('progressbar', { name: '正在提取 PDF 版面' }).getAttribute('aria-valuenow')).toBe('37')
+    expect(within(progress).getByRole('progressbar', { name: '等待切割' }).getAttribute('aria-valuenow')).toBe('0')
+    expect(within(progress).getByText('37%')).toBeTruthy()
+    expect(within(progress).getByText('0%')).toBeTruthy()
+    const active = within(progress).getByRole('listitem', { name: '正在处理.pdf' })
+    const queued = within(progress).getByRole('listitem', { name: '下一份.pdf' })
+    expect(within(active).getByText('用时 00:04')).toBeTruthy()
+    expect(within(queued).getByText('用时 00:00')).toBeTruthy()
+
+    act(() => { vi.advanceTimersByTime(2_000) })
+    expect(within(active).getByText('用时 00:06')).toBeTruthy()
+    expect(within(queued).getByText('用时 00:00')).toBeTruthy()
   })
 
   it('shows each filesystem question directory once while preserving direct images and nested folders', async () => {
@@ -675,9 +730,8 @@ describe('QuestionWorkbench reference shell', () => {
         id: siblingLibraryFolderId, name: '周考', createdAt: 3, updatedAt: 3,
       }],
     }
-    const view = render(
-      <QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={commands()} t={t} />,
-    )
+    const c = commands()
+    const view = render(<QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
     const input = view.container.querySelector<HTMLInputElement>('input[type="file"][accept="application/pdf,.pdf"]')
     expect(input).not.toBeNull()
     fireEvent.change(input!, { target: { files: [pdf] } })
@@ -692,6 +746,15 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(directory).getByRole('option', { name: '周考' })).toBeTruthy()
     fireEvent.change(directory, { target: { value: nestedLibraryFolderId } })
     expect((directory as HTMLSelectElement).value).toBe(nestedLibraryFolderId)
+    fireEvent.click(within(dialog).getByRole('button', { name: '确认切割' }))
+    expect(c.enqueueQuestionCutting).toHaveBeenCalledWith(expect.objectContaining({
+      file: pdf,
+      pageIndexes: [0],
+      pageRange: '全部页码',
+      folderId: nestedLibraryFolderId,
+    }))
+    expect(screen.queryByRole('dialog', { name: '选择页码范围' })).toBeNull()
+    expect((screen.getByRole('button', { name: '上传 PDF' }) as HTMLButtonElement).disabled).toBe(false)
   })
 
   it('toggles image drawers and keeps student and question-bank images mutually exclusive', async () => {

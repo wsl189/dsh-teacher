@@ -9,9 +9,11 @@
   - button "2026" [expanded]
   - button "高一（1）班"
   - button "删除"
-- main "试题工作区空白区域":
-  - strong: 试题工作区
-  - text: 使用右上角工具上传 PDF、打开试题库或添加学生 布局验证试卷 · 1 道试题
+- main "试题切割进度":
+  - region "切割进度":
+    - strong: 切割进度
+    - text: 可连续上传 PDF；切换工作台板块或对话后任务仍会继续
+    - paragraph: 暂无切割任务，请使用右上角“上传 PDF”开始。
 - button "关闭工作台"
 - complementary "试题图片库":
   - heading "试题图片库" [level=2]

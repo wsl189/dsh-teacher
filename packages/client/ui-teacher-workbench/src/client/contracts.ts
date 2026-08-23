@@ -4,8 +4,6 @@ import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   OcrExtractResult,
-  OcrLayoutDocument,
-  OcrLayoutResult,
   TeacherCalendarItemId,
   TeacherClassId,
   TeacherDailyTodoId,
@@ -34,7 +32,6 @@ import type {
   TeacherQuestionMediaDirectoryCreateRequest,
   TeacherQuestionMediaDirectoryDeleteRequest,
   TeacherQuestionMediaDirectoryRenameRequest,
-  TeacherQuestionSegmentResult,
   TeacherQuestionFolderId,
   TeacherQuestionLibraryFolderId,
   TeacherQuestionTemporaryListRequest,
@@ -74,6 +71,10 @@ import type {
 } from './controller.ts'
 import type { StudentImportRow } from './import-data.ts'
 import type { TeacherWorkbenchExtractOptions } from './extract-document.ts'
+import type {
+  QuestionCuttingEnqueueRequest,
+  QuestionCuttingView,
+} from './question-cutting-controller.ts'
 
 /** Semantic commands available to the workbench modules. */
 export interface TeacherWorkbenchCommands {
@@ -110,10 +111,8 @@ export interface TeacherWorkbenchCommands {
     defaults: TeacherTimetableNormalizeDefaults,
     image?: File,
   ) => Promise<TeacherTimetableNormalizeResult>
-  /** Extract page geometry for deterministic question cutting. */
-  extractQuestionLayout: (file: File, pageIndexes?: readonly number[], rasterScale?: number) => Promise<OcrLayoutResult>
-  /** Detect semantic top-level question boundaries through the configured tool model. */
-  segmentQuestions: (layout: OcrLayoutDocument, padding: number) => Promise<TeacherQuestionSegmentResult>
+  /** Enqueue one browser-held PDF on the plugin-lifetime background worker. */
+  enqueueQuestionCutting: (request: QuestionCuttingEnqueueRequest) => void
   /** Persist reviewed school-calendar rows in one write. */
   importCalendarItems: (inputs: readonly TeacherCalendarImportInput[]) => Promise<TeacherWorkbenchActionResult>
   /** Save one durable timetable entry. */
@@ -215,6 +214,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
     workbench: HostObservable<TeacherWorkbenchSnapshot>
     /** Durable teacher identity and analysis settings. */
     teacherSettings: SettingsScope<TeacherWorkbenchSettings>
+    /** Browser-local question-cutting queue that survives workbench and Session navigation. */
+    questionCutting: HostObservable<QuestionCuttingView>
   }
   /** Load or retry the durable document. */
   ensure: () => Promise<TeacherWorkbenchActionResult>

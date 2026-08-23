@@ -1,0 +1,17 @@
+- main "试题切割进度":
+  - region "切割进度":
+    - strong: 切割进度
+    - text: 可连续上传 PDF；切换工作台板块或对话后任务仍会继续 2 项进行中 · 0 项已完成
+    - list:
+      - listitem "后台切割甲.pdf":
+        - strong: 后台切割甲.pdf
+        - text: 3%
+        - progressbar "正在提取 PDF 版面"
+        - text: 正在提取 PDF 版面
+        - time: 用时 {{clock}}
+      - listitem "后台切割乙.pdf":
+        - strong: 后台切割乙.pdf
+        - text: 0%
+        - progressbar "等待切割"
+        - text: 等待切割
+        - time: 用时 {{clock}}

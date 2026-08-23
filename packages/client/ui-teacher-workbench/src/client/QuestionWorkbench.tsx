@@ -15,7 +15,6 @@ import {
   X,
 } from 'lucide-react'
 import type {
-  OcrLayoutDocument,
   TeacherClass,
   TeacherClassId,
   TeacherQuestionAssignment,
@@ -41,7 +40,8 @@ import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { QuestionImageEditor } from './QuestionImageEditor.tsx'
 import { parseQuestionPageRange } from './question-page-range.ts'
-import { partitionQuestionUploads, readPdfPageCount, renderQuestionCrops } from './question-segmentation.ts'
+import type { QuestionCuttingJob, QuestionCuttingView } from './question-cutting-controller.ts'
+import { readPdfPageCount } from './question-segmentation.ts'
 import css from './TeacherWorkbench.module.css'
 
 /** Reference-style question-workspace module props. */
@@ -52,11 +52,13 @@ export interface QuestionWorkbenchProps {
   settings: TeacherWorkbenchSettings
   /** OCR, roster, and durable question commands. */
   commands: TeacherWorkbenchCommands
+  /** Plugin-lifetime queue projection retained across workbench and Session navigation. */
+  cutting: QuestionCuttingView
   /** Namespace translator. */
   t: TeacherWorkbenchTranslate
 }
 
-type BusyTask = 'pdf' | 'cut' | 'document' | 'assign' | 'temporary' | 'student' | 'folder' | null
+type BusyTask = 'document' | 'assign' | 'temporary' | 'student' | 'folder' | null
 
 const HIERARCHY_CLICK_WINDOW_MS = 260
 const LIBRARY_NAME_VISIBLE_CHARACTERS = 7
@@ -154,7 +156,7 @@ interface OfficeDialog {
 }
 
 /** Render the reference workbench shell without its former analysis and image-search center pane. */
-export function QuestionWorkbench({ state, settings, commands, t }: QuestionWorkbenchProps) {
+export function QuestionWorkbench({ state, settings, commands, cutting, t }: QuestionWorkbenchProps) {
   const fallbackYear = settings.academicYear.trim() || String(new Date().getFullYear())
   const durableClasses = useMemo(() => state.classes.filter(item => item.usage === 'roster'), [state.classes])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -167,12 +169,12 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const questionMediaMountedRef = useRef(false)
   const [busy, setBusy] = useState<BusyTask>(null)
   const [toast, setToast] = useState<string | null>(null)
+  const [readingPdf, setReadingPdf] = useState<{ fileName: string; startedAt: number } | null>(null)
   const [pendingPdf, setPendingPdf] = useState<File | null>(null)
   const [pdfPageCount, setPdfPageCount] = useState(0)
   const [pageRange, setPageRange] = useState('')
   const [pageRangeFolderId, setPageRangeFolderId] = useState<TeacherQuestionLibraryFolderId | ''>('')
   const [pageRangeOpen, setPageRangeOpen] = useState(false)
-  const [cutFailure, setCutFailure] = useState<string | null>(null)
   const [skillMenuOpen, setSkillMenuOpen] = useState(false)
   const [pendingSkillKind, setPendingSkillKind] = useState<'word' | 'ppt' | null>(null)
   const [expandedYears, setExpandedYears] = useState<Set<string>>(() => new Set([fallbackYear]))
@@ -258,7 +260,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   )
   const activeClass = classes.find(item => item.id === activeClassId)
   const activeStudent = students.find(item => item.id === activeStudentId)
-  const activeBatch = questionBatches.find(item => item.id === activeBatchId)
   const activeLibraryBatches = useMemo(() => {
     if (activeLibraryDirectoryKey === '') return []
     return questionBatches.filter(batch => activeLibraryDirectoryKey === LIBRARY_ROOT_KEY
@@ -482,9 +483,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
 
   const choosePdf = async (file: File | null): Promise<void> => {
     if (file === null) return
-    setBusy('pdf')
+    setReadingPdf({ fileName: file.name, startedAt: Date.now() })
     setToast(null)
-    setCutFailure(null)
     try {
       const count = await readPdfPageCount(file)
       setPendingPdf(file)
@@ -495,80 +495,33 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     } catch (cause) {
       setToast(errorMessage(cause, t('questions.pdfReadFailed')))
     } finally {
-      setBusy(null)
+      setReadingPdf(null)
     }
   }
 
-  const cutPdf = async (): Promise<void> => {
-    if (pendingPdf === null || pdfPageCount < 1 || busy !== null) return
+  const enqueuePdf = (): void => {
+    if (pendingPdf === null || pdfPageCount < 1) return
     let selection
     try {
       selection = parseQuestionPageRange(pageRange, pdfPageCount)
     } catch (cause) {
-      setCutFailure(errorMessage(cause, t('questions.cutFailed')))
-      setPageRangeOpen(false)
+      setToast(errorMessage(cause, t('questions.cutFailed')))
       return
     }
 
+    commands.enqueueQuestionCutting({
+      file: pendingPdf,
+      pageIndexes: selection.pageIndexes,
+      pageRange: selection.label || t('questions.allPages'),
+      ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
+      renderScale: settings.questionRenderScale,
+      padding: settings.questionCropPadding,
+    })
     setPageRangeOpen(false)
-    setCutFailure(null)
-    setBusy('cut')
-    let savedCount = 0
-    try {
-      const result = await commands.extractQuestionLayout(pendingPdf, selection.pageIndexes, settings.questionRenderScale)
-      if (!result.ok) throw new Error(result.error.message)
-      const exactPages = new Set(selection.pageIndexes)
-      const layout: OcrLayoutDocument = {
-        ...result.value,
-        pages: result.value.pages.filter(page => exactPages.has(page.pageIndex)),
-      }
-      const segmented = await commands.segmentQuestions(layout, settings.questionCropPadding)
-      if (!segmented.ok) throw new Error(segmented.error.message)
-      const questions = segmented.value.questions
-      if (questions.length === 0) throw new Error(t('questions.noMarkers'))
-      const groupCount = segmented.value.groupCount
-      const maxSaveBatchBytes = segmented.value.maxSaveBatchBytes
-      const baseName = pendingPdf.name.replace(/\.pdf$/iu, '')
-      const selectedRange = selection.label || t('questions.allPages')
-      let savedBatchId: TeacherQuestionBatchId | undefined
-      for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
-        const groupQuestions = questions.filter(question => question.groupIndex === groupIndex)
-        if (groupQuestions.length === 0) continue
-        const crops = await renderQuestionCrops(
-          pendingPdf,
-          layout,
-          groupQuestions,
-          segmented.value.maxQuestionWidthRatio,
-          settings.questionRenderScale,
-        )
-        const parts = partitionQuestionUploads(crops, maxSaveBatchBytes)
-        for (const images of parts) {
-          const saved = await commands.saveQuestionBatch({
-            ...(savedBatchId === undefined ? {} : { appendToBatchId: savedBatchId }),
-            ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
-            name: baseName,
-            sourceName: pendingPdf.name,
-            pageRange: selectedRange,
-            images,
-          })
-          if (!saved.ok) throw new Error(saved.error.message)
-          savedBatchId = saved.batchId ?? savedBatchId
-          if (savedBatchId === undefined) throw new Error(t('questions.cutFailed'))
-          savedCount += images.length
-        }
-      }
-      if (savedBatchId !== undefined) setActiveBatchId(savedBatchId)
-      setToast(t('questions.cutSaved', { count: savedCount }))
-      setPendingPdf(null)
-      setPageRange('')
-      setPageRangeFolderId('')
-      if (fileInputRef.current !== null) fileInputRef.current.value = ''
-    } catch (cause) {
-      const message = errorMessage(cause, t('questions.cutFailed'))
-      setCutFailure(savedCount > 0 ? t('questions.cutPartiallySaved', { count: savedCount, message }) : message)
-    } finally {
-      setBusy(null)
-    }
+    setPendingPdf(null)
+    setPdfPageCount(0)
+    setPageRange('')
+    setPageRangeFolderId('')
   }
 
   const addStudentHierarchy = async (): Promise<void> => {
@@ -1291,13 +1244,17 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
           </div>
           <TopAction icon={<FolderOpen size={18} />} label={t('questions.library')} onClick={() => { openQuestionBank() }} />
           <TopAction icon={<UserPlus size={18} />} label={t('questions.addStudent')} onClick={openAddStudent} />
-          <TopAction icon={<Upload size={18} />} label={t('questions.uploadPdf')} disabled={busy !== null} onClick={() => { fileInputRef.current?.click() }} />
+          <TopAction icon={<Upload size={18} />} label={t('questions.uploadPdf')} disabled={readingPdf !== null || pageRangeOpen} onClick={() => { fileInputRef.current?.click() }} />
           <input
             ref={fileInputRef}
             className={css.legacyHiddenInput}
             type="file"
             accept="application/pdf,.pdf"
-            onChange={(event) => { void choosePdf(event.target.files?.[0] ?? null) }}
+            onChange={(event) => {
+              const file = event.currentTarget.files?.[0] ?? null
+              event.currentTarget.value = ''
+              void choosePdf(file)
+            }}
           />
           <input
             ref={(node) => {
@@ -1346,13 +1303,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
             </div>
           ))}
         </aside>
-        <main className={css.legacyBlankMain} aria-label={t('questions.blankArea')}>
-          <div className={css.legacyBlankHint}>
-            <Scissors size={28} />
-            <strong>{t('questions.blankTitle')}</strong>
-            <span>{t('questions.blankHint')}</span>
-            {activeBatch !== undefined && <small>{activeBatch.name} · {t('questions.questionCount', { count: activeBatch.images.length })}</small>}
-          </div>
+        <main className={css.legacyBlankMain} aria-label={t('questions.progressArea')}>
+          <QuestionCuttingProgress cutting={cutting} readingPdf={readingPdf} t={t} />
         </main>
       </div>
 
@@ -1666,7 +1618,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                 {libraryFolderOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </FormField>
-            <div className={css.legacySheetActions}><button type="button" onClick={() => { void cutPdf() }}>{t('questions.confirmCut')}</button></div>
+            <div className={css.legacySheetActions}><button type="button" onClick={enqueuePdf}>{t('questions.confirmCut')}</button></div>
           </section>
         </>
       )}
@@ -1735,16 +1687,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
         </div>
       )}
 
-      {cutFailure !== null && (
-        <div className={css.legacyDialogLayer} role="dialog" aria-modal="true" aria-label={t('questions.cutFailed')}>
-          <button type="button" className={css.legacyEditorMask} aria-label={t('close')} onClick={() => { setCutFailure(null) }} />
-          <section className={css.legacyFailureDialog}>
-            <h3>{t('questions.cutFailed')}</h3><p>{cutFailure}</p>
-            <div><button type="button" onClick={() => { void cutPdf() }}>{t('questions.retryCut')}</button><button type="button" onClick={() => { setCutFailure(null) }}>{t('cancel')}</button></div>
-          </section>
-        </div>
-      )}
-
       {editor !== null && (
         <QuestionImageEditor
           target={editor.target}
@@ -1759,9 +1701,145 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       )}
 
       {toast !== null && <div className={css.legacyToast} role="status">{toast}</div>}
-      {busy !== null && <div className={css.legacyProgress} role="status"><span />{busy === 'cut' ? t('questions.cutting') : busy === 'pdf' ? t('questions.readingPdf') : t('saving')}</div>}
+      {busy !== null && <div className={css.legacyProgress} role="status"><span />{t('saving')}</div>}
     </div>
   )
+}
+
+interface ReadingPdfProgress {
+  readonly fileName: string
+  readonly startedAt: number
+}
+
+interface QuestionCuttingProgressProps {
+  readonly cutting: QuestionCuttingView
+  readonly readingPdf: ReadingPdfProgress | null
+  readonly t: TeacherWorkbenchTranslate
+}
+
+function QuestionCuttingProgress({ cutting, readingPdf, t }: QuestionCuttingProgressProps) {
+  const running = readingPdf !== null || cutting.jobs.some(job => job.stage !== 'completed' && job.stage !== 'failed')
+  const [now, setNow] = useState(() => Date.now())
+  useEffect(() => {
+    setNow(Date.now())
+    if (!running) return
+    const interval = window.setInterval(() => { setNow(Date.now()) }, 1_000)
+    return () => { window.clearInterval(interval) }
+  }, [running])
+  const activeCount = cutting.jobs.filter(job => job.stage !== 'completed' && job.stage !== 'failed').length
+    + (readingPdf === null ? 0 : 1)
+  const completedCount = cutting.jobs.filter(job => job.stage === 'completed').length
+
+  return (
+    <section className={css.legacyCuttingPanel} aria-labelledby="question-cutting-progress-title">
+      <header className={css.legacyCuttingHeader}>
+        <Scissors size={28} aria-hidden="true" />
+        <div>
+          <strong id="question-cutting-progress-title">{t('questions.progressTitle')}</strong>
+          <span>{t('questions.progressHint')}</span>
+        </div>
+        {(activeCount > 0 || completedCount > 0) && (
+          <small>{t('questions.progressSummary', { active: activeCount, completed: completedCount })}</small>
+        )}
+      </header>
+      {readingPdf === null && cutting.jobs.length === 0
+        ? <p className={css.legacyCuttingEmpty}>{t('questions.progressEmpty')}</p>
+        : (
+          <div className={css.legacyCuttingJobs} role="list">
+            {readingPdf !== null && (
+              <article className={css.legacyCuttingJob} role="listitem" aria-label={readingPdf.fileName}>
+                <div className={css.legacyCuttingJobHeading}>
+                  <strong>{readingPdf.fileName}</strong>
+                  <b>0%</b>
+                </div>
+                <div className={css.legacyCuttingTrack} role="progressbar" aria-label={t('questions.readingPdf')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}><span style={{ width: '0%' }} /></div>
+                <div className={css.legacyCuttingMeta}>
+                  <span>{t('questions.readingPdf')}</span>
+                  <time>{t('questions.progressElapsed', { time: formatElapsed(now - readingPdf.startedAt) })}</time>
+                </div>
+              </article>
+            )}
+            {cutting.jobs.map(job => (
+              <QuestionCuttingJobRow key={job.key} job={job} now={now} t={t} />
+            ))}
+          </div>
+        )}
+    </section>
+  )
+}
+
+function QuestionCuttingJobRow({
+  job,
+  now,
+  t,
+}: {
+  readonly job: QuestionCuttingJob
+  readonly now: number
+  readonly t: TeacherWorkbenchTranslate
+}) {
+  const finished = job.stage === 'completed' || job.stage === 'failed'
+  const stage = questionCuttingStageLabel(job, t)
+  const failure = questionCuttingFailure(job, t)
+  const elapsed = job.startedAt === undefined ? 0 : (job.finishedAt ?? now) - job.startedAt
+  return (
+    <article
+      className={`${css.legacyCuttingJob} ${job.stage === 'failed' ? css.legacyCuttingJobFailed : job.stage === 'completed' ? css.legacyCuttingJobCompleted : ''}`}
+      role="listitem"
+      aria-label={job.fileName}
+    >
+      <div className={css.legacyCuttingJobHeading}>
+        <strong>{job.fileName}</strong>
+        <b>{String(job.progress)}%</b>
+      </div>
+      <div
+        className={css.legacyCuttingTrack}
+        role="progressbar"
+        aria-label={stage}
+        aria-valuemin={0}
+        aria-valuemax={100}
+        aria-valuenow={job.progress}
+      ><span style={{ width: `${String(job.progress)}%` }} /></div>
+      <div className={css.legacyCuttingMeta}>
+        <span>{stage}</span>
+        {job.savedCount > 0 && <span>{t('questions.progressSaved', { count: job.savedCount })}</span>}
+        <time>{t('questions.progressElapsed', { time: formatElapsed(elapsed) })}</time>
+      </div>
+      {finished && failure !== null && <p className={css.legacyCuttingError}>{failure}</p>}
+    </article>
+  )
+}
+
+function questionCuttingStageLabel(job: QuestionCuttingJob, t: TeacherWorkbenchTranslate): string {
+  switch (job.stage) {
+    case 'queued': return t('questions.progressQueued')
+    case 'extracting': return t('questions.progressExtracting')
+    case 'segmenting': return t('questions.progressSegmenting')
+    case 'rendering': return t('questions.progressRendering')
+    case 'saving': return t('questions.progressSaving')
+    case 'completed': return t('questions.progressCompleted', { count: job.savedCount })
+    case 'failed': return t('questions.progressFailed')
+  }
+}
+
+function questionCuttingFailure(job: QuestionCuttingJob, t: TeacherWorkbenchTranslate): string | null {
+  if (job.stage !== 'failed') return null
+  const message = job.failureCode === 'no-session'
+    ? t('questions.progressNoSession')
+    : job.failureCode === 'no-questions'
+      ? t('questions.noMarkers')
+      : job.failureMessage ?? t('questions.cutFailed')
+  return job.savedCount > 0
+    ? t('questions.cutPartiallySaved', { count: job.savedCount, message })
+    : message
+}
+
+function formatElapsed(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1_000))
+  const hours = Math.floor(totalSeconds / 3_600)
+  const minutes = Math.floor(totalSeconds % 3_600 / 60)
+  const seconds = totalSeconds % 60
+  const clock = [minutes, seconds].map(value => String(value).padStart(2, '0')).join(':')
+  return hours === 0 ? clock : `${String(hours)}:${clock}`
 }
 
 interface TopActionProps {

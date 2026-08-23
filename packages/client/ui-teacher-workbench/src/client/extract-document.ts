@@ -39,6 +39,7 @@ export interface TeacherWorkbenchExtractOptions {
  * @param remote - generated OCR Remote namespace.
  * @param pageIndexes - exact zero-based source pages to parse; omitted parses every page.
  * @param rasterScale - PDF.js scale used only when one copied page still exceeds the provider limit.
+ * @param progress - optional callback after each top-level OCR batch completes.
  * @returns normalized layout or a transport failure.
  */
 export async function extractWorkbenchLayout(
@@ -46,6 +47,7 @@ export async function extractWorkbenchLayout(
   remote: TeacherWorkbenchOcrRemote,
   pageIndexes?: readonly number[],
   rasterScale = 2,
+  progress?: (completedPages: number, totalPages: number) => void,
 ): Promise<OcrLayoutResult> {
   try {
     const carriedLimits = await remote.layoutLimits()
@@ -69,6 +71,7 @@ export async function extractWorkbenchLayout(
       if (!result.ok) return result
       provider ??= result.value.provider
       pages.push(...result.value.pages)
+      progress?.(Math.min(offset + batch.length, indexes.length), indexes.length)
     }
     pages.sort((left, right) => left.pageIndex - right.pageIndex)
     return pages.length === 0

@@ -40,6 +40,7 @@ const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
 const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
 const QUESTION_SAVE_DIRECTORY_EXPECTED = join(SNAPSHOT_DIR, 'question-save-directory.expected.md')
 const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
+const QUESTION_CUTTING_PROGRESS_EXPECTED = join(SNAPSHOT_DIR, 'question-cutting-progress.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
 const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
@@ -76,6 +77,7 @@ describe('web e2e: durable teacher workbench', () => {
   let minerUServer: Server
   let minerUMarkdown = ''
   let minerUMiddleJson = ''
+  let minerUResponseGate: Promise<void> | null = null
 
   async function openModule(name: string): Promise<void> {
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
@@ -99,20 +101,28 @@ describe('web e2e: durable teacher workbench', () => {
       const chunks: Uint8Array[] = []
       request.on('data', (chunk: Uint8Array) => { chunks.push(chunk) })
       request.on('end', () => {
-        const upload = Buffer.concat(chunks).toString('latin1')
-        if (request.method !== 'POST' || request.url !== '/file_parse' || !upload.includes('return_md') || !upload.includes('effort')) {
-          response.writeHead(400).end()
-          return
-        }
-        response.setHeader('content-type', 'application/json')
-        response.end(JSON.stringify({
-          results: {
-            document: {
-              md_content: minerUMarkdown,
-              ...(minerUMiddleJson === '' ? {} : { middle_json: minerUMiddleJson }),
+        void (async () => {
+          const upload = Buffer.concat(chunks).toString('latin1')
+          if (request.method !== 'POST' || request.url !== '/file_parse' || !upload.includes('return_md') || !upload.includes('effort')) {
+            response.writeHead(400).end()
+            return
+          }
+          const responseGate = minerUResponseGate
+          const responseMarkdown = minerUMarkdown
+          const responseMiddleJson = minerUMiddleJson
+          if (responseGate !== null) await responseGate
+          response.setHeader('content-type', 'application/json')
+          response.end(JSON.stringify({
+            results: {
+              document: {
+                md_content: responseMarkdown,
+                ...(responseMiddleJson === '' ? {} : { middle_json: responseMiddleJson }),
+              },
             },
-          },
-        }))
+          }))
+        })().catch((error: unknown) => {
+          response.destroy(error instanceof Error ? error : new Error(String(error)))
+        })
       })
     })
     await new Promise<void>((resolve) => { minerUServer.listen(0, '127.0.0.1', resolve) })
@@ -1006,6 +1016,69 @@ describe('web e2e: durable teacher workbench', () => {
     await liveLibraryDelete.click()
     await liveLibraryFolder.waitFor({ state: 'hidden', timeout: 10_000 })
     await expect(stat(liveLibraryDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps consecutive PDF cuts running across workbench and conversation navigation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-question-cutting-progress'))
+    await openModule('试题切割')
+    const originalMarkdown = minerUMarkdown
+    const originalMiddleJson = minerUMiddleJson
+    let releaseMinerU: (() => void) | undefined
+    minerUMarkdown = ''
+    minerUMiddleJson = ''
+    minerUResponseGate = new Promise<void>((resolve) => { releaseMinerU = resolve })
+    const pdfInput = page.locator('[data-question-workbench] input[type="file"][accept="application/pdf,.pdf"]')
+
+    try {
+      for (const name of ['后台切割甲.pdf', '后台切割乙.pdf']) {
+        await pdfInput.setInputFiles({
+          name,
+          mimeType: 'application/pdf',
+          buffer: onePagePdfFixture(),
+        })
+        const pageRangeDialog = page.getByRole('dialog', { name: '选择页码范围' })
+        await pageRangeDialog.waitFor({ timeout: 10_000 })
+        await pageRangeDialog.getByRole('button', { name: '确认切割' }).click()
+        await pageRangeDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+      }
+
+      let progressArea = page.getByRole('main', { name: '试题切割进度' })
+      const firstJob = progressArea.getByRole('listitem', { name: '后台切割甲.pdf' })
+      const secondJob = progressArea.getByRole('listitem', { name: '后台切割乙.pdf' })
+      await firstJob.getByText('正在提取 PDF 版面', { exact: true }).waitFor({ timeout: 10_000 })
+      await secondJob.getByText('等待切割', { exact: true }).waitFor({ timeout: 10_000 })
+      expect(await firstJob.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('3')
+      expect(await secondJob.getByRole('progressbar').getAttribute('aria-valuenow')).toBe('0')
+      await compareOrRefreshGolden(
+        QUESTION_CUTTING_PROGRESS_EXPECTED,
+        await captureStableAria(page, 'main[aria-label="试题切割进度"]', scaffold.workspaceCwd),
+        MODE,
+      )
+
+      await openModule('日常备课')
+      await openModule('试题切割')
+      progressArea = page.getByRole('main', { name: '试题切割进度' })
+      await progressArea.getByRole('listitem', { name: '后台切割甲.pdf' }).waitFor({ timeout: 10_000 })
+      await progressArea.getByRole('listitem', { name: '后台切割乙.pdf' }).waitFor({ timeout: 10_000 })
+
+      await showConversation()
+      await openModule('试题切割')
+      progressArea = page.getByRole('main', { name: '试题切割进度' })
+      await progressArea.getByRole('listitem', { name: '后台切割甲.pdf' }).waitFor({ timeout: 10_000 })
+      await progressArea.getByRole('listitem', { name: '后台切割乙.pdf' }).waitFor({ timeout: 10_000 })
+    } finally {
+      releaseMinerU?.()
+      minerUResponseGate = null
+      minerUMarkdown = originalMarkdown
+      minerUMiddleJson = originalMiddleJson
+    }
+
+    const progressArea = page.getByRole('main', { name: '试题切割进度' })
+    await expect.poll(
+      () => progressArea.getByText('切割失败', { exact: true }).count(),
+      { timeout: 10_000 },
+    ).toBe(2)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

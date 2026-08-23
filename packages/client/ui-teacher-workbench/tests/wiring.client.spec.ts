@@ -126,7 +126,7 @@ describe('teacher-workbench browser wiring', () => {
     const resetListeners: (() => void)[] = []
     const navigationListeners: (() => void)[] = []
     let currentSession = 'session-a'
-    const effectDisposers: (() => void)[] = []
+    const effectDisposers: (() => void | Promise<void>)[] = []
     const localeDispose = vi.fn()
     const slotDispose = vi.fn()
     const ctx = {
@@ -138,7 +138,7 @@ describe('teacher-workbench browser wiring', () => {
         },
       },
       settingsScope: { bind: vi.fn(() => scope) },
-      effect: vi.fn((factory: () => undefined | (() => void)) => {
+      effect: vi.fn((factory: () => undefined | (() => void | Promise<void>)) => {
         const result = factory()
         if (typeof result === 'function') effectDisposers.push(result)
       }),
@@ -254,9 +254,15 @@ describe('teacher-workbench browser wiring', () => {
     })
     expect(weather).toHaveBeenCalledWith({ location: '不存在' })
     expect((surface.hooks as Record<string, unknown>).teacherSettings).toBe(scope)
+    const questionCutting = (surface.hooks as Record<string, unknown>).questionCutting as {
+      readonly getSnapshot?: unknown
+      readonly subscribe?: unknown
+    }
+    expect(typeof questionCutting.getSnapshot).toBe('function')
+    expect(typeof questionCutting.subscribe).toBe('function')
     expect((settings.hooks as Record<string, unknown>).teacherSettings).toBe(scope)
 
-    effectDisposers.forEach((disposer) => { disposer() })
+    for (const disposer of effectDisposers) await Promise.resolve(disposer())
     await expect((surface.saveClass as (value: unknown) => Promise<unknown>)({
       name: '已销毁', grade: '', subject: '',
     })).resolves.toMatchObject({ ok: false, error: { code: 'disposed' } })

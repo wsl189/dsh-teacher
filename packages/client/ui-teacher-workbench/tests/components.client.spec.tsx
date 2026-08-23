@@ -19,6 +19,7 @@ import { SidebarWorkbench, type SidebarWorkbenchProps } from '../src/client/Side
 import { TeacherWorkbenchSettingsRow } from '../src/client/TeacherWorkbenchSettingsRow.tsx'
 import { WorkbenchSurface, type WorkbenchSurfaceProps } from '../src/client/WorkbenchSurface.tsx'
 import { formatMetric } from '../src/client/shared.tsx'
+import { EMPTY_QUESTION_CUTTING_VIEW } from '../src/client/question-cutting-controller.ts'
 
 vi.mock('pdfjs-dist', () => ({ getDocument: vi.fn() }))
 vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: { setup: vi.fn() } }))
@@ -50,6 +51,7 @@ function commands() {
       saveQuickNote: ok, deleteQuickNote: ok, saveLedgerCategory: ok, deleteLedgerCategory: ok,
       saveLedgerEntry: ok, deleteLedgerEntry: ok, saveCalendarItem: ok, deleteCalendarItem: ok,
       extractDocument: vi.fn(), normalizeTimetable: vi.fn(), importCalendarItems: ok,
+      enqueueQuestionCutting: vi.fn(),
       saveTimetableEntry: ok, deleteTimetableEntry: ok, importTimetableEntries: ok,
       saveClass: ok, deleteClass: ok, saveStudent: ok, importStudents: ok, deleteStudent: ok,
       saveResource: ok, deleteResource: ok, saveTemplate: ok, deleteTemplate: ok,
@@ -393,6 +395,7 @@ describe('WorkbenchSurface', () => {
       actions: { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() },
       useWorkbench: selector => selector(snapshot),
       useTeacherSettings: selector => selector(settings),
+      useQuestionCutting: selector => selector(EMPTY_QUESTION_CUTTING_VIEW),
       ensure: vi.fn(async () => ({ ok: true })),
       subscribeSessionNavigation: vi.fn(() => () => {}),
       setWeatherLocation: vi.fn(async () => {}),

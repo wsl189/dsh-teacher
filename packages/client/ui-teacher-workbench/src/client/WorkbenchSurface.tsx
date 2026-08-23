@@ -18,7 +18,7 @@ import { FamilyCommunication } from './FamilyCommunication.tsx'
 import { StructuredRecords } from './StructuredRecords.tsx'
 import { SeatingPlan } from './SeatingPlan.tsx'
 import { Timetable } from './Timetable.tsx'
-import { QuestionWorkbench } from './QuestionWorkbench.tsx'
+import { QuestionWorkbench, type QuestionWorkbenchProps } from './QuestionWorkbench.tsx'
 import css from './TeacherWorkbench.module.css'
 
 /** Full main-surface component props. */
@@ -27,6 +27,9 @@ export type WorkbenchSurfaceProps =
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
   & InjectFace<TeacherWorkbenchInjected>
+
+type ConnectedQuestionWorkbenchProps = Omit<QuestionWorkbenchProps, 'cutting'>
+  & Pick<WorkbenchSurfaceProps, 'useQuestionCutting'>
 
 const MODULE_LABELS: Record<TeacherWorkbenchModule, TeacherWorkbenchKey> = {
   daily: 'module.daily',
@@ -78,8 +81,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     deleteCalendarItem: props.deleteCalendarItem,
     extractDocument: props.extractDocument,
     normalizeTimetable: props.normalizeTimetable,
-    extractQuestionLayout: props.extractQuestionLayout,
-    segmentQuestions: props.segmentQuestions,
+    enqueueQuestionCutting: props.enqueueQuestionCutting,
     importCalendarItems: props.importCalendarItems,
     saveTimetableEntry: props.saveTimetableEntry,
     deleteTimetableEntry: props.deleteTimetableEntry,
@@ -180,7 +182,13 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                     t={props.t}
                   />
                   : active === 'questions'
-                    ? <QuestionWorkbench state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
+                    ? <ConnectedQuestionWorkbench
+                      state={snapshot.document.state}
+                      settings={settings}
+                      commands={commands}
+                      useQuestionCutting={props.useQuestionCutting}
+                      t={props.t}
+                    />
                     : active === 'lesson'
                       ? <LessonPreparation state={snapshot.document.state} commands={commands} t={props.t} />
                       : active === 'students'
@@ -204,4 +212,9 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
       </div>
     </section>
   )
+}
+
+function ConnectedQuestionWorkbench({ useQuestionCutting, ...props }: ConnectedQuestionWorkbenchProps) {
+  const cutting = useQuestionCutting(state => state)
+  return <QuestionWorkbench {...props} cutting={cutting} />
 }

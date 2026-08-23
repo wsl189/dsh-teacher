@@ -132,6 +132,7 @@ export async function readPdfPageCount(file: File): Promise<number> {
  * @param questions - reviewed detection regions in source order.
  * @param maxQuestionWidthRatio - widest normalized MinerU question region in the PDF.
  * @param renderScale - bounded PDF.js raster scale.
+ * @param progress - optional callback after each complete question crop.
  * @returns browser-produced PNG payloads ready for Host persistence.
  */
 export async function renderQuestionCrops(
@@ -140,6 +141,7 @@ export async function renderQuestionCrops(
   questions: readonly DetectedQuestion[],
   maxQuestionWidthRatio: MaximumQuestionWidthRatio,
   renderScale: number,
+  progress?: (completedQuestions: number, totalQuestions: number) => void,
 ): Promise<TeacherQuestionImageUpload[]> {
   const pdfjs = await loadPdfJs()
   const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
@@ -216,6 +218,7 @@ export async function renderQuestionCrops(
         height: output.height,
         contentBase64: await blobBase64(blob),
       })
+      progress?.(uploads.length, questions.length)
     }
     return uploads
   } finally {
