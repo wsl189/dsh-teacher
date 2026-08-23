@@ -100,7 +100,7 @@ function browserSourcePath(source: string, sourcemapPath: string): string {
  * @param libEntry - node-half entries, spelled at the call site so the
  * package-invariants gate can see `lib/types/invariant.js` in each package's
  * own tsdown.config.ts (a preset-side glob hides it from the mechanical check).
- * @param options - phase placement, lib overrides, and companion Node configs.
+ * @param options - phase placement, client aliases, lib overrides, and companion Node configs.
  * @returns ENV-selected tsdown config for the current build face.
  */
 export function clientBundle(
@@ -112,7 +112,7 @@ export function clientBundle(
   return ({ env }) => {
     const face = buildFace(env?.DSH_BUILD_FACE)
     const clientEntry = face === undefined ? 'src/client/index.ts' : 'lib/types/client/index.js'
-    const client = clientConfig(id, clientEntry, options.client)
+    const client = clientConfig(id, clientEntry, options.clientAlias)
     const node = [lib, ...(options.companions ?? [])]
     if (face === 'host') return options.hostPhase === true ? node : [SKIP_WORKSPACE_BUILD]
     if (face === 'client') {
@@ -197,12 +197,12 @@ export function clientOnly(configs: readonly UserConfig[]): BuildFaceConfig {
 interface ClientBundleOptions {
   /** Emit the Node-side artifacts during the Host pass instead of the Client pass. */
   readonly hostPhase?: boolean
+  /** Browser-only dependency aliases for packages whose CJS export conditions select a Node entry. */
+  readonly clientAlias?: Readonly<Record<string, string>>
   /** Additional Node-side configs emitted alongside the package library. */
   readonly companions?: readonly UserConfig[]
   /** Overrides for the package's primary Node-side library config. */
   readonly lib?: UserConfig
-  /** Overrides for the browser client bundle. */
-  readonly client?: UserConfig
 }
 
 type BuildFace = 'host' | 'client' | undefined
@@ -436,7 +436,11 @@ function matchesSpecifier(patterns: readonly RegExp[], specifier: string): boole
   return patterns.some(pattern => pattern.test(specifier))
 }
 
-function clientConfig(id: string, entry: string, overrides: UserConfig = {}): UserConfig {
+function clientConfig(
+  id: string,
+  entry: string,
+  alias: Readonly<Record<string, string>> | undefined,
+): UserConfig {
   const isRequested = (specifier: string): boolean => clientExternals(id).has(specifier)
   return {
     name: `${id}/client`,
@@ -447,6 +451,7 @@ function clientConfig(id: string, entry: string, overrides: UserConfig = {}): Us
     outDir: 'lib',
     format: 'cjs',
     platform: 'browser',
+    ...alias === undefined ? {} : { alias: { ...alias } },
     // Types ship from lib/types (tsc); dts here would wrap the banner/footer into .d.cts and break parsing.
     dts: false,
     // Plugin code is fetched outside Vite's module graph, so its own bundle
@@ -565,7 +570,6 @@ function clientConfig(id: string, entry: string, overrides: UserConfig = {}): Us
       footer: 'return module.exports; } });',
       intro: 'var module = { exports: {} }; var exports = module.exports;',
     },
-    ...overrides,
   }
 }
 

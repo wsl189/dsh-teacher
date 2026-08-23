@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
-  ComposerAttachment, ComposerAttachmentsProps,
+  ComposerAttachment, ComposerAttachmentsProps, DraftDocument, DraftDocumentId,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import type { DocumentSidebarController } from './document-sidebar.tsx'
 import { AttachmentRail } from '../AttachmentRail.tsx'
 import type { AttachmentRailItem } from '../AttachmentRail.tsx'
 import { DropOverlay } from '../DropOverlay.tsx'
@@ -25,6 +26,28 @@ interface DroppedEntry {
 interface DroppedBatch {
   readonly directories: readonly string[]
   readonly files: readonly File[]
+}
+
+/** Optional better-sidebar bridge injected by this plugin's registration. */
+export interface ComposerAttachmentsInjected {
+  /** Read the currently composed preview bridge without making it a hard dependency. */
+  documentSidebar: () => DocumentSidebarController | undefined
+}
+
+type ComposerAttachmentsViewProps = ComposerAttachmentsProps & ComposerAttachmentsInjected
+
+function documentStatus(document: DraftDocument, t: ComposerAttachmentsProps['t']): string {
+  if (document.status === 'extracting') return t('document.extracting')
+  if (document.status === 'error') return t('document.failed')
+  return document.truncated === true ? t('document.readyTruncated') : t('document.ready')
+}
+
+function DocumentIcon() {
+  return (
+    <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+      <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  )
 }
 
 /** Resolve a directory path from native-client metadata or the browser-relative entry. */
@@ -59,16 +82,23 @@ function droppedBatch(dataTransfer: DataTransfer): DroppedBatch {
 
 /** Draft-image rail, file/folder drop target, and original-image preview slot entry. */
 export function ComposerAttachments({
-  attachments, canAcceptDrop, onAddImages, onAddDirectories, onRemoveImage, dropLimits, t,
-}: ComposerAttachmentsProps) {
+  attachments, documents, canAcceptDrop, canRemoveDocuments,
+  onAddImages, onAddDirectories, onRemoveImage, resolveDocumentFile, onRemoveDocument,
+  dropLimits, sessionId, documentSidebar, t,
+}: ComposerAttachmentsViewProps) {
   const [preview, setPreview] = useState<ComposerAttachment | null>(null)
   const [dragActive, setDragActive] = useState(false)
   const dragDepth = useRef(0)
   const closePreview = useCallback(() => { setPreview(null) }, [])
+  const sidebar = documentSidebar()
 
   useEffect(() => {
     if (preview !== null && !attachments.some(attachment => attachment.id === preview.id)) setPreview(null)
   }, [attachments, preview])
+
+  useEffect(() => {
+    if (sessionId !== undefined) sidebar?.reconcile(sessionId, documents)
+  }, [documents, sessionId, sidebar])
 
   useEffect(() => {
     const fileTransfer = (event: globalThis.DragEvent): DataTransfer | null => {
@@ -139,6 +169,61 @@ export function ComposerAttachments({
           disabled={!canAcceptDrop}
           labels={dropOverlayLabels(t, canAcceptDrop, dropLimits)}
         />
+      )}
+      {documents.length > 0 && (
+        <div className={css.documentRail} aria-label={t('document.pending')}>
+          {documents.map((document) => {
+            const open = sessionId === undefined || sidebar === undefined
+              ? undefined
+              : (): void => {
+                const file = resolveDocumentFile(document.id)
+                if (file !== undefined) sidebar.open(sessionId, document, file, t)
+              }
+            const previewable = open !== undefined
+            const content = (
+              <>
+                <DocumentIcon />
+                <span className={css.documentName}>{document.name}</span>
+                <span className={css.documentStatus}>{documentStatus(document, t)}</span>
+              </>
+            )
+            const remove = (id: DraftDocumentId): void => {
+              if (sessionId !== undefined) sidebar?.close(sessionId, id)
+              onRemoveDocument(id)
+            }
+            return (
+              <div
+                key={document.id}
+                className={css.documentChip}
+                data-document-status={document.status}
+                data-document-previewable={previewable || undefined}
+                title={document.error}
+              >
+                {previewable
+                  ? (
+                    <button
+                      type="button"
+                      className={css.documentOpen}
+                      aria-label={t('document.openPreview', { name: document.name })}
+                      onClick={open}
+                    >
+                      {content}
+                    </button>
+                  )
+                  : <div className={css.documentStatic}>{content}</div>}
+                <button
+                  type="button"
+                  className={css.documentRemove}
+                  aria-label={t('document.remove', { name: document.name })}
+                  disabled={!canRemoveDocuments}
+                  onClick={() => { remove(document.id) }}
+                >
+                  ×
+                </button>
+              </div>
+            )
+          })}
+        </div>
       )}
       {railItems.length > 0 && (
         <div className={css.rail}>

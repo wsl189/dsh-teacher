@@ -130,12 +130,11 @@ describe('session export compression config', () => {
     expect(ApiProxyService.Config({})).toEqual({
       sessionExportCompressionLevel: 6,
       coldBlankProbeMaxBytes: 1024,
-      previewFileMaxBytes: 41943040,
     })
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 0 }))
-      .toEqual({ sessionExportCompressionLevel: 0, coldBlankProbeMaxBytes: 1024, previewFileMaxBytes: 41943040 })
+      .toEqual({ sessionExportCompressionLevel: 0, coldBlankProbeMaxBytes: 1024 })
     expect(ApiProxyService.Config({ sessionExportCompressionLevel: 9 }))
-      .toEqual({ sessionExportCompressionLevel: 9, coldBlankProbeMaxBytes: 1024, previewFileMaxBytes: 41943040 })
+      .toEqual({ sessionExportCompressionLevel: 9, coldBlankProbeMaxBytes: 1024 })
     for (const value of [-1, 10, 1.5]) {
       expect(() => ApiProxyService.Config({ sessionExportCompressionLevel: value } as never)).toThrow()
     }
@@ -145,23 +144,11 @@ describe('session export compression config', () => {
 describe('cold blank probe config', () => {
   it('accepts a per-Session byte bound including zero and rejects invalid bounds', () => {
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 0 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 0, previewFileMaxBytes: 41943040 })
+      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 0 })
     expect(ApiProxyService.Config({ coldBlankProbeMaxBytes: 2048 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 2048, previewFileMaxBytes: 41943040 })
+      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 2048 })
     for (const value of [-1, 1.5]) {
       expect(() => ApiProxyService.Config({ coldBlankProbeMaxBytes: value })).toThrow()
-    }
-  })
-})
-
-describe('file preview config', () => {
-  it('accepts a complete-file byte bound including zero and rejects invalid bounds', () => {
-    expect(ApiProxyService.Config({ previewFileMaxBytes: 0 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 1024, previewFileMaxBytes: 0 })
-    expect(ApiProxyService.Config({ previewFileMaxBytes: 2048 }))
-      .toEqual({ sessionExportCompressionLevel: 6, coldBlankProbeMaxBytes: 1024, previewFileMaxBytes: 2048 })
-    for (const value of [-1, 1.5]) {
-      expect(() => ApiProxyService.Config({ previewFileMaxBytes: value })).toThrow()
     }
   })
 })

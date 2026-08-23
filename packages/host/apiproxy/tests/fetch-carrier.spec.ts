@@ -102,9 +102,6 @@ function fakeApi(overrides: Partial<{ muxFrames: MuxFrame[]; hostFrames: HostFra
           result: { ok: true, value: { attachment: { attachmentId: 'a' as never, mediaType: 'image/png' as const, bytes: 1, width: 1, height: 1 }, data: 'AA==' } },
         }
       },
-      async previewFile(request) {
-        return { rpcId: request.rpcId, result: { ok: true, value: { dataBase64: 'AA==', size: 1 } } }
-      },
       async updateQueue(request) {
         return { rpcId: request.rpcId, result: { ok: true, value: { accepted: true as const } } }
       },
@@ -361,8 +358,6 @@ describe('unary round trip (handler ⇄ client, no network)', () => {
     expect(renamed.result).toMatchObject({ ok: true, value: { title: 'named', seq: 0 } })
     expect((await c.sessions.prompt({ sessionId: 's' as never, mode: 'queue', content: [{ type: 'text', text: 'x' }] })).result.ok).toBe(true)
     expect((await c.sessions.attachment({ sessionId: 's' as never, attachmentId: 'a' as never })).result.ok).toBe(true)
-    expect((await c.sessions.previewFile({ sessionId: 's' as never, path: 'report.pdf' })).result)
-      .toEqual({ ok: true, value: { dataBase64: 'AA==', size: 1 } })
     expect((await c.sessions.updateQueue({
       sessionId: 's' as never,
       itemId: 'item-1' as never,

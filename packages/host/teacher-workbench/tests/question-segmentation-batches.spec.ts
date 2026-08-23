@@ -111,4 +111,52 @@ describe('segmentQuestionsInBatches', () => {
     expect(result.ok && result.value.questions.map(question => question.questionNo)).toEqual([1, 2, 3, 4])
     await ctx.fiber.dispose()
   })
+
+  it('publishes PDF-wide normalized horizontal crop bounds after every semantic group is merged', async () => {
+    const runner = vi.fn(async (_ctx: Context, groupRequest: TeacherQuestionSegmentRequest) => ({
+      ok: true as const,
+      value: {
+        questions: groupRequest.pages.map(page => ({
+          questionNo: 1,
+          headPageIndex: page.pageIndex,
+          groupIndex: 0,
+          regions: [{
+            pageIndex: page.pageIndex,
+            left: page.pageIndex === 0 ? 30 : 120,
+            top: 20,
+            right: page.pageIndex === 0 ? 300 : 540,
+            bottom: 50,
+            pageWidth: 600,
+            pageHeight: 800,
+          }],
+        })),
+      },
+    }))
+    const ctx = new Context()
+    const result = await segmentQuestionsInBatches(ctx, request(2), {
+      ...CONFIG,
+      questionSegmentationBatchPages: 1,
+    }, runner)
+
+    expect(result.ok && result.value.horizontalBounds).toEqual({ leftRatio: 0.05, rightRatio: 0.9 })
+    expect(result.ok && result.value.questions.map(question => question.regions[0])).toMatchObject([
+      { left: 30, right: 300 },
+      { left: 120, right: 540 },
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('uses the complete page width when no group returns a question', async () => {
+    const ctx = new Context()
+    const result = await segmentQuestionsInBatches(ctx, request(1), CONFIG, async () => ({
+      ok: true,
+      value: { questions: [] },
+    }))
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { horizontalBounds: { leftRatio: 0, rightRatio: 1 }, questions: [] },
+    })
+    await ctx.fiber.dispose()
+  })
 })

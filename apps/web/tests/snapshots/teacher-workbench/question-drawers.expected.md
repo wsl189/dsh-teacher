@@ -1,5 +1,4 @@
 - heading "试题分割系统" [level=2]
-- text: 布局验证试卷
 - button "技能库"
 - button "试题图片库"
 - button "添加学生"
@@ -18,9 +17,9 @@
   - heading "试题图片库" [level=2]
   - button "新建文件夹"
   - button "关闭工作台"
-  - button "▾ 模拟题库 0" [expanded]
+  - button "▾ 模拟题库" [expanded]: 模拟题库 0
   - button "删除目录“模拟题库”"
-  - button "· 八月题库 0"
+  - button "八月题库": 八月题库 0
   - button "删除目录“八月题库”"
   - button "布局验证试卷 1"
   - button "删除"

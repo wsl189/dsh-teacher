@@ -22,6 +22,22 @@ Start a session and send:
 
 The agent can read and edit workspace files, run commands, delegate work, and maintain a plan. The Web UI asks before operations that require approval under the active permission policy.
 
+## Preview uploaded files
+
+Use the file button in the composer to upload PDF, DOCX, XLSX, PPTX, or a supported image. Select the pending file card to open it in the right sidebar; preview is available while MinerU extraction is running and does not require the external Office viewer. Removing the file or sending the message closes its temporary preview because the browser-held upload is no longer part of the draft.
+
+## Preview workspace files
+
+The standard Web profile includes the better-sidebar workbench. Open its handle at the right edge, choose **Files**, and open a workspace file. Markdown, images, and PDF render inline without another installation.
+
+Previewing modern Word, Excel, and PowerPoint files from the workspace requires the external Office viewer plugin:
+
+```sh
+dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.0
+```
+
+The Office viewer is an AGPL-3.0 package installed into the user's Web profile rather than distributed with the MIT-licensed Harness runtime. Restart `dsh web` and hard-refresh the browser after installation. It previews `.docx`, `.xlsx`, and `.pptx`; legacy `.doc`, `.xls`, and `.ppt` files remain download-only.
+
 ## Continue
 
 - [Configure models](./providers.md)

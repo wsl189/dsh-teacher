@@ -161,6 +161,7 @@ async function scopedBench(register?: (inputTriggers: InputTriggerService) => vo
     })),
     addDocuments: vi.fn(),
     removeDocument: vi.fn(),
+    draftDocumentFile: () => undefined,
     resolveSubmitMode: () => 'queue',
     toggleCommandMenu: (selection) => {
       const snapshot = shell.snapshot

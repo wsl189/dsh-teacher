@@ -52,7 +52,8 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  max-height: 178px;
+  /* Eight 34px rows plus seven 2px gaps; remaining modules scroll. */
+  max-height: 286px;
   padding: 2px 0 0 18px;
   overflow-x: hidden;
   overflow-y: auto;

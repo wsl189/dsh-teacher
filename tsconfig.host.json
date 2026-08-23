@@ -30,6 +30,7 @@
     "apps/web/tests/plugin-config.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
     "apps/web/tests/teacher-workbench.e2e.ts",
+    "apps/web/tests/better-sidebar.e2e.ts",
     "apps/web/tests/question-segmentation.snapshot.ts",
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/onboarding-deepseek-config.e2e.ts",

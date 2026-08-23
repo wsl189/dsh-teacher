@@ -305,6 +305,7 @@ export function apply(ctx: Context): void {
           draftImages: undefined,
           addDocuments: undefined,
           removeDocument: undefined,
+          draftDocumentFile: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
             submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
@@ -346,6 +347,7 @@ export function apply(ctx: Context): void {
         draftImages: ids => conversation.draftImages(ids),
         addDocuments: (files) => { conversation.addDraftDocuments(sessionId, files) },
         removeDocument: (id) => { conversation.removeDraftDocument(id) },
+        draftDocumentFile: id => conversation.draftDocumentFile(id),
         resolveSubmitMode: (running, gesture, steeringAvailable) =>
           submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
@@ -426,10 +428,6 @@ export function apply(ctx: Context): void {
           actions.select(target)
           layout.openDetails()
         },
-        previewFile: (path) => {
-          actions.preview(path)
-          layout.openDetails()
-        },
         fileMentions: owner => ctx.get('chatFileMentions')?.forClosing(owner),
         openFile: (path) => {
           const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
@@ -487,15 +485,10 @@ export function apply(ctx: Context): void {
     locale: NS,
     children: {
       'conversation.details.tool': { kind: 'single', scope: 'session' },
-      'conversation.details.file': { kind: 'single', scope: 'session' },
     },
     store: chatStore,
-    inject: (sessionId: SessionId): DetailsInjected => ({
+    inject: (): DetailsInjected => ({
       closeDetails: () => { layout.closeDetails() },
-      openFile: (path) => {
-        const cwd = sessions.list.getSnapshot().byId[sessionId]?.cwd
-        return workspaces.openPath(resolveWorkspacePath(cwd, path))
-      },
     }),
   }, DetailsPanel)
 

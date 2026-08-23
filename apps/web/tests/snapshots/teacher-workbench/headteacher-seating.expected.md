@@ -87,9 +87,9 @@
 - button "1排 · 1列 张同学":
   - text: 1排 · 1列
   - strong: 张同学
-- button "1排 · 2列 空位":
+- button "1排 · 2列 李同学":
   - text: 1排 · 2列
-  - strong: 空位
+  - strong: 李同学
 - button "1排 · 3列 空位":
   - text: 1排 · 3列
   - strong: 空位

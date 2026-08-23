@@ -8,7 +8,6 @@ import type { CallId, ChatStoreState, SelectionTarget } from './contract/views.t
 /** Declared action shape used to give the exported factory a stable return type. */
 type ChatActions = {
   select: (draft: ChatStoreState, target: SelectionTarget | null) => void
-  preview: (draft: ChatStoreState, path: string) => void
   setDraft: (draft: ChatStoreState, text: string) => void
   setView: (draft: ChatStoreState, view: string) => void
   setInspect: (draft: ChatStoreState, target: { callId: CallId } | null) => void
@@ -23,17 +22,10 @@ export function createChatStore(): EngineStoreHandle<ChatStoreState, ChatActions
     // Anchored to the contract shape: consumers read the store through
     // PropsStore<ChatStore>'s SnapshotSelectorHook<ChatStoreState>, so init
     // and the contract cannot drift.
-    init: (): ChatStoreState => ({ selection: null, previewPath: null, draft: '', view: null, inspect: null }),
+    init: (): ChatStoreState => ({ selection: null, draft: '', view: null, inspect: null }),
     persist: 'dsh.conversation.chat',
     actions: {
-      select: (d, target: SelectionTarget | null) => {
-        d.selection = target
-        if (target !== null) d.previewPath = null
-      },
-      preview: (d, path: string) => {
-        d.selection = null
-        d.previewPath = path
-      },
+      select: (d, target: SelectionTarget | null) => { d.selection = target },
       setDraft: (d, text: string) => { d.draft = text },
       setView: (d, view: string) => { d.view = view },
       setInspect: (d, target: { callId: CallId } | null) => { d.inspect = target },

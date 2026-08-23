@@ -2,7 +2,7 @@
 
 [English](README.md) | 中文
 
-对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments` 与 `conversation.message.images`，随后注册输入框草稿图片栏、文件夹／图片拖放目标、聊天历史图片画廊和原图灯箱。conversation slot 持有方提供附件数据、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
+对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments` 与 `conversation.message.images`，随后注册输入框草稿图片栏与文件栏、文件夹／图片拖放目标、聊天历史图片画廊和原图灯箱。当组合中存在 `dsh-better-sidebar` 时，它还会注册隐藏的上传文件标签页类型，并把每张文件卡片变成右侧栏预览操作。conversation slot 持有方提供附件数据、浏览器文件解析、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
 
 ## 附件栏
 
@@ -16,9 +16,15 @@
 
 `DropOverlay` 是文件系统条目拖拽悬停页面时的全视口邀请层：插画、标题，接受拖放时再加一行上限说明（`disabled` 换为禁用插画并隐藏上限行）。该层不接收指针事件——持有方的 document 级拖拽监听器负责 enter/leave 计数和接受与否的判定；遮罩只呈现状态。drop 发生时，`ComposerAttachments` 不打开目录 reader，直接把目录条目与普通文件分开：目录经 `onAddDirectories` 贡献路径元数据，普通文件继续走已有图片输入回调。原生客户端提供的 `File.path` 优先，否则使用浏览器条目相对于拖放根的 `fullPath`。与灯箱一样经 body portal 渲染。
 
+## 上传文件预览
+
+文件栏会在 OCR 提取等待中、成功或失败时显示每条仅运行时存在的记录。如果 `dsh-better-sidebar` 可用，选择卡片会打开或聚焦会话定向的 `dsh:uploaded-document` 标签页，并展开侧边栏。该标签页读取 `ui-conversation` 已保留的不可变浏览器 `File`；它不会向工作区写入副本、调用 Host 文件读取路由，也不会在侧边栏状态中持久化文件字节。移除记录、成功接收提示词或停用插件时，系统会先关闭标签页，再释放浏览器文件引用。
+
+PDF 使用浏览器原生查看器，常见图片使用 Blob URL，DOCX 使用 `docx-preview`，PPTX 使用 Office Kit 生成并经过清理的 SVG，XLSX 则使用最多 200 行、50 列的语义表格。所有格式都保留下载链接。外部 Office 预览插件仍负责从工作区资源管理器打开的 `.docx`、`.xlsx` 与 `.pptx` 文件；输入框上传文件不依赖该 profile 扩展。
+
 ## 模型体验
 
-无，因为目录拖放只把路径元数据交给 conversation 持有方的草稿回调；该插件既不读取目录内容，也不组装模型请求。
+无，因为目录拖放只把路径元数据交给 conversation 持有方的草稿回调，文件预览也只为呈现读取浏览器保留的文件；该插件既不读取目录内容，也不组装模型请求。
 
 #### KV Cache 影响
 
@@ -26,7 +32,7 @@
 
 ## 已知限制与暂缓事项
 
-- **附件栏仅支持图片** — 目录会加入路径文本而不产生附件栏卡片；其他非图片文件尚无附件栏卡片与历史渲染。DeepSeek Chat 风格的文件卡片和上传进度状态等输入框接受非图片附件后再做。
+- **文件预览只用于辅助阅读** — 复杂 Word、PowerPoint 与电子表格的布局可能与 Microsoft Office 不同，PDF 渲染则取决于浏览器。上传控件不接受旧版 `.doc`、`.xls` 与 `.ppt` 文件。
 - **标准浏览器只暴露相对目录元数据** — 普通 Web 页面取得的是相对于拖放数据存储根的目录，而不是操作系统绝对路径。原生客户端可以暴露绝对 `File.path`；否则生成的引用相对于会话工作区，且不会授予对工作区外目录的访问权。
 - **灯箱无缩放与下载** — 预览仅以适配视口的尺寸渲染原图。
 - **灯箱不锁定焦点** — 它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。

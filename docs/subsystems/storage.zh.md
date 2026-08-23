@@ -280,6 +280,34 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('readQuestionImage') async readQuestionImage(request: TeacherQuestionImageReadRequest): Promise<TeacherQuestionImageReadResult>
 
 /**
+ * Scan the currently configured batch and student roots for visible images.
+ * @param _request - empty request retained for a uniform Remote signature.
+ * @returns filesystem-backed collections or a stable storage failure.
+ */
+@Remote('browseQuestionMedia') async browseQuestionMedia(_request: TeacherQuestionMediaBrowseRequest): Promise<TeacherQuestionMediaBrowseResult>
+
+/**
+ * Create one physical child directory selected through the current configured-root projection.
+ * @param request - opaque scanned parent or question-library root and safe child name.
+ * @returns the unchanged durable document or a stable failure.
+ */
+@Remote('createQuestionMediaDirectory') createQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryCreateRequest, ): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Delete one physical configured-root directory and all of its descendants.
+ * @param request - opaque directory target from the latest scan.
+ * @returns the unchanged durable document or a stable failure.
+ */
+@Remote('deleteQuestionMediaDirectory') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>
+
+/**
+ * Rename one physical configured-root directory or durable student hierarchy directory.
+ * @param request - opaque directory target and safe replacement name.
+ * @returns the committed or unchanged durable document, or a stable failure.
+ */
+@Remote('renameQuestionMediaDirectory') renameQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryRenameRequest, ): Promise<TeacherQuestionMutationResult>
+
+/**
  * Replace one stored raster after browser-side editing.
  * @param request - exact target plus replacement raster payload.
  * @returns the committed document or a stable failure.

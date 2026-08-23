@@ -4,23 +4,20 @@
 // The folder request is intercepted so one real browser click can exercise
 // the full client carrier without launching a native application in CI.
 import { fileURLToPath } from 'node:url'
-import { writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
 import { CallId, createAssistantMessage, createToolResultMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SESSION_FORMAT_VERSION, Session, SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-title'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import {
-  captureStableAria, compareOrRefreshGolden, launchWebScaffold, seedSession, watchConsole,
-  webSnapshotMode, type WebScaffold,
+  launchWebScaffold, seedSession, watchConsole, webSnapshotMode, type WebScaffold,
 } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const MODE = webSnapshotMode()
 const OVERLAY = fileURLToPath(new URL('./produced-files.overlay.yml', import.meta.url))
-const PREVIEW_EXPECTED = fileURLToPath(new URL('./snapshots/produced-files/markdown-preview.expected.md', import.meta.url))
 const SEED_ID = 'produced-files-web-e2e'
 const DONE = 'PRODUCED_FILES_DONE'
 
@@ -115,7 +112,11 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({ extraOverlayPath: OVERLAY })
-    await writeFile(join(scaffold.workspaceCwd, PRODUCED[0]), '# Workspace preview\n\nRendered beside the conversation.\n')
+    // This scenario owns the native opener branch. The shipped sidebar has a
+    // separate e2e for its editor takeover, so disable that tab before boot.
+    await scaffold.ctx.settings.update(settingsNamespace('dsh-better-sidebar'), {
+      tabsEnabled: { editor: false },
+    })
     await seedSession(scaffold, producedFixture(), SEED_ID)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
@@ -123,16 +124,8 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
     // the assertion itself narrows the conversation after navigation.
     await page.setViewportSize({ width: 1280, height: 900 })
     tripwire = watchConsole(page)
-    const navigation = await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
-    try {
-      await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
-    } catch (error: unknown) {
-      const text = (await page.locator('body').innerText()).slice(0, 1_000)
-      throw new Error(
-        `Web frame did not mount (HTTP ${String(navigation?.status())}): ${text}; ${tripwire.pageErrors.map(String).join(' | ')}`,
-        { cause: error },
-      )
-    }
+    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
   }, 120_000)
 
   afterAll(async () => {
@@ -168,13 +161,21 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
         result: { ok: true, value: { opened: true as const } },
       }))
     try {
+      const [fileResponse] = await Promise.all([
+        page.waitForResponse(response => new URL(response.url()).pathname === '/api/host.openPath'),
+        chips.nth(0).click({ clickCount: 1 }),
+      ])
+      expect(fileResponse.status()).toBe(200)
+      expect(openPath).toHaveBeenCalledTimes(1)
+      expect(openPath.mock.calls[0]![0].payload).toEqual({ path: `${scaffold.workspaceCwd}/${PRODUCED[0]}` })
+
       const [response] = await Promise.all([
         page.waitForResponse(response => new URL(response.url()).pathname === '/api/host.openPath'),
         showFolder.click({ clickCount: 1 }),
       ])
       expect(response.status()).toBe(200)
-      expect(openPath).toHaveBeenCalledTimes(1)
-      expect(openPath.mock.calls[0]![0].payload).toEqual({ path: `${scaffold.workspaceCwd}/.` })
+      expect(openPath).toHaveBeenCalledTimes(2)
+      expect(openPath.mock.calls[1]![0].payload).toEqual({ path: `${scaffold.workspaceCwd}/.` })
     } finally {
       openPath.mockRestore()
     }
@@ -186,17 +187,6 @@ describe('web e2e: a finished turn ends with the files it produced', () => {
       clientWidth: element.clientWidth, scrollWidth: element.scrollWidth,
     }))
     expect(geometry.scrollWidth).toBeLessThanOrEqual(geometry.clientWidth)
-
-    await page.setViewportSize({ width: 1400, height: 900 })
-    const [previewResponse] = await Promise.all([
-      page.waitForResponse(response => new URL(response.url()).pathname === '/api/session.previewFile'),
-      chips.nth(0).click(),
-    ])
-    expect(previewResponse.status()).toBe(200)
-    await page.locator('[data-file-preview="关于我.md"]').waitFor({ timeout: 15_000 })
-    await page.getByRole('heading', { name: 'Workspace preview', exact: true }).waitFor()
-    const preview = await captureStableAria(page, '[data-file-preview]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(PREVIEW_EXPECTED, preview, MODE)
 
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])

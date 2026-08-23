@@ -59,7 +59,6 @@ function scriptedApi(overrides: {
         attachment: { attachmentId: 'a' as never, mediaType: 'image/png', bytes: 1, width: 1, height: 1 },
         data: 'AA==',
       }),
-      previewFile: r => ok(r, { dataBase64: 'AA==', size: 1 }),
       updateQueue: r => ok(r, { accepted: true as const }),
       cancel: r => ok(r, { accepted: true as const }),
       ...overrides.sessions,

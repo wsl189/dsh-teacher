@@ -2585,7 +2585,6 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         }
         return ok(request, stored)
       },
-      previewFile: request => ok(request, { dataBase64: '', size: 0 }),
       updateQueue: request => err(request, {
         code: 'queue-item-not-found',
         message: 'fixture has no pending queue item',
@@ -3186,7 +3185,6 @@ export class FixtureApiClient extends AbstractApiClient {
       case 'session.fork': return this.api.sessions.fork(request)
       case 'session.prompt': return this.api.sessions.prompt(request)
       case 'session.attachment': return this.api.sessions.attachment(request)
-      case 'session.previewFile': return this.api.sessions.previewFile(request, signal)
       case 'session.updateQueue': return this.api.sessions.updateQueue(request)
       case 'session.cancel': return this.api.sessions.cancel(request)
       case 'subagent.list': return this.api.subagents.list(request)

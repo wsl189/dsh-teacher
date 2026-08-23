@@ -156,7 +156,7 @@ interface ToolGroupSeatProps extends ChatNodeOwnerProps {
 
 /** Place one Tool run through its presentation slot with per-Node fallback. */
 function ToolGroupSeat({
-  nodeKeys, selectedCallId, cwd, openFile, previewFile, inspectCall, forkAt,
+  nodeKeys, selectedCallId, cwd, openFile, inspectCall, forkAt,
   renderMessageImages, fileMentions, useSession, renderSlot, t,
 }: ToolGroupSeatProps) {
   const owner: ToolGroupOwnerProps = useMemo(() => ({
@@ -164,13 +164,12 @@ function ToolGroupSeat({
     selectedCallId,
     cwd,
     openFile,
-    previewFile,
     inspectCall,
     forkAt,
     renderMessageImages,
     fileMentions,
   }), [
-    nodeKeys, selectedCallId, cwd, openFile, previewFile, inspectCall, forkAt, renderMessageImages, fileMentions,
+    nodeKeys, selectedCallId, cwd, openFile, inspectCall, forkAt, renderMessageImages, fileMentions,
   ])
   const firstKey = nodeKeys[0]
   if (firstKey === undefined) return null
@@ -191,7 +190,6 @@ function ToolGroupSeat({
             selectedCallId={selectedCallId}
             cwd={cwd}
             openFile={openFile}
-            previewFile={previewFile}
             inspectCall={inspectCall}
             forkAt={forkAt}
             renderMessageImages={renderMessageImages}
@@ -246,7 +244,7 @@ function TurnStatus({ startTime, t }: {
  * ordered business Node crosses the keyed renderer seat.
  */
 export function ChatView({
-  useSession, useSessions, useStore, renderSlot, sessionId, openFile, previewFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
+  useSession, useSessions, useStore, renderSlot, sessionId, openFile, loadOlder, loadImage, inspectCall, chatScroll, forkAt,
   fileMentions, t,
 }: ChatViewSlotProps) {
   const order = useSession(s => s.chat.order)
@@ -528,7 +526,6 @@ export function ChatView({
               selectedCallId={selectedCallId}
               cwd={cwd}
               openFile={requestOpenFile}
-              previewFile={previewFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
               renderMessageImages={renderMessageImages}
@@ -544,7 +541,6 @@ export function ChatView({
               selectedCallId={selectedCallId}
               cwd={cwd}
               openFile={requestOpenFile}
-              previewFile={previewFile}
               inspectCall={inspectCall}
               forkAt={forkAt}
               renderMessageImages={renderMessageImages}

@@ -843,6 +843,13 @@ export interface TeacherQuestionSegmentSuccess {
     readonly groupCount: number
     /** Maximum decoded image bytes sent in one automatic save part. */
     readonly maxSaveBatchBytes: number
+    /** Normalized source-crop bounds shared by every question from this PDF. */
+    readonly horizontalBounds: {
+      /** Minimum MinerU question-box left edge divided by its OCR page width. */
+      readonly leftRatio: number
+      /** Maximum MinerU question-box right edge divided by its OCR page width. */
+      readonly rightRatio: number
+    }
     readonly questions: readonly TeacherSegmentedQuestion[]
   }
 }
@@ -975,6 +982,70 @@ export interface TeacherQuestionImageReadRequest {
   readonly target: TeacherQuestionImageTarget
 }
 
+/** Empty request for scanning the configured question-media roots. */
+export type TeacherQuestionMediaBrowseRequest = Record<never, never>
+
+/** One directory selected from the latest configured-root scan. */
+export type TeacherQuestionMediaDirectoryTarget =
+  | { readonly kind: 'student'; readonly id: TeacherStudentId }
+  | { readonly kind: 'student-folder'; readonly id: TeacherQuestionFolderId }
+  | { readonly kind: 'library-folder'; readonly id: TeacherQuestionLibraryFolderId }
+
+/** Parent accepted when creating a physical configured-root directory. */
+export type TeacherQuestionMediaDirectoryParent =
+  | TeacherQuestionMediaDirectoryTarget
+  | { readonly kind: 'library-root' }
+
+/** Create one physical directory below a configured-root parent. */
+export interface TeacherQuestionMediaDirectoryCreateRequest {
+  /** Opaque scanned parent or the configured question-library root. */
+  readonly parent: TeacherQuestionMediaDirectoryParent
+  /** One safe path segment. */
+  readonly name: string
+}
+
+/** Rename one configured-root directory without exposing its host path. */
+export interface TeacherQuestionMediaDirectoryRenameRequest {
+  /** Opaque directory identity from the latest scan or durable student hierarchy. */
+  readonly target: TeacherQuestionMediaDirectoryTarget
+  /** Replacement safe path segment. */
+  readonly name: string
+}
+
+/** Delete one configured-root directory without exposing its host path. */
+export interface TeacherQuestionMediaDirectoryDeleteRequest {
+  /** Opaque directory identity from the latest scan. */
+  readonly target: TeacherQuestionMediaDirectoryTarget
+}
+
+/** Filesystem-backed question collections available under the current roots. */
+export interface TeacherQuestionMediaBrowseValue {
+  /** Roster classes merged with class directories found below the configured student root. */
+  readonly classes: readonly TeacherClass[]
+  /** Roster students merged with student directories found below the configured student root. */
+  readonly students: readonly TeacherStudent[]
+  /** Paper directories and images found below the configured batch root. */
+  readonly questionBatches: readonly TeacherQuestionBatch[]
+  /** Durable and filesystem-derived directories visible in the question library. */
+  readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[]
+  /** Durable and filesystem-derived directories below visible students. */
+  readonly questionFolders: readonly TeacherQuestionFolder[]
+  /** Student images found below the configured student root. */
+  readonly questionAssignments: readonly TeacherQuestionAssignment[]
+  /** Batch ids derived from external directories rather than durable metadata. */
+  readonly readOnlyBatchIds: readonly TeacherQuestionBatchId[]
+  /** Library folder ids derived from external directories rather than durable metadata. */
+  readonly readOnlyLibraryFolderIds: readonly TeacherQuestionLibraryFolderId[]
+  /** Assignment ids derived from external files rather than durable metadata. */
+  readonly readOnlyAssignmentIds: readonly TeacherQuestionAssignmentId[]
+  /** Class ids derived from external directories rather than durable roster metadata. */
+  readonly readOnlyClassIds: readonly TeacherClassId[]
+  /** Student ids derived from external directories rather than durable roster metadata. */
+  readonly readOnlyStudentIds: readonly TeacherStudentId[]
+  /** Folder ids derived from external directories rather than durable metadata. */
+  readonly readOnlyFolderIds: readonly TeacherQuestionFolderId[]
+}
+
 /** Browser-safe stored image bytes. */
 export interface TeacherQuestionImagePayload {
   /** Display file name. */
@@ -1080,6 +1151,17 @@ export interface TeacherQuestionImageReadSuccess {
 
 /** Stored-image read result. */
 export type TeacherQuestionImageReadResult = TeacherQuestionImageReadSuccess | TeacherQuestionRejected
+
+/** Successful scan of the currently configured question-media roots. */
+export interface TeacherQuestionMediaBrowseSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Filesystem-backed question collections for the current settings. */
+  readonly value: TeacherQuestionMediaBrowseValue
+}
+
+/** Result of scanning the currently configured question-media roots. */
+export type TeacherQuestionMediaBrowseResult = TeacherQuestionMediaBrowseSuccess | TeacherQuestionRejected
 
 /** Successful temporary-selection save. */
 export interface TeacherQuestionTemporarySaveSuccess {

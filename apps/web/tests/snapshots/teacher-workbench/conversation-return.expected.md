@@ -1,6 +1,9 @@
 - textbox "描述你想要构建的内容"
 - button "命令":
   - img
+- button "上传文件并用 MinerU OCR 识别"
+- button "Choose File"
+- button "语音输入（也可长按空格）"
 - button "访问模式，当前：帮我批准": 帮我批准
 - button "选择模型，当前 DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

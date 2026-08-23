@@ -104,7 +104,7 @@ function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
 
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
-  addDocuments, removeDocument,
+  addDocuments, removeDocument, draftDocumentFile,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher, useDocuments,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
@@ -486,6 +486,10 @@ export function InputBar({
     }
     if (e.key === ' ') {
       if (composing) return
+      if (spaceHold.current !== null) {
+        e.preventDefault()
+        return
+      }
       if (keyboard.space()) {
         e.preventDefault() // claim token already carries the trailing separator
         return
@@ -836,50 +840,55 @@ export function InputBar({
       >
         {overlay !== undefined && <div className={css.overlayAnchor}>{overlay}</div>}
         {accessory !== undefined && <div className={css.accessory}>{accessory}</div>}
-        {documents.length > 0 && (
-          <div className={css.documentRail} aria-label={t('document.pending')}>
-            {documents.map(document => (
-              <div
-                key={document.id}
-                className={clsx(css.documentChip, document.status === 'error' && css.documentChipError)}
-                data-document-status={document.status}
-                title={document.error}
-              >
-                <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
-                  <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                </svg>
-                <span className={css.documentName}>{document.name}</span>
-                <span className={css.documentStatus}>
-                  {document.status === 'extracting'
-                    ? t('document.extracting')
-                    : document.status === 'error'
-                      ? t('document.failed')
-                      : document.truncated === true ? t('document.readyTruncated') : t('document.ready')}
-                </span>
-                <button
-                  type="button"
-                  className={css.documentRemove}
-                  aria-label={t('document.remove', { name: document.name })}
-                  disabled={machineBusy}
-                  onMouseDown={keepFocus}
-                  onClick={() => { removeDocument?.(document.id) }}
-                >
-                  ×
-                </button>
-              </div>
-            ))}
-          </div>
-        )}
         {renderSlot('conversation.input.attachments', {
           attachments,
+          documents,
           canAcceptDrop,
+          canRemoveDocuments: !machineBusy,
           onAddImages: intakeImages,
           onAddDirectories: intakeDirectories,
           onRemoveImage: (id) => { removeImage?.(id) },
+          resolveDocumentFile: id => draftDocumentFile?.(id),
+          onRemoveDocument: (id) => { removeDocument?.(id) },
           dropLimits: imageLimits === undefined ? undefined : {
             count: imageLimits.maxImagesPerMessage,
             size: imageSizeText(imageLimits.maxImageBytes),
           },
+        }, {
+          fallback: documents.length === 0 ? null : (
+            <div className={css.documentRail} aria-label={t('document.pending')}>
+              {documents.map(document => (
+                <div
+                  key={document.id}
+                  className={clsx(css.documentChip, document.status === 'error' && css.documentChipError)}
+                  data-document-status={document.status}
+                  title={document.error}
+                >
+                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
+                    <path d="M3 1.5h6l4 4v9H3zM9 1.5v4h4" fill="none" stroke="currentColor" strokeWidth="1.4" />
+                  </svg>
+                  <span className={css.documentName}>{document.name}</span>
+                  <span className={css.documentStatus}>
+                    {document.status === 'extracting'
+                      ? t('document.extracting')
+                      : document.status === 'error'
+                        ? t('document.failed')
+                        : document.truncated === true ? t('document.readyTruncated') : t('document.ready')}
+                  </span>
+                  <button
+                    type="button"
+                    className={css.documentRemove}
+                    aria-label={t('document.remove', { name: document.name })}
+                    disabled={machineBusy}
+                    onMouseDown={keepFocus}
+                    onClick={() => { removeDocument?.(document.id) }}
+                  >
+                    ×
+                  </button>
+                </div>
+              ))}
+            </div>
+          ),
         })}
         {/* One scrollport, two text layers. The hidden mirror renders draft+'\n' and stretches the
             stack to the draft's FULL height (counting rows by '\n' cannot see soft wraps); the

@@ -19,8 +19,6 @@ export interface ViewTab { id: string; label: string }
 export interface ChatStoreState {
   /** Details-linkage channel (conversation writes, details reads). */
   selection: SelectionTarget | null
-  /** Produced file selected for the preview panel; exclusive with `selection`. */
-  previewPath: string | null
   /** Composer draft (persisted; survives session switches and reloads). */
   draft: string
   /** Active conversation view id ('conversation.view' entry id); null falls back to Chat. */

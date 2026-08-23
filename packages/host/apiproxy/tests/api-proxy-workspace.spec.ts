@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, mkdtempSync, realpathSync, symlinkSync, writeFileSync } from 'node:fs'
+import { existsSync, mkdirSync, mkdtempSync, realpathSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,6 @@ import UserQuestionService from '@deepseek-ai/dsh-user-questions'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerCapability } from '@deepseek-ai/dsh-host-directory-picker'
 import WorkspaceRegistry from '@deepseek-ai/dsh-workspace'
-import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
 import type { HostFrame, WorkspaceId } from '@deepseek-ai/dsh-host-apiproxy/api'
 import type { RpcRequest, RpcResponse } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
 import { RpcId } from '@deepseek-ai/dsh-host-apiproxy/api/rpc'
@@ -65,11 +64,9 @@ async function harness(
   extras: {
     openPath?: (path: string, signal: AbortSignal) => Promise<void>
     canOpenPath?: () => boolean
-    previewFileMaxBytes?: number
   } = {},
 ) {
   const ctx = new Context()
-  await ctx.plugin(LocalFileSystem)
   await ctx.plugin(SessionStore)
   await ctx.plugin(AgentRegistry)
   await ctx.plugin(UserQuestionService)
@@ -110,7 +107,6 @@ async function harness(
     cwd: root,
     ...extras.openPath === undefined ? {} : { openPath: extras.openPath },
     ...extras.canOpenPath === undefined ? {} : { canOpenPath: extras.canOpenPath },
-    ...extras.previewFileMaxBytes === undefined ? {} : { previewFileMaxBytes: extras.previewFileMaxBytes },
   })
   return { api, ctx, storageDomain, root }
 }
@@ -261,64 +257,6 @@ describe('host.openPath', () => {
     const pending = api.host.openPath(request({ path: '/tmp/a.txt' }), abort.signal)
     abort.abort()
     expect((await pending).result).toMatchObject({ ok: false, error: { code: 'cancelled' } })
-  })
-})
-
-describe('session.previewFile', () => {
-  it('returns complete Base64 bytes only for regular files inside the session workspace', async () => {
-    const { api, root } = await harness()
-    const sessionId = SessionId('preview-contained')
-    writeFileSync(join(root, 'report.md'), '# preview\n')
-    expectOk(await api.sessions.create(request({ cwd: root, sessionId })))
-
-    const response = expectOk(await api.sessions.previewFile(
-      request({ sessionId, path: 'report.md' }),
-      new AbortController().signal,
-    ))
-    expect(Buffer.from(response.dataBase64, 'base64').toString('utf8')).toBe('# preview\n')
-    expect(response.size).toBe(10)
-  })
-
-  it('rejects traversal, symlink escape, missing files, and files over the configured limit', async () => {
-    const parent = realpathSync.native(mkdtempSync(join(tmpdir(), 'dsh-apiproxy-preview-')))
-    const root = join(parent, 'workspace')
-    mkdirSync(root)
-    writeFileSync(join(parent, 'outside.md'), 'outside')
-    writeFileSync(join(root, 'large.md'), '12345')
-    symlinkSync(join(parent, 'outside.md'), join(root, 'escape.md'))
-    const { api } = await harness(root, undefined, { previewFileMaxBytes: 4 })
-    const sessionId = SessionId('preview-rejections')
-    expectOk(await api.sessions.create(request({ cwd: root, sessionId })))
-
-    for (const [path, reason] of [
-      ['../outside.md', 'outside-workspace'],
-      ['escape.md', 'outside-workspace'],
-      ['missing.md', 'not-found'],
-      ['large.md', 'too-large'],
-    ] as const) {
-      const response = await api.sessions.previewFile(
-        request({ sessionId, path }),
-        new AbortController().signal,
-      )
-      expect(response.result).toMatchObject({
-        ok: false,
-        error: { code: 'file-preview-unavailable', details: { path, reason } },
-      })
-    }
-  })
-
-  it('can disable preview reads without touching the filesystem', async () => {
-    const { api, root } = await harness(undefined, undefined, { previewFileMaxBytes: 0 })
-    const sessionId = SessionId('preview-disabled')
-    expectOk(await api.sessions.create(request({ cwd: root, sessionId })))
-    const response = await api.sessions.previewFile(
-      request({ sessionId, path: 'anything.md' }),
-      new AbortController().signal,
-    )
-    expect(response.result).toMatchObject({
-      ok: false,
-      error: { code: 'file-preview-unavailable', details: { reason: 'disabled' } },
-    })
   })
 })
 

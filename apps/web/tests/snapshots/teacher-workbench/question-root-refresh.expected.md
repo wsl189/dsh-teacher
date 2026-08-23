@@ -1,0 +1,60 @@
+- heading "试题分割系统" [level=2]
+- button "技能库"
+- button "试题图片库"
+- button "添加学生"
+- button "上传 PDF"
+- button "Choose File"
+- button "Choose File"
+- complementary "学生目录":
+  - button "2026" [expanded]
+  - button "高一（1）班"
+  - button "删除"
+- main "试题工作区空白区域":
+  - strong: 试题工作区
+  - text: 使用右上角工具上传 PDF、打开试题库或添加学生 新路径试卷 · 1 道试题
+- button "关闭工作台"
+- complementary "学生列表":
+  - heading "高一（1）班" [level=2]
+  - button "Word" [disabled]
+  - button "PPT" [disabled]
+  - button "关闭工作台"
+  - paragraph: 单击打开图片，双击展开或收起下级目录，三击新建子目录，四击重命名
+  - button "张同学"
+  - button "删除"
+  - button "李同学"
+  - button "删除"
+  - button "目录学生"
+  - button "删除"
+  - button "实时新增学生目录"
+  - button "删除"
+  - button "月考"
+  - button "删除"
+  - button "第一周"
+  - button "删除"
+  - button "第二周订正"
+  - button "删除"
+- complementary "试题图片库":
+  - heading "试题图片库" [level=2]
+  - button "新建文件夹"
+  - button "关闭工作台"
+  - button "▾ 新路径试卷" [expanded]: 新路径试卷 1
+  - button "删除目录“新路径试卷”"
+  - button "新路径试卷 1"
+  - button "▾ 月考" [expanded]: 月考 1
+  - button "删除目录“月考”"
+  - button "▾ 第一次" [expanded]: 第一次 1
+  - button "删除目录“第一次”"
+  - button "▾ 套题甲" [expanded]: 套题甲 1
+  - button "删除目录“套题甲”"
+  - button "套题甲 1"
+  - button "第二次月考": 第二次月考 0
+  - button "删除目录“第二次月考”"
+  - button "▾ 空目录" [expanded]: 空目录 0
+  - button "删除目录“空目录”"
+  - button "下一层": 下一层 0
+  - button "删除目录“下一层”"
+  - button "▸ 模拟题库": 模拟题库 0
+  - button "删除目录“模拟题库”"
+  - button "实时新增图片目录": 实时新增图片目… 0
+  - button "删除目录“实时新增图片目录”"
+- status: 已重命名目录：第二次月考

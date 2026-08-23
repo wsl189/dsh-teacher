@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { PDFDocument } from 'pdf-lib'
 import type {
   TeacherClassId,
@@ -10,6 +10,7 @@ import type {
   TeacherQuestionFolderId,
   TeacherQuestionLibraryFolderId,
   TeacherQuestionImageId,
+  TeacherQuestionMediaBrowseValue,
   TeacherQuestionTemporarySaveRequest,
   TeacherQuestionUploadedDocumentRequest,
   TeacherStudentId,
@@ -92,6 +93,9 @@ function commands(): TeacherWorkbenchCommands {
     createQuestionFolder: ok,
     createQuestionLibraryFolder: ok,
     renameQuestionLibraryFolder: ok,
+    createQuestionMediaDirectory: ok,
+    deleteQuestionMediaDirectory: ok,
+    renameQuestionMediaDirectory: ok,
     deleteQuestionLibraryFolder: ok,
     deleteQuestionFolder: ok,
     deleteQuestionBatch: ok,
@@ -106,11 +110,13 @@ function commands(): TeacherWorkbenchCommands {
       ok: true,
       value: { fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: 'iVBORw0KGgo=' },
     } as const)),
+    browseQuestionMedia: vi.fn(async () => ({ ok: false, error: { code: 'storage-failure', message: 'unavailable' } } as const)),
   } as unknown as TeacherWorkbenchCommands
 }
 
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.unstubAllGlobals()
 })
 
@@ -128,6 +134,304 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByRole('button', { name: '高二第一节' })).toBeNull()
     expect(screen.queryByText('错题分析')).toBeNull()
     expect(screen.queryByPlaceholderText(/同类题|讲义|PPT/u)).toBeNull()
+  })
+
+  it('shows students discovered from the configured fourth-level directory', async () => {
+    const c = commands()
+    const directoryStudentId = 'filesystem-student' as TeacherStudentId
+    const directoryAssignmentId = 'filesystem-assignment' as TeacherQuestionAssignmentId
+    const directoryFolderId = 'filesystem-folder' as TeacherQuestionFolderId
+    const nestedDirectoryFolderId = 'filesystem-nested-folder' as TeacherQuestionFolderId
+    const externalLibraryFolderId = 'filesystem-library-folder' as TeacherQuestionLibraryFolderId
+    const externalNestedLibraryFolderId = 'filesystem-nested-library-folder' as TeacherQuestionLibraryFolderId
+    const externalBatchId = 'filesystem-batch' as TeacherQuestionBatchId
+    const externalImageId = 'filesystem-image' as TeacherQuestionImageId
+    c.browseQuestionMedia = vi.fn(async () => ({
+      ok: true,
+      value: {
+        classes: [state.classes[0]!],
+        students: [...state.students, {
+          id: directoryStudentId,
+          classId,
+          name: '目录学生',
+          studentNumber: '',
+          gender: '',
+          guardian: '',
+          relation: '',
+          phone: '',
+          address: '',
+          extras: {},
+        }],
+        questionBatches: [...state.questionBatches, {
+          id: externalBatchId,
+          folderId: externalNestedLibraryFolderId,
+          name: '套题甲',
+          sourceName: '套题甲.pdf',
+          pageRange: '',
+          createdAt: 3,
+          images: [{
+            id: externalImageId,
+            questionNo: 1,
+            fileName: '套题甲_1.png',
+            mediaType: 'image/png',
+            width: 100,
+            height: 80,
+            createdAt: 3,
+            updatedAt: 3,
+          }],
+        }],
+        questionLibraryFolders: [...state.questionLibraryFolders, {
+          id: externalLibraryFolderId,
+          name: '月考',
+          createdAt: 2,
+          updatedAt: 2,
+        }, {
+          id: externalNestedLibraryFolderId,
+          parentId: externalLibraryFolderId,
+          name: '第一次',
+          createdAt: 3,
+          updatedAt: 3,
+        }],
+        questionFolders: [...state.questionFolders, {
+          id: directoryFolderId,
+          studentId: directoryStudentId,
+          name: '复习',
+          createdAt: 2,
+          updatedAt: 2,
+        }, {
+          id: nestedDirectoryFolderId,
+          studentId: directoryStudentId,
+          parentId: directoryFolderId,
+          name: '第一周',
+          createdAt: 3,
+          updatedAt: 3,
+        }],
+        questionAssignments: [...state.questionAssignments, {
+          id: directoryAssignmentId,
+          studentId: directoryStudentId,
+          sourceImageId: imageId,
+          folderId: nestedDirectoryFolderId,
+          fileName: '四级目录题.png',
+          relativePath: '2026/高一/一班/目录学生/复习/第一周/四级目录题.png',
+          mediaType: 'image/png',
+          width: 100,
+          height: 80,
+          temporarySaveCount: 0,
+          createdAt: 2,
+          updatedAt: 2,
+        }],
+        readOnlyBatchIds: [externalBatchId],
+        readOnlyLibraryFolderIds: [externalLibraryFolderId, externalNestedLibraryFolderId],
+        readOnlyAssignmentIds: [directoryAssignmentId],
+        readOnlyClassIds: [],
+        readOnlyStudentIds: [directoryStudentId],
+        readOnlyFolderIds: [directoryFolderId, nestedDirectoryFolderId],
+      },
+    } as const))
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+
+    await waitFor(() => { expect(c.browseQuestionMedia).toHaveBeenCalled() })
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    const classDrawer = await screen.findByRole('complementary', { name: '学生列表' })
+    const directoryStudent = await within(classDrawer).findByRole('button', { name: '目录学生' })
+
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    let dialog = await screen.findByRole('dialog', { name: '新建子目录' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '周练' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '新建' }))
+    await waitFor(() => {
+      expect(c.createQuestionMediaDirectory).toHaveBeenCalledWith({
+        parent: { kind: 'student', id: directoryStudentId },
+        name: '周练',
+      })
+    })
+
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    dialog = await screen.findByRole('dialog', { name: '重命名目录' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '目录学生甲' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.renameQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'student', id: directoryStudentId },
+        name: '目录学生甲',
+      })
+    })
+
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    const directoryFolder = await within(classDrawer).findByRole('button', { name: '复习' })
+    fireEvent.click(directoryFolder)
+    fireEvent.click(directoryFolder)
+    const nestedDirectoryFolder = await within(classDrawer).findByRole('button', { name: '第一周' })
+
+    fireEvent.click(nestedDirectoryFolder)
+    fireEvent.click(nestedDirectoryFolder)
+    fireEvent.click(nestedDirectoryFolder)
+    dialog = await screen.findByRole('dialog', { name: '新建子目录' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '第二周' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '新建' }))
+    await waitFor(() => {
+      expect(c.createQuestionMediaDirectory).toHaveBeenCalledWith({
+        parent: { kind: 'student-folder', id: nestedDirectoryFolderId },
+        name: '第二周',
+      })
+    })
+
+    fireEvent.click(nestedDirectoryFolder)
+    fireEvent.click(nestedDirectoryFolder)
+    fireEvent.click(nestedDirectoryFolder)
+    fireEvent.click(nestedDirectoryFolder)
+    dialog = await screen.findByRole('dialog', { name: '重命名目录' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '第一周订正' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.renameQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'student-folder', id: nestedDirectoryFolderId },
+        name: '第一周订正',
+      })
+    })
+
+    fireEvent.click(nestedDirectoryFolder)
+    const studentImages = await screen.findByRole('complementary', { name: '学生图片' })
+    expect(await within(studentImages).findByRole('button', { name: '四级目录题.png' })).toBeTruthy()
+    expect(within(classDrawer).getAllByRole('button', { name: '删除' })).toHaveLength(4)
+
+    fireEvent.click(within(studentImages).getByRole('button', { name: '试题图片库' }))
+    const library = await screen.findByRole('complementary', { name: '试题图片库' })
+    const externalLibraryFolder = within(library).getByRole('button', { name: /^▸ 月考/u })
+    fireEvent.click(externalLibraryFolder)
+    fireEvent.click(externalLibraryFolder)
+    dialog = await screen.findByRole('dialog', { name: '新建文件夹' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '第二次' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '新建' }))
+    await waitFor(() => {
+      expect(c.createQuestionMediaDirectory).toHaveBeenCalledWith({
+        parent: { kind: 'library-folder', id: externalLibraryFolderId },
+        name: '第二次',
+      })
+    })
+    fireEvent.click(externalLibraryFolder)
+    const externalNestedLibraryFolder = await within(library).findByRole('button', { name: /^▸ 第一次/u })
+    fireEvent.click(externalNestedLibraryFolder)
+    fireEvent.click(externalNestedLibraryFolder)
+    fireEvent.click(externalNestedLibraryFolder)
+    dialog = await screen.findByRole('dialog', { name: '重命名目录' })
+    fireEvent.change(within(dialog).getByLabelText('目录名'), { target: { value: '第一次月考' } })
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.renameQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'library-folder', id: externalNestedLibraryFolderId },
+        name: '第一次月考',
+      })
+    })
+    fireEvent.click(externalNestedLibraryFolder)
+    expect(await within(library).findByRole('button', { name: '套题甲 1' })).toBeTruthy()
+
+    vi.stubGlobal('confirm', vi.fn(() => true))
+    fireEvent.click(within(nestedDirectoryFolder.parentElement!).getByRole('button', { name: '删除' }))
+    await waitFor(() => {
+      expect(c.deleteQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'student-folder', id: nestedDirectoryFolderId },
+      })
+    })
+    fireEvent.click(within(library).getByRole('button', { name: '删除目录“第一次”' }))
+    await waitFor(() => {
+      expect(c.deleteQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'library-folder', id: externalNestedLibraryFolderId },
+      })
+    })
+  })
+
+  it('updates visible student and question-library directory trees after filesystem changes', async () => {
+    vi.useFakeTimers()
+    const c = commands()
+    const directoryStudentId = 'live-filesystem-student' as TeacherStudentId
+    const directoryFolderId = 'live-filesystem-folder' as TeacherQuestionFolderId
+    const libraryRootId = 'live-filesystem-library-root' as TeacherQuestionLibraryFolderId
+    const libraryChildId = 'live-filesystem-library-child' as TeacherQuestionLibraryFolderId
+    const baseValue: TeacherQuestionMediaBrowseValue = {
+      classes: [state.classes[0]!],
+      students: state.students,
+      questionBatches: state.questionBatches,
+      questionLibraryFolders: state.questionLibraryFolders,
+      questionFolders: state.questionFolders,
+      questionAssignments: state.questionAssignments,
+      readOnlyBatchIds: [],
+      readOnlyLibraryFolderIds: [],
+      readOnlyAssignmentIds: [],
+      readOnlyClassIds: [],
+      readOnlyStudentIds: [],
+      readOnlyFolderIds: [],
+    }
+    let currentValue = baseValue
+    c.browseQuestionMedia = vi.fn(async () => ({ ok: true as const, value: currentValue }))
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    await act(async () => { await Promise.resolve() })
+
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    const classDrawer = screen.getByRole('complementary', { name: '学生列表' })
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
+    const library = screen.getByRole('complementary', { name: '试题图片库' })
+
+    currentValue = {
+      ...baseValue,
+      students: [...baseValue.students, {
+        id: directoryStudentId,
+        classId,
+        name: '实时目录学生',
+        studentNumber: '',
+        gender: '',
+        guardian: '',
+        relation: '',
+        phone: '',
+        address: '',
+        extras: {},
+      }],
+      questionLibraryFolders: [{
+        id: libraryRootId,
+        name: '实时月考',
+        createdAt: 2,
+        updatedAt: 2,
+      }, {
+        id: libraryChildId,
+        parentId: libraryRootId,
+        name: '第一次',
+        createdAt: 3,
+        updatedAt: 3,
+      }],
+      questionFolders: [...baseValue.questionFolders, {
+        id: directoryFolderId,
+        studentId: directoryStudentId,
+        name: '实时复习',
+        createdAt: 2,
+        updatedAt: 2,
+      }],
+      readOnlyLibraryFolderIds: [libraryRootId, libraryChildId],
+      readOnlyStudentIds: [directoryStudentId],
+      readOnlyFolderIds: [directoryFolderId],
+    }
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+
+    const directoryStudent = within(classDrawer).getByRole('button', { name: '实时目录学生' })
+    fireEvent.click(directoryStudent)
+    fireEvent.click(directoryStudent)
+    const libraryRoot = within(library).getByRole('button', { name: /^▸ 实时月考/u })
+    fireEvent.click(libraryRoot)
+    await act(async () => { await vi.advanceTimersByTimeAsync(260) })
+    expect(within(classDrawer).getByRole('button', { name: '实时复习' })).toBeTruthy()
+    expect(within(library).getByRole('button', { name: '第一次' })).toBeTruthy()
+
+    currentValue = baseValue
+    await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
+    expect(within(classDrawer).queryByRole('button', { name: '实时目录学生' })).toBeNull()
+    expect(within(classDrawer).queryByRole('button', { name: '实时复习' })).toBeNull()
+    expect(within(library).queryByRole('button', { name: /^▸ 实时月考/u })).toBeNull()
+    expect(within(library).queryByRole('button', { name: '第一次' })).toBeNull()
   })
 
   it('restores question-library folders and supports create, rename, and delete gestures', async () => {
@@ -197,7 +501,8 @@ describe('QuestionWorkbench reference shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
     const library = screen.getByRole('complementary', { name: '试题图片库' })
-    expect(within(library).getByTitle('高考模拟专题训练').textContent).toBe('▸ 高考模拟专题训…')
+    expect(within(library).getByTitle('高考模拟专题训练').textContent).toBe('高考模拟专题训…')
+    expect(within(library).getByRole('button', { name: '▸ 高考模拟专题训练' }).querySelector('[aria-hidden="true"]')?.textContent).toBe('▸')
     expect(within(library).getByTitle('月考').textContent).toBe('月考')
     expect(within(library).getByRole('button', { name: '月考' })).toBeTruthy()
     fireEvent.click(within(library).getByRole('button', { name: '▸ 高考模拟专题训练' }))
@@ -371,6 +676,20 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '新建' }))
     await waitFor(() => {
       expect(c.createQuestionFolder).toHaveBeenCalledWith({ studentId, parentId: folderId, name: '错题订正' })
+    })
+
+    fireEvent.click(folder)
+    fireEvent.click(folder)
+    fireEvent.click(folder)
+    fireEvent.click(folder)
+    const renameDialog = await screen.findByRole('dialog', { name: '重命名目录' })
+    fireEvent.change(within(renameDialog).getByLabelText('目录名'), { target: { value: '第一次订正' } })
+    fireEvent.click(within(renameDialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.renameQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'student-folder', id: folderId },
+        name: '第一次订正',
+      })
     })
   })
 

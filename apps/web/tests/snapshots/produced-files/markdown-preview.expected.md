@@ -1,4 +1,0 @@
-- button "Refresh"
-- button "Open in system app"
-- heading "Workspace preview" [level=1]
-- paragraph: Rendered beside the conversation.

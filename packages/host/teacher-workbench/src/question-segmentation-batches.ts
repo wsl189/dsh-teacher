@@ -10,6 +10,7 @@ import type {
   TeacherQuestionLayoutPage,
   TeacherQuestionSegmentRequest,
   TeacherQuestionSegmentResult,
+  TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
 } from './types.ts'
 
@@ -36,6 +37,17 @@ type SegmentationRunner = (
   request: TeacherQuestionSegmentRequest,
   config: TeacherQuestionSegmentationAgentConfig,
 ) => Promise<TeacherQuestionSegmentationAgentResult>
+
+type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
+
+function questionHorizontalBounds(questions: readonly TeacherSegmentedQuestion[]): QuestionHorizontalBounds {
+  const regions = questions.flatMap(question => question.regions)
+  if (regions.length === 0) return { leftRatio: 0, rightRatio: 1 }
+  return {
+    leftRatio: Math.min(...regions.map(region => region.left / region.pageWidth)),
+    rightRatio: Math.max(...regions.map(region => region.right / region.pageWidth)),
+  }
+}
 
 /**
  * Plan fixed-size core groups with adjacent-page overlap.
@@ -130,6 +142,7 @@ export async function segmentQuestionsInBatches(
     value: {
       groupCount: groups.length,
       maxSaveBatchBytes: config.maxQuestionBatchBytes,
+      horizontalBounds: questionHorizontalBounds(numberedQuestions),
       questions: numberedQuestions,
     },
   }

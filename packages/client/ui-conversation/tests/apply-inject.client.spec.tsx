@@ -352,11 +352,11 @@ describe('conversation slot inject API', () => {
 })
 
 describe('details inject API', () => {
-  it('details injects panel closing and native file opening; selection rides the shared store', async () => {
+  it('details injects panel closing while selection rides the shared store', async () => {
     const b = await bench()
     const entry = b.entryOf('details')
     const injected = (entry.inject as unknown as () => DetailsInjected)()
-    expect(Object.keys(injected)).toEqual(['closeDetails', 'openFile'])
+    expect(Object.keys(injected)).toEqual(['closeDetails'])
     injected.closeDetails()
     expect(b.layoutFake.closeDetails).toHaveBeenCalledTimes(1)
     // The shared handle: details resolves the SAME instance conversation writes.

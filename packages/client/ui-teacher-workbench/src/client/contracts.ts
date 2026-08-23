@@ -30,6 +30,10 @@ import type {
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
   TeacherQuestionImageReplaceRequest,
+  TeacherQuestionMediaBrowseResult,
+  TeacherQuestionMediaDirectoryCreateRequest,
+  TeacherQuestionMediaDirectoryDeleteRequest,
+  TeacherQuestionMediaDirectoryRenameRequest,
   TeacherQuestionSegmentResult,
   TeacherQuestionFolderId,
   TeacherQuestionLibraryFolderId,
@@ -170,6 +174,20 @@ export interface TeacherWorkbenchCommands {
   saveQuestionBatch: (request: TeacherQuestionBatchSaveRequest) => Promise<TeacherWorkbenchActionResult>
   /** Read one question raster. */
   readQuestionImage: (request: TeacherQuestionImageReadRequest) => Promise<TeacherQuestionImageReadResult>
+  /** Scan the currently configured question-media roots. */
+  browseQuestionMedia: () => Promise<TeacherQuestionMediaBrowseResult>
+  /** Create one physical directory below a configured-root parent. */
+  createQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryCreateRequest,
+  ) => Promise<TeacherWorkbenchActionResult>
+  /** Delete one physical directory below the configured question-media roots. */
+  deleteQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryDeleteRequest,
+  ) => Promise<TeacherWorkbenchActionResult>
+  /** Rename one physical or durable student hierarchy directory. */
+  renameQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryRenameRequest,
+  ) => Promise<TeacherWorkbenchActionResult>
   /** Replace one browser-edited question raster. */
   replaceQuestionImage: (request: TeacherQuestionImageReplaceRequest) => Promise<TeacherWorkbenchActionResult>
   /** Delete one question raster. */

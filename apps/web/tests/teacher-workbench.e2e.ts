@@ -1,4 +1,4 @@
-import { readFile } from 'node:fs/promises'
+import { mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
@@ -7,6 +7,7 @@ import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import type {} from '@deepseek-ai/dsh-host-teacher-workbench'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import {
   captureStableAria,
   compareOrRefreshGolden,
@@ -37,6 +38,7 @@ const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-dele
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
 const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
 const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
+const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
 const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
@@ -111,6 +113,7 @@ describe('web e2e: durable teacher workbench', () => {
       viewport: { width: 1440, height: 900 },
       locale: ZH_BROWSER_LOCALE,
     })
+    await page.clock.setFixedTime('2026-08-22T09:30:00+08:00')
     tripwire = watchConsole(page)
     await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -413,9 +416,8 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('persists the five headteacher workspaces through the real Web transport', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-headteacher'))
-    const workbench = page.getByRole('region', { name: '工作台', exact: true })
+  it('shows eight workbench modules before scrolling', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-module-viewport'))
     const moduleList = page.locator('[class*="sidebarModules"]')
     const workbenchTrigger = page.getByRole('button', { name: '打开工作台', exact: true })
     if (await workbenchTrigger.getAttribute('aria-expanded') !== 'true') await workbenchTrigger.click()
@@ -427,8 +429,14 @@ describe('web e2e: durable teacher workbench', () => {
       }).length
       return { clientHeight: element.clientHeight, scrollHeight: element.scrollHeight, fullyVisible }
     })
-    expect(moduleListLayout).toMatchObject({ clientHeight: 180, fullyVisible: 5 })
+    expect(moduleListLayout).toMatchObject({ clientHeight: 288, fullyVisible: 8 })
     expect(moduleListLayout.scrollHeight).toBeGreaterThan(moduleListLayout.clientHeight)
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
+  it('persists the five headteacher workspaces through the real Web transport', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-headteacher'))
+    const workbench = page.getByRole('region', { name: '工作台', exact: true })
     const current = await scaffold.ctx.teacherWorkbench.read({})
     const rosterClass = current.value.state.classes.find(item => item.usage === 'roster')
     if (rosterClass === undefined) {
@@ -682,19 +690,19 @@ describe('web e2e: durable teacher workbench', () => {
     let libraryFolderDialog = page.getByRole('dialog', { name: '新建文件夹' })
     await libraryFolderDialog.getByLabel('目录名').fill('模拟题库')
     await libraryFolderDialog.getByRole('button', { name: '新建' }).click()
-    const libraryFolder = bankFolders.getByRole('button', { name: /^· 模拟题库/u })
+    const libraryFolder = bankFolders.getByRole('button', { name: '模拟题库', exact: true })
     await libraryFolder.waitFor({ timeout: 10_000 })
     await libraryFolder.dblclick()
     libraryFolderDialog = page.getByRole('dialog', { name: '新建文件夹' })
     await libraryFolderDialog.getByLabel('目录名').fill('八月')
     await libraryFolderDialog.getByRole('button', { name: '新建' }).click()
-    const nestedLibraryFolder = bankFolders.getByRole('button', { name: /^· 八月/u })
+    const nestedLibraryFolder = bankFolders.getByRole('button', { name: '八月', exact: true })
     await nestedLibraryFolder.waitFor({ timeout: 10_000 })
     await nestedLibraryFolder.click({ clickCount: 3 })
     const renameFolderDialog = page.getByRole('dialog', { name: '重命名目录' })
     await renameFolderDialog.getByLabel('目录名').fill('八月题库')
     await renameFolderDialog.getByRole('button', { name: '保存' }).click()
-    await bankFolders.getByRole('button', { name: /^· 八月题库/u }).waitFor({ timeout: 10_000 })
+    await bankFolders.getByRole('button', { name: '八月题库', exact: true }).waitFor({ timeout: 10_000 })
 
     const batchButton = bankFolders.getByRole('button', { name: /布局验证试卷/u })
     await batchButton.click()
@@ -723,12 +731,187 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('shows images discovered below newly configured question roots', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-question-roots'))
+    let document = await scaffold.ctx.teacherWorkbench.read({})
+    let rosterClass = document.value.state.classes.find(item => item.usage === 'roster')
+    if (rosterClass === undefined) {
+      await openModule('学生名册')
+      const workbench = page.getByRole('region', { name: '工作台', exact: true })
+      await workbench.getByRole('button', { name: '新建班级' }).click()
+      const classEditor = page.getByRole('dialog', { name: '新建班级' })
+      await classEditor.getByLabel('班级名称').fill('高一（1）班')
+      await classEditor.getByLabel('年级').fill('高一')
+      await classEditor.getByLabel('学科').fill('数学')
+      await classEditor.getByRole('button', { name: '保存' }).click()
+      await classEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+      document = await scaffold.ctx.teacherWorkbench.read({})
+      rosterClass = document.value.state.classes.find(item => item.usage === 'roster')
+    }
+    if (rosterClass === undefined) throw new Error('question root roster setup failed')
+
+    const segmentsRoot = join(scaffold.harnessHome, 'external-question-media', 'segments')
+    const studentsRoot = join(scaffold.harnessHome, 'external-question-media', 'students')
+    const batchDirectory = join(segmentsRoot, '新路径试卷')
+    const nestedBatchDirectory = join(segmentsRoot, '月考', '第一次', '套题甲')
+    const emptyLibraryDirectory = join(segmentsRoot, '空目录', '下一层')
+    const academicYear = rosterClass.academicYear?.trim() || '2026'
+    const grade = rosterClass.grade.trim() || '高一'
+    const classDirectoryName = rosterClass.name.startsWith(grade)
+      ? rosterClass.name.slice(grade.length)
+      : rosterClass.name
+    const directoryStudentName = '目录学生'
+    const studentDirectory = join(
+      studentsRoot,
+      academicYear,
+      grade,
+      classDirectoryName,
+      directoryStudentName,
+      '月考',
+      '第一周',
+    )
+    const raster = await readFile(RASTER_FIXTURE)
+    await mkdir(batchDirectory, { recursive: true })
+    await writeFile(join(batchDirectory, '新路径试卷_7.png'), raster)
+    await mkdir(nestedBatchDirectory, { recursive: true })
+    await writeFile(join(nestedBatchDirectory, '月考_8.png'), raster)
+    await mkdir(emptyLibraryDirectory, { recursive: true })
+    await mkdir(studentDirectory, { recursive: true })
+    await writeFile(join(studentDirectory, '新路径学生题.png'), raster)
+    await Promise.all([
+      utimes(batchDirectory, 1, 1),
+      utimes(join(segmentsRoot, '月考'), 2, 2),
+      utimes(join(segmentsRoot, '空目录'), 3, 3),
+    ])
+    await scaffold.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot, studentsRoot })
+
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openModule('试题切割')
+    const hierarchy = page.getByRole('complementary', { name: '学生目录' })
+    await hierarchy.getByRole('button', { name: rosterClass.name, exact: true }).dblclick()
+    const classDrawer = page.getByRole('complementary', { name: '学生列表' })
+    await classDrawer.waitFor({ timeout: 10_000 })
+    const directoryStudent = classDrawer.getByRole('button', { name: directoryStudentName, exact: true })
+    await directoryStudent.click()
+    const studentImages = page.getByRole('complementary', { name: '学生图片' })
+    await studentImages.getByRole('button', { name: '新路径学生题.png', exact: true }).waitFor({ timeout: 10_000 })
+    await studentImages.locator('img').first().waitFor({ timeout: 10_000 })
+    await directoryStudent.click({ clickCount: 2 })
+    const studentMonthFolder = classDrawer.getByRole('button', { name: '月考', exact: true })
+    await studentMonthFolder.waitFor({ timeout: 10_000 })
+    await studentMonthFolder.click({ clickCount: 2 })
+    const firstWeekFolder = classDrawer.getByRole('button', { name: '第一周', exact: true })
+    await firstWeekFolder.waitFor({ timeout: 10_000 })
+    await firstWeekFolder.click({ clickCount: 3 })
+    let directoryDialog = page.getByRole('dialog', { name: '新建子目录' })
+    await directoryDialog.getByLabel('目录名').fill('第二周')
+    await directoryDialog.getByRole('button', { name: '新建' }).click()
+    await directoryDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    const secondWeekFolder = classDrawer.getByRole('button', { name: '第二周', exact: true })
+    await secondWeekFolder.waitFor({ timeout: 10_000 })
+    await secondWeekFolder.click({ clickCount: 4 })
+    directoryDialog = page.getByRole('dialog', { name: '重命名目录' })
+    await directoryDialog.getByLabel('目录名').fill('第二周订正')
+    await directoryDialog.getByRole('button', { name: '保存' }).click()
+    await directoryDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    await classDrawer.getByRole('button', { name: '第二周订正', exact: true }).waitFor({ timeout: 10_000 })
+    expect((await stat(join(studentDirectory, '第二周订正'))).isDirectory()).toBe(true)
+
+    await studentImages.getByRole('button', { name: '试题图片库' }).click()
+    const bankFolders = page.getByRole('complementary', { name: '试题图片库' })
+    const batchDirectoryFolder = bankFolders.getByRole('button', { name: /^▸ 新路径试卷/u })
+    await batchDirectoryFolder.waitFor({ timeout: 10_000 })
+    await batchDirectoryFolder.click()
+    const batchButton = bankFolders.getByRole('button', { name: '新路径试卷 1', exact: true })
+    await batchButton.waitFor({ timeout: 10_000 })
+    await batchButton.click()
+    const bankImages = page.getByRole('complementary', { name: '试题库图片' })
+    await bankImages.getByRole('button', { name: '第 7 题', exact: true }).waitFor({ timeout: 10_000 })
+    await bankImages.locator('img').first().waitFor({ timeout: 10_000 })
+    const libraryMonthFolder = bankFolders.getByRole('button', { name: /^▸ 月考/u })
+    await libraryMonthFolder.waitFor({ timeout: 10_000 })
+    const [libraryMonthBox, libraryMonthMarkerBox] = await Promise.all([
+      libraryMonthFolder.boundingBox(),
+      libraryMonthFolder.locator('[aria-hidden="true"]').boundingBox(),
+    ])
+    if (libraryMonthBox === null || libraryMonthMarkerBox === null) throw new Error('question-library folder marker has no layout box')
+    expect(libraryMonthMarkerBox.x - libraryMonthBox.x).toBeGreaterThanOrEqual(10)
+    expect(libraryMonthMarkerBox.x - libraryMonthBox.x).toBeLessThanOrEqual(20)
+    await libraryMonthFolder.click()
+    const firstExamFolder = bankFolders.getByRole('button', { name: /^[▸▾] 第一次/u })
+    await firstExamFolder.waitFor({ timeout: 10_000 })
+    await firstExamFolder.click()
+    const nestedBatchFolder = bankFolders.getByRole('button', { name: /^▸ 套题甲/u })
+    await nestedBatchFolder.waitFor({ timeout: 10_000 })
+    await nestedBatchFolder.click()
+    await bankFolders.getByRole('button', { name: '套题甲 1', exact: true }).waitFor({ timeout: 10_000 })
+    await firstExamFolder.click({ clickCount: 2 })
+    directoryDialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await directoryDialog.getByLabel('目录名').fill('第二次')
+    await directoryDialog.getByRole('button', { name: '新建' }).click()
+    await directoryDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    const secondExamFolder = bankFolders.getByRole('button', { name: '第二次', exact: true })
+    await secondExamFolder.waitFor({ timeout: 10_000 })
+    await secondExamFolder.click({ clickCount: 3 })
+    directoryDialog = page.getByRole('dialog', { name: '重命名目录' })
+    await directoryDialog.getByLabel('目录名').fill('第二次月考')
+    await directoryDialog.getByRole('button', { name: '保存' }).click()
+    await directoryDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    await bankFolders.getByRole('button', { name: '第二次月考', exact: true }).waitFor({ timeout: 10_000 })
+    expect((await stat(join(nestedBatchDirectory, '..', '第二次月考'))).isDirectory()).toBe(true)
+    const emptyFolder = bankFolders.getByRole('button', { name: /^▸ 空目录/u })
+    await emptyFolder.click()
+    await bankFolders.getByRole('button', { name: '下一层', exact: true }).waitFor({ timeout: 10_000 })
+
+    const liveStudentDirectory = join(
+      studentsRoot,
+      academicYear,
+      grade,
+      classDirectoryName,
+      directoryStudentName,
+      '实时新增学生目录',
+    )
+    const liveLibraryDirectory = join(segmentsRoot, '实时新增图片目录')
+    await Promise.all([
+      mkdir(liveStudentDirectory, { recursive: true }),
+      mkdir(liveLibraryDirectory, { recursive: true }),
+    ])
+    const liveStudentFolder = classDrawer.getByRole('button', { name: '实时新增学生目录', exact: true })
+    const liveLibraryFolder = bankFolders.getByRole('button', { name: '实时新增图片目录', exact: true })
+    await Promise.all([
+      liveStudentFolder.waitFor({ timeout: 10_000 }),
+      liveLibraryFolder.waitFor({ timeout: 10_000 }),
+    ])
+    await compareOrRefreshGolden(
+      QUESTION_ROOT_REFRESH_EXPECTED,
+      await captureStableAria(page, '[data-question-workbench]', scaffold.workspaceCwd),
+      MODE,
+    )
+    const liveStudentDelete = liveStudentFolder.locator('..').getByRole('button', { name: '删除', exact: true })
+    await liveStudentFolder.hover()
+    expect(await liveStudentDelete.evaluate(element => getComputedStyle(element).opacity)).toBe('1')
+    page.once('dialog', async (dialog) => { await dialog.accept() })
+    await liveStudentDelete.click()
+    await liveStudentFolder.waitFor({ state: 'hidden', timeout: 10_000 })
+    await expect(stat(liveStudentDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const liveLibraryDelete = liveLibraryFolder.locator('..').getByRole('button', { name: '删除目录“实时新增图片目录”' })
+    await liveLibraryFolder.hover()
+    expect(await liveLibraryDelete.evaluate(element => getComputedStyle(element).opacity)).toBe('1')
+    page.once('dialog', async (dialog) => { await dialog.accept() })
+    await liveLibraryDelete.click()
+    await liveLibraryFolder.waitFor({ state: 'hidden', timeout: 10_000 })
+    await expect(stat(liveLibraryDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it('links the normal timetable while isolating Grade OCR classes', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-timetable'))
     await openModule('课程表')
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
     const weekdays = ['周日', '周一', '周二', '周三', '周四', '周五', '周六'] as const
-    const weekday = new Date().getDay()
+    const weekday = await page.evaluate(() => new Date().getDay())
     const weekdayLabel = weekdays[weekday]
     if (weekdayLabel === undefined) throw new Error(`Unexpected weekday index: ${String(weekday)}`)
 

@@ -1,10 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
 import sharp from 'sharp'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, rgb } from 'pdf-lib'
 import { Context } from '@deepseek-ai/cordis'
 import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
@@ -13,6 +13,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
+import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import * as ToolTeacherWorkbench from '../../tool-teacher-workbench/src/index.ts'
@@ -40,12 +41,34 @@ import type {
   TeacherQuickNoteId,
   TeacherQuestionBatchId,
   TeacherQuestionFolderId,
+  TeacherQuestionLibraryFolderId,
   TeacherStudentId,
   TeacherTimetableEntryId,
   TeacherWorkbenchState,
 } from '../src/types.ts'
 
-async function harness(pool = new MemoryMediaPool(), config?: ConstructorParameters<typeof TeacherWorkbenchService>[1]) {
+class MemorySettings extends SettingsProvider {
+  private storedDocument: Record<string, unknown> = {}
+
+  override get writable(): boolean {
+    return true
+  }
+
+  protected override load(): Promise<Record<string, unknown>> {
+    return Promise.resolve(structuredClone(this.storedDocument))
+  }
+
+  protected override persist(ns: SettingsNamespace, section: Record<string, unknown>): Promise<void> {
+    this.storedDocument = { ...this.storedDocument, [ns]: structuredClone(section) }
+    return Promise.resolve()
+  }
+}
+
+async function harness(
+  pool = new MemoryMediaPool(),
+  config?: ConstructorParameters<typeof TeacherWorkbenchService>[1],
+  withSettings = false,
+) {
   const ctx = new Context()
   await ctx.plugin(SystemPrompt)
   await ctx.plugin(ToolRuntime)
@@ -55,6 +78,7 @@ async function harness(pool = new MemoryMediaPool(), config?: ConstructorParamet
   const facility = new DomainFacility(ctx, { backend: 'memory', routes: {} })
   ctx.storage.mount('domain', facility)
   ctx.provide('storageDomain', facility)
+  if (withSettings) await ctx.plugin(MemorySettings)
   const fiber = config === undefined
     ? await ctx.plugin(TeacherWorkbenchService)
     : await ctx.plugin(TeacherWorkbenchService, config)
@@ -532,7 +556,9 @@ describe('TeacherWorkbenchService', () => {
     const b = await harness(undefined, config)
     contexts.push(b.ctx)
     const pdf = await PDFDocument.create()
-    pdf.addPage([200, 300]).drawText('1. question', { x: 20, y: 260, size: 16 })
+    const pdfPage = pdf.addPage([200, 300])
+    pdfPage.drawText('1. question', { x: 20, y: 260, size: 16 })
+    pdfPage.drawRectangle({ x: 130, y: 220, width: 30, height: 30, color: rgb(1, 0, 0) })
     const bytes = await pdf.save()
     const staged = await b.service.stageSource({
       name: 'paper.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(bytes).toString('base64'),
@@ -553,11 +579,17 @@ describe('TeacherWorkbenchService', () => {
       value: {
         groupCount: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
+        horizontalBounds: { leftRatio: 0.1, rightRatio: 0.9 },
         questions: [{
           questionNo: 1,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 0, top: 0, right: 200, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+          regions: [{ pageIndex: 0, left: 20, top: 0, right: 80, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+        }, {
+          questionNo: 2,
+          headPageIndex: 0,
+          groupIndex: 0,
+          regions: [{ pageIndex: 0, left: 120, top: 120, right: 180, bottom: 240, pageWidth: 200, pageHeight: 300 }],
         }],
       },
     })
@@ -573,13 +605,25 @@ describe('TeacherWorkbenchService', () => {
     }, { id: 'session-1' })
     expect(cut.isError).toBe(false)
     const result = cut.value as { batchId: TeacherQuestionBatchId; questionCount: number; groupCount: number }
-    expect(result).toMatchObject({ questionCount: 1, groupCount: 1 })
+    expect(result).toMatchObject({ questionCount: 2, groupCount: 1 })
     const document = (await b.service.read({})).value
     expect(document.state.questionBatches).toMatchObject([{
       id: result.batchId,
       name: '自动切题',
-      images: [{ questionNo: 1, mediaType: 'image/png' }],
+      images: [
+        { questionNo: 1, mediaType: 'image/png', width: 320 },
+        { questionNo: 2, mediaType: 'image/png', width: 320 },
+      ],
     }])
+    const firstImage = document.state.questionBatches[0]?.images[0]
+    if (firstImage === undefined) throw new Error('first segmented question image is missing')
+    const storedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: firstImage.id } })
+    if (!storedImage.ok) throw new Error(storedImage.error.message)
+    const directCropStats = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))
+      .extract({ left: 160, top: 0, width: 160, height: 200 })
+      .stats()
+    expect(directCropStats.channels[1]?.min).toBeLessThan(80)
+    expect(directCropStats.channels[2]?.min).toBeLessThan(80)
   })
 
   it('ships the reference headteacher templates and rejects cross-class seating occupants', () => {
@@ -1065,6 +1109,12 @@ describe('TeacherWorkbenchService', () => {
       expectedRevision: editedDocument.revision,
       state: {
         ...editedDocument.state,
+        questionLibraryFolders: [{
+          id: 'library-empty' as TeacherQuestionLibraryFolderId,
+          name: '空试题库',
+          createdAt: 2,
+          updatedAt: 2,
+        }],
         questionFolders: [{ id: folderId, studentId, name: '第一次作业', createdAt: 2, updatedAt: 2 }],
       },
     })
@@ -1086,6 +1136,36 @@ describe('TeacherWorkbenchService', () => {
     const nestedAssignment = assigned.value.document.state.questionAssignments[0]!
     expect(nestedAssignment.folderId).toBe(folderId)
     expect(nestedAssignment.relativePath.split(/[\\/]/u).slice(0, 4)).toEqual(['2026', '高一(1)班', '张同学', '第一次作业'])
+
+    const browsedAssignments = await b.service.browseQuestionMedia({})
+    expect(browsedAssignments).toMatchObject({ ok: true })
+    if (!browsedAssignments.ok) throw new Error(browsedAssignments.error.message)
+    expect(browsedAssignments.value.questionAssignments).toHaveLength(4)
+    for (const assignment of assigned.value.document.state.questionAssignments) {
+      expect(browsedAssignments.value.questionAssignments).toContainEqual(expect.objectContaining({
+        id: assignment.id,
+        studentId,
+      }))
+    }
+    expect(browsedAssignments.value.students.filter(item => item.id === studentId)).toHaveLength(1)
+    expect(browsedAssignments.value.questionLibraryFolders).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: 'library-empty', name: '空试题库' }),
+    ]))
+    expect(browsedAssignments.value.questionLibraryFolders.some(folder => folder.name === String(batch.id))).toBe(false)
+    const renamedFolder = await b.service.renameQuestionMediaDirectory({
+      target: { kind: 'student-folder', id: folderId },
+      name: '第一次订正',
+    })
+    expect(renamedFolder).toMatchObject({ ok: true })
+    if (!renamedFolder.ok) throw new Error(renamedFolder.error.message)
+    expect(renamedFolder.value.document.state.questionFolders)
+      .toEqual(expect.arrayContaining([expect.objectContaining({ id: folderId, name: '第一次订正' })]))
+    expect(renamedFolder.value.document.state.questionAssignments
+      .some(assignment => assignment.relativePath.includes('第一次订正'))).toBe(true)
+    expect((await stat(join(root, 'students', '2026', '高一(1)班', '张同学', '第一次订正'))).isDirectory())
+      .toBe(true)
+    await expect(b.service.readQuestionImage({ target: { kind: 'assignment', id: nestedAssignment.id } }))
+      .resolves.toMatchObject({ ok: true, value: { width: 12, height: 12 } })
 
     const staged = await b.service.saveTemporaryQuestionSelection({
       studentId,
@@ -1261,6 +1341,263 @@ describe('TeacherWorkbenchService', () => {
     await expect(b.service.read({})).resolves.toMatchObject({
       value: { state: { questionBatches: [], questionAssignments: [] } },
     })
+  })
+
+  it('browses images from the newly configured batch and student roots', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-root-change-'))
+    temporaryRoots.push(root)
+    const originalSegments = join(root, 'original-segments')
+    const originalStudents = join(root, 'original-students')
+    const nextSegments = join(root, 'next-segments')
+    const nextStudents = join(root, 'next-students')
+    const b = await harness(new MemoryMediaPool(), {
+      geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
+      geocodingCacheEntries: 16,
+      segmentsRoot: originalSegments,
+      studentsRoot: originalStudents,
+      sourcesRoot: join(root, 'sources'),
+      generatedRoot: join(root, 'generated'),
+      maxSourceDocumentBytes: 8 * 1024 * 1024,
+      maxQuestionImageBytes: 1024 * 1024,
+      maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxTimetableSourceCharacters: 120_000,
+      maxTimetableEntries: 1_000,
+      timetableAgentTimeoutMs: 120_000,
+      timetableVisionAgentTimeoutMs: 45_000,
+      maxQuestionLayoutPages: 50,
+      questionSegmentationBatchPages: 20,
+      maxQuestionLayoutElements: 5_000,
+      maxQuestionSourceChunkCharacters: 18_000,
+      maxSegmentedQuestions: 300,
+      maxQuestionBoundarySubmissions: 3,
+      questionSegmentationAgentTimeoutMs: 90_000,
+    }, true)
+    contexts.push(b.ctx)
+    const owningClass = { ...classItem('class-root-change', '高一（1）班'), academicYear: '2026' }
+    const studentId = 'student-root-change' as TeacherStudentId
+    const seeded = await b.service.write({
+      expectedRevision: 0,
+      state: {
+        ...INITIAL_TEACHER_WORKBENCH_STATE,
+        classes: [owningClass],
+        students: [{
+          id: studentId,
+          classId: owningClass.id,
+          name: '张同学',
+          studentNumber: '1',
+          gender: '', guardian: '', relation: '', phone: '', address: '', extras: {},
+        }],
+      },
+    })
+    expect(seeded.ok).toBe(true)
+    const oldBytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#993333' } }).png().toBuffer()
+    const saved = await b.service.saveQuestionBatch({
+      name: '旧目录试卷',
+      sourceName: 'math.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 1,
+        fileName: '旧题.png',
+        mediaType: 'image/png',
+        width: 12,
+        height: 8,
+        contentBase64: oldBytes.toString('base64'),
+      }],
+    })
+    if (!saved.ok || saved.value.batchId === undefined) throw new Error('missing old batch')
+    const image = saved.value.document.state.questionBatches[0]!.images[0]!
+    const assigned = await b.service.assignQuestions({ studentId, imageIds: [image.id] })
+    if (!assigned.ok) throw new Error(assigned.error.message)
+
+    const nextBytes = await sharp({ create: { width: 17, height: 9, channels: 3, background: '#336699' } }).png().toBuffer()
+    const batchPath = join(nextSegments, '新路径试卷', '新路径试卷_7.png')
+    const nestedBatchPath = join(nextSegments, '月考', '第一次', '套题甲', '月考_8.png')
+    const studentPath = join(nextStudents, '2026', '高一', '（1）班', '张同学', '月考', '新路径学生题.png')
+    const directoryStudentPath = join(
+      nextStudents,
+      '2026',
+      '高一',
+      '（1）班',
+      '目录学生',
+      '复习',
+      '第一周',
+      '四级目录题.png',
+    )
+    await Promise.all([
+      mkdir(join(nextSegments, '新路径试卷'), { recursive: true }),
+      mkdir(join(nextSegments, '月考', '第一次', '套题甲'), { recursive: true }),
+      mkdir(join(nextSegments, '空目录', '下一层'), { recursive: true }),
+      mkdir(join(nextStudents, '2026', '高一', '（1）班', '张同学', '月考'), { recursive: true }),
+      mkdir(join(nextStudents, '2026', '高一', '（1）班', '目录学生', '复习', '第一周'), { recursive: true }),
+    ])
+    await Promise.all([
+      writeFile(batchPath, nextBytes),
+      writeFile(nestedBatchPath, nextBytes),
+      writeFile(studentPath, nextBytes),
+      writeFile(directoryStudentPath, nextBytes),
+    ])
+
+    await b.ctx.settings.update(settingsNamespace('teacher-workbench'), {
+      segmentsRoot: nextSegments,
+      studentsRoot: nextStudents,
+    })
+    const browsed = await b.service.browseQuestionMedia({})
+    expect(browsed).toMatchObject({
+      ok: true,
+      value: {
+        classes: [{ id: owningClass.id, name: owningClass.name }],
+      },
+    })
+    if (!browsed.ok) throw new Error(browsed.error.message)
+    expect(browsed.value.questionBatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        name: '新路径试卷',
+        images: [expect.objectContaining({ questionNo: 7, fileName: '新路径试卷_7.png' })],
+      }),
+      expect.objectContaining({
+        name: '套题甲',
+        images: [expect.objectContaining({ questionNo: 8, fileName: '月考_8.png' })],
+      }),
+    ]))
+    expect(browsed.value.students).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: studentId, name: '张同学' }),
+      expect.objectContaining({ name: '目录学生', classId: owningClass.id }),
+    ]))
+    expect(browsed.value.questionAssignments).toEqual(expect.arrayContaining([
+      expect.objectContaining({ studentId, fileName: '新路径学生题.png' }),
+      expect.objectContaining({ fileName: '四级目录题.png' }),
+    ]))
+    const libraryFolderByName = new Map(browsed.value.questionLibraryFolders.map(folder => [folder.name, folder] as const))
+    expect(libraryFolderByName.get('第一次')?.parentId).toBe(libraryFolderByName.get('月考')?.id)
+    expect(libraryFolderByName.get('下一层')?.parentId).toBe(libraryFolderByName.get('空目录')?.id)
+    expect(browsed.value.questionBatches.find(batch => batch.name === '新路径试卷')?.folderId)
+      .toBe(libraryFolderByName.get('新路径试卷')?.id)
+    expect(browsed.value.questionBatches.find(batch => batch.name === '套题甲')?.folderId)
+      .toBe(libraryFolderByName.get('套题甲')?.id)
+    const studentFolderByName = new Map(browsed.value.questionFolders.map(folder => [folder.name, folder] as const))
+    expect(studentFolderByName.get('第一周')?.parentId).toBe(studentFolderByName.get('复习')?.id)
+    const nestedStudentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '四级目录题.png')
+    expect(nestedStudentAssignment?.folderId).toBe(studentFolderByName.get('第一周')?.id)
+    expect(browsed.value.readOnlyLibraryFolderIds).toEqual(expect.arrayContaining([
+      libraryFolderByName.get('月考')?.id,
+      libraryFolderByName.get('第一次')?.id,
+      libraryFolderByName.get('空目录')?.id,
+      libraryFolderByName.get('下一层')?.id,
+      libraryFolderByName.get('新路径试卷')?.id,
+      libraryFolderByName.get('套题甲')?.id,
+    ]))
+    expect(browsed.value.readOnlyFolderIds).toEqual(expect.arrayContaining([
+      studentFolderByName.get('复习')?.id,
+      studentFolderByName.get('第一周')?.id,
+    ]))
+    expect(browsed.value.questionBatches.some(batch => batch.name === '旧目录试卷')).toBe(false)
+    const discoveredBatchImage = browsed.value.questionBatches.find(batch => batch.name === '新路径试卷')!.images[0]!
+    const studentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '新路径学生题.png')!
+    const directoryStudentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '四级目录题.png')!
+    const [batchRead, studentRead, directoryStudentRead] = await Promise.all([
+      b.service.readQuestionImage({ target: { kind: 'batch', id: discoveredBatchImage.id } }),
+      b.service.readQuestionImage({ target: { kind: 'assignment', id: studentAssignment.id } }),
+      b.service.readQuestionImage({ target: { kind: 'assignment', id: directoryStudentAssignment.id } }),
+    ])
+    expect(batchRead).toMatchObject({ ok: true, value: { width: 17, height: 9 } })
+    expect(studentRead).toMatchObject({ ok: true, value: { width: 17, height: 9 } })
+    expect(directoryStudentRead).toMatchObject({ ok: true, value: { width: 17, height: 9 } })
+
+    await expect(b.service.renameQuestionMediaDirectory({
+      target: { kind: 'student', id: studentId },
+      name: '张同学重命名',
+    })).resolves.toMatchObject({
+      ok: true,
+      value: { document: { state: { students: [expect.objectContaining({ id: studentId, name: '张同学重命名' })] } } },
+    })
+    expect((await stat(join(nextStudents, '2026', '高一', '（1）班', '张同学重命名'))).isDirectory()).toBe(true)
+
+    const afterDurableRename = await b.service.browseQuestionMedia({})
+    if (!afterDurableRename.ok) throw new Error(afterDurableRename.error.message)
+    expect(afterDurableRename.value.students.filter(student => student.id === studentId))
+      .toEqual([expect.objectContaining({ name: '张同学重命名' })])
+    const firstWeekFolder = afterDurableRename.value.questionFolders.find(folder => folder.name === '第一周')
+    if (firstWeekFolder === undefined) throw new Error('missing discovered student folder')
+    await expect(b.service.createQuestionMediaDirectory({
+      parent: { kind: 'student-folder', id: firstWeekFolder.id },
+      name: '第二周',
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(
+      nextStudents,
+      '2026',
+      '高一',
+      '（1）班',
+      '目录学生',
+      '复习',
+      '第一周',
+      '第二周',
+    ))).isDirectory()).toBe(true)
+
+    const afterStudentCreate = await b.service.browseQuestionMedia({})
+    if (!afterStudentCreate.ok) throw new Error(afterStudentCreate.error.message)
+    const secondWeek = afterStudentCreate.value.questionFolders.find(folder => folder.name === '第二周')
+    if (secondWeek === undefined) throw new Error('missing created student folder')
+    await expect(b.service.renameQuestionMediaDirectory({
+      target: { kind: 'student-folder', id: secondWeek.id },
+      name: '第二周订正',
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(
+      nextStudents,
+      '2026',
+      '高一',
+      '（1）班',
+      '目录学生',
+      '复习',
+      '第一周',
+      '第二周订正',
+    ))).isDirectory()).toBe(true)
+
+    const afterStudentRename = await b.service.browseQuestionMedia({})
+    if (!afterStudentRename.ok) throw new Error(afterStudentRename.error.message)
+    const firstExamFolder = afterStudentRename.value.questionLibraryFolders.find(folder => folder.name === '第一次')
+    if (firstExamFolder === undefined) throw new Error('missing discovered library folder')
+    await expect(b.service.createQuestionMediaDirectory({
+      parent: { kind: 'library-folder', id: firstExamFolder.id },
+      name: '第二次',
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(nextSegments, '月考', '第一次', '第二次'))).isDirectory()).toBe(true)
+
+    const afterLibraryCreate = await b.service.browseQuestionMedia({})
+    if (!afterLibraryCreate.ok) throw new Error(afterLibraryCreate.error.message)
+    const secondExamFolder = afterLibraryCreate.value.questionLibraryFolders.find(folder => folder.name === '第二次')
+    if (secondExamFolder === undefined) throw new Error('missing created library folder')
+    await expect(b.service.renameQuestionMediaDirectory({
+      target: { kind: 'library-folder', id: secondExamFolder.id },
+      name: '第二次月考',
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(nextSegments, '月考', '第一次', '第二次月考'))).isDirectory()).toBe(true)
+
+    const afterLibraryRename = await b.service.browseQuestionMedia({})
+    if (!afterLibraryRename.ok) throw new Error(afterLibraryRename.error.message)
+    const renamedExamFolder = afterLibraryRename.value.questionLibraryFolders.find(folder => folder.name === '第二次月考')
+    if (renamedExamFolder === undefined) throw new Error('missing renamed library folder')
+    await expect(b.service.createQuestionMediaDirectory({
+      parent: { kind: 'library-folder', id: renamedExamFolder.id },
+      name: '../越界',
+    })).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    await expect(stat(join(nextSegments, '月考', '第一次', '越界'))).rejects.toMatchObject({ code: 'ENOENT' })
+
+    await expect(b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'library-folder', id: renamedExamFolder.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(stat(join(nextSegments, '月考', '第一次', '第二次月考')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+
+    const afterLibraryDelete = await b.service.browseQuestionMedia({})
+    if (!afterLibraryDelete.ok) throw new Error(afterLibraryDelete.error.message)
+    const directoryStudent = afterLibraryDelete.value.students.find(student => student.name === '目录学生')
+    if (directoryStudent === undefined) throw new Error('missing discovered directory student')
+    await expect(b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'student', id: directoryStudent.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(stat(join(nextStudents, '2026', '高一', '（1）班', '目录学生')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(join(nextSegments, String(saved.value.batchId), `${String(image.id)}.png`))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 
   it('fails loud before its storage domain is initialized', () => {

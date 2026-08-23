@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Dynamic attachment presentation plugin for the conversation UI. It waits for the conversation package's `conversation.input.attachments` and `conversation.message.images` declarations through `ctx.slots.inject`, then registers the composer draft-image rail, folder/image drop target, chat-history image gallery, and original-image lightbox. The conversation slot owner supplies attachment data, image loading, callbacks, and its namespace translator; presentation components remain pure props and are not exported from the package entry.
+Dynamic attachment presentation plugin for the conversation UI. It waits for the conversation package's `conversation.input.attachments` and `conversation.message.images` declarations through `ctx.slots.inject`, then registers the composer draft-image and document rails, folder/image drop target, chat-history image gallery, and original-image lightbox. When `dsh-better-sidebar` is composed, it also registers a hidden uploaded-document tab type and turns each document card into a right-sidebar preview action. The conversation slot owner supplies attachment data, browser-file resolution, image loading, callbacks, and its namespace translator; presentation components remain pure props and are not exported from the package entry.
 
 ## Attachment rail
 
@@ -16,9 +16,15 @@ Dynamic attachment presentation plugin for the conversation UI. It waits for the
 
 `DropOverlay` is the full-viewport invitation shown while a file-system drag is over the page: illustration, title, and a limits line while drops are accepted (`disabled` swaps the blocked illustration and hides the limits line). The layer is pointer-inert — the owner's document-level drag listeners keep the enter/leave count and decide accept/reject; the overlay only shows state. On drop, `ComposerAttachments` separates directory entries from ordinary files without opening a directory reader: directories contribute path metadata through `onAddDirectories`, while files retain the existing image intake callback. A native client-provided `File.path` wins; otherwise the browser entry's root-relative `fullPath` is used. It portals to the body like the lightbox.
 
+## Uploaded document preview
+
+The document rail presents every runtime-only OCR row while extraction is pending, ready, or failed. With `dsh-better-sidebar` available, selecting the card opens or focuses a session-targeted `dsh:uploaded-document` tab and expands the panel. The tab reads the immutable browser `File` already retained by `ui-conversation`; it does not stage a copy in the workspace, call a Host file-read route, or persist file bytes in sidebar state. Removing the row, admitting the prompt, or disposing the plugin closes the tab before releasing that browser reference.
+
+PDF uses the browser's native viewer, common images use Blob URLs, DOCX uses `docx-preview`, PPTX uses sanitized SVG from Office Kit, and XLSX uses a semantic table bounded to 200 rows by 50 columns. A download link remains available for every format. The external Office viewer plugin remains responsible for `.docx`, `.xlsx`, and `.pptx` files opened from the workspace explorer; uploaded composer files do not depend on that profile extension.
+
 ## Model Experience
 
-None, as directory drops only pass path metadata to the conversation owner's draft callback; this plugin never reads directory contents or assembles model requests.
+None, as directory drops only pass path metadata to the conversation owner's draft callback and document preview reads only the browser-held file for presentation; this plugin never reads directory contents or assembles model requests.
 
 #### KV Cache effect
 
@@ -26,7 +32,7 @@ One dropped directory changes only the next user-message suffix by its `@path/` 
 
 ## Known Limitations and Deferred Work
 
-- **Images only in the attachment rail** — directories add path text without a rail card; other non-image files have no rail card or history renderer yet. DeepSeek Chat-style file cards and upload-progress states wait until the composer accepts non-image attachments.
+- **Document preview is a reading aid** — complex Word, PowerPoint, and spreadsheet layout can differ from Microsoft Office, and PDF rendering depends on the browser. Legacy `.doc`, `.xls`, and `.ppt` files are not accepted by the upload control.
 - **Standard browsers expose relative directory metadata** — a normal Web page receives the dragged root relative to the drag data store, not its operating-system absolute path. Native clients may expose an absolute `File.path`; otherwise the resulting reference is relative to the session workspace and does not grant access to a directory outside that workspace.
 - **No zoom or download in the lightbox** — the preview renders the original at fit-to-viewport size only.
 - **The lightbox does not trap focus** — it sets `aria-modal` and restores focus on close, but Tab can reach the page behind it.

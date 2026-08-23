@@ -43,7 +43,14 @@
   },
   "license": "MIT",
   "dependencies": {
-    "clsx": "^2.0.0"
+    "@office-kit/pptx": "0.12.0",
+    "@office-kit/pptx-preview": "0.9.1",
+    "@office-kit/xlsx": "0.9.0",
+    "clsx": "^2.0.0",
+    "docx-preview": "0.4.0",
+    "dompurify": "3.2.7",
+    "fflate": "0.8.3",
+    "jszip": "3.10.1"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
@@ -56,7 +63,8 @@
     "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "@deepseek-ai/dsh-attachment": "workspace:^"
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "dsh-better-sidebar": "^0.15.0"
   },
   "files": [
     "lib/index.js",
@@ -69,6 +77,12 @@
     "@deepseek-ai/dsh-invariants": "workspace:^",
     "@deepseek-ai/dsh-client-runtime": "workspace:^",
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
-    "@deepseek-ai/dsh-attachment": "workspace:^"
+    "@deepseek-ai/dsh-attachment": "workspace:^",
+    "dsh-better-sidebar": "^0.15.0"
+  },
+  "peerDependenciesMeta": {
+    "dsh-better-sidebar": {
+      "optional": true
+    }
   }
 }

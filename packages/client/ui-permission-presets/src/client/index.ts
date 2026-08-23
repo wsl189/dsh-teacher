@@ -30,6 +30,7 @@ import type { PermissionRowInjected } from './PermissionRow.tsx'
 import {
   accessEn, accessZh, en, zh,
 } from './locales.ts'
+import type { PermissionAccessKey } from './locales.ts'
 import {
   FULL_ACCESS_PRESET, permissionPresetCopy,
 } from './presentation.ts'
@@ -51,7 +52,7 @@ function selectOf(session: SessionFace | undefined): PermissionSelect | undefine
 }
 
 /** Flatten the projection select into popup rows; `custom` is display state, never a target. */
-function optionsOf(value: PermissionSelect, t: (key: string) => string): SelectOption[] {
+function optionsOf(value: PermissionSelect, t: (key: PermissionAccessKey) => string): SelectOption[] {
   return value.options
     .filter(option => option.value !== 'custom')
     .map((option) => {
@@ -87,13 +88,10 @@ export function apply(ctx: ClientContext): void {
   // This optional bundle and ui-conversation can load independently, so each
   // owns the same safety copy under its own locale namespace.
   /* jscpd:ignore-start */
-  ctx.effect(() => {
-    const disposers = [
-      ctx.locale.register(ACCESS_NS, 'zh', accessZh),
-      ctx.locale.register(ACCESS_NS, 'en', accessEn),
-    ]
-    return () => { for (const dispose of disposers) dispose() }
-  }, 'ui-permission: Full access confirmation dictionaries')
+  ctx.effect(
+    () => ctx.locale.register(ACCESS_NS, { zh: accessZh, en: accessEn }),
+    'ui-permission: Full access confirmation dictionaries',
+  )
   /* jscpd:ignore-end */
   const t = ctx.locale.bind(ACCESS_NS)
   const sessionFor = (session: ClientSessionContext): SessionFace | undefined =>

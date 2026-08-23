@@ -12,9 +12,12 @@ import type {
   TeacherQuestionBatchId,
   TeacherQuestionImageUpload,
   TeacherQuestionLayoutPage,
+  TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
   TeacherWorkbenchSourceId,
 } from './types.ts'
+
+type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
 
 /** One complete agent-driven question-cutting request. */
 export interface StagedQuestionSegmentationRequest {
@@ -87,7 +90,13 @@ export async function segmentStagedQuestionPdf(
   })
   if (!segmented.ok) throw new Error(segmented.error.message)
   throwIfAborted(signal)
-  const uploads = await renderQuestionUploads(bytes, pages, segmented.value.questions, signal)
+  const uploads = await renderQuestionUploads(
+    bytes,
+    pages,
+    segmented.value.questions,
+    segmented.value.horizontalBounds,
+    signal,
+  )
   if (uploads.length === 0) throw new Error('question segmentation returned no images')
   const parts = partitionUploads(uploads, segmented.value.maxSaveBatchBytes)
   let batchId: TeacherQuestionBatchId | undefined
@@ -165,6 +174,7 @@ async function renderQuestionUploads(
   bytes: Uint8Array,
   pages: readonly TeacherQuestionLayoutPage[],
   questions: readonly TeacherSegmentedQuestion[],
+  horizontalBounds: QuestionHorizontalBounds,
   signal: AbortSignal,
 ): Promise<TeacherQuestionImageUpload[]> {
   const pageLayouts = new Map(pages.map(page => [page.pageIndex, page] as const))
@@ -192,26 +202,38 @@ async function renderQuestionUploads(
     const uploads: TeacherQuestionImageUpload[] = []
     for (const question of questions) {
       throwIfAborted(signal)
-      const slices: Array<{ bytes: Uint8Array; width: number; height: number }> = []
+      const slices: Array<{
+        bytes: Uint8Array
+        width: number
+        height: number
+      }> = []
       for (const region of question.regions) {
         const page = rendered.get(region.pageIndex)
         const layout = pageLayouts.get(region.pageIndex)
         if (page === undefined || layout === undefined) throw new Error('rendered PDF page is missing')
-        const left = Math.max(0, Math.floor(region.left * page.width / layout.width))
         const top = Math.max(0, Math.floor(region.top * page.height / layout.height))
-        const right = Math.min(page.width, Math.ceil(region.right * page.width / layout.width))
         const bottom = Math.min(page.height, Math.ceil(region.bottom * page.height / layout.height))
+        const left = Math.max(0, Math.min(page.width - 1, Math.floor(horizontalBounds.leftRatio * page.width)))
+        const right = Math.max(left + 1, Math.min(page.width, Math.ceil(horizontalBounds.rightRatio * page.width)))
         const width = Math.max(1, right - left)
         const height = Math.max(1, bottom - top)
         const cropped = await sharp(page.png).extract({ left, top, width, height }).png().toBuffer()
-        slices.push({ bytes: new Uint8Array(cropped), width, height })
+        slices.push({
+          bytes: new Uint8Array(cropped),
+          width,
+          height,
+        })
       }
       const gap = slices.length > 1 ? 12 : 0
       const width = Math.max(...slices.map(slice => slice.width))
       const height = slices.reduce((sum, slice) => sum + slice.height, 0) + gap * Math.max(0, slices.length - 1)
       let top = 0
       const composite = slices.map((slice) => {
-        const input = { input: Buffer.from(slice.bytes), left: Math.floor((width - slice.width) / 2), top }
+        const input = {
+          input: Buffer.from(slice.bytes),
+          left: 0,
+          top,
+        }
         top += slice.height + gap
         return input
       })

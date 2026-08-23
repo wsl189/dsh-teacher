@@ -6,7 +6,7 @@
     - /placeholder: "2026"
     - text: "2026"
   - text: 教师姓名
-  - textbox "教师姓名"
+  - textbox "教师姓名": 王老师
   - text: 学校名称
   - textbox "学校名称"
   - text: 默认学科

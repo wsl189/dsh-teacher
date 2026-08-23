@@ -293,6 +293,15 @@ export class ConversationController extends Service implements IConversation {
   }
 
   /**
+   * Resolve the immutable browser file retained for an unsent document row.
+   * @param id - draft document identity to resolve.
+   * @returns the file until the row is removed, admitted, or the service is disposed.
+   */
+  draftDocumentFile(id: DraftDocumentId): File | undefined {
+    return this.draftDocuments.get(id)?.file
+  }
+
+  /**
    * Move unsent documents with their draft when the user switches workspace.
    * @param from - source session.
    * @param to - destination session when it has no document rows of its own.

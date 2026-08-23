@@ -3,7 +3,7 @@
   - text: 浦东新区 · 上海市 · 中国
   - button "恢复日常管理布局"
   - strong: {{clock}}
-  - paragraph: 2026年8月20日星期四
+  - paragraph: 2026年8月22日星期六
   - strong: 30°
   - text: 少云 最高 36° / 最低 28° 今日最高降水概率 45%
   - textbox "天气地点":

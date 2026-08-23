@@ -12,6 +12,7 @@ import { createRequire } from 'node:module'
 import { dirname, join, resolve } from 'node:path'
 import { pathToFileURL } from 'node:url'
 import { act, cleanup } from '@testing-library/react'
+import { DOMMatrix, ImageData, Path2D } from '@napi-rs/canvas'
 import { afterEach, beforeEach, vi } from 'vitest'
 import { bootInjections, orderByModuleGraph } from '@deepseek-ai/dsh-client-modules'
 import type { ClientModuleLoaderTarget, WebBootEntry } from '@deepseek-ai/dsh-client-modules/client'
@@ -159,6 +160,9 @@ export function installAssembledBootEnv(): void {
     document.title = 'DeepSeek Harness'
     vi.stubGlobal('ResizeObserver', ResizeObserverStub)
     vi.stubGlobal('EventSource', EventSourceStub)
+    vi.stubGlobal('DOMMatrix', DOMMatrix)
+    vi.stubGlobal('ImageData', ImageData)
+    vi.stubGlobal('Path2D', Path2D)
     vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
       setTimeout(() => { callback(0) }, 0) as unknown as number)
     vi.stubGlobal('cancelAnimationFrame', (id: number) => { clearTimeout(id) })

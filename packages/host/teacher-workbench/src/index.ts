@@ -26,6 +26,7 @@ import {
   listTemporaryQuestionSelections,
   persistQuestionAssignments,
   persistQuestionBatch,
+  prepareDurableQuestionDirectoryRename,
   readQuestionImage,
   replaceQuestionImage,
   saveTemporaryQuestionSelection,
@@ -33,6 +34,20 @@ import {
   type PersistedTemporaryQuestionSelection,
   type TeacherQuestionMediaConfig,
 } from './question-media.ts'
+import {
+  discoverQuestionMedia,
+  discoveredQuestionTargetKey,
+  readDiscoveredQuestionFile,
+  type DiscoveredQuestionFile,
+} from './question-media-browser.ts'
+import {
+  createDiscoveredQuestionDirectory,
+  deleteDiscoveredQuestionDirectory,
+  discoveredQuestionDirectoryTargetKey,
+  renameDiscoveredQuestionDirectory,
+  resolveDiscoveredQuestionDirectory,
+  type DiscoveredQuestionDirectory,
+} from './question-media-directories.ts'
 import { normalizeTimetableWithAgent } from './timetable-agent.ts'
 import { segmentQuestionsInBatches } from './question-segmentation-batches.ts'
 import { registerQuestionSegmentationSkill } from './question-segmentation-skill.ts'
@@ -59,10 +74,15 @@ import type {
   TeacherQuestionDocumentRequest,
   TeacherQuestionDocumentResult,
   TeacherQuestionImageDeleteRequest,
+  TeacherQuestionMediaBrowseRequest,
+  TeacherQuestionMediaBrowseResult,
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
   TeacherQuestionImageReplaceRequest,
   TeacherQuestionImageTarget,
+  TeacherQuestionMediaDirectoryCreateRequest,
+  TeacherQuestionMediaDirectoryDeleteRequest,
+  TeacherQuestionMediaDirectoryRenameRequest,
   TeacherQuestionMutationResult,
   TeacherQuestionRejected,
   TeacherQuestionSegmentRequest,
@@ -220,6 +240,8 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   private readonly weatherProvider: TeacherWeatherProvider
   private readonly reminderRuntime: TeacherReminderRuntime
   private configSource: () => Config
+  private discoveredQuestionFiles: ReadonlyMap<string, DiscoveredQuestionFile> = new Map()
+  private discoveredQuestionDirectories: ReadonlyMap<string, DiscoveredQuestionDirectory> = new Map()
 
   /**
    * @param ctx - Host context carrying the storage-domain facility.
@@ -431,13 +453,140 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('readQuestionImage')
   async readQuestionImage(request: TeacherQuestionImageReadRequest): Promise<TeacherQuestionImageReadResult> {
     try {
+      const config = this.questionMediaConfig()
+      const discovered = this.discoveredQuestionFiles.get(discoveredQuestionTargetKey(request.target))
       return Object.freeze({
         ok: true,
-        value: Object.freeze(await readQuestionImage(this.questionMediaConfig(), this.requireGlobal().get().state, request.target)),
+        value: Object.freeze(discovered === undefined
+          ? await readQuestionImage(config, this.requireGlobal().get().state, request.target)
+          : await readDiscoveredQuestionFile(discovered, config.maxImageBytes)),
       })
     } catch (error) {
       return questionRejected(error)
     }
+  }
+
+  /**
+   * Scan the currently configured batch and student roots for visible images.
+   * @param _request - empty request retained for a uniform Remote signature.
+   * @returns filesystem-backed collections or a stable storage failure.
+   */
+  @Remote('browseQuestionMedia')
+  async browseQuestionMedia(_request: TeacherQuestionMediaBrowseRequest): Promise<TeacherQuestionMediaBrowseResult> {
+    try {
+      const discovered = await discoverQuestionMedia(this.questionMediaConfig(), this.requireGlobal().get().state)
+      this.discoveredQuestionFiles = discovered.files
+      this.discoveredQuestionDirectories = discovered.directories
+      return Object.freeze({ ok: true, value: discovered.value })
+    } catch (error) {
+      return questionRejected(error)
+    }
+  }
+
+  /**
+   * Create one physical child directory selected through the current configured-root projection.
+   * @param request - opaque scanned parent or question-library root and safe child name.
+   * @returns the unchanged durable document or a stable failure.
+   */
+  @Remote('createQuestionMediaDirectory')
+  createQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryCreateRequest,
+  ): Promise<TeacherQuestionMutationResult> {
+    return this.enqueueQuestionMutation(async () => {
+      const current = this.requireGlobal().get()
+      await createDiscoveredQuestionDirectory(
+        this.questionMediaConfig(),
+        this.discoveredQuestionDirectories,
+        request,
+      )
+      this.discoveredQuestionDirectories = new Map()
+      return questionMutationSuccess(current)
+    })
+  }
+
+  /**
+   * Delete one physical configured-root directory and all of its descendants.
+   * @param request - opaque directory target from the latest scan.
+   * @returns the unchanged durable document or a stable failure.
+   */
+  @Remote('deleteQuestionMediaDirectory')
+  deleteQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryDeleteRequest,
+  ): Promise<TeacherQuestionMutationResult> {
+    return this.enqueueQuestionMutation(async () => {
+      const current = this.requireGlobal().get()
+      const durableTarget = request.target.kind === 'student'
+        ? current.state.students.some(student => student.id === request.target.id)
+        : request.target.kind === 'student-folder'
+          ? current.state.questionFolders.some(folder => folder.id === request.target.id)
+          : false
+      if (durableTarget) {
+        throw new TeacherQuestionMediaError('invalid-request', '持久化学生目录必须通过工作台删除')
+      }
+      await deleteDiscoveredQuestionDirectory(
+        this.questionMediaConfig(),
+        this.discoveredQuestionDirectories,
+        request,
+      )
+      this.discoveredQuestionFiles = new Map()
+      this.discoveredQuestionDirectories = new Map()
+      return questionMutationSuccess(current)
+    })
+  }
+
+  /**
+   * Rename one physical configured-root directory or durable student hierarchy directory.
+   * @param request - opaque directory target and safe replacement name.
+   * @returns the committed or unchanged durable document, or a stable failure.
+   */
+  @Remote('renameQuestionMediaDirectory')
+  renameQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryRenameRequest,
+  ): Promise<TeacherQuestionMutationResult> {
+    return this.enqueueQuestionMutation(async () => {
+      const current = this.requireGlobal().get()
+      const durableTarget = request.target.kind === 'student'
+        ? current.state.students.some(student => student.id === request.target.id)
+        : request.target.kind === 'student-folder'
+          ? current.state.questionFolders.some(folder => folder.id === request.target.id)
+          : false
+      if (!durableTarget) {
+        await renameDiscoveredQuestionDirectory(
+          this.questionMediaConfig(),
+          this.discoveredQuestionDirectories,
+          request,
+        )
+        this.discoveredQuestionFiles = new Map()
+        this.discoveredQuestionDirectories = new Map()
+        return questionMutationSuccess(current)
+      }
+      const discoveredDirectory = this.discoveredQuestionDirectories.get(
+        discoveredQuestionDirectoryTargetKey(request.target),
+      )
+      const physicalDirectory = discoveredDirectory === undefined
+        ? undefined
+        : await resolveDiscoveredQuestionDirectory(
+          this.questionMediaConfig(),
+          this.discoveredQuestionDirectories,
+          request.target,
+        )
+      const prepared = await prepareDurableQuestionDirectoryRename(
+        this.questionMediaConfig(),
+        current.state,
+        request,
+        Date.now(),
+        physicalDirectory,
+      )
+      try {
+        const document = await this.commitQuestionState(() => prepared.state)
+        this.discoveredQuestionFiles = new Map()
+        this.discoveredQuestionDirectories = new Map()
+        return questionMutationSuccess(document)
+      } catch (error) {
+        await prepared.rollback()
+        throw error
+      }
+    })
   }
 
   /**

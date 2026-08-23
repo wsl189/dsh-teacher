@@ -163,12 +163,12 @@ it('accepts a whole-page drop under the limits-labeled overlay and refuses an ov
   // desc line carries the projected limits — copy that can only render after
   // the imageLimits projection crossed the real fixture transport.
   const image = new File([new Uint8Array([137, 80, 78, 71])], 'dropped.png', { type: 'image/png' })
-  const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
+  const dataTransfer = { types: ['Files'], files: [image], items: [], dropEffect: 'none' }
   fireEvent.dragEnter(document.body, { dataTransfer })
   const overlay = await screen.findByRole('status')
-  expect(overlay.textContent).toContain('Drag images here to add them')
+  expect(overlay.textContent).toContain('Drop folders or images here')
   await waitFor(() => {
-    expect(overlay.textContent).toContain('Up to 20 images, 5MB each')
+    expect(overlay.textContent).toContain('Folders add paths only; up to 20 images, 5MB each')
   })
 
   // Dropping on the transcript area (not the composer card) lands in the rail.

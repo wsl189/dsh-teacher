@@ -59,6 +59,10 @@ import type {
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
   TeacherQuestionImageReplaceRequest,
+  TeacherQuestionMediaBrowseResult,
+  TeacherQuestionMediaDirectoryCreateRequest,
+  TeacherQuestionMediaDirectoryDeleteRequest,
+  TeacherQuestionMediaDirectoryRenameRequest,
   TeacherQuestionMutationResult,
   TeacherQuestionRejected,
   TeacherQuestionTemporaryListRequest,
@@ -102,6 +106,20 @@ export interface TeacherWorkbenchRemote {
   saveQuestionBatch: (request: TeacherQuestionBatchSaveRequest) => Promise<RemoteResult<TeacherQuestionMutationResult>>
   /** Read one stored question raster. */
   readQuestionImage: (request: TeacherQuestionImageReadRequest) => Promise<RemoteResult<TeacherQuestionImageReadResult>>
+  /** Scan the currently configured question-media roots. */
+  browseQuestionMedia: (request: Record<never, never>) => Promise<RemoteResult<TeacherQuestionMediaBrowseResult>>
+  /** Create one physical directory below a configured-root parent. */
+  createQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryCreateRequest,
+  ) => Promise<RemoteResult<TeacherQuestionMutationResult>>
+  /** Delete one physical directory below the configured question-media roots. */
+  deleteQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryDeleteRequest,
+  ) => Promise<RemoteResult<TeacherQuestionMutationResult>>
+  /** Rename one configured-root or durable student directory. */
+  renameQuestionMediaDirectory: (
+    request: TeacherQuestionMediaDirectoryRenameRequest,
+  ) => Promise<RemoteResult<TeacherQuestionMutationResult>>
   /** Replace one stored question raster. */
   replaceQuestionImage: (request: TeacherQuestionImageReplaceRequest) => Promise<RemoteResult<TeacherQuestionMutationResult>>
   /** Delete one stored question raster. */
@@ -1292,6 +1310,54 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
     } catch (error) {
       return transportQuestionFailure(error)
     }
+  }
+
+  /**
+   * Scan the currently configured question-media roots.
+   * @returns filesystem-backed batches and student images, or a transport failure.
+   */
+  async browseQuestionMedia(): Promise<TeacherQuestionMediaBrowseResult> {
+    try {
+      const carried = await this.remote.browseQuestionMedia({})
+      return carried.ok
+        ? carried.value
+        : { ok: false, error: { code: 'storage-failure', message: carried.error.message } }
+    } catch (error) {
+      return transportQuestionFailure(error)
+    }
+  }
+
+  /**
+   * Create one physical directory below the current question-media roots.
+   * @param request - opaque parent and safe child name.
+   * @returns the settled persistence result.
+   */
+  createQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryCreateRequest,
+  ): Promise<TeacherWorkbenchActionResult> {
+    return this.questionMutation(() => this.remote.createQuestionMediaDirectory(request))
+  }
+
+  /**
+   * Delete one physical directory below the current question-media roots.
+   * @param request - opaque configured-root directory target.
+   * @returns the settled persistence result.
+   */
+  deleteQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryDeleteRequest,
+  ): Promise<TeacherWorkbenchActionResult> {
+    return this.questionMutation(() => this.remote.deleteQuestionMediaDirectory(request))
+  }
+
+  /**
+   * Rename one configured-root directory or durable student hierarchy directory.
+   * @param request - opaque target and safe replacement name.
+   * @returns the settled persistence result.
+   */
+  renameQuestionMediaDirectory(
+    request: TeacherQuestionMediaDirectoryRenameRequest,
+  ): Promise<TeacherWorkbenchActionResult> {
+    return this.questionMutation(() => this.remote.renameQuestionMediaDirectory(request))
   }
 
   /**

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import DOMPurify from 'dompurify'
 import { getSlides, loadPresentation } from '@office-kit/pptx'
 import { renderSlideToSvg } from '@office-kit/pptx-preview'
@@ -7,172 +7,81 @@ import type { Workbook } from '@office-kit/xlsx/workbook'
 import { cellValueAsString } from '@office-kit/xlsx/cell'
 import { getCell, getMaxCol, getMaxRow } from '@office-kit/xlsx/worksheet'
 import { renderAsync } from 'docx-preview'
-import * as pdfjs from 'pdfjs-dist'
-import { WorkerMessageHandler } from 'pdfjs-dist/build/pdf.worker.mjs'
-import { MarkdownText } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { FilePreviewProps } from './FilePreview.tsx'
-import css from './FilePreview.module.css'
+import type { ComposerAttachmentsProps, DraftDocument } from '@deepseek-ai/dsh-client-ui-conversation/client'
+import css from './DocumentPreview.module.css'
 
 const WORKSHEET_PREVIEW_MAX_ROWS = 200
 const WORKSHEET_PREVIEW_MAX_COLUMNS = 50
 
-type Translate = FilePreviewProps['t']
-type PdfDocument = Awaited<ReturnType<typeof pdfjs.getDocument>['promise']>
+type Translate = ComposerAttachmentsProps['t']
 type Presentation = Awaited<ReturnType<typeof loadPresentation>>
 
-const workerScope = globalThis as typeof globalThis & {
-  pdfjsWorker?: { WorkerMessageHandler: typeof WorkerMessageHandler }
+/** Browser-held file and row metadata backing one transient sidebar tab. */
+export interface DocumentPreviewSource {
+  /** Public OCR row whose identity and name address the tab. */
+  readonly document: DraftDocument
+  /** Immutable browser file retained until the draft row is released. */
+  readonly file: File
+  /** Conversation namespace translator captured from the composer slot. */
+  readonly t: Translate
 }
-workerScope.pdfjsWorker ??= { WorkerMessageHandler }
 
-/** Preview renderer selected from a produced file's extension. */
-export type PreviewKind = 'pdf' | 'pptx' | 'docx' | 'xlsx' | 'markdown' | 'image' | 'unsupported'
+/** Preview renderer selected from an uploaded file's extension. */
+export type DocumentPreviewKind = 'pdf' | 'pptx' | 'docx' | 'xlsx' | 'image' | 'unsupported'
 
-const IMAGE_MEDIA_TYPES: Readonly<Record<string, string>> = {
-  avif: 'image/avif',
-  bmp: 'image/bmp',
-  gif: 'image/gif',
-  jpeg: 'image/jpeg',
-  jpg: 'image/jpeg',
-  png: 'image/png',
-  svg: 'image/svg+xml',
-  webp: 'image/webp',
-}
+const IMAGE_EXTENSIONS = new Set(['bmp', 'jpeg', 'jpg', 'png', 'webp'])
+const OFFICE_PREVIEW_KINDS = new Set<DocumentPreviewKind>(['docx', 'pptx', 'xlsx'])
 
 function extension(path: string): string {
-  const name = path.split(/[\\/]/u).at(-1) ?? path
+  const name = path.replace(/^.*[\\/]/u, '')
   const dot = name.lastIndexOf('.')
   return dot < 0 ? '' : name.slice(dot + 1).toLowerCase()
 }
 
 /**
- * Classify supported file extensions.
- * @param path - produced path as recorded by the mutation tool.
- * @returns The specialized renderer kind or `unsupported`.
+ * Classify the formats accepted by the document-upload control.
+ * @param path - uploaded file name.
+ * @returns the specialized renderer kind or `unsupported`.
  */
-export function previewKind(path: string): PreviewKind {
+export function documentPreviewKind(path: string): DocumentPreviewKind {
   const ext = extension(path)
   if (ext === 'pdf') return 'pdf'
   if (ext === 'pptx') return 'pptx'
   if (ext === 'docx') return 'docx'
-  if (ext === 'xlsx' || ext === 'xlsm') return 'xlsx'
-  if (['md', 'markdown', 'mdown', 'mkd'].includes(ext)) return 'markdown'
-  if (IMAGE_MEDIA_TYPES[ext] !== undefined) return 'image'
+  if (ext === 'xlsx') return 'xlsx'
+  if (IMAGE_EXTENSIONS.has(ext)) return 'image'
   return 'unsupported'
 }
 
-/** Decode the API's complete Base64 payload without widening it through JSON arrays. */
-export function decodePreviewBytes(value: string): Uint8Array {
-  const binary = atob(value)
-  const bytes = new Uint8Array(binary.length)
-  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
-  return bytes
-}
-
-function Pager({ page, total, unit, setPage, t }: {
+function Pager({ page, total, setPage, t }: {
   page: number
   total: number
-  unit: 'page' | 'slide'
   setPage: (page: number) => void
   t: Translate
 }) {
   return (
     <div className={css.pager}>
       <button type="button" disabled={page <= 1} onClick={() => { setPage(page - 1) }}>
-        {t('preview.previous')}
+        {t('document.previewPrevious')}
       </button>
-      <span>{t(unit === 'page' ? 'preview.page' : 'preview.slide', {
+      <span>{t('document.previewSlide', {
         page: String(page), total: String(total),
       })}</span>
       <button type="button" disabled={page >= total} onClick={() => { setPage(page + 1) }}>
-        {t('preview.next')}
+        {t('document.previewNext')}
       </button>
     </div>
   )
 }
 
-/** Render settled Markdown through the same sanitized renderer as assistant messages. */
-export function MarkdownPreview({ bytes }: { bytes: Uint8Array }) {
-  const text = useMemo(() => new TextDecoder().decode(bytes), [bytes])
-  return <div className={css.markdown}><MarkdownText text={text} /></div>
+/** Render a PDF with the browser's native PDF surface. */
+function PdfPreview({ url, name, t }: { url: string; name: string; t: Translate }) {
+  return <iframe className={css.pdf} src={url} title={t('document.previewTitle', { name })} />
 }
 
-/** Render a browser-native image through an owned Blob URL. */
-export function ImagePreview({ bytes, path }: { bytes: Uint8Array; path: string }) {
-  const [url, setUrl] = useState<string>()
-  useEffect(() => {
-    const mediaType = IMAGE_MEDIA_TYPES[extension(path)] ?? 'application/octet-stream'
-    const next = URL.createObjectURL(new Blob([bytes.slice().buffer], { type: mediaType }))
-    setUrl(next)
-    return () => { URL.revokeObjectURL(next) }
-  }, [bytes, path])
-  return url === undefined ? null : <img className={css.image} src={url} alt="" />
-}
-
-/** Render one PDF page at panel width; page changes replace the canvas task. */
-export function PdfPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
-  const [document, setDocument] = useState<PdfDocument | null>(null)
-  const [page, setPage] = useState(1)
-  const [error, setError] = useState<string>()
-  const canvasRef = useRef<HTMLCanvasElement>(null)
-  const stageRef = useRef<HTMLDivElement>(null)
-
-  useEffect(() => {
-    const loading = pdfjs.getDocument({ data: bytes.slice() })
-    let active = true
-    setDocument(null)
-    setPage(1)
-    setError(undefined)
-    void loading.promise.then(
-      (next) => { if (active) setDocument(next) },
-      (reason: unknown) => { if (active) setError(reason instanceof Error ? reason.message : String(reason)) },
-    )
-    return () => {
-      active = false
-      void loading.destroy()
-    }
-  }, [bytes])
-
-  useEffect(() => {
-    if (document === null) return
-    let active = true
-    let cancel: (() => void) | undefined
-    void document.getPage(page).then(async (pdfPage) => {
-      const canvas = canvasRef.current
-      const stage = stageRef.current
-      if (!active || canvas === null || stage === null) return
-      const base = pdfPage.getViewport({ scale: 1 })
-      const cssScale = Math.min(1.5, Math.max(0.25, (stage.clientWidth - 8) / base.width))
-      const outputScale = Math.min(globalThis.devicePixelRatio || 1, 2)
-      const viewport = pdfPage.getViewport({ scale: cssScale * outputScale })
-      const context = canvas.getContext('2d')
-      if (context === null) throw new Error('Canvas is unavailable')
-      canvas.width = Math.max(1, Math.ceil(viewport.width))
-      canvas.height = Math.max(1, Math.ceil(viewport.height))
-      canvas.style.width = `${String(viewport.width / outputScale)}px`
-      canvas.style.height = `${String(viewport.height / outputScale)}px`
-      const task = pdfPage.render({ canvas, canvasContext: context, viewport })
-      cancel = () => { task.cancel() }
-      await task.promise
-    }).catch((reason: unknown) => {
-      if (active && !(reason instanceof Error && reason.name === 'RenderingCancelledException')) {
-        setError(reason instanceof Error ? reason.message : String(reason))
-      }
-    })
-    return () => {
-      active = false
-      cancel?.()
-    }
-  }, [document, page])
-
-  if (error !== undefined) return <div className={css.error}>{error}</div>
-  if (document === null) return <div className={css.status}>{t('preview.loading')}</div>
-  return (
-    <div className={css.documentPreview}>
-      <Pager page={page} total={document.numPages} unit="page" setPage={setPage} t={t} />
-      <div ref={stageRef} className={css.canvasStage}><canvas ref={canvasRef} /></div>
-    </div>
-  )
+/** Render a browser-native image through the source file's owned Blob URL. */
+function ImagePreview({ url, name }: { url: string; name: string }) {
+  return <img className={css.image} src={url} alt={name} />
 }
 
 /** Render one PPTX slide to sanitized SVG. */
@@ -191,7 +100,7 @@ export function PptxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
     )
     return () => { active = false }
   }, [bytes])
-  const slides = presentation === null ? [] : getSlides(presentation)
+  const slides = useMemo(() => presentation === null ? [] : getSlides(presentation), [presentation])
   const svg = useMemo(() => {
     if (presentation === null) return undefined
     const slide = slides[page - 1]
@@ -202,11 +111,11 @@ export function PptxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
     })
   }, [page, presentation, slides])
   if (error !== undefined) return <div className={css.error}>{error}</div>
-  if (presentation === null) return <div className={css.status}>{t('preview.loading')}</div>
-  if (svg === undefined || slides.length === 0) return <div className={css.status}>{t('preview.empty')}</div>
+  if (presentation === null) return <div className={css.status}>{t('document.previewLoading')}</div>
+  if (svg === undefined) return <div className={css.status}>{t('document.previewEmpty')}</div>
   return (
     <div className={css.documentPreview}>
-      <Pager page={page} total={slides.length} unit="slide" setPage={setPage} t={t} />
+      <Pager page={page} total={slides.length} setPage={setPage} t={t} />
       <div className={css.slide} dangerouslySetInnerHTML={{ __html: svg }} />
     </div>
   )
@@ -218,8 +127,7 @@ export function DocxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
   const [error, setError] = useState<string>()
   const [loading, setLoading] = useState(true)
   useEffect(() => {
-    const body = bodyRef.current
-    if (body === null) return
+    const body = bodyRef.current as HTMLDivElement
     let active = true
     body.replaceChildren()
     setError(undefined)
@@ -243,7 +151,7 @@ export function DocxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
   }, [bytes])
   return (
     <div className={css.wordPreview}>
-      {loading && <div className={css.status}>{t('preview.loading')}</div>}
+      {loading && <div className={css.status}>{t('document.previewLoading')}</div>}
       {error !== undefined && <div className={css.error}>{error}</div>}
       <div ref={bodyRef} />
     </div>
@@ -278,10 +186,10 @@ export function XlsxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
     return () => { active = false }
   }, [bytes])
   if (error !== undefined) return <div className={css.error}>{error}</div>
-  if (workbook === null) return <div className={css.status}>{t('preview.loading')}</div>
+  if (workbook === null) return <div className={css.status}>{t('document.previewLoading')}</div>
   const sheet = workbook.sheets[sheetIndex]
   if (sheet === undefined || sheet.kind !== 'worksheet') {
-    return <div className={css.status}>{t('preview.empty')}</div>
+    return <div className={css.status}>{t('document.previewEmpty')}</div>
   }
   const maxRow = getMaxRow(sheet.sheet)
   const maxColumn = getMaxCol(sheet.sheet)
@@ -304,7 +212,7 @@ export function XlsxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
         ))}
       </div>
       {rowCount === 0 || columnCount === 0
-        ? <div className={css.status}>{t('preview.empty')}</div>
+        ? <div className={css.status}>{t('document.previewEmpty')}</div>
         : (
           <div className={css.sheetScroll}>
             <table>
@@ -330,10 +238,74 @@ export function XlsxPreview({ bytes, t }: { bytes: Uint8Array; t: Translate }) {
           </div>
         )}
       {truncated && (
-        <div className={css.truncated}>{t('preview.sheetTruncated', {
+        <div className={css.truncated}>{t('document.previewSheetTruncated', {
           rows: String(rowCount), columns: String(columnCount),
         })}</div>
       )}
+    </div>
+  )
+}
+
+type LoadState =
+  | { kind: 'loading' }
+  | { kind: 'failed'; message: string }
+  | { kind: 'ready'; bytes: Uint8Array }
+
+/** Load and render one browser-held upload inside a better-sidebar tab. */
+export function DocumentPreview({ document, file, t }: DocumentPreviewSource) {
+  const kind = documentPreviewKind(document.name)
+  const [revision, setRevision] = useState(0)
+  const [state, setState] = useState<LoadState>({ kind: 'loading' })
+  const [url, setUrl] = useState<string>()
+
+  useEffect(() => {
+    const next = URL.createObjectURL(file)
+    setUrl(next)
+    return () => { URL.revokeObjectURL(next) }
+  }, [file])
+
+  useEffect(() => {
+    if (!OFFICE_PREVIEW_KINDS.has(kind)) return
+    let active = true
+    setState({ kind: 'loading' })
+    void file.arrayBuffer().then(
+      (buffer) => { if (active) setState({ kind: 'ready', bytes: new Uint8Array(buffer) }) },
+      (reason: unknown) => {
+        if (active) setState({ kind: 'failed', message: reason instanceof Error ? reason.message : String(reason) })
+      },
+    )
+    return () => { active = false }
+  }, [file, kind, revision])
+
+  let body: ReactNode
+  if (kind === 'unsupported') body = <div className={css.status}>{t('document.previewUnsupported')}</div>
+  else if (kind === 'pdf' || kind === 'image') {
+    if (url === undefined) body = <div className={css.status}>{t('document.previewLoading')}</div>
+    else body = kind === 'pdf'
+      ? <PdfPreview url={url} name={document.name} t={t} />
+      : <ImagePreview url={url} name={document.name} />
+  } else if (state.kind === 'loading') body = <div className={css.status}>{t('document.previewLoading')}</div>
+  else if (state.kind === 'failed') {
+    body = (
+      <div className={css.failure}>
+        <div className={css.error}>{state.message}</div>
+        <button type="button" onClick={() => { setRevision(value => value + 1) }}>
+          {t('document.previewRetry')}
+        </button>
+      </div>
+    )
+  } else {
+    if (kind === 'pptx') body = <PptxPreview bytes={state.bytes} t={t} />
+    else if (kind === 'docx') body = <DocxPreview bytes={state.bytes} t={t} />
+    else body = <XlsxPreview bytes={state.bytes} t={t} />
+  }
+
+  return (
+    <div className={css.root} data-upload-document-preview={document.name}>
+      <div className={css.toolbar}>
+        {url !== undefined && <a href={url} download={document.name}>{t('document.previewDownload')}</a>}
+      </div>
+      <div className={css.body}>{body}</div>
     </div>
   )
 }

@@ -29,6 +29,8 @@ export interface QuestionImageEditorProps {
   readonly questionNo: number
   /** Image display name used by Save As. */
   readonly fileName: string
+  /** Prevent overwriting an image discovered outside durable metadata. */
+  readonly readOnly: boolean
   /** Durable image commands. */
   readonly commands: Pick<TeacherWorkbenchCommands, 'readQuestionImage' | 'replaceQuestionImage'>
   /** Namespace translator. */
@@ -247,7 +249,9 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
             <button type="button" disabled={saving || selection === null} onClick={eraseSelection}>{props.t('questions.eraseText')}</button>
             <button type="button" disabled={saving || payload === null} onClick={() => { void rotate() }}><RotateCw size={15} />{props.t('questions.rotate')}</button>
             <button type="button" disabled={saving || payload === null} onClick={() => { void saveCopy() }}>{props.t('questions.saveCopy')}</button>
-            <button type="button" disabled={saving || payload === null} onClick={() => { void overwrite() }}>{props.t('questions.overwrite')}</button>
+            {!props.readOnly && (
+              <button type="button" disabled={saving || payload === null} onClick={() => { void overwrite() }}>{props.t('questions.overwrite')}</button>
+            )}
             <button type="button" className={css.legacyEditorClose} aria-label={props.t('close')} onClick={props.onClose}><X size={16} /></button>
           </div>
         </header>

@@ -112,6 +112,13 @@ describe('minimal agent preset', () => {
         "tools": [
           "bash",
           "str_replace_editor",
+          "teacher_daily_management",
+          "teacher_question_image_read",
+          "teacher_question_workbench",
+          "teacher_score_analysis",
+          "teacher_student_roster",
+          "teacher_timetable",
+          "teacher_workbench_read",
         ],
       }
     `)

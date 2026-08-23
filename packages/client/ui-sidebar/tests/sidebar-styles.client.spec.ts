@@ -60,7 +60,13 @@ describe('SidebarRoot.module.css', () => {
 
   it('gives shell rail controls the same base anchor for their shared translation', () => {
     expect(declarations('.collapsed .logoRow')?.get('justify-content')).toBe('flex-start')
-    expect(declarations('.collapsed .primarySections')?.get('justify-content')).toBe('center')
+    expect(declarations('.collapsed .primarySections')?.get('align-items')).toBe('center')
+  })
+
+  it('stacks additive primary sections as separate rail controls', () => {
+    const primarySections = declarations('.collapsed .primarySections')
+    expect(primarySections?.get('flex-direction')).toBe('column')
+    expect(primarySections?.get('gap')).toBe('12px')
   })
 
   it('keeps the slotted brand row at the full artwork height', () => {

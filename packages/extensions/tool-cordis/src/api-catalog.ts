@@ -2041,6 +2041,30 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'validated image bytes or a stable failure.',
       },
       {
+        signature: '@Remote(\'browseQuestionMedia\') async browseQuestionMedia(_request: TeacherQuestionMediaBrowseRequest): Promise<TeacherQuestionMediaBrowseResult>',
+        description: 'Scan the currently configured batch and student roots for visible images.',
+        parameters: [{ name: '_request', description: 'empty request retained for a uniform Remote signature.' }],
+        returns: 'filesystem-backed collections or a stable storage failure.',
+      },
+      {
+        signature: '@Remote(\'createQuestionMediaDirectory\') createQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryCreateRequest, ): Promise<TeacherQuestionMutationResult>',
+        description: 'Create one physical child directory selected through the current configured-root projection.',
+        parameters: [{ name: 'request', description: 'opaque scanned parent or question-library root and safe child name.' }],
+        returns: 'the unchanged durable document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'deleteQuestionMediaDirectory\') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>',
+        description: 'Delete one physical configured-root directory and all of its descendants.',
+        parameters: [{ name: 'request', description: 'opaque directory target from the latest scan.' }],
+        returns: 'the unchanged durable document or a stable failure.',
+      },
+      {
+        signature: '@Remote(\'renameQuestionMediaDirectory\') renameQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryRenameRequest, ): Promise<TeacherQuestionMutationResult>',
+        description: 'Rename one physical configured-root directory or durable student hierarchy directory.',
+        parameters: [{ name: 'request', description: 'opaque directory target and safe replacement name.' }],
+        returns: 'the committed or unchanged durable document, or a stable failure.',
+      },
+      {
         signature: '@Remote(\'replaceQuestionImage\') replaceQuestionImage(request: TeacherQuestionImageReplaceRequest): Promise<TeacherQuestionMutationResult>',
         description: 'Replace one stored raster after browser-side editing.',
         parameters: [{ name: 'request', description: 'exact target plus replacement raster payload.' }],
@@ -5102,6 +5126,42 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherQuestionLibraryFolderId = Branded<\'TeacherQuestionLibraryFolderId\'>;',
   },
   {
+    name: 'TeacherQuestionMediaBrowseRequest',
+    declaration: 'export type TeacherQuestionMediaBrowseRequest = Record<never, never>;',
+  },
+  {
+    name: 'TeacherQuestionMediaBrowseResult',
+    declaration: 'export type TeacherQuestionMediaBrowseResult = TeacherQuestionMediaBrowseSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionMediaBrowseSuccess',
+    declaration: 'export interface TeacherQuestionMediaBrowseSuccess {\n    readonly ok: true;\n    readonly value: TeacherQuestionMediaBrowseValue;\n}',
+  },
+  {
+    name: 'TeacherQuestionMediaBrowseValue',
+    declaration: 'export interface TeacherQuestionMediaBrowseValue {\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n    readonly readOnlyBatchIds: readonly TeacherQuestionBatchId[];\n    readonly readOnlyLibraryFolderIds: readonly TeacherQuestionLibraryFolderId[];\n    readonly readOnlyAssignmentIds: readonly TeacherQuestionAssignmentId[];\n    readonly readOnlyClassIds: readonly TeacherClassId[];\n    readonly readOnlyStudentIds: readonly TeacherStudentId[];\n    readonly readOnlyFolderIds: readonly TeacherQuestionFolderId[];\n}',
+  },
+  {
+    name: 'TeacherQuestionMediaDirectoryCreateRequest',
+    declaration: 'export interface TeacherQuestionMediaDirectoryCreateRequest {\n    readonly parent: TeacherQuestionMediaDirectoryParent;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionMediaDirectoryDeleteRequest',
+    declaration: 'export interface TeacherQuestionMediaDirectoryDeleteRequest {\n    readonly target: TeacherQuestionMediaDirectoryTarget;\n}',
+  },
+  {
+    name: 'TeacherQuestionMediaDirectoryParent',
+    declaration: 'export type TeacherQuestionMediaDirectoryParent = TeacherQuestionMediaDirectoryTarget | {\n    readonly kind: \'library-root\';\n};',
+  },
+  {
+    name: 'TeacherQuestionMediaDirectoryRenameRequest',
+    declaration: 'export interface TeacherQuestionMediaDirectoryRenameRequest {\n    readonly target: TeacherQuestionMediaDirectoryTarget;\n    readonly name: string;\n}',
+  },
+  {
+    name: 'TeacherQuestionMediaDirectoryTarget',
+    declaration: 'export type TeacherQuestionMediaDirectoryTarget = {\n    readonly kind: \'student\';\n    readonly id: TeacherStudentId;\n} | {\n    readonly kind: \'student-folder\';\n    readonly id: TeacherQuestionFolderId;\n} | {\n    readonly kind: \'library-folder\';\n    readonly id: TeacherQuestionLibraryFolderId;\n};',
+  },
+  {
     name: 'TeacherQuestionMutationResult',
     declaration: 'export type TeacherQuestionMutationResult = TeacherQuestionMutationSuccess | TeacherQuestionRejected;',
   },
@@ -5135,7 +5195,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentSuccess',
-    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
+    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly horizontalBounds: {\n            readonly leftRatio: number;\n            readonly rightRatio: number;\n        };\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionStudentDocumentOptions',

@@ -377,16 +377,6 @@ export interface SessionsApi {
   Promise<RpcResponse<{ attachment: ImageAttachmentRef; data: string }>>
 
   /**
-   * Read one regular file for the in-product preview after resolving it inside
-   * the session workspace. Symlinks that leave the workspace are rejected;
-   * oversized files fail instead of returning partial bytes.
-   */
-  previewFile(
-    request: RpcRequest<{ sessionId: SessionId; path: string }>,
-    signal: AbortSignal,
-  ): Promise<RpcResponse<{ dataBase64: string; size: number }>>
-
-  /**
    * Edits, removes, or strictly steers one pending queued occurrence on an ordinary session.
    * Session-backed subagents reject with `agent-busy`.
    */

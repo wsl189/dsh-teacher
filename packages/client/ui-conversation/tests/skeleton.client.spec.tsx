@@ -224,6 +224,7 @@ function mount(
           draftImages={() => []}
           addDocuments={vi.fn()}
           removeDocument={vi.fn()}
+          draftDocumentFile={() => undefined}
           resolveSubmitMode={() => 'queue'}
           toggleCommandMenu={vi.fn()}
           useNotices={bindSnapshotSelector(wiring.notices)}

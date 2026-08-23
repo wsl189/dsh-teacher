@@ -343,6 +343,12 @@
     - id: ui-trajectory
       name: '@deepseek-ai/dsh-client-ui-trajectory'
 
+    # Ship the workbench closed by default. Its id differs from the standalone
+    # bundle's `better-sidebar` row so that bundle's later duplicate-mount guard
+    # detects this package row and disables the redundant instance.
+    - id: web-better-sidebar
+      name: 'dsh-better-sidebar'
+
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #
 # Every row below composes what ONE agent contributes to the host registries:

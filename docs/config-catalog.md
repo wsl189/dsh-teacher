@@ -795,7 +795,7 @@ Source: [`packages/hooks/hooks-codex/src/index.ts:44`](../packages/hooks/hooks-c
 
 ## `@deepseek-ai/dsh-host-apiproxy`
 
-Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `fs` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
+Requires: `agentDefaultModel` · `agents` · `attachments` · `directoryPicker` · `llm` · `sessions` · `subagents` · `sessionQuery` · `tools` · `userQuestions` · `workspaceRegistry`
 
 ```ts config-catalog
 /** Gateway plugin configuration. */
@@ -820,16 +820,10 @@ export interface Config {
    * @default 1024
    */
   coldBlankProbeMaxBytes?: number
-  /**
-   * Maximum complete file size returned to the browser preview. Zero disables
-   * preview reads without removing the produced-files UI.
-   * @default 41943040
-   */
-  previewFileMaxBytes?: number
 }
 ```
 
-Source: [`packages/host/apiproxy/src/index.ts:43`](../packages/host/apiproxy/src/index.ts)
+Source: [`packages/host/apiproxy/src/index.ts:41`](../packages/host/apiproxy/src/index.ts)
 
 <a id="deepseek-aidsh-host-directory-picker-browse"></a>
 
@@ -915,7 +909,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:143`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:163`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

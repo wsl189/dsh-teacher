@@ -150,11 +150,11 @@ function bench(over?: BenchOptions) {
   const removeDocument = vi.fn()
   const menuLauncher = createSnapshotStore<string | null>(over?.commandMenuOpen === true ? 'command' : null)
   const slotCalls: { key: string; owner: unknown }[] = []
-  const renderSlot = ((key: string, owner: object) => {
+  const renderSlot = ((key: string, owner: object, options?: { fallback?: React.ReactNode }) => {
     slotCalls.push({ key, owner })
     if (key === 'conversation.input.plan') return over?.planEntry ?? null
     if (key === 'conversation.input.model') return over?.modelEntry ?? null
-    return null
+    return options?.fallback ?? null
   }) as InputBarProps['renderSlot']
   const props: InputBarProps = {
     sessionId: SID,
@@ -183,6 +183,9 @@ function bench(over?: BenchOptions) {
     }),
     addDocuments: over?.addDocuments ?? vi.fn(),
     removeDocument,
+    draftDocumentFile: id => over?.documents?.find(document => document.id === id) === undefined
+      ? undefined
+      : new File([Uint8Array.of(1)], over?.documents?.find(document => document.id === id)?.name ?? 'document'),
     resolveSubmitMode: (running, gesture, steeringAvailable) => {
       if (!running || !steeringAvailable) return 'queue'
       const preferred = over?.busyEnter ?? 'queue'
@@ -419,6 +422,10 @@ describe('image draft rail', () => {
     expect(result.textarea.value).toBe('导入学生名册')
     expect(result.view.getByText('MinerU 识别中…')).toBeTruthy()
     expect(result.button.disabled).toBe(true)
+    const documentSlot = result.slotCalls.find(call => call.key === 'conversation.input.attachments')
+      ?.owner as ComposerAttachmentsOwnerProps
+    expect(documentSlot.documents).toEqual([pending])
+    expect(documentSlot.resolveDocumentFile(pending.id)?.name).toBe('roster.xlsx')
 
     const fileInput = result.view.container.querySelector<HTMLInputElement>('input[type="file"]')!
     const file = new File([Uint8Array.of(1)], 'scores.pdf', { type: 'application/pdf' })
@@ -495,9 +502,11 @@ describe('image draft rail', () => {
 
       keyboard.textarea.setSelectionRange(2, 2)
       fireEvent.keyDown(keyboard.textarea, { key: ' ' })
+      expect(fireEvent.keyDown(keyboard.textarea, { key: ' ', repeat: true })).toBe(false)
       act(() => { vi.advanceTimersByTime(500) })
       expect(instances).toHaveLength(2)
       expect(instances[1]?.start).toHaveBeenCalledOnce()
+      expect(fireEvent.keyDown(keyboard.textarea, { key: ' ', repeat: true })).toBe(false)
       fireEvent.keyUp(keyboard.textarea, { key: ' ' })
       expect(instances[1]?.stop).toHaveBeenCalledOnce()
       expect(keyboard.textarea.value).toBe('A ')

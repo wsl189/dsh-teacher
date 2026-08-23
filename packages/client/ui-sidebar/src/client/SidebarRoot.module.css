@@ -224,8 +224,8 @@
   line-height: 16px;
 }
 
-/* Primary feature sections occupy the first control row below the brand
-   without consuming the workspace browser's flexible scroll region. */
+/* Primary feature sections stack below the brand without consuming the
+   workspace browser's flexible scroll region. */
 .primarySections {
   flex: none;
   min-width: 0;
@@ -234,7 +234,9 @@
 
 .collapsed .primarySections {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
   width: auto;
 }
 

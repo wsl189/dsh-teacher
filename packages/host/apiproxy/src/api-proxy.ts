@@ -14,7 +14,6 @@ import type { Agent, ModelSelection, ModelSelectionRef, AgentOptions, AgentStatu
 import type {} from '@deepseek-ai/dsh-agent-presets/types'
 import { AttachmentError, admitEncodedImages } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import { FsError } from '@deepseek-ai/dsh-fs'
 import { boundContextSummary, createUserMessage, freezeMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { errorChain } from '@deepseek-ai/dsh-llm'
 import type { ContentBlock, MessageSource } from '@deepseek-ai/dsh-llm'
@@ -122,8 +121,6 @@ const SESSION_SEARCH_PROVIDER_CALL_LIMIT = 100
 const COLD_SUMMARY_BATCH_SIZE = 16
 /** Default maximum artifact size eligible for one cold blankness read. */
 export const DEFAULT_COLD_BLANK_PROBE_MAX_BYTES = 1024
-/** Default complete-file bound for one browser preview read. */
-export const DEFAULT_PREVIEW_FILE_MAX_BYTES = 40 * 1024 * 1024
 
 /** Conversation message event types (the pagination counting unit). */
 const MESSAGE_TYPES = new Set(['user/message', 'assistant/message'])
@@ -603,8 +600,6 @@ export interface ApiProxyDefaults {
   sessionExportCompressionLevel?: SessionLogCompressionLevel
   /** Maximum artifact size eligible for one cold blankness read. */
   coldBlankProbeMaxBytes?: number
-  /** Maximum complete file size returned to an in-product preview. */
-  previewFileMaxBytes?: number
   /**
    * Whether handing a path to the native opener can work at all — the
    * `hasDocument` capability the preset roster reports, and the switch
@@ -1054,8 +1049,6 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
     ?? DEFAULT_SESSION_LOG_COMPRESSION_LEVEL
   const coldBlankProbeMaxBytes = defaults.coldBlankProbeMaxBytes
     ?? DEFAULT_COLD_BLANK_PROBE_MAX_BYTES
-  const previewFileMaxBytes = defaults.previewFileMaxBytes
-    ?? DEFAULT_PREVIEW_FILE_MAX_BYTES
   /** The seed model each create/resume declares; re-read so it never goes stale. */
   const agentOptions = (): AgentOptions => {
     const { provider, model } = defaults.defaultModelSelection()
@@ -2488,95 +2481,6 @@ export function createApiProxy(ctx: Context, defaults: ApiProxyDefaults): ApiPro
             message: 'Unable to read image attachment.',
             details: {},
           })
-        }
-      },
-
-      async previewFile(request, signal) {
-        const { sessionId, path } = request.payload
-        if (previewFileMaxBytes === 0) {
-          return err(request, {
-            code: 'file-preview-unavailable',
-            message: 'File previews are disabled by this deployment.',
-            details: { sessionId, path, reason: 'disabled' },
-          })
-        }
-        let cwd: string
-        try {
-          cwd = sourceSession(await historySourceFor(sessionId)).header.cwd ?? defaults.cwd
-        } catch (error: unknown) {
-          if (error instanceof SessionNotFound) {
-            return err(request, { code: 'session-not-found', message: error.message, details: { sessionId } })
-          }
-          return err(request, {
-            code: 'internal',
-            message: `file preview authorization unavailable for session "${sessionId}": ${String(error)}`,
-            details: {},
-          })
-        }
-        try {
-          const [root, target] = await Promise.all([
-            ctx.fs.resolve('.', { cwd, signal }),
-            ctx.fs.resolve(path, { cwd, signal }),
-          ])
-          if (!ctx.fs.contains(root, target)) {
-            return err(request, {
-              code: 'file-preview-unavailable',
-              message: 'The selected file is outside this session workspace.',
-              details: { sessionId, path, reason: 'outside-workspace' },
-            })
-          }
-          const bytes = await ctx.fs.readBytes(target, signal, previewFileMaxBytes)
-          return ok(request, {
-            dataBase64: Buffer.from(bytes).toString('base64'),
-            size: bytes.byteLength,
-          })
-        } catch (error: unknown) {
-          if (signal.aborted || (error instanceof FsError && error.code === 'FS_ABORTED')) {
-            return err(request, { code: 'cancelled', message: 'file preview read was aborted', details: {} })
-          }
-          if (!(error instanceof FsError)) {
-            return err(request, {
-              code: 'file-preview-unavailable',
-              message: `Unable to read ${JSON.stringify(path)} for preview.`,
-              details: { sessionId, path, reason: 'read-failed' },
-            })
-          }
-          switch (error.code) {
-            case 'FS_NOT_FOUND':
-              return err(request, {
-                code: 'file-preview-unavailable', message: error.message,
-                details: { sessionId, path, reason: 'not-found' },
-              })
-            case 'FS_NOT_DIRECTORY':
-            case 'FS_NOT_TEXT':
-            case 'FS_NOT_REGULAR_FILE':
-              return err(request, {
-                code: 'file-preview-unavailable', message: error.message,
-                details: { sessionId, path, reason: 'not-regular' },
-              })
-            case 'FS_TOO_LARGE':
-              return err(request, {
-                code: 'file-preview-unavailable', message: error.message,
-                details: { sessionId, path, reason: 'too-large' },
-              })
-            case 'FS_PERMISSION_DENIED':
-            case 'FS_SANDBOX_DENIED':
-            case 'FS_IO_ERROR':
-            case 'FS_STALE_VERSION':
-            case 'FS_NOT_OBSERVED':
-            case 'FS_AMBIGUOUS_EDIT':
-            case 'FS_EDIT_NOT_FOUND':
-              return err(request, {
-                code: 'file-preview-unavailable', message: error.message,
-                details: { sessionId, path, reason: 'read-failed' },
-              })
-            case 'FS_ABORTED':
-              return err(request, { code: 'cancelled', message: 'file preview read was aborted', details: {} })
-            default: {
-              const unreachable: never = error.code
-              return unreachable
-            }
-          }
         }
       },
 

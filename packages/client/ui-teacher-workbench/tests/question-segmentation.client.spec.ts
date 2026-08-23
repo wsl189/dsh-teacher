@@ -3,7 +3,7 @@ import type { OcrLayoutRequest } from '@deepseek-ai/dsh-api-remotes/client'
 import { PDFDocument } from 'pdf-lib'
 import { extractWorkbenchLayout, type TeacherWorkbenchOcrRemote } from '../src/client/extract-document.ts'
 import { parseQuestionPageRange } from '../src/client/question-page-range.ts'
-import { partitionQuestionUploads, readPdfPageCount } from '../src/client/question-segmentation.ts'
+import { partitionQuestionUploads, readPdfPageCount, renderQuestionCrops } from '../src/client/question-segmentation.ts'
 
 const pdfMocks = vi.hoisted(() => ({
   destroy: vi.fn(async () => {}),
@@ -63,6 +63,81 @@ describe('partitionQuestionUploads', () => {
 
   it('rejects a single crop that cannot fit any save part', () => {
     expect(() => partitionQuestionUploads([upload(9, 'AQIDBA==')], 3)).toThrow('第 9 题')
+  })
+})
+
+describe('renderQuestionCrops', () => {
+  it('directly crops every question between the PDF-wide MinerU horizontal bounds', async () => {
+    const canvases: Array<{
+      width: number
+      height: number
+      context: {
+        fillStyle: string
+        fillRect: ReturnType<typeof vi.fn>
+        drawImage: ReturnType<typeof vi.fn>
+      }
+      getContext: () => unknown
+      toBlob: (callback: (blob: Blob | null) => void) => void
+    }> = []
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const context = { fillStyle: '', fillRect: vi.fn(), drawImage: vi.fn() }
+        const canvas = {
+          width: 0,
+          height: 0,
+          context,
+          getContext: () => context,
+          toBlob: (callback: (blob: Blob | null) => void) => {
+            callback(new Blob([Uint8Array.of(1)], { type: 'image/png' }))
+          },
+        }
+        canvases.push(canvas)
+        return canvas
+      },
+    })
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        getPage: async () => ({
+          getViewport: () => ({ width: 100, height: 100 }),
+          render: () => ({ promise: Promise.resolve() }),
+        }),
+      }),
+      destroy: pdfMocks.destroy,
+    })
+    const file = { arrayBuffer: async () => Uint8Array.of(1).buffer } as File
+    const layout = {
+      name: 'paper.pdf',
+      provider: 'mineru',
+      pages: [{ pageIndex: 0, width: 100, height: 100, elements: [] }],
+    }
+    const questions = [{
+      questionNo: 1,
+      headPageIndex: 0,
+      groupIndex: 0,
+      regions: [{ pageIndex: 0, left: 10, top: 10, right: 60, bottom: 30, pageWidth: 100, pageHeight: 100 }],
+    }, {
+      questionNo: 2,
+      headPageIndex: 0,
+      groupIndex: 0,
+      regions: [{ pageIndex: 0, left: 40, top: 40, right: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
+    }]
+
+    const uploads = await renderQuestionCrops(
+      file,
+      layout,
+      questions,
+      { leftRatio: 0.1, rightRatio: 0.9 },
+      1,
+    )
+
+    expect(uploads.map(upload => [upload.width, upload.height])).toEqual([[80, 20], [80, 20]])
+    expect(canvases[1]?.context.drawImage).toHaveBeenCalledWith(
+      canvases[0], 10, 10, 80, 20, 0, 0, 80, 20,
+    )
+    expect(canvases[2]?.context.drawImage).toHaveBeenCalledWith(
+      canvases[0], 10, 40, 80, 20, 0, 0, 80, 20,
+    )
+    expect(pdfMocks.destroy).toHaveBeenCalledOnce()
   })
 })
 

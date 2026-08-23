@@ -5,6 +5,7 @@ import type {
   OcrLayoutPage,
   TeacherQuestionPageRegion,
   TeacherQuestionImageUpload,
+  TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import * as pdfjs from 'pdfjs-dist'
@@ -15,6 +16,8 @@ export type QuestionPageRegion = TeacherQuestionPageRegion
 
 /** One detected question and its one-or-more source page slices. */
 export type DetectedQuestion = TeacherSegmentedQuestion
+
+type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
 
 /**
  * Split rendered crops into ordered save requests below a decoded-byte ceiling.
@@ -127,6 +130,7 @@ export async function readPdfPageCount(file: File): Promise<number> {
  * @param file - original browser-held PDF.
  * @param layout - normalized OCR page dimensions used for proportional mapping.
  * @param questions - reviewed detection regions in source order.
+ * @param horizontalBounds - PDF-wide normalized MinerU left and right crop coordinates.
  * @param renderScale - bounded PDF.js raster scale.
  * @returns browser-produced PNG payloads ready for Host persistence.
  */
@@ -134,6 +138,7 @@ export async function renderQuestionCrops(
   file: File,
   layout: OcrLayoutDocument,
   questions: readonly DetectedQuestion[],
+  horizontalBounds: QuestionHorizontalBounds,
   renderScale: number,
 ): Promise<TeacherQuestionImageUpload[]> {
   const pdfjs = await loadPdfJs()
@@ -161,12 +166,11 @@ export async function renderQuestionCrops(
         const source = rendered.get(region.pageIndex)
         const pageLayout = pageLayouts.get(region.pageIndex)
         if (source === undefined || pageLayout === undefined) throw new Error('PDF 页渲染结果不完整')
-        const scaleX = source.width / pageLayout.width
         const scaleY = source.height / pageLayout.height
-        const left = Math.max(0, Math.floor(region.left * scaleX))
         const top = Math.max(0, Math.floor(region.top * scaleY))
-        const right = Math.min(source.width, Math.ceil(region.right * scaleX))
         const bottom = Math.min(source.height, Math.ceil(region.bottom * scaleY))
+        const left = Math.max(0, Math.min(source.width - 1, Math.floor(horizontalBounds.leftRatio * source.width)))
+        const right = Math.max(left + 1, Math.min(source.width, Math.ceil(horizontalBounds.rightRatio * source.width)))
         return {
           source,
           left,
@@ -187,14 +191,13 @@ export async function renderQuestionCrops(
       context.fillRect(0, 0, width, height)
       let y = 0
       for (const slice of slices) {
-        const x = Math.floor((width - slice.width) / 2)
         context.drawImage(
           slice.source,
           slice.left,
           slice.top,
           slice.width,
           slice.height,
-          x,
+          0,
           y,
           slice.width,
           slice.height,

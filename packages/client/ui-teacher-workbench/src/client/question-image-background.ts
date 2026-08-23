@@ -1,6 +1,13 @@
 /** Robust background sampling for rectangular question-image erasure. */
 
-/** Sample a fill color from the exterior ring of an image-edit selection. */
+/**
+ * Sample a fill color from the exterior ring of an image-edit selection.
+ * @param context - source image canvas context.
+ * @param rect - selected source-pixel rectangle excluded from sampling.
+ * @param canvasWidth - source canvas width in pixels.
+ * @param canvasHeight - source canvas height in pixels.
+ * @returns median RGB color from the sampled exterior pixels.
+ */
 export function sampleBorderColor(
   context: CanvasRenderingContext2D,
   rect: { x: number; y: number; width: number; height: number },

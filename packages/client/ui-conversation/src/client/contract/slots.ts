@@ -35,14 +35,22 @@ export interface ComposerAttachment {
 export interface ComposerAttachmentsOwnerProps {
   /** Browser-owned draft images in input order. */
   attachments: readonly ComposerAttachment[]
+  /** Browser-owned draft documents in upload order. */
+  documents: readonly DraftDocument[]
   /** Whether a document-level file drop may add images or directory paths now. */
   canAcceptDrop: boolean
+  /** Whether a pending document may be removed while the input machine is settling. */
+  canRemoveDocuments: boolean
   /** Add one dropped batch through the composer's validation path. */
   onAddImages: (files: readonly File[]) => void
   /** Append dropped directory paths to the draft without reading their contents. */
   onAddDirectories: (paths: readonly string[]) => void
   /** Remove one draft image through the conversation service. */
   onRemoveImage: (id: DraftAttachmentId) => void
+  /** Resolve the browser file retained for one document row. */
+  resolveDocumentFile: (id: DraftDocumentId) => File | undefined
+  /** Remove one draft document through the conversation service. */
+  onRemoveDocument: (id: DraftDocumentId) => void
   /** Display-ready limits for the drop invitation. */
   dropLimits?: { readonly count: number; readonly size: string } | undefined
 }
@@ -170,8 +178,6 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * instead; this one is the whole panel.
      */
     'conversation.details.tool': { kind: 'single'; scope: 'session'; owner: DetailsToolOwnerProps }
-    /** Body renderer for a produced file selected in the shared details store. */
-    'conversation.details.file': { kind: 'single'; scope: 'session'; owner: DetailsFileOwnerProps }
     /**
      * The composer takeover chain: entries are selector-routed replacements
      * of the default InputBar. Declared by this package's 'conversation'
@@ -399,8 +405,6 @@ export interface TurnTailOwnerProps {
    * view resolves relative paths against the session cwd).
    */
   openFile: (path: string) => void
-  /** Select a produced file and open the in-product preview panel. */
-  previewFile: (path: string) => void
 }
 
 /**
@@ -432,7 +436,6 @@ export interface ChatNodeOwnerProps {
   /** Session workspace root; Tool summaries display paths relative to it. */
   cwd?: string | undefined
   openFile: (path: string) => void
-  previewFile: (path: string) => void
   inspectCall: (callId: CallId) => void
   forkAt: (seq: number) => void
   /** Render a historical image group through the attachment slot. */
@@ -456,14 +459,6 @@ export interface DetailsToolOwnerProps {
   block: ToolCallBlock
   /** Session workspace root for card cwd and relative-path display. */
   cwd?: string | undefined
-}
-
-/** Owner currency of the selected produced-file preview renderer. */
-export interface DetailsFileOwnerProps {
-  /** Path as recorded by the producing Tool. */
-  path: string
-  /** Open the same path through the Host operating system. */
-  openFile: (path: string) => Promise<void>
 }
 
 /**
@@ -591,6 +586,8 @@ export interface ComposerBarInjected {
   addDocuments: ((files: readonly File[]) => void) | undefined
   /** Remove one background-OCR document from this session composer. */
   removeDocument: ((id: DraftDocumentId) => void) | undefined
+  /** Resolve the browser file retained for one background-OCR document. */
+  draftDocumentFile: ((id: DraftDocumentId) => File | undefined) | undefined
   /** Resolve one keyboard submission gesture against the current running state and persisted preference. */
   resolveSubmitMode: (
     running: boolean,
@@ -791,8 +788,6 @@ export interface ChatViewInjected {
    * hand the path off (the chat view shows that reason and a retry).
    */
   openFile: (path: string) => Promise<void>
-  /** Select a produced file in the shared details store and open the right panel. */
-  previewFile: (path: string) => void
   loadOlder: () => void
   /** Resolve a session-authorized historical image for inline display. */
   loadImage: (attachment: ImageAttachmentRef) => Promise<string>
@@ -840,13 +835,10 @@ export type MessageImagesProps = PropsRuntime<'conversation.message.images'> & P
 export interface DetailsInjected {
   /** Close the details panel (layout geometry stays with ctx.layout). */
   closeDetails: () => void
-  /** Open a previewed path through the Host operating system. */
-  openFile: (path: string) => Promise<void>
 }
 
 /** Full details-slot props: selection store, Tool output seat, injected close callback, and locale. */
-export type DetailsSlotProps = PropsRuntime<'details'>
-  & PropsRenderSlots<'conversation.details.tool' | 'conversation.details.file'>
+export type DetailsSlotProps = PropsRuntime<'details'> & PropsRenderSlots<'conversation.details.tool'>
   & PropsStore<ChatStore> & DetailsInjected & PropsLocale<'conversation'>
 
 /** Owner share common to the hero / New-Session Workspace pickers. */

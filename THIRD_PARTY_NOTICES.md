@@ -64,11 +64,13 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`docx`](https://github.com/dolanmiu/docx) | MIT |
 | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) | Apache-2.0 |
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
+| [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) | MIT |
 | [`e2b`](https://github.com/e2b-dev/e2b) | MIT |
 | [`eventsource-parser`](https://github.com/rexxars/eventsource-parser) | MIT |
 | [`fflate`](https://github.com/101arrowz/fflate) | MIT |
 | [`immer`](https://github.com/immerjs/immer) | MIT |
 | [`js-yaml`](https://github.com/nodeca/js-yaml) | MIT |
+| [`jszip`](https://github.com/Stuk/jszip) | (MIT OR GPL-3.0-or-later) |
 | [`katex`](https://github.com/KaTeX/KaTeX) | MIT |
 | [`koffi`](https://github.com/Koromix/koffi) | MIT |
 | [`lucide-react`](https://github.com/lucide-icons/lucide) | ISC |

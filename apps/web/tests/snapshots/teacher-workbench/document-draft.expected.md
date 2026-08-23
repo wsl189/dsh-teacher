@@ -1,4 +1,4 @@
-- text: lesson-plan.docx 已识别
+- button "在右侧栏预览文件 lesson-plan.docx": lesson-plan.docx 已识别
 - button "移除文件 lesson-plan.docx": ×
 - textbox "描述你想要构建的内容": 请总结这份教学计划
 - button "命令":

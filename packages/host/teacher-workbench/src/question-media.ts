@@ -1,7 +1,7 @@
 /** Filesystem and Office-artifact operations for teacher question images. */
 
 import { randomUUID } from 'node:crypto'
-import { copyFile, mkdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   AlignmentType,
@@ -31,6 +31,7 @@ import type {
   TeacherQuestionImageMediaType,
   TeacherQuestionImagePayload,
   TeacherQuestionImageTarget,
+  TeacherQuestionMediaDirectoryRenameRequest,
   TeacherQuestionTemporaryListRequest,
   TeacherQuestionTemporarySaveRequest,
   TeacherQuestionTemporarySelection,
@@ -68,6 +69,14 @@ export interface PersistedQuestionAssignments {
 export interface PersistedTemporaryQuestionSelection {
   readonly selection: TeacherQuestionTemporarySelection
   commit(): Promise<void>
+  rollback(): Promise<void>
+}
+
+/** Durable rename prepared together with a reversible physical-directory move. */
+export interface PreparedQuestionDirectoryRename {
+  /** Complete state carrying the renamed student or nested folder and updated image paths. */
+  readonly state: TeacherWorkbenchState
+  /** Restore the physical directory when the durable state commit fails. */
   rollback(): Promise<void>
 }
 
@@ -122,6 +131,132 @@ export class TeacherQuestionMediaError extends Error {
     super(message, options)
     this.name = 'TeacherQuestionMediaError'
   }
+}
+
+/**
+ * Validate one user-entered question directory name as a single path segment.
+ * @param value - untrusted browser input.
+ * @returns trimmed directory name.
+ */
+export function validateQuestionDirectoryName(value: string): string {
+  const name = value.trim()
+  if (name === '') throw new TeacherQuestionMediaError('invalid-request', '目录名不能为空')
+  if (name.length > 80) throw new TeacherQuestionMediaError('invalid-request', '目录名不能超过 80 个字符')
+  if (name === '.' || name === '..' || /[\\/\u0000-\u001f:*?"<>|]/u.test(name)) {
+    throw new TeacherQuestionMediaError('invalid-request', '目录名包含无效字符')
+  }
+  return name
+}
+
+/**
+ * Prepare a durable student or nested-folder rename and move its physical directory when present.
+ * @param config - current student storage root.
+ * @param state - authoritative roster, folder, and assignment metadata.
+ * @param request - durable student hierarchy target and replacement name.
+ * @param now - shared folder update timestamp.
+ * @param physicalDirectory - optional revalidated directory found under the current configured root.
+ * @returns updated state plus physical rollback.
+ */
+export async function prepareDurableQuestionDirectoryRename(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+  request: TeacherQuestionMediaDirectoryRenameRequest,
+  now: number,
+  physicalDirectory?: string,
+): Promise<PreparedQuestionDirectoryRename> {
+  if (request.target.kind === 'library-folder') {
+    throw new TeacherQuestionMediaError('invalid-request', '试题库持久目录应由工作区状态重命名')
+  }
+  const name = validateQuestionDirectoryName(request.name)
+  const root = configuredRoot(config.studentsRoot, '学生目录')
+  const studentId = request.target.kind === 'student' ? request.target.id : state.questionFolders.find(
+    folder => folder.id === request.target.id,
+  )?.studentId
+  if (studentId === undefined) throw new TeacherQuestionMediaError('not-found', '学生目录不存在')
+  const student = state.students.find(item => item.id === studentId)
+  if (student === undefined) throw new TeacherQuestionMediaError('not-found', '学生不存在')
+  const owningClass = state.classes.find(item => item.id === student.classId)
+  if (owningClass === undefined) throw new TeacherQuestionMediaError('not-found', '学生所属班级不存在')
+
+  const oldDirectory = physicalDirectory === undefined
+    ? studentQuestionDirectory(
+      state,
+      owningClass,
+      student,
+      request.target.kind === 'student-folder' ? request.target.id : undefined,
+    )
+    : relative(root, physicalDirectory)
+  const renamedState: TeacherWorkbenchState = request.target.kind === 'student'
+    ? {
+      ...state,
+      students: state.students.map(item => item.id === student.id ? { ...item, name } : item),
+    }
+    : {
+      ...state,
+      questionFolders: state.questionFolders.map(folder => folder.id === request.target.id
+        ? { ...folder, name, updatedAt: now }
+        : folder),
+    }
+  const renamedStudent = renamedState.students.find(item => item.id === student.id)
+  if (renamedStudent === undefined) throw new TeacherQuestionMediaError('not-found', '学生不存在')
+  const newDirectory = physicalDirectory === undefined
+    ? studentQuestionDirectory(
+      renamedState,
+      owningClass,
+      renamedStudent,
+      request.target.kind === 'student-folder' ? request.target.id : undefined,
+    )
+    : join(dirname(oldDirectory), questionMediaPathSegment(name))
+  const oldPrefix = normalizeStoredPath(oldDirectory)
+  const newPrefix = normalizeStoredPath(newDirectory)
+  const nextState: TeacherWorkbenchState = {
+    ...renamedState,
+    questionAssignments: renamedState.questionAssignments.map((assignment) => {
+      if (assignment.studentId !== student.id) return assignment
+      const relativePath = normalizeStoredPath(assignment.relativePath)
+      if (!relativePath.startsWith(`${oldPrefix}/`)) return assignment
+      return { ...assignment, relativePath: `${newPrefix}${relativePath.slice(oldPrefix.length)}` }
+    }),
+  }
+  const source = within(root, oldDirectory)
+  const destination = within(root, newDirectory)
+  let moved = false
+  if (source !== destination) {
+    try {
+      await assertDirectoryMissing(destination)
+      const sourceEntry = await lstat(source)
+      if (sourceEntry.isSymbolicLink() || !sourceEntry.isDirectory()) {
+        throw new TeacherQuestionMediaError('invalid-request', '目标学生目录不是普通目录')
+      }
+      await rename(source, destination)
+      moved = true
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== 'ENOENT') {
+        if (error instanceof TeacherQuestionMediaError) throw error
+        throw new TeacherQuestionMediaError('storage-failure', '重命名学生目录失败', { cause: error })
+      }
+    }
+  }
+  return {
+    state: nextState,
+    rollback: moved
+      ? async () => { await rename(destination, source) }
+      : async () => {},
+  }
+}
+
+async function assertDirectoryMissing(path: string): Promise<void> {
+  try {
+    await lstat(path)
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') return
+    throw error
+  }
+  throw new TeacherQuestionMediaError('invalid-request', '同名目录已存在')
+}
+
+function normalizeStoredPath(value: string): string {
+  return value.split(/[\\/]/u).join('/')
 }
 
 /**
@@ -255,7 +390,7 @@ export async function persistQuestionAssignments(
   const owningClass = state.classes.find(item => item.id === student.classId)
   if (owningClass === undefined) throw new TeacherQuestionMediaError('not-found', '学生所属班级不存在')
   const root = configuredRoot(config.studentsRoot, '学生目录')
-  const folder = studentFolder(state, owningClass, student, folderId)
+  const folder = studentQuestionDirectory(state, owningClass, student, folderId)
   const createdPaths: string[] = []
   const assignments: TeacherQuestionAssignment[] = []
   try {
@@ -1047,7 +1182,15 @@ function within(root: string, child: string): string {
   throw new TeacherQuestionMediaError('invalid-request', '存储路径超出配置目录')
 }
 
-function studentFolder(
+/**
+ * Resolve the readable relative directory owned by one roster student.
+ * @param state - current student-folder metadata.
+ * @param owningClass - roster class that supplies the academic hierarchy.
+ * @param student - student whose directory is requested.
+ * @param folderId - optional nested question folder.
+ * @returns a safe path relative to the configured student root.
+ */
+export function studentQuestionDirectory(
   state: TeacherWorkbenchState,
   owningClass: TeacherClass,
   student: TeacherStudent,
@@ -1057,9 +1200,9 @@ function studentFolder(
   const className = owningClass.name.trim()
   const group = grade !== '' && !className.includes(grade) ? `${grade}${className}` : className
   return join(
-    safePathSegment(owningClass.academicYear?.trim() || '未分学年'),
-    safePathSegment(group),
-    safePathSegment(student.name),
+    questionMediaPathSegment(owningClass.academicYear?.trim() || '未分学年'),
+    questionMediaPathSegment(group),
+    questionMediaPathSegment(student.name),
     ...questionFolderSegments(state, student, folderId),
   )
 }
@@ -1078,14 +1221,19 @@ function questionFolderSegments(
     if (current.studentId !== student.id) throw new TeacherQuestionMediaError('invalid-request', '目标目录不属于所选学生')
     if (visited.has(current.id) || visited.size >= 64) throw new TeacherQuestionMediaError('invalid-request', '学生目录层级无效')
     visited.add(current.id)
-    segments.unshift(safePathSegment(current.name))
+    segments.unshift(questionMediaPathSegment(current.name))
     current = current.parentId === undefined ? undefined : folders.get(current.parentId)
   }
   if (!visited.has(folderId)) throw new TeacherQuestionMediaError('not-found', '目标学生目录不存在')
   return segments
 }
 
-function safePathSegment(value: string): string {
+/**
+ * Normalize a user label to the exact filesystem segment used by question media.
+ * @param value - class, student, or folder label.
+ * @returns a non-empty platform-safe path segment.
+ */
+export function questionMediaPathSegment(value: string): string {
   const normalized = value.normalize('NFKC').replace(/[\\/\u0000-\u001f:*?"<>|]/gu, '_').trim().replace(/^\.+|\.+$/gu, '')
   return (normalized || '未命名').slice(0, 80)
 }
@@ -1096,7 +1244,7 @@ function safeFileName(value: string, fallback: string): string {
 }
 
 function safeFileStem(value: string, fallback: string): string {
-  return safePathSegment(value.trim() || fallback).slice(0, 100)
+  return questionMediaPathSegment(value.trim() || fallback).slice(0, 100)
 }
 
 function extensionFor(mediaType: TeacherQuestionImageMediaType): string {

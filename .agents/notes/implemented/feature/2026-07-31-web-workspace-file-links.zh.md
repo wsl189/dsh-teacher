@@ -4,7 +4,7 @@ Status: implemented
 
 [English](2026-07-31-web-workspace-file-links.md) | 中文
 
-> 范围：完成的轮次以其产出文件收尾的那一行、读得出是链接的文件路径链接，以及 Host 打开器对浏览器可渲染文档优先选用默认浏览器。后续的[产品内文件预览决策](2026-08-22-web-produced-file-preview.zh.md)部分取代了最初不做预览的范围，同时保留本说明关于原生打开器与活动文档隔离的理由。
+> 范围：完成的轮次以其产出文件收尾的那一行、读得出是链接的文件路径链接，以及 Host 打开器对浏览器可渲染文档优先选用默认浏览器。经决定不在范围内：以 HTTP 提供工作区文件，以及为不在 Host 机器上的客户端提供预览。
 
 ## 问题
 
@@ -14,13 +14,13 @@ Status: implemented
 
 ## 决策
 
-**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`previewFile` 与 `openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。单行 lane 会测量 chip 和本地化剩余计数，再显示能放下的最大前缀（至多六个）及 `+ N 个文件`。文件 chip 选中详情预览，溢出文件夹操作继续使用原生打开器。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
+**完成的一轮以它产出的文件收尾。** 该行是独立插件 `@deepseek-ai/dsh-client-ui-deliverables`，注册进 chat 视图在收尾消息正文与其 IconActions 之间渲染的 `conversation.chat.turnTail` 空位——ui-conversation 拥有空位与 owner 通货（节点、收尾 seq、`openFile`），插件拥有全部策略。`producedForClosing` 从改写工具自身的跟随文件 `locations` 中读出路径——diff 卡片，或 `kind` 为 `edit` 的 generic 卡片（即 `str_replace_editor` 的 insert 所呈现的形状）——因此无论收尾消息是否点名，这一轮的产出都会被列出；新的改写工具靠声明自己做了什么加入，而不是靠被加进某张名单。read、删除与失败的调用不贡献任何条目；同一路径在一轮内按首见顺序只出现一次；累积在 turn 边界重置，因此一轮若先改写文件、随后没有正文内容就结束，不会溢进下一轮的行里。单行 lane 会测量 chip 和本地化剩余计数，再显示能放下的最大前缀（至多六个）及 `+ N 个文件`。cordis.yml 中的一行即可把该交互面组合进来或去掉；未注册的空位什么也不渲染。
 
 **路径链接读得出是链接。** 静止状态下就带下划线，而不只在悬停时。这是本次改动中更小的那一半，却是修复中更大的那一半。
 
-**原生打开仍然是 Host 的职责，并且优先选用默认浏览器。** `host.openPath` 把路径交给操作系统，得到的是真实浏览器里的一份 `file://` 文档：页面能力完整，且够不到 `/api`——因为 `file://` 文档与它并不同源。在所报告的那份产物上实测：`localStorage` 可用、主题切换生效、tabs 可切换，而对 API 的 `fetch` 失败。对浏览器能渲染的文档——`.html`、`.htm`、`.xhtml`、`.svg`——平台能够确定默认浏览器时，打开器解析的是默认**浏览器**而非该类型的默认应用，因为把 `.html` 绑给编辑器的开发者，否则点开一个产出的页面得到的会是源码。macOS 读取 LaunchServices 的 `https` 处理程序，桌面 Linux 读取 `$BROWSER`；无法确定浏览器时，两者都会回退到默认应用。Windows 使用其注册的文件关联，WSL 则先转换路径，再使用同一 Windows 交接。Tool 行路径、预览的**使用系统应用打开**与**在文件夹中显示**都使用该能力；文件夹操作只在 loopback 页面的当前 `host.describe.canOpenPath` 允许原生打开时出现。其他部署会省略它；桌面探测误报时可配置 `nativeOpen: false`。
+**打开仍然是 Host 的职责，并且优先选用默认浏览器。** `host.openPath` 把路径交给操作系统，得到的是真实浏览器里的一份 `file://` 文档：页面能力完整，且够不到 `/api`——因为 `file://` 文档与它并不同源。在所报告的那份产物上实测：`localStorage` 可用、主题切换生效、tabs 可切换，而对 API 的 `fetch` 失败。对浏览器能渲染的文档——`.html`、`.htm`、`.xhtml`、`.svg`——平台能够确定默认浏览器时，打开器解析的是默认**浏览器**而非该类型的默认应用，因为把 `.html` 绑给编辑器的开发者，否则点开一个产出的页面得到的会是源码。macOS 读取 LaunchServices 的 `https` 处理程序，桌面 Linux 读取 `$BROWSER`；无法确定浏览器时，两者都会回退到默认应用。Windows 使用其注册的文件关联，WSL 则先转换路径，再使用同一 Windows 交接。存在隐藏文件时，**在文件夹中显示**会把 `.` 经由同一 owner `openFile` 传递；它只在 loopback 页面的当前 `host.describe.canOpenPath` 允许原生打开时出现。其他部署会省略它；桌面探测误报时可配置 `nativeOpen: false`。
 
-**以 HTTP 提供活动 workspace 文档不在范围内。** harness 不会让浏览器导航到所提供的 workspace URL：同源提供会暴露 `/api`，sandbox 则会破坏正常页面。后续预览把有界文件字节交给按格式选择的纯数据渲染器，绝不把 workspace 文档作为页面执行；该设计能够服务已连接的非本机客户端，而无需引入活动文档 origin。
+**以 HTTP 提供工作区文件不在范围内，非本机客户端亦然。** 由 harness 自己提供文件——与 `/api` 同源、置于 `CSP: sandbox` 之后、或交给一个以自身端口给所服务文档独立源的第二监听器——随产品范围一并否决：不为「浏览器不在 Host 机器上」的场景提供预览，因此 Host 打开器完整回答受支持的场景，而那套 HTTP 机制只会回答不受支持的那个。
 
 ## 考虑过的替代方案
 
@@ -33,4 +33,4 @@ Status: implemented
 
 ## 后果
 
-Tool 的 write、edit、read 与通用单文件卡片仍汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。产出文件行改为选中产品内预览，而组装层 Web 测试继续覆盖溢出几何，并验证文件夹操作抵达 Host 且不启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。远程客户端保留 chip，但省略文件夹操作；每个 chip 的 `title` 仍保留完整路径。
+现有的每一处文件交互都同时改变了：write、edit、read 与通用单文件卡片都汇到 `openFile`，因此链接修复与浏览器优先策略无需逐行改动。组装层 Web 测试覆盖溢出几何和单次点击的 Host 交接，且不会启动原生应用。产出的 `file://` 文档无法 `fetch` 同级文件（但 `<script src>`、`<img>` 和 CSS `@import` 可用），这是 HTTP 提供曾有、而此处没有的能力。远程客户端保留 chip，但省略文件夹操作；每个 chip 的 `title` 仍保留完整路径。Markdown 仍由平台的 `.md` 应用打开；产品内渲染属于另一项工作。

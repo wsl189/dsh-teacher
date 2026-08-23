@@ -3,9 +3,13 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import type {
-  ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
+  ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps, DraftDocument,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { ComposerAttachments } from '../src/client/ComposerAttachments.tsx'
+import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import {
+  ComposerAttachments, type ComposerAttachmentsInjected,
+} from '../src/client/ComposerAttachments.tsx'
+import type { DocumentSidebarController } from '../src/client/document-sidebar.tsx'
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class {
@@ -31,6 +35,11 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
     'image.scrollRight': '向右滚动图片',
     'image.dropBlocked': '当前无法添加文件夹或图片',
     'image.dropTitle': '将文件夹或图片拖到此处',
+    'document.pending': '待发送文件',
+    'document.extracting': 'MinerU 识别中…',
+    'document.ready': '已识别',
+    'document.readyTruncated': '已识别（内容已截断）',
+    'document.failed': '识别失败',
   }
   if (key === 'image.remove') {
     const name = params?.name
@@ -40,6 +49,14 @@ const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => 
     const count = params?.count
     const size = params?.size
     return `文件夹仅添加路径；图片最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
+  }
+  if (key === 'document.remove') {
+    const name = params?.name
+    return `移除文件 ${typeof name === 'string' ? name : ''}`
+  }
+  if (key === 'document.openPreview') {
+    const name = params?.name
+    return `在右侧栏预览文件 ${typeof name === 'string' ? name : ''}`
   }
   return messages[key] ?? key
 }) as ComposerAttachmentsProps['t']
@@ -53,16 +70,23 @@ function attachment(id: string, name = `${id}.png`): ComposerAttachment {
   }
 }
 
-function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): ComposerAttachmentsProps {
+function props(
+  overrides: Partial<ComposerAttachmentsOwnerProps & ComposerAttachmentsInjected> & { sessionId?: SessionId } = {},
+): ComposerAttachmentsProps & ComposerAttachmentsInjected {
   return {
     attachments: [],
+    documents: [],
     canAcceptDrop: true,
+    canRemoveDocuments: true,
     onAddImages: () => {},
     onAddDirectories: () => {},
     onRemoveImage: () => {},
+    resolveDocumentFile: () => undefined,
+    onRemoveDocument: () => {},
+    documentSidebar: () => undefined,
     t,
     ...overrides,
-  } as unknown as ComposerAttachmentsProps
+  } as unknown as ComposerAttachmentsProps & ComposerAttachmentsInjected
 }
 
 describe('ComposerAttachments', () => {
@@ -146,6 +170,47 @@ describe('ComposerAttachments', () => {
     expect(onAddDirectories).toHaveBeenCalledWith(['C:/work/source'])
   })
 
+  it('drops unusable entries and falls back to a directory entry name', () => {
+    const onAddDirectories = vi.fn()
+    const onAddImages = vi.fn()
+    render(<ComposerAttachments {...props({ onAddDirectories, onAddImages })} />)
+    const image = attachment('entry-without-metadata').file
+    const emptyNativePath = new File([], 'named folder')
+    Object.defineProperty(emptyNativePath, 'path', { value: '' })
+    fireEvent.drop(document.body, {
+      dataTransfer: {
+        types: ['Files'],
+        files: [],
+        items: [
+          { kind: 'string' },
+          {
+            kind: 'file',
+            getAsFile: () => emptyNativePath,
+            webkitGetAsEntry: () => ({ isDirectory: true, name: 'named folder' }),
+          },
+          {
+            kind: 'file',
+            getAsFile: () => null,
+            webkitGetAsEntry: () => ({ isDirectory: true, name: 'empty', fullPath: '///' }),
+          },
+          {
+            kind: 'file',
+            getAsFile: () => null,
+            webkitGetAsEntry: () => ({ isDirectory: false, name: 'missing' }),
+          },
+          {
+            kind: 'file',
+            getAsFile: () => image,
+            webkitGetAsEntry: () => null,
+          },
+        ],
+      },
+    })
+
+    expect(onAddDirectories).toHaveBeenCalledWith(['named folder'])
+    expect(onAddImages).toHaveBeenCalledWith([image])
+  })
+
   it('tracks nested file drags and clears an aborted drag', () => {
     const view = render(<ComposerAttachments {...props()} />)
     const dataTransfer = { types: ['Files'], files: [], dropEffect: 'none' }
@@ -213,5 +278,91 @@ describe('ComposerAttachments', () => {
     expect(view.getByAltText('待发送图片')).toBeTruthy()
     fireEvent.click(view.getByTitle('查看原图'))
     expect(view.getByAltText('原图')).toBeTruthy()
+  })
+
+  it('opens uploaded documents in the sidebar and closes their tabs before removal', () => {
+    const document: DraftDocument = {
+      id: 'document-1' as DraftDocument['id'],
+      name: 'lesson.docx',
+      status: 'extracting',
+    }
+    const file = new File([Uint8Array.of(1)], document.name)
+    const open = vi.fn()
+    const close = vi.fn()
+    const reconcile = vi.fn()
+    const sidebar: DocumentSidebarController = {
+      open,
+      close,
+      reconcile,
+      dispose: vi.fn(),
+    }
+    const onRemoveDocument = vi.fn()
+    const sessionId = 'session-1' as SessionId
+    const view = render(<ComposerAttachments {...props({
+      sessionId,
+      documents: [document],
+      resolveDocumentFile: () => file,
+      onRemoveDocument,
+      documentSidebar: () => sidebar,
+    })} />)
+
+    fireEvent.click(view.getByRole('button', { name: '在右侧栏预览文件 lesson.docx' }))
+    expect(open).toHaveBeenCalledWith(sessionId, document, file, t)
+    fireEvent.click(view.getByRole('button', { name: '移除文件 lesson.docx' }))
+    expect(close).toHaveBeenCalledWith(sessionId, document.id)
+    expect(onRemoveDocument).toHaveBeenCalledWith(document.id)
+    expect(reconcile).toHaveBeenCalledWith(sessionId, [document])
+  })
+
+  it('renders every document state and keeps cards static without a complete sidebar target', () => {
+    const documents: DraftDocument[] = [
+      { id: 'extracting' as DraftDocument['id'], name: 'extracting.pdf', status: 'extracting' },
+      { id: 'failed' as DraftDocument['id'], name: 'failed.pdf', status: 'error', error: 'OCR failed' },
+      { id: 'ready' as DraftDocument['id'], name: 'ready.pdf', status: 'ready' },
+      { id: 'truncated' as DraftDocument['id'], name: 'truncated.pdf', status: 'ready', truncated: true },
+    ]
+    const open = vi.fn()
+    const close = vi.fn()
+    const sidebar: DocumentSidebarController = {
+      open,
+      close,
+      reconcile: vi.fn(),
+      dispose: vi.fn(),
+    }
+    const onRemoveDocument = vi.fn()
+    const view = render(<ComposerAttachments {...props({
+      documents,
+      documentSidebar: () => sidebar,
+      onRemoveDocument,
+    })} />)
+
+    expect(view.getByText('MinerU 识别中…')).toBeTruthy()
+    expect(view.getByText('识别失败')).toBeTruthy()
+    expect(view.getByText('已识别')).toBeTruthy()
+    expect(view.getByText('已识别（内容已截断）')).toBeTruthy()
+    expect(view.queryByRole('button', { name: '在右侧栏预览文件 ready.pdf' })).toBeNull()
+    fireEvent.click(view.getByRole('button', { name: '移除文件 ready.pdf' }))
+    expect(close).not.toHaveBeenCalled()
+    expect(onRemoveDocument).toHaveBeenCalledWith(documents[2]?.id)
+
+    const sessionId = 'static-session' as SessionId
+    view.rerender(<ComposerAttachments {...props({
+      sessionId,
+      documents: [documents[2]!],
+      resolveDocumentFile: () => undefined,
+      documentSidebar: () => sidebar,
+      onRemoveDocument,
+    })} />)
+    fireEvent.click(view.getByRole('button', { name: '在右侧栏预览文件 ready.pdf' }))
+    expect(open).not.toHaveBeenCalled()
+
+    view.rerender(<ComposerAttachments {...props({
+      sessionId,
+      documents: [documents[2]!],
+      documentSidebar: () => undefined,
+      onRemoveDocument,
+    })} />)
+    fireEvent.click(view.getByRole('button', { name: '移除文件 ready.pdf' }))
+    expect(onRemoveDocument).toHaveBeenCalledTimes(2)
   })
 })

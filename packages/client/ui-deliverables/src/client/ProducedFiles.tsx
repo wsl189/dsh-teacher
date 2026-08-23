@@ -1,8 +1,8 @@
 // ProducedFiles: the produced-file row a finished turn ends with. The paths
 // come pre-matched by the turn-tail chain from the mutation tools'
-// follow-along locations, never from the closing prose. Clicking a file
-// selects its in-product preview; the overflow folder action retains the
-// Host's native opener.
+// follow-along locations, never from the closing prose. Clicking one goes
+// through the same openFile the tool rows use — the Host's own opener, on the
+// Host machine.
 
 import { useLayoutEffect, useRef, useState } from 'react'
 import type { HostDescriptionSource } from '@deepseek-ai/dsh-client-connection/client'
@@ -56,8 +56,8 @@ export interface ProducedFilesInjected {
   }
 }
 
-/** Matched paths plus preview/native-open actions, locale, and Host capability. */
-export type ProducedFilesProps = Pick<TurnTailOwnerProps, 'openFile' | 'previewFile'> & {
+/** Matched paths plus the opener, locale, and injected Host capability. */
+export type ProducedFilesProps = Pick<TurnTailOwnerProps, 'openFile'> & {
   matched: readonly string[]
 } & PropsLocale<typeof NS> & InjectFace<ProducedFilesInjected>
 
@@ -66,12 +66,12 @@ function moreLabel(t: ProducedFilesProps['t'], count: number): string {
 }
 
 /**
- * Render one turn's produced files as preview chips with an optional native folder action.
- * @param props - selector-matched paths, chat file actions, and the locale seat.
+ * Render one turn's produced files as openable chips.
+ * @param props - selector-matched paths, the chat view's file opener, and the locale seat.
  * @returns The produced-files row.
  */
 export function ProducedFiles({
-  matched: paths, openFile, previewFile, isLoopback, useHostDescription, t,
+  matched: paths, openFile, isLoopback, useHostDescription, t,
 }: ProducedFilesProps) {
   const hostCanOpenPath = useHostDescription(description => description?.canOpenPath === true)
   const canOpenPath = isLoopback && hostCanOpenPath
@@ -125,7 +125,7 @@ export function ProducedFiles({
             // that share a basename; the chip itself stays short.
             title={path}
             aria-label={t('produced.open', { name: path })}
-            onClick={() => { previewFile(path) }}
+            onClick={() => { openFile(path) }}
           >
             {basename(path)}
           </button>

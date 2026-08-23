@@ -61,6 +61,7 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     })),
     addDocuments: vi.fn(),
     removeDocument: vi.fn(),
+    draftDocumentFile: () => undefined,
     resolveSubmitMode: () => 'queue',
     toggleCommandMenu: vi.fn(),
     useNotices: bindSnapshotSelector(shell.notices),

@@ -117,3 +117,8 @@
 .overlayLayer > * {
   pointer-events: auto;
 }
+
+/* A full-shell occupant owns the top-right chrome while it is mounted. */
+:global(body):has([data-shell-overlay] [data-slot='shell.overlay'] > *) :global([data-dsh-toggle-cluster]) {
+  display: none;
+}
