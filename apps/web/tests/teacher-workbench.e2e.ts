@@ -38,6 +38,7 @@ const TIMETABLE_CLASS_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'timetable-class-dele
 const TIMETABLE_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'timetable-import.expected.md')
 const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
 const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
+const QUESTION_SAVE_DIRECTORY_EXPECTED = join(SNAPSHOT_DIR, 'question-save-directory.expected.md')
 const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
@@ -46,6 +47,26 @@ const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const DOCUMENT_CONTEXT_EXPECTED = join(SNAPSHOT_DIR, 'document-context.expected.md')
 const DOCUMENT_CONTEXT_FIXTURE = join(SNAPSHOT_DIR, 'document-context.session.jsonl')
 const MODE = webSnapshotMode()
+
+function onePagePdfFixture(): Buffer {
+  const objects = [
+    '<< /Type /Catalog /Pages 2 0 R >>',
+    '<< /Type /Pages /Kids [3 0 R] /Count 1 >>',
+    '<< /Type /Page /Parent 2 0 R /MediaBox [0 0 600 800] /Resources << >> /Contents 4 0 R >>',
+    '<< /Length 0 >>\nstream\n\nendstream',
+  ]
+  let source = '%PDF-1.4\n'
+  const offsets: number[] = []
+  objects.forEach((object, index) => {
+    offsets.push(Buffer.byteLength(source, 'ascii'))
+    source += `${String(index + 1)} 0 obj\n${object}\nendobj\n`
+  })
+  const xrefOffset = Buffer.byteLength(source, 'ascii')
+  source += `xref\n0 ${String(objects.length + 1)}\n0000000000 65535 f \n`
+  source += offsets.map(offset => `${String(offset).padStart(10, '0')} 00000 n \n`).join('')
+  source += `trailer\n<< /Size ${String(objects.length + 1)} /Root 1 0 R >>\nstartxref\n${String(xrefOffset)}\n%%EOF\n`
+  return Buffer.from(source, 'ascii')
+}
 
 describe('web e2e: durable teacher workbench', () => {
   let scaffold: WebScaffold
@@ -733,6 +754,28 @@ describe('web e2e: durable teacher workbench', () => {
     const libraryDocument = await scaffold.ctx.teacherWorkbench.read({})
     const directSaveFolder = libraryDocument.value.state.questionLibraryFolders.find(item => item.name === '八月题库')
     if (directSaveFolder === undefined) throw new Error('direct-save library folder is missing')
+
+    await page.locator('[data-question-workbench] input[type="file"][accept="application/pdf,.pdf"]').setInputFiles({
+      name: '默认目录试卷.pdf',
+      mimeType: 'application/pdf',
+      buffer: onePagePdfFixture(),
+    })
+    const pageRangeDialog = page.getByRole('dialog', { name: '选择页码范围' })
+    await pageRangeDialog.waitFor({ timeout: 10_000 })
+    const saveDirectory = pageRangeDialog.getByLabel('保存目录')
+    expect(await saveDirectory.inputValue()).toBe('')
+    const directoryOptions = await saveDirectory.locator('option').allTextContents()
+    expect(directoryOptions).toContain('不选择（按 PDF 名新建文件夹）')
+    expect(directoryOptions).toContain('模拟题库 / 八月题库')
+    expect(directoryOptions).not.toContain('模拟题库')
+    await compareOrRefreshGolden(
+      QUESTION_SAVE_DIRECTORY_EXPECTED,
+      await captureStableAria(page, '[role="dialog"][aria-label="选择页码范围"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await pageRangeDialog.getByRole('button', { name: '关闭工作台' }).click()
+    await pageRangeDialog.waitFor({ state: 'hidden', timeout: 10_000 })
+
     const directSaved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
       folderId: directSaveFolder.id,
       name: '目录直存验证',
@@ -765,8 +808,8 @@ describe('web e2e: durable teacher workbench', () => {
     await expect(scaffold.ctx.teacherWorkbench.deleteQuestionBatch({ batchId: directBatch.id }))
       .resolves.toMatchObject({ ok: true })
 
-    const rootDirectoryButton = bankFolders.getByRole('button', { name: '试题图片库根目录', exact: true })
-    await rootDirectoryButton.click()
+    const automaticDirectoryButton = bankFolders.getByRole('button', { name: 'layout', exact: true })
+    await automaticDirectoryButton.click()
     const bankImages = page.getByRole('complementary', { name: '试题库图片' })
     await bankImages.waitFor({ timeout: 10_000 })
     expect(await studentImages.count()).toBe(0)
@@ -781,12 +824,12 @@ describe('web e2e: durable teacher workbench', () => {
       MODE,
     )
 
-    await rootDirectoryButton.click()
+    await automaticDirectoryButton.click()
     await bankImages.waitFor({ state: 'hidden', timeout: 10_000 })
     await bankFolders.getByRole('button', { name: '关闭工作台' }).click()
     await page.getByRole('button', { name: '试题图片库', exact: true }).click()
     await bankFolders.waitFor({ timeout: 10_000 })
-    await rootDirectoryButton.click()
+    await automaticDirectoryButton.click()
     await bankImages.waitFor({ timeout: 10_000 })
     expect(await bankImages.getByRole('button', { name: '另存为' }).isDisabled()).toBe(true)
     expect(tripwire.pageErrors).toEqual([])

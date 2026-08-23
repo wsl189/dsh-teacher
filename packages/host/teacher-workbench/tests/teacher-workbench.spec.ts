@@ -729,6 +729,11 @@ describe('TeacherWorkbenchService', () => {
     })
     expect(first.ok).toBe(true)
     if (!first.ok || first.value.batchId === undefined) throw new Error('missing batch id')
+    const firstBatch = first.value.document.state.questionBatches.find(batch => batch.id === first.value.batchId)
+    const automaticFolder = first.value.document.state.questionLibraryFolders.find(folder => folder.name === 'math')
+    if (firstBatch === undefined || automaticFolder === undefined) throw new Error('missing automatic PDF directory')
+    expect(firstBatch.folderId).toBe(automaticFolder.id)
+    expect((await stat(join(root, 'segments', 'math', `${String(firstBatch.images[0]!.id)}.png`))).isFile()).toBe(true)
     const second = await b.service.saveQuestionBatch({
       appendToBatchId: first.value.batchId,
       name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(2, '#0000ff')],
@@ -745,9 +750,17 @@ describe('TeacherWorkbenchService', () => {
         },
       },
     })
+    const separate = await b.service.saveQuestionBatch({
+      name: '另一批次', sourceName: 'math.pdf', pageRange: '1', images: [await image(3, '#00ff00')],
+    })
+    expect(separate).toMatchObject({ ok: true })
+    if (!separate.ok || separate.value.batchId === undefined) throw new Error('missing separate batch')
+    expect(separate.value.document.state.questionLibraryFolders.filter(folder => folder.name === 'math')).toHaveLength(1)
+    expect(separate.value.document.state.questionBatches.find(batch => batch.id === separate.value.batchId)?.folderId)
+      .toBe(automaticFolder.id)
     expect(await b.service.saveQuestionBatch({
       appendToBatchId: 'missing' as TeacherQuestionBatchId,
-      name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(3, '#00ff00')],
+      name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(4, '#00ff00')],
     })).toMatchObject({ ok: false, error: { code: 'not-found' } })
   })
 
@@ -804,6 +817,20 @@ describe('TeacherWorkbenchService', () => {
     expect((await stat(selectedDirectory)).isDirectory()).toBe(true)
 
     const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#123456' } }).png().toBuffer()
+    await expect(b.service.saveQuestionBatch({
+      folderId: libraryFolderId,
+      name: '父目录拒绝验证',
+      sourceName: '父目录拒绝验证.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 1,
+        fileName: '第1题.png',
+        mediaType: 'image/png',
+        width: 12,
+        height: 8,
+        contentBase64: bytes.toString('base64'),
+      }],
+    })).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request', message: '保存目录必须是末级目录' } })
     const saved = await b.service.saveQuestionBatch({
       folderId: nestedLibraryFolderId,
       name: '期中试卷',
@@ -1279,7 +1306,7 @@ describe('TeacherWorkbenchService', () => {
       expectedRevision: editedDocument.revision,
       state: {
         ...editedDocument.state,
-        questionLibraryFolders: [{
+        questionLibraryFolders: [...editedDocument.state.questionLibraryFolders, {
           id: 'library-empty' as TeacherQuestionLibraryFolderId,
           name: '空试题库',
           createdAt: 2,

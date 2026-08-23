@@ -17,12 +17,13 @@
   - heading "试题图片库" [level=2]
   - button "新建文件夹"
   - button "关闭工作台"
-  - button "试题图片库根目录": 试题图片库根目录 1
   - button "收起目录“模拟题库”" [expanded]
-  - button "模拟题库": 模拟题库 1
+  - button "模拟题库": 模拟题库 0
   - button "删除目录“模拟题库”"
-  - button "八月题库": 八月题库 1
+  - button "八月题库": 八月题库 0
   - button "删除目录“八月题库”"
+  - button "layout": layout 1
+  - button "删除目录“layout”"
 - complementary "试题库图片":
   - button "全选"
   - button "保存" [disabled]
@@ -33,4 +34,3 @@
     - text: 第1题.png
     - checkbox "选择"
     - text: 选择
-- status: 已重命名目录：八月题库

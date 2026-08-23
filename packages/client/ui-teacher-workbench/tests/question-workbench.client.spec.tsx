@@ -34,6 +34,7 @@ const folderAssignmentId = 'assignment-2' as TeacherQuestionAssignmentId
 const folderId = 'folder-1' as TeacherQuestionFolderId
 const libraryFolderId = 'library-folder-1' as TeacherQuestionLibraryFolderId
 const nestedLibraryFolderId = 'library-folder-2' as TeacherQuestionLibraryFolderId
+const siblingLibraryFolderId = 'library-folder-3' as TeacherQuestionLibraryFolderId
 
 const t: QuestionWorkbenchProps['t'] = (key, params) => {
   let value: string = zh[key]
@@ -656,7 +657,7 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(images).getByRole('button', { name: '第 2 题' })).toBeTruthy()
   })
 
-  it('offers existing nested library directories after a PDF is uploaded', async () => {
+  it('defaults to a PDF-named directory and offers only leaf library directories', async () => {
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve({ numPages: 1 }),
       destroy: vi.fn(async () => {}),
@@ -670,6 +671,8 @@ describe('QuestionWorkbench reference shell', () => {
         id: libraryFolderId, name: '月考', createdAt: 1, updatedAt: 1,
       }, {
         id: nestedLibraryFolderId, parentId: libraryFolderId, name: '高一', createdAt: 2, updatedAt: 2,
+      }, {
+        id: siblingLibraryFolderId, name: '周考', createdAt: 3, updatedAt: 3,
       }],
     }
     const view = render(
@@ -681,9 +684,12 @@ describe('QuestionWorkbench reference shell', () => {
 
     const dialog = await screen.findByRole('dialog', { name: '选择页码范围' })
     const directory = within(dialog).getByLabelText('保存目录')
-    expect(within(directory).getByRole('option', { name: '试题图片库根目录' })).toBeTruthy()
-    expect(within(directory).getByRole('option', { name: '月考' })).toBeTruthy()
+    expect((directory as HTMLSelectElement).value).toBe('')
+    expect(within(directory).getByRole('option', { name: '不选择（按 PDF 名新建文件夹）' })).toBeTruthy()
+    expect(within(directory).queryByRole('option', { name: '试题图片库根目录' })).toBeNull()
+    expect(within(directory).queryByRole('option', { name: '月考' })).toBeNull()
     expect(within(directory).getByRole('option', { name: '月考 / 高一' })).toBeTruthy()
+    expect(within(directory).getByRole('option', { name: '周考' })).toBeTruthy()
     fireEvent.change(directory, { target: { value: nestedLibraryFolderId } })
     expect((directory as HTMLSelectElement).value).toBe(nestedLibraryFolderId)
   })

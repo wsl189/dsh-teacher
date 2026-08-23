@@ -14,6 +14,8 @@ The existing shared OCR capability returns reading-order Markdown. Markdown is s
 
 ## Decision
 
+PDF destination selection follows the [optional question-save directory](2026-08-24-optional-question-save-directory.md): a blank selection resolves to a physical PDF-named root folder, while an explicit selection resolves directly to one durable leaf. The component descriptions below use “selected directory” for that resolved destination.
+
 [`@deepseek-ai/dsh-ocr`](../../../../packages/ocr/ocr) adds provider-neutral structured-layout types and the Typert `ocr.layout` Remote. A request carries the ordinary document metadata and bytes plus an optional inclusive, zero-based page range. A successful result contains ordered pages with source indices and dimensions; every normalized element contains a content family, reading-order text, and `[left, top, right, bottom]` bounding box in that page's coordinate system. Every registered provider implements both Markdown and layout extraction, so provider selection and stable error handling remain owned by one runtime.
 
 [`@deepseek-ai/dsh-ocr-mineru`](../../../../packages/ocr/ocr-mineru) implements the new path by requesting `return_middle_json=true`, disabling unnecessary returned artifacts, and forwarding the range as `start_page_id` and `end_page_id`. It validates the complete response, parses `pdf_info`, maps range-relative `page_idx` values back to source-document indices, retains `page_size`, and normalizes usable line, span, and non-text block geometry without exposing MinerU's vendor JSON. The existing endpoint, backend, hybrid effort, language, timeout, upload limit, and response limit continue to come from the ordinary `ocr-mineru` DSH settings namespace.

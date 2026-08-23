@@ -954,7 +954,7 @@ export interface TeacherQuestionImageUpload {
 export interface TeacherQuestionBatchSaveRequest {
   /** Existing paper batch that receives this bounded continuation part. */
   readonly appendToBatchId?: TeacherQuestionBatchId
-  /** Destination library directory for a new batch's direct image files. */
+  /** Leaf destination for a new batch; omission creates or reuses a root-level directory named after the PDF. */
   readonly folderId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing batch name. */
   readonly name: string

@@ -449,6 +449,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       try {
         const document = await this.commitQuestionState(state => ({
           ...state,
+          questionLibraryFolders: persisted.createdFolder === undefined
+            ? state.questionLibraryFolders
+            : [...state.questionLibraryFolders, persisted.createdFolder],
           questionBatches: existingBatch === undefined
             ? [...state.questionBatches, persisted.batch]
             : state.questionBatches.map(batch => batch.id === persisted.batch.id ? persisted.batch : batch),

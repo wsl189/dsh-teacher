@@ -1,0 +1,12 @@
+- dialog "选择页码范围":
+  - heading "选择页码范围" [level=2]
+  - button "关闭工作台"
+  - paragraph: 总页数：1
+  - paragraph: 留空表示全部页码切割
+  - textbox "如 1-5,8（留空=全部）"
+  - text: 保存目录
+  - combobox "保存目录":
+    - option "不选择（按 PDF 名新建文件夹）" [selected]
+    - option "模拟题库 / 八月题库"
+    - option "layout"
+  - button "确认切割"

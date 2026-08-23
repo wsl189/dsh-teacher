@@ -14,6 +14,8 @@ Status: implemented
 
 ## 决策
 
+PDF 目标选择遵循[可选试题保存目录](2026-08-24-optional-question-save-directory.zh.md)决策：空白选择会解析为一个 PDF 同名物理根目录，明确选择则直接解析到一个持久化叶子目录。下方组件描述中的“所选目录”均指该解析后的目标。
+
 [`@deepseek-ai/dsh-ocr`](../../../../packages/ocr/ocr) 增加提供方无关的结构化版面类型与 Typert `ocr.layout` Remote。请求携带普通文档元数据与字节，以及可选的从零开始且首尾均包含的页码范围。成功结果包含按顺序排列且具有源索引与尺寸的页面；每个归一化元素包含内容类别、阅读顺序文本，以及页面坐标系中的 `[左, 上, 右, 下]` 边界框。每个已注册提供方都实现 Markdown 与版面提取，因此提供方选择与稳定错误处理仍由同一个运行时拥有。
 
 [`@deepseek-ai/dsh-ocr-mineru`](../../../../packages/ocr/ocr-mineru) 通过请求 `return_middle_json=true`、关闭不必要的返回产物，并把页码范围转发为 `start_page_id` 与 `end_page_id` 来实现新路径。它校验完整响应、解析 `pdf_info`、把相对于所选范围的 `page_idx` 映射回源文档索引、保留 `page_size`，并归一化可用文本行、span 和非文本块的几何信息，而不暴露 MinerU 供应商 JSON。现有端点、后端、混合解析质量、语言、超时、上传上限与响应上限继续来自普通 `ocr-mineru` DSH 设置命名空间。

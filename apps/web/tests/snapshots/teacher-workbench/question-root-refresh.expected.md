@@ -57,6 +57,8 @@
   - button "展开目录“模拟题库”"
   - button "模拟题库": 模拟题库 0
   - button "删除目录“模拟题库”"
+  - button "layout": layout 0
+  - button "删除目录“layout”"
   - button "实时新增图片目录": 实时新增图片目… 0
   - button "删除目录“实时新增图片目录”"
 - complementary "试题库图片":

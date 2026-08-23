@@ -26,6 +26,7 @@ import type {
   TeacherQuestionDocumentRequest,
   TeacherQuestionDocumentSkipped,
   TeacherQuestionFolderId,
+  TeacherQuestionLibraryFolder,
   TeacherQuestionLibraryFolderId,
   TeacherQuestionImage,
   TeacherQuestionImageId,
@@ -57,6 +58,8 @@ export interface TeacherQuestionMediaConfig {
 /** Prepared batch whose files already exist and can still be rolled back. */
 export interface PersistedQuestionBatch {
   readonly batch: TeacherQuestionBatch
+  /** Root-level PDF directory created for an unselected new-batch destination. */
+  readonly createdFolder?: TeacherQuestionLibraryFolder
   rollback(): Promise<void>
 }
 
@@ -536,6 +539,50 @@ function normalizeStoredPath(value: string): string {
   return value.split(/[\\/]/u).join('/')
 }
 
+interface ResolvedQuestionBatchDirectory {
+  readonly state: TeacherWorkbenchState
+  readonly folderId?: TeacherQuestionLibraryFolderId
+  readonly createdFolder?: TeacherQuestionLibraryFolder
+}
+
+function resolveQuestionBatchDirectory(
+  state: TeacherWorkbenchState,
+  request: TeacherQuestionBatchSaveRequest,
+  now: number,
+  existingBatch?: TeacherQuestionBatch,
+): ResolvedQuestionBatchDirectory {
+  if (existingBatch !== undefined) return {
+    state,
+    ...(existingBatch.folderId === undefined ? {} : { folderId: existingBatch.folderId }),
+  }
+  if (request.folderId !== undefined) {
+    const folder = state.questionLibraryFolders.find(item => item.id === request.folderId)
+    if (folder === undefined) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不存在')
+    if (state.questionLibraryFolders.some(item => item.parentId === folder.id)) {
+      throw new TeacherQuestionMediaError('invalid-request', '保存目录必须是末级目录')
+    }
+    return { state, folderId: folder.id }
+  }
+
+  const sourceFileName = request.sourceName.split(/[\\/]/u).at(-1) ?? ''
+  const name = questionMediaPathSegment(sourceFileName.replace(/\.pdf$/iu, '').trim() || request.name.trim())
+  const existingFolder = state.questionLibraryFolders.find(folder => folder.parentId === undefined
+    && questionMediaPathSegment(folder.name) === name)
+  if (existingFolder !== undefined) return { state, folderId: existingFolder.id }
+
+  const createdFolder: TeacherQuestionLibraryFolder = {
+    id: randomUUID() as TeacherQuestionLibraryFolderId,
+    name,
+    createdAt: now,
+    updatedAt: now,
+  }
+  return {
+    state: { ...state, questionLibraryFolders: [...state.questionLibraryFolders, createdFolder] },
+    folderId: createdFolder.id,
+    createdFolder,
+  }
+}
+
 /**
  * Validate and atomically materialize one bounded question-batch part.
  * @param config - current media roots and decoded-byte limits.
@@ -558,10 +605,11 @@ export async function persistQuestionBatch(
     request.name.trim() !== existingBatch.name
     || safeFileName(request.sourceName, '试卷.pdf') !== existingBatch.sourceName
     || request.pageRange.trim() !== existingBatch.pageRange
-    || request.folderId !== existingBatch.folderId
+    || (request.folderId !== undefined && request.folderId !== existingBatch.folderId)
   )) {
     throw new TeacherQuestionMediaError('invalid-request', '追加分片与原试卷信息不一致')
   }
+  const resolvedDirectory = resolveQuestionBatchDirectory(state, request, now, existingBatch)
   const existingQuestionNumbers = new Set(existingBatch?.images.map(image => image.questionNo) ?? [])
   const decoded: DecodedImage[] = []
   let aggregateBytes = 0
@@ -579,7 +627,7 @@ export async function persistQuestionBatch(
     decoded.push(image)
   }
   const batchId = existingBatch?.id ?? randomUUID() as TeacherQuestionBatchId
-  const folderId = existingBatch?.folderId ?? request.folderId
+  const folderId = resolvedDirectory.folderId
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
   const images: TeacherQuestionImage[] = request.images.map((upload, index) => {
     const image = decoded[index]
@@ -607,7 +655,7 @@ export async function persistQuestionBatch(
     const physicalRoot = await realpath(root)
     const destinationDirectory = await materializeQuestionDirectory(
       physicalRoot,
-      questionLibraryDirectory(state, folderId),
+      questionLibraryDirectory(resolvedDirectory.state, folderId),
       createdDirectories,
     )
     temporary = within(physicalRoot, `.pending-${String(batchId)}-${randomUUID()}`)
@@ -641,6 +689,7 @@ export async function persistQuestionBatch(
   }
   return {
     batch,
+    ...(resolvedDirectory.createdFolder === undefined ? {} : { createdFolder: resolvedDirectory.createdFolder }),
     rollback,
   }
 }

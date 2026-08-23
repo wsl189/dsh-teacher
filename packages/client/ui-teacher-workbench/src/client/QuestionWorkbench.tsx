@@ -490,9 +490,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       setPendingPdf(file)
       setPdfPageCount(count)
       setPageRange('')
-      setPageRangeFolderId(state.questionLibraryFolders.some(folder => folder.id === activeLibraryFolderId)
-        ? activeLibraryFolderId
-        : '')
+      setPageRangeFolderId('')
       setPageRangeOpen(true)
     } catch (cause) {
       setToast(errorMessage(cause, t('questions.pdfReadFailed')))
@@ -1664,7 +1662,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                 value={pageRangeFolderId}
                 onChange={(event) => { setPageRangeFolderId(event.target.value as TeacherQuestionLibraryFolderId | '') }}
               >
-                <option value="">{t('questions.libraryRoot')}</option>
+                <option value="">{t('questions.autoPdfDirectory')}</option>
                 {libraryFolderOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </FormField>
@@ -1917,8 +1915,9 @@ function buildQuestionLibraryFolderOptions(
       .toSorted((left, right) => left.name.localeCompare(right.name, 'zh-CN', { numeric: true, sensitivity: 'base' }))
     for (const folder of children) {
       const path = [...ancestors, folder.name]
-      options.push({ id: folder.id, label: path.join(' / ') })
-      append(folder.id, path)
+      const childCount = folders.filter(candidate => candidate.parentId === folder.id).length
+      if (childCount === 0) options.push({ id: folder.id, label: path.join(' / ') })
+      else append(folder.id, path)
     }
   }
   append(undefined, [])
