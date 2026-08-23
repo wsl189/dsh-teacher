@@ -172,20 +172,23 @@ export async function renderQuestionCrops(
         const top = Math.max(0, Math.floor(region.top * scaleY))
         const bottom = Math.min(source.height, Math.ceil(region.bottom * scaleY))
         const left = Math.max(0, Math.min(source.width - 1, Math.floor(region.left / region.pageWidth * source.width)))
-        const right = Math.max(
+        const targetWidth = Math.max(1, Math.ceil(maxQuestionWidthRatio * source.width))
+        const rightLimit = Math.max(
           left + 1,
-          Math.min(source.width, left + Math.ceil(maxQuestionWidthRatio * source.width)),
+          Math.min(source.width, Math.ceil(region.rightLimit / region.pageWidth * source.width)),
         )
+        const right = Math.min(rightLimit, left + targetWidth)
         return {
           source,
           left,
           top,
           width: Math.max(1, right - left),
+          targetWidth,
           height: Math.max(1, bottom - top),
         }
       })
       const separator = slices.length > 1 ? 12 : 0
-      const width = Math.max(...slices.map(slice => slice.width))
+      const width = Math.max(...slices.map(slice => slice.targetWidth))
       const height = slices.reduce((sum, slice) => sum + slice.height, 0) + separator * Math.max(0, slices.length - 1)
       const output = document.createElement('canvas')
       output.width = width

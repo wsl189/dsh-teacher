@@ -30,7 +30,7 @@ Each accepted task captures its selected pages, destination, render settings, an
 
 ## Question Crop Scale
 
-After every semantic group is merged, the Host returns the maximum MinerU-backed question-region width normalized to its source page. PDF.js keeps each region's own left, top, and bottom coordinates, then places its right edge one maximum width after that left edge, clipped at the page edge. It performs no horizontal padding or resizing, so questions in separate columns remain separate while equal-size pages normally retain one image width and raster scale.
+After every semantic group is merged, the Host returns the maximum MinerU-backed question-region width normalized to its source page. Each region also carries a right-side source limit derived from vertically overlapping content that belongs to another question. PDF.js keeps the region's own left, top, and bottom coordinates and samples at most one maximum width from that left edge without crossing the source limit. The output canvas still uses the maximum width and fills any unavailable right-hand area with white, so separate columns cannot leak into one another while equal-size pages retain one image width and raster scale.
 
 ## Extension Points
 

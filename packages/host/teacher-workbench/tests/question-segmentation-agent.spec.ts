@@ -126,13 +126,13 @@ describe('segmentQuestionsWithAgent', () => {
         questions: [{
           questionNo: 1, headPageIndex: 0, groupIndex: 0,
           regions: [{
-            pageIndex: 0, left: 30, top: 95, right: 620, bottom: 570, pageWidth: 720, pageHeight: 1000,
+            pageIndex: 0, left: 30, top: 95, right: 620, rightLimit: 720, bottom: 570, pageWidth: 720, pageHeight: 1000,
           }],
         }, {
           questionNo: 2, headPageIndex: 0, groupIndex: 0,
           regions: [
-            { pageIndex: 0, left: 30, top: 590, right: 630, bottom: 950, pageWidth: 720, pageHeight: 1000 },
-            { pageIndex: 1, left: 35, top: 50, right: 510, bottom: 195, pageWidth: 720, pageHeight: 1000 },
+            { pageIndex: 0, left: 30, top: 590, right: 630, rightLimit: 720, bottom: 950, pageWidth: 720, pageHeight: 1000 },
+            { pageIndex: 1, left: 35, top: 50, right: 510, rightLimit: 720, bottom: 195, pageWidth: 720, pageHeight: 1000 },
           ],
         }],
       },
@@ -220,19 +220,80 @@ describe('segmentQuestionsWithAgent', () => {
         questions: [
           {
             questionNo: 1, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 20, top: 10, right: 420, bottom: 200, pageWidth: 841, pageHeight: 595 }],
+            regions: [{ pageIndex: 0, left: 20, top: 10, right: 420, rightLimit: 440, bottom: 200, pageWidth: 841, pageHeight: 595 }],
           },
           {
             questionNo: 2, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 430, top: 10, right: 710, bottom: 75, pageWidth: 841, pageHeight: 595 }],
+            regions: [{ pageIndex: 0, left: 430, top: 10, right: 710, rightLimit: 841, bottom: 75, pageWidth: 841, pageHeight: 595 }],
           },
           {
             questionNo: 3, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 430, top: 238, right: 710, bottom: 310, pageWidth: 841, pageHeight: 595 }],
+            regions: [{ pageIndex: 0, left: 430, top: 238, right: 710, rightLimit: 841, bottom: 310, pageWidth: 841, pageHeight: 595 }],
           },
         ],
       },
     })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects an attachment reassigned across another question head and publishes a column limit', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        await expect(submit.execute({
+          headConvention: 'Bracketed 题 labels start each top-level question.',
+          questions: [
+            { headElementId: 'p0e0' },
+            { headElementId: 'p0e2', additionalElementIds: ['p0e1'] },
+            { headElementId: 'p0e4' },
+          ],
+        }, {} as never)).resolves.toContain('assigns p0e1 across the vertical band of p0e0')
+        const accepted = String(await submit.execute({
+          headConvention: 'Bracketed 题 labels start each top-level question.',
+          questions: [
+            { headElementId: 'p0e0' },
+            { headElementId: 'p0e2' },
+            { headElementId: 'p0e4' },
+          ],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'),
+      fileName: '双栏附图试卷.pdf',
+      padding: 10,
+      pages: [{
+        pageIndex: 0, width: 841, height: 595,
+        elements: [
+          { type: 'text', text: '[题14] 已知几何体', bbox: [20, 20, 300, 60] },
+          { type: 'image', text: '', bbox: [310, 20, 400, 80] },
+          { type: 'text', text: '[题15] 求概率', bbox: [20, 100, 100, 120] },
+          { type: 'text', text: '写出完整过程', bbox: [30, 130, 400, 200] },
+          { type: 'text', text: '[题16] 已知函数', bbox: [440, 20, 540, 40] },
+          { type: 'text', text: '求函数的解析式', bbox: [450, 50, 800, 150] },
+        ],
+      }],
+    }
+
+    const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
+    expect(result.ok && result.value.questions[0]?.regions[0]?.top).toBe(10)
+    expect(result.ok && result.value.questions[1]?.regions[0]?.rightLimit).toBe(450)
     await ctx.fiber.dispose()
   })
 
@@ -354,6 +415,60 @@ describe('segmentQuestionsWithAgent', () => {
     const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
     expect(result.ok && result.value.questions.map(question => question.questionNo)).toEqual([1, 2, 3, 4])
     expect(result.ok && result.value.questions.at(-1)?.regions[0]?.top).toBe(480)
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects a tagged question omitted after a decimal chapter heading', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        await expect(submit.execute({
+          headConvention: 'Bracketed 题 labels start independent exercises.',
+          questions: [{ headElementId: 'p0e0' }],
+          excludedElementIds: ['p0e2'],
+        }, {} as never)).resolves.toContain('must include tagged question-head candidate p0e3')
+        const accepted = String(await submit.execute({
+          headConvention: 'Bracketed 题 labels start independent exercises.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e3' }],
+          excludedElementIds: ['p0e2'],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'),
+      fileName: '章节练习.pdf',
+      padding: 10,
+      pages: [{
+        pageIndex: 0, width: 595, height: 841,
+        elements: [
+          { type: 'text', text: '[题4变式4] 若命题为真', bbox: [58, 527, 535, 560] },
+          { type: 'text', text: '则实数 a 的范围为', bbox: [58, 575, 535, 609] },
+          { type: 'text', text: '2.1.1 不等式的性质及应用', bbox: [202, 624, 411, 643] },
+          { type: 'text', text: '[题1（多选)] 下列不等式成立的是', bbox: [57, 652, 537, 680] },
+          { type: 'text', text: 'A. 甲  B. 乙', bbox: [57, 698, 524, 724] },
+        ],
+      }],
+    }
+
+    const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
+    expect(result.ok && result.value.questions).toHaveLength(2)
+    expect(result.ok && result.value.questions[0]?.regions[0]?.bottom).toBeLessThanOrEqual(624)
     await ctx.fiber.dispose()
   })
 

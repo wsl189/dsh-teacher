@@ -608,17 +608,17 @@ describe('TeacherWorkbenchService', () => {
       value: {
         groupCount: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
-        maxQuestionWidthRatio: 0.3,
+        maxQuestionWidthRatio: 0.7,
         questions: [{
           questionNo: 1,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 20, top: 0, right: 80, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+          regions: [{ pageIndex: 0, left: 20, top: 0, right: 80, rightLimit: 100, bottom: 120, pageWidth: 200, pageHeight: 300 }],
         }, {
           questionNo: 2,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 120, top: 0, right: 180, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+          regions: [{ pageIndex: 0, left: 120, top: 0, right: 180, rightLimit: 200, bottom: 120, pageWidth: 200, pageHeight: 300 }],
         }],
       },
     })
@@ -640,12 +640,20 @@ describe('TeacherWorkbenchService', () => {
       id: result.batchId,
       name: '自动切题',
       images: [
-        { questionNo: 1, mediaType: 'image/png', width: 120 },
-        { questionNo: 2, mediaType: 'image/png', width: 120 },
+        { questionNo: 1, mediaType: 'image/png', width: 280 },
+        { questionNo: 2, mediaType: 'image/png', width: 280 },
       ],
     }])
+    const firstImage = document.state.questionBatches[0]?.images[0]
     const secondImage = document.state.questionBatches[0]?.images[1]
-    if (secondImage === undefined) throw new Error('second segmented question image is missing')
+    if (firstImage === undefined || secondImage === undefined) throw new Error('segmented question image is missing')
+    const storedFirstImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: firstImage.id } })
+    if (!storedFirstImage.ok) throw new Error(storedFirstImage.error.message)
+    const padded = await sharp(Buffer.from(storedFirstImage.value.contentBase64, 'base64'))
+      .extract({ left: 250, top: 80, width: 25, height: 80 })
+      .toBuffer()
+    const paddedStats = await sharp(padded).stats()
+    expect(paddedStats.channels.slice(0, 3).every(channel => channel.min === 255)).toBe(true)
     const storedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: secondImage.id } })
     if (!storedImage.ok) throw new Error(storedImage.error.message)
     const directCropStats = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))

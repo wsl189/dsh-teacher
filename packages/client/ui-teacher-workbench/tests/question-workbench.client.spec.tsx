@@ -754,7 +754,7 @@ describe('QuestionWorkbench reference shell', () => {
       folderId: nestedLibraryFolderId,
     }))
     expect(screen.queryByRole('dialog', { name: '选择页码范围' })).toBeNull()
-    expect((screen.getByRole('button', { name: '上传 PDF' }) as HTMLButtonElement).disabled).toBe(false)
+    expect(screen.getByRole('button', { name: '上传 PDF' }).hasAttribute('disabled')).toBe(false)
   })
 
   it('toggles image drawers and keeps student and question-bank images mutually exclusive', async () => {

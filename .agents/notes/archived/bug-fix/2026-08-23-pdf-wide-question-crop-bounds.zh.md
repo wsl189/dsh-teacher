@@ -1,6 +1,7 @@
-# Agent Note：整份 PDF 共用试题横向裁切边界
+# Agent Note: 整份 PDF 共用试题横向裁切边界
 
 Status: implemented
+Archived: 2026-08-24
 
 [English](2026-08-23-pdf-wide-question-crop-bounds.md) | 中文
 

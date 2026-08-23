@@ -14,18 +14,22 @@ Validated question regions retain their own left, top, right, and bottom coordin
 
 After all semantic page groups merge, the Host computes `maxQuestionWidthRatio` as the maximum `(right - left) / pageWidth` across accepted question regions. The segmentation result carries this one normalized width to both renderers.
 
-The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer places the right edge one maximum normalized width after that region's left edge and clamps it to the source page. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
+For each page slice, the Host also records `rightLimit`: the nearest left edge of vertically overlapping content outside that question, or the source page edge when no such content exists. This value is a hard source-pixel limit independent of the region's content-derived `right` coordinate.
+
+The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer samples at most one maximum normalized width after that region's left edge, capped by `rightLimit`. It places those unscaled source pixels on a white canvas whose width still equals the maximum normalized width. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
 
 ## Alternatives considered
 
 **Use the PDF-wide minimum left and maximum right coordinates.** This makes equal-size pages produce one width, but it discards column ownership and caused the page-wide crops this decision corrects.
 
-**Keep every region's original right edge.** This preserves columns, but produces variable crop widths and does not satisfy the workbench requirement to use the widest accepted question consistently.
+**Keep every region's original right edge.** This preserves columns, but produces variable output widths and does not satisfy the workbench requirement to use the widest accepted question consistently.
 
-**Detect page columns separately.** The accepted region's left coordinate already identifies its horizontal origin. A second column classifier would add layout assumptions and another failure mode without changing the required calculation.
+**Clamp only at the source page edge.** This preserves equal output widths but still samples a neighboring column whenever a wide question elsewhere in the PDF increases the shared width.
+
+**Classify complete page columns before cropping.** A full column model is unnecessary for the safety property. The nearest vertically overlapping non-owned element already provides a local pixel limit without assuming a fixed number or width of columns.
 
 ## Consequences
 
-Questions in different columns keep different horizontal origins while normally receiving one consistent pixel width on equal-size pages. A region near the page's right edge can be narrower because source pixels do not exist beyond the page.
+Questions in different columns keep different horizontal origins and one consistent output width on equal-size pages. A region constrained by a page edge or neighboring column has white space to its right instead of unrelated source pixels.
 
-A genuinely wide accepted question increases the width used by every crop. Existing saved images are not rewritten; users recut a source PDF to apply this geometry. Client and Host regressions use horizontally separated regions and assert that each renderer starts from the region-local left coordinate.
+A genuinely wide accepted question increases the canvas width used by every crop but cannot override another region's source limit. Existing saved images are not rewritten; users recut a source PDF to apply this geometry. Client and Host regressions use horizontally separated regions and assert both the local crop origin and the absence of neighboring-column pixels beyond `rightLimit`.

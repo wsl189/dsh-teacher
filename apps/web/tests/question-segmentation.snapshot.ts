@@ -52,7 +52,7 @@ class QuestionSegmentationAdapter extends LlmAdapter {
     this.requests.push(options)
     const source = options.tools?.find(tool => tool.name.startsWith('question_layout_'))?.name
     const submit = options.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))?.name
-    const phase = (this.requests.length - 1) % 3
+    const phase = (this.requests.length - 1) % 4
     if (phase === 0 && source !== undefined) {
       yield * toolCall(source, { chunk: 0 }, 1)
       return
@@ -64,14 +64,27 @@ class QuestionSegmentationAdapter extends LlmAdapter {
           { headElementId: 'p0e3' },
           { headElementId: 'p0e6' },
         ],
-        excludedElementIds: ['p0e2'],
-        endElementId: 'p1e2',
+        excludedElementIds: ['p0e2', 'p1e2'],
+        endElementId: 'p1e5',
       }, 2)
+      return
+    }
+    if (phase === 2 && submit !== undefined) {
+      yield * toolCall(submit, {
+        headConvention: 'Arabic punctuation and bracketed 题 labels begin independent top-level questions.',
+        questions: [
+          { headElementId: 'p0e3' },
+          { headElementId: 'p0e6' },
+          { headElementId: 'p1e3' },
+        ],
+        excludedElementIds: ['p0e2', 'p1e2'],
+        endElementId: 'p1e5',
+      }, 3)
       return
     }
     const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
     if (token === undefined) throw new Error('accepted boundary token is missing from the child history')
-    yield * toolCall('structured_output', { validationToken: token }, 3)
+    yield * toolCall('structured_output', { validationToken: token }, 4)
   }
 }
 
@@ -100,7 +113,7 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
     await scaffold?.close()
   })
 
-  it('keeps subquestions, figures, and a continuation page while rejecting document furniture', async () => {
+  it('keeps subquestions, figures, and continuations while repairing an omitted tagged head', async () => {
     const parent = await scaffold.ctx.agents.create({
       sessionId: SessionId('question-segmentation-web-e2e'),
       meta: { cwd: scaffold.workspaceCwd },
@@ -131,8 +144,11 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
         elements: [
           { type: 'text', text: '接上页，求角 A', bbox: [45, 60, 500, 95] },
           { type: 'equation', text: 'AB=AC', bbox: [80, 150, 260, 185] },
-          { type: 'text', text: '数学试卷参考答案及评分标准', bbox: [150, 400, 570, 440] },
-          { type: 'text', text: '1. x>0', bbox: [40, 470, 400, 500] },
+          { type: 'text', text: '2.1.1 不等式的性质及应用', bbox: [160, 300, 560, 330] },
+          { type: 'text', text: '[题3] 已知 a>b>0', bbox: [40, 370, 600, 405] },
+          { type: 'text', text: '判断下列不等式', bbox: [60, 430, 500, 465] },
+          { type: 'text', text: '数学试卷参考答案及评分标准', bbox: [150, 520, 570, 560] },
+          { type: 'text', text: '1. x>0', bbox: [40, 590, 400, 620] },
         ],
       }],
     })

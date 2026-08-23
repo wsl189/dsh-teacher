@@ -205,6 +205,7 @@ async function renderQuestionUploads(
       const slices: Array<{
         bytes: Uint8Array
         width: number
+        targetWidth: number
         height: number
       }> = []
       for (const region of question.regions) {
@@ -214,21 +215,24 @@ async function renderQuestionUploads(
         const top = Math.max(0, Math.floor(region.top * page.height / layout.height))
         const bottom = Math.min(page.height, Math.ceil(region.bottom * page.height / layout.height))
         const left = Math.max(0, Math.min(page.width - 1, Math.floor(region.left / region.pageWidth * page.width)))
-        const right = Math.max(
+        const targetWidth = Math.max(1, Math.ceil(maxQuestionWidthRatio * page.width))
+        const rightLimit = Math.max(
           left + 1,
-          Math.min(page.width, left + Math.ceil(maxQuestionWidthRatio * page.width)),
+          Math.min(page.width, Math.ceil(region.rightLimit / region.pageWidth * page.width)),
         )
+        const right = Math.min(rightLimit, left + targetWidth)
         const width = Math.max(1, right - left)
         const height = Math.max(1, bottom - top)
         const cropped = await sharp(page.png).extract({ left, top, width, height }).png().toBuffer()
         slices.push({
           bytes: new Uint8Array(cropped),
           width,
+          targetWidth,
           height,
         })
       }
       const gap = slices.length > 1 ? 12 : 0
-      const width = Math.max(...slices.map(slice => slice.width))
+      const width = Math.max(...slices.map(slice => slice.targetWidth))
       const height = slices.reduce((sum, slice) => sum + slice.height, 0) + gap * Math.max(0, slices.length - 1)
       let top = 0
       const composite = slices.map((slice) => {

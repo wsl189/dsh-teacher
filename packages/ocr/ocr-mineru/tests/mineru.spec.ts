@@ -183,6 +183,78 @@ describe('MinerUProvider', () => {
     expect(result.pages.map(page => page.pageIndex)).toEqual([0, 1, 2, 3, 4, 5, 6, 7, 8, 9])
   })
 
+  it('repairs cross-page paragraph lines with targeted single-page layout requests', async () => {
+    const line = (text: string, bbox: [number, number, number, number]) => ({
+      bbox,
+      spans: [{ type: 'text', content: text }],
+    })
+    const response = (pdfInfo: readonly unknown[]) => Response.json({
+      results: { paper: { middle_json: JSON.stringify({ pdf_info: pdfInfo }) } },
+    })
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData
+      const start = form.get('start_page_id')
+      if (start === '0') {
+        return response([{
+          page_idx: 0,
+          page_size: [100, 100],
+          para_blocks: [{
+            type: 'text', bbox: [10, 70, 90, 90], lines: [line('[题1] 第一页', [10, 72, 90, 88])],
+          }],
+        }])
+      }
+      if (start === '1') {
+        return response([{
+          page_idx: 0,
+          page_size: [100, 100],
+          para_blocks: [
+            { type: 'text', bbox: [10, 10, 90, 30], lines: [line('[题2] 第二页', [10, 12, 90, 28])] },
+            { type: 'text', bbox: [10, 40, 90, 60], lines: [line('后续正文', [10, 42, 90, 58])] },
+          ],
+        }])
+      }
+      return response([{
+        page_idx: 0,
+        page_size: [100, 100],
+        para_blocks: [{
+          type: 'text',
+          bbox: [10, 70, 90, 90],
+          lines: [
+            line('[题1] 第一页', [10, 72, 90, 88]),
+            line('[题2] 错挂到上一页', [10, 12, 90, 28]),
+          ],
+        }],
+        preproc_blocks: [{
+          type: 'text', bbox: [10, 70, 90, 90], lines: [line('[题1] 第一页', [10, 72, 90, 88])],
+        }],
+      }, {
+        page_idx: 1,
+        page_size: [100, 100],
+        para_blocks: [
+          { type: 'text', bbox: [10, 10, 90, 30], lines_deleted: true, lines: [] },
+          { type: 'text', bbox: [10, 40, 90, 60], lines: [line('后续正文', [10, 42, 90, 58])] },
+        ],
+        preproc_blocks: [
+          { type: 'text', bbox: [10, 10, 90, 30], lines: [line('[题2] 第二页', [10, 12, 90, 28])] },
+          { type: 'text', bbox: [10, 40, 90, 60], lines: [line('后续正文', [10, 42, 90, 58])] },
+        ],
+      }])
+    })
+    const provider = new MinerUProvider(config(), fetch)
+
+    const result = await provider.extractLayout(request({ name: 'paper.pdf', mediaType: 'application/pdf' }))
+
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(fetch.mock.calls.slice(1).map((call) => {
+      const form = call[1]?.body as FormData
+      return [form.get('start_page_id'), form.get('end_page_id')]
+    })).toEqual([['0', '0'], ['1', '1']])
+    expect(result.pages.map(page => page.elements.map(element => element.text))).toEqual([
+      ['[题1] 第一页'],
+      ['[题2] 第二页', '后续正文'],
+    ])
+  })
+
   it('infers a supported extension from media type and truncates output', async () => {
     const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
       expect((init?.body as FormData).get('files')).toMatchObject({ name: 'calendar.xlsx' })

@@ -792,6 +792,8 @@ export interface TeacherQuestionPageRegion {
   readonly top: number
   /** Exclusive crop right in OCR page units. */
   readonly right: number
+  /** Exclusive source-pixel limit imposed by overlapping content to the right. */
+  readonly rightLimit: number
   /** Exclusive crop bottom in OCR page units. */
   readonly bottom: number
   /** OCR page width used for proportional browser rendering. */

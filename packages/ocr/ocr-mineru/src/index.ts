@@ -194,20 +194,43 @@ export class MinerUProvider implements OcrProvider {
     const ranges = layoutRanges(request.pageRange, config.layoutBatchPages)
     const pages: OcrLayoutPage[] = []
     for (const pageRange of ranges) {
-      const batchRequest = pageRange === undefined ? request : { ...request, pageRange }
-      const parsed = await this.callMinerU(config, createForm(batchRequest, decoded, config, 'layout'), signal)
-      const validated = mineruLayoutResponseSchema.safeParse(parsed)
-      if (!validated.success) throw new OcrError('MinerU layout response fields are invalid', 'invalid-response')
-      const encoded = Object.values(validated.data.results)
-        .map(result => result.middle_json ?? '')
-        .find(content => content.trim() !== '')
-      if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
-      const middle = parseMiddleJson(encoded)
-      pages.push(...middle.pdf_info.map(page => normalizePage(page, pageRange?.start ?? 0)))
+      const batch = await this.extractLayoutRange(config, request, decoded, pageRange, signal)
+      if (request.mediaType === 'application/pdf' && batch.length > 1) {
+        for (const [index, normalized] of batch.entries()) {
+          if (!normalized.suspicious) continue
+          const retryRange = { start: normalized.page.pageIndex, end: normalized.page.pageIndex }
+          const retried = await this.extractLayoutRange(config, request, decoded, retryRange, signal)
+          const [replacement] = retried
+          if (replacement === undefined || retried.length !== 1) {
+            throw new OcrError('MinerU single-page layout recovery returned an unexpected page count', 'invalid-response')
+          }
+          batch[index] = replacement
+        }
+      }
+      pages.push(...batch.map(normalized => normalized.page))
     }
     pages.sort((left, right) => left.pageIndex - right.pageIndex)
     if (pages.length === 0) throw new OcrError('MinerU returned no parsed pages', 'empty-result')
     return { name: request.name, provider: this.id, pages }
+  }
+
+  private async extractLayoutRange(
+    config: Config,
+    request: OcrLayoutRequest,
+    decoded: DecodedRequest,
+    pageRange: OcrPageRange | undefined,
+    signal?: AbortSignal,
+  ): Promise<NormalizedLayoutPage[]> {
+    const batchRequest = pageRange === undefined ? request : { ...request, pageRange }
+    const parsed = await this.callMinerU(config, createForm(batchRequest, decoded, config, 'layout'), signal)
+    const validated = mineruLayoutResponseSchema.safeParse(parsed)
+    if (!validated.success) throw new OcrError('MinerU layout response fields are invalid', 'invalid-response')
+    const encoded = Object.values(validated.data.results)
+      .map(result => result.middle_json ?? '')
+      .find(content => content.trim() !== '')
+    if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
+    const middle = parseMiddleJson(encoded)
+    return middle.pdf_info.map(page => normalizePage(page, pageRange?.start ?? 0))
   }
 
   private async callMinerU(
@@ -429,26 +452,89 @@ function collectBlockText(value: unknown): string[] {
 type MinerUMiddlePage = validation.infer<typeof mineruMiddleSchema>['pdf_info'][number]
 type UnknownRecord = Record<string, unknown>
 
-function normalizePage(page: MinerUMiddlePage, pageOffset: number) {
-  const [width, height] = page.page_size
-  const blocks = page.para_blocks ?? page.preproc_blocks ?? []
-  const elements = blocks.flatMap(block => normalizeBlock(block, width, height))
-  return { pageIndex: page.page_idx + pageOffset, width, height, elements }
+interface NormalizedLayoutPage {
+  readonly page: OcrLayoutPage
+  readonly suspicious: boolean
 }
 
-function normalizeBlock(value: unknown, width: number, height: number): OcrLayoutElement[] {
-  const block = asRecord(value)
-  if (block === undefined) return []
-  const blockType = normalizeElementType(block.type)
-  const lines = Array.isArray(block.lines) ? block.lines : []
-  const elements = lines.flatMap(line => normalizeLine(line, blockType, width, height))
-  const nested = Array.isArray(block.blocks) ? block.blocks : []
-  elements.push(...nested.flatMap(child => normalizeBlock(child, width, height)))
-  if (elements.length === 0) {
-    const bbox = normalizeBox(block.bbox, width, height)
-    if (bbox !== undefined) elements.push({ type: blockType, text: '', bbox })
+interface NormalizedBlock {
+  readonly elements: readonly OcrLayoutElement[]
+  readonly suspicious: boolean
+}
+
+function normalizePage(page: MinerUMiddlePage, pageOffset: number): NormalizedLayoutPage {
+  const [width, height] = page.page_size
+  const preprocessed = page.preproc_blocks ?? []
+  const preprocessedByBox = new Map(preprocessed.flatMap((block) => {
+    const key = blockKey(block, width, height)
+    return key === undefined ? [] : [[key, block] as const]
+  }))
+  let suspicious = false
+  const blocks = page.para_blocks === undefined || (page.para_blocks.length === 0 && preprocessed.length > 0)
+    ? preprocessed
+    : page.para_blocks
+  suspicious ||= page.para_blocks !== undefined && page.para_blocks.length === 0 && preprocessed.length > 0
+  const elements = blocks.flatMap((block) => {
+    const normalized = normalizeBlock(block, width, height)
+    suspicious ||= normalized.suspicious
+    if (hasMeaningfulElements(normalized.elements)) return normalized.elements
+    const key = blockKey(block, width, height)
+    const fallback = key === undefined ? undefined : preprocessedByBox.get(key)
+    if (fallback === undefined || fallback === block) return normalized.elements
+    const recovered = normalizeBlock(fallback, width, height)
+    if (!hasMeaningfulElements(recovered.elements)) return normalized.elements
+    suspicious = true
+    return recovered.elements
+  })
+  return {
+    page: { pageIndex: page.page_idx + pageOffset, width, height, elements },
+    suspicious,
   }
-  return elements
+}
+
+function normalizeBlock(value: unknown, width: number, height: number): NormalizedBlock {
+  const block = asRecord(value)
+  if (block === undefined) return { elements: [], suspicious: false }
+  const blockType = normalizeElementType(block.type)
+  const blockBox = normalizeBox(block.bbox, width, height)
+  const lines = Array.isArray(block.lines) ? block.lines : []
+  let suspicious = false
+  const elements = lines.flatMap((line) => {
+    const normalized = normalizeLine(line, blockType, width, height)
+    if (blockBox === undefined) return normalized
+    return normalized.filter((element) => {
+      if (boxCenterInside(element.bbox, blockBox)) return true
+      suspicious = true
+      return false
+    })
+  })
+  const nested = Array.isArray(block.blocks) ? block.blocks : []
+  for (const child of nested) {
+    const normalized = normalizeBlock(child, width, height)
+    elements.push(...normalized.elements)
+    suspicious ||= normalized.suspicious
+  }
+  if (elements.length === 0 && blockBox !== undefined && blockType !== 'text' && blockType !== 'equation') {
+    elements.push({ type: blockType, text: '', bbox: blockBox })
+  }
+  return { elements, suspicious }
+}
+
+function blockKey(value: unknown, width: number, height: number): string | undefined {
+  const block = asRecord(value)
+  if (block === undefined) return undefined
+  const bbox = normalizeBox(block.bbox, width, height)
+  return bbox === undefined ? undefined : `${normalizeElementType(block.type)}:${bbox.join(',')}`
+}
+
+function hasMeaningfulElements(elements: readonly OcrLayoutElement[]): boolean {
+  return elements.some(element => element.text.trim() !== '' || (element.type !== 'text' && element.type !== 'equation'))
+}
+
+function boxCenterInside(inner: OcrBoundingBox, outer: OcrBoundingBox): boolean {
+  const centerX = (inner[0] + inner[2]) / 2
+  const centerY = (inner[1] + inner[3]) / 2
+  return centerX >= outer[0] && centerX <= outer[2] && centerY >= outer[1] && centerY <= outer[3]
 }
 
 function normalizeLine(

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-24-per-region-question-crop-origin.md
-2026-08-24-per-region-question-crop-origin.md: 70dc1257b07367d87905249732693c8d67cd2c8c
-2026-08-24-per-region-question-crop-origin.zh.md: 7c3ecef81a0233e5762c64c0797900e486ed82e2
+2026-08-24-per-region-question-crop-origin.md: 7397a89b550df369d229f21d61454aa9a483de7e
+2026-08-24-per-region-question-crop-origin.zh.md: 748bc0257e1b9c220fb9fcd3d692c72e12fb6cec

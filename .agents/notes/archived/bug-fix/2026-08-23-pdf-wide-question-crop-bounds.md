@@ -1,6 +1,7 @@
 # Agent Note: PDF-wide question crop bounds
 
 Status: implemented
+Archived: 2026-08-24
 
 English | [中文](2026-08-23-pdf-wide-question-crop-bounds.zh.md)
 

@@ -67,7 +67,7 @@ describe('partitionQuestionUploads', () => {
 })
 
 describe('renderQuestionCrops', () => {
-  it('keeps each question left edge and applies the PDF-wide maximum question width', async () => {
+  it('keeps uniform output width without sampling past a region right limit', async () => {
     const canvases: Array<{
       width: number
       height: number
@@ -114,12 +114,12 @@ describe('renderQuestionCrops', () => {
       questionNo: 1,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 5, top: 10, right: 45, bottom: 30, pageWidth: 100, pageHeight: 100 }],
+      regions: [{ pageIndex: 0, left: 5, top: 10, right: 45, rightLimit: 50, bottom: 30, pageWidth: 100, pageHeight: 100 }],
     }, {
       questionNo: 2,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 55, top: 40, right: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
+      regions: [{ pageIndex: 0, left: 55, top: 40, right: 90, rightLimit: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
     }]
     const progress = vi.fn()
 
@@ -138,7 +138,7 @@ describe('renderQuestionCrops', () => {
       canvases[0], 5, 10, 40, 20, 0, 0, 40, 20,
     )
     expect(canvases[2]?.context.drawImage).toHaveBeenCalledWith(
-      canvases[0], 55, 40, 40, 20, 0, 0, 40, 20,
+      canvases[0], 55, 40, 35, 20, 0, 0, 35, 20,
     )
     expect(pdfMocks.destroy).toHaveBeenCalledOnce()
   })

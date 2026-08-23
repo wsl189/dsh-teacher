@@ -68,7 +68,18 @@ interface AcceptedBoundaryDraft {
 
 const structuredOutputSchema = z.object({ validationToken: z.string().min(1).max(128) }).strict()
 const answerHeadingPattern = /^\s*(?:.{0,80}(?:试卷|作业|练习)\s*)?(?:参考)?答案(?:与解析|及解析|及评分标准|与评分标准)?\s*[:：]?\s*$/u
-const sectionHeadingPattern = /^\s*(?:[一二三四五六七八九十]+\s*[、.．]\s*(?:(?:单项|多项)?选择|填空|解答|计算|证明|判断|作图|应用)|(?:part|section)\s+[A-Z0-9]+)/iu
+const sectionHeadingPattern = new RegExp([
+  '^\\s*(?:',
+  '[一二三四五六七八九十]+\\s*[、.．]\\s*(?:(?:单项|多项)?选择|填空|解答|计算|证明|判断|作图|应用)',
+  '|[0-9０-９]+(?:\\s*[.．]\\s*[0-9０-９]+){2,}\\s*\\S',
+  '|(?:part|section)\\s+[A-Z0-9]+',
+  ')',
+].join(''), 'iu')
+const questionNumberPattern = '[0-9０-９一二三四五六七八九十百]+'
+const taggedQuestionHeadPattern = new RegExp(
+  `^\\s*(?:[\\[【「『(（]\\s*题\\s*${questionNumberPattern}|题\\s*${questionNumberPattern}(?=\\s*(?:[\\]】」』)）]|[（(:：]|$))|第\\s*${questionNumberPattern}\\s*题(?=\\s*(?:[（(:：、.．]|$)))`,
+  'u',
+)
 
 /** Structured-output schema requiring a server-issued accepted-draft token. */
 export const questionSegmentationOutputSchema: ObjectJsonSchema = {
@@ -251,7 +262,16 @@ function cropRegions(
     const right = Math.min(page.width, ownedRight + padding, nextLeft)
     const bottom = Math.min(page.height, ownedBottom + padding, nextTop)
     return right > left && bottom > top
-      ? [{ pageIndex: page.pageIndex, left, top, right, bottom, pageWidth: page.width, pageHeight: page.height }]
+      ? [{
+        pageIndex: page.pageIndex,
+        left,
+        top,
+        right,
+        rightLimit: nextLeft,
+        bottom,
+        pageWidth: page.width,
+        pageHeight: page.height,
+      }]
       : []
   })
 }
@@ -265,9 +285,9 @@ function expandSectionExclusions(
   for (const heading of elements) {
     if (!declared.has(heading.id) || !sectionHeadingPattern.test(heading.element.text)) continue
     const nextHead = questions.find(question => question.head.ordinal > heading.ordinal)?.head
-    if (nextHead === undefined || nextHead.page !== heading.page) continue
+    if (nextHead === undefined) continue
     for (const element of elements) {
-      if (element.page === heading.page && element.ordinal > heading.ordinal && element.ordinal < nextHead.ordinal) {
+      if (element.ordinal > heading.ordinal && element.ordinal < nextHead.ordinal) {
         expanded.add(element.id)
       }
     }
@@ -352,6 +372,13 @@ function validateBoundaryDraft(
   const selectedHeadIds = new Set(selected.map(question => question.head.id as string))
   const firstHeadOrdinal = selected[0]?.head.ordinal ?? 0
   const endOrdinal = end?.ordinal ?? elements.length
+  const candidateEndOrdinal = Math.min(endOrdinal, answerBoundary?.ordinal ?? elements.length)
+  for (const element of elements) {
+    if (element.ordinal >= candidateEndOrdinal || !taggedQuestionHeadPattern.test(element.element.text)) continue
+    if (!selectedHeadIds.has(element.id)) {
+      errors.push(`questions must include tagged question-head candidate ${String(element.id)}`)
+    }
+  }
   for (const element of elements) {
     const id = element.id as string
     if (element.ordinal < firstHeadOrdinal || element.ordinal >= endOrdinal
@@ -370,6 +397,17 @@ function validateBoundaryDraft(
       }
       if (excluded.has(id)) {
         errors.push(`questions[${String(questionIndex)}].additionalElementIds claims excluded element ${id}`)
+      }
+      if (question.head.page === element.page) {
+        const claimantOverlaps = verticalBoxesOverlap(element.element.bbox, question.head.element.bbox)
+        const overlappingHead = selected.find((candidate, candidateIndex) => (
+          candidateIndex !== questionIndex
+            && candidate.head.page === element.page
+            && verticalBoxesOverlap(element.element.bbox, candidate.head.element.bbox)
+        ))
+        if (!claimantOverlaps && overlappingHead !== undefined) {
+          errors.push(`questions[${String(questionIndex)}].additionalElementIds assigns ${id} across the vertical band of ${String(overlappingHead.head.id)}`)
+        }
       }
       claimed.set(id, questionIndex)
     }
@@ -397,6 +435,13 @@ function validateBoundaryDraft(
     return { errors: ['one or more accepted boundaries produce an empty crop'] }
   }
   return { errors: [], questions }
+}
+
+function verticalBoxesOverlap(
+  left: readonly [number, number, number, number],
+  right: readonly [number, number, number, number],
+): boolean {
+  return left[3] > right[1] && left[1] < right[3]
 }
 
 function canonicalLabel(value: string): string {

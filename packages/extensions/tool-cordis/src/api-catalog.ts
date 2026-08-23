@@ -5171,7 +5171,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionPageRegion',
-    declaration: 'export interface TeacherQuestionPageRegion {\n    readonly pageIndex: number;\n    readonly left: number;\n    readonly top: number;\n    readonly right: number;\n    readonly bottom: number;\n    readonly pageWidth: number;\n    readonly pageHeight: number;\n}',
+    declaration: 'export interface TeacherQuestionPageRegion {\n    readonly pageIndex: number;\n    readonly left: number;\n    readonly top: number;\n    readonly right: number;\n    readonly rightLimit: number;\n    readonly bottom: number;\n    readonly pageWidth: number;\n    readonly pageHeight: number;\n}',
   },
   {
     name: 'TeacherQuestionRejected',

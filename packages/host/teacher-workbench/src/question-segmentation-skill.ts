@@ -17,11 +17,15 @@ Work from semantic roles and reading order, not fixed coordinates, page template
 
 A top-level question head is the first OCR element of an independent problem. For an unnumbered exercise, select the first condition, instruction, or stem element that begins that problem. Titles, school names, page headers, section headings, score notes, document instructions, cautions, answer sheets, reference answers, solutions, and page numbers are not question heads.
 
+Treat every bracketed or OCR-damaged 题-number label in the selected range as a candidate that must be classified. Select it as a question head when it begins an independent problem; do not silently omit it or exclude it as ordinary text. Decimal chapter labels such as 2.1.1 are section headings, not question heads.
+
 Keep all subordinate material with its top-level question: stems, choices, tables, formulas, proofs, every (1)/(2) or ①/② subquestion, shared conditions, continuation text, and geometric or statistical figures. A page break never ends a question by itself. A new top-level question head ends the previous question. If answers, explanations, appendices, or unrelated material follow the final question, select the first excluded element as the explicit document end. When a new answer page repeats the paper title immediately before an answer heading, exclude the repeated title too; it is the first excluded element.
 
 Use only elementId values returned by the source tool. Never create, alter, or infer an elementId, bounding box, page number, or coordinate. Submit the elementId of each first head. Follow source order when convenient, but do not spend a correction attempt manually reordering valid heads: the Host sorts them by authoritative OCR ordinal before assigning one unique source-order display number and mapping accepted IDs back to exact coordinates. Do not submit or derive display numbers.
 
 OCR source order can interleave columns or emit a figure after the next question head. Normally the Host assigns elements between consecutive heads to the earlier question. For any continuation text, formula, table, or figure that belongs to a question but occurs outside that default interval, add its exact elementId to that question's additionalElementIds. Put section headings, repeated page headers, page numbers, watermarks, and other non-question elements that occur inside a default interval in excludedElementIds. Use these lists only when needed; do not repeat ordinary in-order elements.
+
+Do not move a figure or other element to a later question when its vertical band overlaps an earlier question head on the same page but not the proposed owner. The Host rejects that cross-head reassignment because it usually indicates a column or reading-order mistake.
 
 additionalElementIds is an array inside one question object. excludedElementIds and endElementId are fields of the complete draft, alongside questions. Never encode an array or object as a JSON string.
 

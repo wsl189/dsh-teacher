@@ -38,6 +38,7 @@ const segmented = (): TeacherQuestionSegmentResult => ({
         left: 0,
         top: 0,
         right: 50,
+        rightLimit: 100,
         bottom: 50,
         pageWidth: 100,
         pageHeight: 100,
