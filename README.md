@@ -96,6 +96,28 @@ dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.
 
 Restart `dsh web` and hard-refresh the browser afterwards. Legacy `.doc`, `.xls`, and `.ppt` remain download-only.
 
+### Windows differences
+
+The steps below need adjustment on Windows; everything else (run from source, plugin install, MinerU, voice, Office preview) is the same as Linux.
+
+- **`~/.dsh` directory**: on Windows it is `C:\Users\<user>\.dsh`. All config paths (`cordis.patch.yml`, `integrations/dsh-qq/config.json`, `integrations/dsh-qq/workspaces.json`, `.credentials.yaml`) live under it — copy these files from the old machine when moving.
+- **`qq.outboundMediaRoots` in `cordis.patch.yml`**: use Windows absolute paths, for example:
+
+  ```yaml
+  - id: xmanrui-dsh-im
+    config:
+      qq:
+        outboundMediaRoots:
+          - C:/Users/你的用户名/Desktop
+  ```
+
+  Either `/` or `\\` separators work; the path must be absolute. When unset, the plugin falls back to `C:\Users\<user>\Desktop`.
+- **`workspaces.json`**: point the QQ bot workspace at the Windows clone path, e.g. `C:/Users/<user>/dsh-teacher`.
+- **`DSH_HOME` environment variable** (optional): default needs no override; on Windows use `set DSH_HOME=C:\...` or the system environment panel to customize the data directory.
+- **`dshHomePath` adapts automatically**: teacher-workbench storage (`segments`/`students`/`sources`/`generated`) and session storage use `dshHomePath()` and land under `C:\Users\<user>\.dsh\...` with no manual edit.
+- **Shell**: run `pnpm dsh web` etc. in PowerShell; if the execution policy blocks scripts, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
+- **MinerU and voice services**: loopback `127.0.0.1` endpoints work on Windows too; when the services run inside WSL, point `baseUrl`/`endpoint` at the WSL address instead.
+
 ### 6. Verify
 
 - Right-side better-sidebar handle appears (built-in workbench).

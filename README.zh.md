@@ -98,6 +98,28 @@ dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.
 
 安装后重启 `dsh web` 并强制刷新浏览器。旧版 `.doc`、`.xls`、`.ppt` 仍只能下载。
 
+### Windows 系统差异
+
+以下内容在 Windows 上需要调整，其余步骤（仓库运行、插件安装、MinerU、语音、Office 预览）与 Linux 一致。
+
+- **`~/.dsh` 目录**：Windows 上位于 `C:\Users\<用户名>\.dsh`。所有配置路径（`cordis.patch.yml`、`integrations/dsh-qq/config.json`、`integrations/dsh-qq/workspaces.json`、`.credentials.yaml`）都在这下面，新设备需把这些文件从旧机器复制过来。
+- **`cordis.patch.yml` 的 `qq.outboundMediaRoots`**：必须写 Windows 绝对路径，例如：
+
+  ```yaml
+  - id: xmanrui-dsh-im
+    config:
+      qq:
+        outboundMediaRoots:
+          - C:/Users/你的用户名/Desktop
+  ```
+
+  路径分隔符用 `/` 或 `\\` 均可，必须是绝对路径。若不配置此项，插件会回退到 `C:\Users\<用户名>\Desktop`（Windows 桌面）。
+- **`workspaces.json`**：QQ 机器人的工作区路径也要改成 Windows 路径，例如 `C:/Users/你的用户名/dsh-teacher`（克隆仓库的位置）。
+- **`DSH_HOME` 环境变量**（可选）：默认无需设置；如需自定义数据目录，Windows 用 `set DSH_HOME=C:\...` 或系统环境变量。
+- **`dshHomePath` 自动适配**：教师工作台的存储（`segments`/`students`/`sources`/`generated`）和会话存储用 `dshHomePath()` 生成，自动落到 `C:\Users\<用户名>\.dsh\...`，**无需手动改**。
+- **命令提示符**：PowerShell 中运行 `pnpm dsh web` 等命令即可；若提示执行策略限制，先运行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`。
+- **MinerU 与语音服务**：`baseUrl`/`endpoint` 用 `127.0.0.1` 回环地址即可（Windows 上同样支持）；这些服务若装在 WSL 里，则把地址改成 WSL 的 IP。
+
 ### 6. 验证
 
 - 右侧出现 better-sidebar 手柄（内置工作台）。
