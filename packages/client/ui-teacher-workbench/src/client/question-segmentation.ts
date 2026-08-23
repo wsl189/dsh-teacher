@@ -17,7 +17,7 @@ export type QuestionPageRegion = TeacherQuestionPageRegion
 /** One detected question and its one-or-more source page slices. */
 export type DetectedQuestion = TeacherSegmentedQuestion
 
-type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
+type MaximumQuestionWidthRatio = TeacherQuestionSegmentSuccess['value']['maxQuestionWidthRatio']
 
 /**
  * Split rendered crops into ordered save requests below a decoded-byte ceiling.
@@ -130,7 +130,7 @@ export async function readPdfPageCount(file: File): Promise<number> {
  * @param file - original browser-held PDF.
  * @param layout - normalized OCR page dimensions used for proportional mapping.
  * @param questions - reviewed detection regions in source order.
- * @param horizontalBounds - PDF-wide normalized MinerU left and right crop coordinates.
+ * @param maxQuestionWidthRatio - widest normalized MinerU question region in the PDF.
  * @param renderScale - bounded PDF.js raster scale.
  * @returns browser-produced PNG payloads ready for Host persistence.
  */
@@ -138,7 +138,7 @@ export async function renderQuestionCrops(
   file: File,
   layout: OcrLayoutDocument,
   questions: readonly DetectedQuestion[],
-  horizontalBounds: QuestionHorizontalBounds,
+  maxQuestionWidthRatio: MaximumQuestionWidthRatio,
   renderScale: number,
 ): Promise<TeacherQuestionImageUpload[]> {
   const pdfjs = await loadPdfJs()
@@ -169,8 +169,11 @@ export async function renderQuestionCrops(
         const scaleY = source.height / pageLayout.height
         const top = Math.max(0, Math.floor(region.top * scaleY))
         const bottom = Math.min(source.height, Math.ceil(region.bottom * scaleY))
-        const left = Math.max(0, Math.min(source.width - 1, Math.floor(horizontalBounds.leftRatio * source.width)))
-        const right = Math.max(left + 1, Math.min(source.width, Math.ceil(horizontalBounds.rightRatio * source.width)))
+        const left = Math.max(0, Math.min(source.width - 1, Math.floor(region.left / region.pageWidth * source.width)))
+        const right = Math.max(
+          left + 1,
+          Math.min(source.width, left + Math.ceil(maxQuestionWidthRatio * source.width)),
+        )
         return {
           source,
           left,

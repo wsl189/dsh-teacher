@@ -13,6 +13,7 @@
     - button "Agent 预设":
       - img
       - text: Agent 预设
+    - button "侧边卡片"
   - button "打开配置文件"
   - button "关闭":
     - img
@@ -43,3 +44,38 @@
   - button "排队发送":
     - text: 排队发送
     - img
+  - text: 教师工作台 教师信息、日常功能、成绩标准和试题切割参数
+  - region "基础信息":
+    - heading "基础信息" [level=3]
+    - text: 当前学年
+    - textbox "当前学年":
+      - /placeholder: "2026"
+      - text: "2026"
+    - text: 教师姓名
+    - textbox "教师姓名"
+    - text: 学校名称
+    - textbox "学校名称"
+    - text: 默认学科
+    - textbox "默认学科"
+    - text: 天气地点
+    - textbox "天气地点"
+    - text: 语音识别语言
+    - combobox "语音识别语言":
+      - option "简体中文（中国大陆）" [selected]
+      - option "繁體中文（台灣）"
+      - option "English (United States)"
+  - region "成绩标准":
+    - heading "成绩标准" [level=3]
+    - text: 满分
+    - spinbutton "满分": "100"
+    - text: 优秀线
+    - spinbutton "优秀线": "85"
+    - text: 及格线
+    - spinbutton "及格线": "60"
+  - region "试题切割":
+    - heading "试题切割" [level=3]
+    - paragraph: 清晰度倍率控制 PDF 栅格与切题图片分辨率；边距控制题目内容向四周扩展的版面范围。
+    - text: 切题清晰度倍率
+    - spinbutton "切题清晰度倍率": "2"
+    - text: 切题边距
+    - spinbutton "切题边距": "12"

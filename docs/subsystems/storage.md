@@ -294,14 +294,14 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('createQuestionMediaDirectory') createQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryCreateRequest, ): Promise<TeacherQuestionMutationResult>
 
 /**
- * Delete one physical configured-root directory and all of its descendants.
- * @param request - opaque directory target from the latest scan.
- * @returns the unchanged durable document or a stable failure.
+ * Delete one external directory or one durable question-library hierarchy.
+ * @param request - opaque directory target from the latest scan or durable state.
+ * @returns the committed or unchanged durable document, or a stable failure.
  */
 @Remote('deleteQuestionMediaDirectory') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>
 
 /**
- * Rename one physical configured-root directory or durable student hierarchy directory.
+ * Rename one external, durable student, or durable question-library directory.
  * @param request - opaque directory target and safe replacement name.
  * @returns the committed or unchanged durable document, or a stable failure.
  */

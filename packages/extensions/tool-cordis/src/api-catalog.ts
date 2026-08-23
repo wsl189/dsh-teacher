@@ -2054,13 +2054,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'deleteQuestionMediaDirectory\') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>',
-        description: 'Delete one physical configured-root directory and all of its descendants.',
-        parameters: [{ name: 'request', description: 'opaque directory target from the latest scan.' }],
-        returns: 'the unchanged durable document or a stable failure.',
+        description: 'Delete one external directory or one durable question-library hierarchy.',
+        parameters: [{ name: 'request', description: 'opaque directory target from the latest scan or durable state.' }],
+        returns: 'the committed or unchanged durable document, or a stable failure.',
       },
       {
         signature: '@Remote(\'renameQuestionMediaDirectory\') renameQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryRenameRequest, ): Promise<TeacherQuestionMutationResult>',
-        description: 'Rename one physical configured-root directory or durable student hierarchy directory.',
+        description: 'Rename one external, durable student, or durable question-library directory.',
         parameters: [{ name: 'request', description: 'opaque directory target and safe replacement name.' }],
         returns: 'the committed or unchanged durable document, or a stable failure.',
       },
@@ -5195,7 +5195,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentSuccess',
-    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly horizontalBounds: {\n            readonly leftRatio: number;\n            readonly rightRatio: number;\n        };\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
+    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly maxQuestionWidthRatio: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionStudentDocumentOptions',

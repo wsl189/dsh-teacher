@@ -27,6 +27,8 @@ import {
   persistQuestionAssignments,
   persistQuestionBatch,
   prepareDurableQuestionDirectoryRename,
+  prepareDurableQuestionLibraryDirectoryDelete,
+  prepareQuestionStateDirectories,
   readQuestionImage,
   replaceQuestionImage,
   saveTemporaryQuestionSelection,
@@ -167,7 +169,7 @@ export interface Config {
   geocodingEndpoint: string
   /** Maximum number of resolved location queries cached in memory. */
   geocodingCacheEntries: number
-  /** Root containing immutable paper batches and their cropped images. */
+  /** Root containing durable question-library directories and direct cropped-image files. */
   segmentsRoot: string
   /** Root containing grade/class/student assignment copies. */
   studentsRoot: string
@@ -351,7 +353,15 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         })
       }
       const next = snapshotDocument({ revision: current.revision + 1, state: parsed.data })
-      await global.set(next)
+      const preparedDirectories = await prepareQuestionStateDirectories(this.questionMediaConfig(), parsed.data)
+      try {
+        await global.set(next)
+      } catch (error) {
+        await preparedDirectories.rollback()
+        throw error
+      }
+      this.discoveredQuestionFiles = new Map()
+      this.discoveredQuestionDirectories = new Map()
       this.reminderRuntime.requestDrive()
       const retainedAssignments = new Set(parsed.data.questionAssignments.map(item => item.id))
       const removedAssignments = current.state.questionAssignments.filter(item => !retainedAssignments.has(item.id))
@@ -429,7 +439,13 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       if (request.appendToBatchId !== undefined && existingBatch === undefined) {
         throw new TeacherQuestionMediaError('not-found', '待追加的试卷批次不存在')
       }
-      const persisted = await persistQuestionBatch(this.questionMediaConfig(), request, Date.now(), existingBatch)
+      const persisted = await persistQuestionBatch(
+        this.questionMediaConfig(),
+        current.state,
+        request,
+        Date.now(),
+        existingBatch,
+      )
       try {
         const document = await this.commitQuestionState(state => ({
           ...state,
@@ -505,9 +521,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Delete one physical configured-root directory and all of its descendants.
-   * @param request - opaque directory target from the latest scan.
-   * @returns the unchanged durable document or a stable failure.
+   * Delete one external directory or one durable question-library hierarchy.
+   * @param request - opaque directory target from the latest scan or durable state.
+   * @returns the committed or unchanged durable document, or a stable failure.
    */
   @Remote('deleteQuestionMediaDirectory')
   deleteQuestionMediaDirectory(
@@ -515,6 +531,27 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   ): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
+      if (request.target.kind === 'library-folder'
+        && current.state.questionLibraryFolders.some(folder => folder.id === request.target.id)) {
+        const prepared = await prepareDurableQuestionLibraryDirectoryDelete(
+          this.questionMediaConfig(),
+          current.state,
+          request.target.id,
+        )
+        let document: TeacherWorkbenchDocument
+        try {
+          document = await this.commitQuestionState(() => prepared.state)
+        } catch (error) {
+          await prepared.rollback()
+          throw error
+        }
+        await prepared.commit().catch(() => {
+          // The committed state and retained batch images remain valid when removing the detached residue fails.
+        })
+        this.discoveredQuestionFiles = new Map()
+        this.discoveredQuestionDirectories = new Map()
+        return questionMutationSuccess(document)
+      }
       const durableTarget = request.target.kind === 'student'
         ? current.state.students.some(student => student.id === request.target.id)
         : request.target.kind === 'student-folder'
@@ -535,7 +572,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Rename one physical configured-root directory or durable student hierarchy directory.
+   * Rename one external, durable student, or durable question-library directory.
    * @param request - opaque directory target and safe replacement name.
    * @returns the committed or unchanged durable document, or a stable failure.
    */
@@ -549,7 +586,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         ? current.state.students.some(student => student.id === request.target.id)
         : request.target.kind === 'student-folder'
           ? current.state.questionFolders.some(folder => folder.id === request.target.id)
-          : false
+          : current.state.questionLibraryFolders.some(folder => folder.id === request.target.id)
       if (!durableTarget) {
         await renameDiscoveredQuestionDirectory(
           this.questionMediaConfig(),
@@ -658,7 +695,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         questionBatches: state.questionBatches.filter(item => item.id !== request.batchId),
         questionAssignments: state.questionAssignments.filter(item => !imageIds.has(item.sourceImageId)),
       }))
-      await deleteQuestionBatchFiles(this.questionMediaConfig(), request.batchId).catch(() => {})
+      await deleteQuestionBatchFiles(this.questionMediaConfig(), current.state, request.batchId).catch(() => {})
       await Promise.all(assignmentCopies.map(async (assignment) => {
         await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
           kind: 'assignment',

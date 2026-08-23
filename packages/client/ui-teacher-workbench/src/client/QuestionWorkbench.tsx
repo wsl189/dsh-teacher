@@ -103,9 +103,23 @@ type LibraryFolderPrompt =
   | { readonly mode: 'create'; readonly parent?: TeacherQuestionLibraryFolder }
   | { readonly mode: 'rename'; readonly folder: TeacherQuestionLibraryFolder }
 
+const LIBRARY_ROOT_KEY = 'question-library-root' as const
+
+type LibraryDirectoryKey = TeacherQuestionLibraryFolderId | typeof LIBRARY_ROOT_KEY
+
 type LibraryHierarchyRow =
-  | { readonly kind: 'folder'; readonly folder: TeacherQuestionLibraryFolder; readonly depth: number; readonly hasChildren: boolean; readonly expanded: boolean }
-  | { readonly kind: 'batch'; readonly batch: TeacherWorkbenchState['questionBatches'][number]; readonly depth: number }
+  | {
+    readonly kind: 'root'
+    readonly batches: TeacherWorkbenchState['questionBatches']
+  }
+  | {
+    readonly kind: 'folder'
+    readonly folder: TeacherQuestionLibraryFolder
+    readonly batches: TeacherWorkbenchState['questionBatches']
+    readonly depth: number
+    readonly hasChildren: boolean
+    readonly expanded: boolean
+  }
 
 interface QuestionBankSaveTarget {
   readonly studentId: TeacherStudentId
@@ -169,6 +183,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const [activeFolderId, setActiveFolderId] = useState<TeacherQuestionFolderId | ''>('')
   const [activeBatchId, setActiveBatchId] = useState<TeacherQuestionBatchId | ''>(() => state.questionBatches.at(-1)?.id ?? '')
   const [activeLibraryFolderId, setActiveLibraryFolderId] = useState<TeacherQuestionLibraryFolderId | ''>('')
+  const [activeLibraryDirectoryKey, setActiveLibraryDirectoryKey] = useState<LibraryDirectoryKey | ''>('')
   const [selectedBatchImageIds, setSelectedBatchImageIds] = useState<Set<string>>(() => new Set())
   const [selectedAssignmentIds, setSelectedAssignmentIds] = useState<Set<string>>(() => new Set())
   const [temporarySelections, setTemporarySelections] = useState<ReadonlyMap<TeacherStudentId, number>>(() => new Map())
@@ -193,6 +208,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   const [batchWordRows, setBatchWordRows] = useState<readonly BatchWordRow[]>([])
   const [batchBulkTitle, setBatchBulkTitle] = useState('')
   const [questionMedia, setQuestionMedia] = useState<TeacherQuestionMediaBrowseValue | null>(null)
+  const [questionMediaRevision, setQuestionMediaRevision] = useState(0)
 
   const refreshQuestionMedia = useCallback((): Promise<void> => {
     const current = questionMediaRefreshRef.current
@@ -203,6 +219,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       if (questionMediaFingerprintRef.current === fingerprint) return
       questionMediaFingerprintRef.current = fingerprint
       setQuestionMedia(result.value)
+      setQuestionMediaRevision(currentRevision => currentRevision + 1)
     }).finally(() => {
       questionMediaRefreshRef.current = null
     })
@@ -239,10 +256,30 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     () => new Set(questionMedia?.readOnlyFolderIds ?? []),
     [questionMedia?.readOnlyFolderIds],
   )
-
   const activeClass = classes.find(item => item.id === activeClassId)
   const activeStudent = students.find(item => item.id === activeStudentId)
   const activeBatch = questionBatches.find(item => item.id === activeBatchId)
+  const activeLibraryBatches = useMemo(() => {
+    if (activeLibraryDirectoryKey === '') return []
+    return questionBatches.filter(batch => activeLibraryDirectoryKey === LIBRARY_ROOT_KEY
+      ? batch.folderId === undefined
+      : batch.folderId === activeLibraryDirectoryKey)
+  }, [activeLibraryDirectoryKey, questionBatches])
+  const activeBatchEntries = useMemo(() => activeLibraryBatches.flatMap(batch => (
+    batch.images.map(image => ({ batch, image }))
+  )), [activeLibraryBatches])
+  const selectableBatchEntries = useMemo(
+    () => questionBankSaveTarget === null
+      ? activeBatchEntries
+      : activeBatchEntries.filter(entry => !readOnlyBatchIds.has(entry.batch.id)),
+    [activeBatchEntries, questionBankSaveTarget, readOnlyBatchIds],
+  )
+  const selectedBatchEntries = useMemo(
+    () => activeBatchEntries.filter(entry => selectedBatchImageIds.has(entry.image.id)),
+    [activeBatchEntries, selectedBatchImageIds],
+  )
+  const selectedReadOnlyBatch = questionBankSaveTarget !== null
+    && selectedBatchEntries.some(entry => readOnlyBatchIds.has(entry.batch.id))
   const classStudents = useMemo(
     () => students.filter(student => student.classId === activeClassId),
     [activeClassId, students],
@@ -269,8 +306,16 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     [classStudents, expandedHierarchy, questionFolders],
   )
   const libraryRows = useMemo(
-    () => buildQuestionLibraryRows(questionLibraryFolders, questionBatches, expandedLibraryFolders),
-    [expandedLibraryFolders, questionBatches, questionLibraryFolders],
+    () => buildQuestionLibraryRows(
+      questionLibraryFolders,
+      questionBatches,
+      expandedLibraryFolders,
+    ),
+    [
+      expandedLibraryFolders,
+      questionBatches,
+      questionLibraryFolders,
+    ],
   )
   const libraryFolderOptions = useMemo(
     () => buildQuestionLibraryFolderOptions(state.questionLibraryFolders),
@@ -369,6 +414,18 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setActiveBatchId(questionBatches.at(-1)?.id ?? '')
     setSelectedBatchImageIds(new Set())
   }, [activeBatchId, questionBatches])
+
+  useEffect(() => {
+    if (activeLibraryDirectoryKey === '') return
+    const exists = activeLibraryDirectoryKey === LIBRARY_ROOT_KEY
+      ? questionBatches.some(batch => batch.folderId === undefined && batch.images.length > 0)
+      : questionLibraryFolders.some(folder => folder.id === activeLibraryDirectoryKey)
+        && questionBatches.some(batch => batch.folderId === activeLibraryDirectoryKey && batch.images.length > 0)
+    if (exists) return
+    setActiveLibraryDirectoryKey('')
+    setBatchImagesOpen(false)
+    setSelectedBatchImageIds(new Set())
+  }, [activeLibraryDirectoryKey, questionBatches, questionLibraryFolders])
 
   useEffect(() => {
     if (activeStudentId !== '' && students.some(item => item.id === activeStudentId)) return
@@ -483,7 +540,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
           pendingPdf,
           layout,
           groupQuestions,
-          segmented.value.horizontalBounds,
+          segmented.value.maxQuestionWidthRatio,
           settings.questionRenderScale,
         )
         const parts = partitionQuestionUploads(crops, maxSaveBatchBytes)
@@ -797,6 +854,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       setExpandedLibraryFolders(current => new Set([...current].filter(id => !removed.has(id))))
       if (removed.has(activeLibraryFolderId as TeacherQuestionLibraryFolderId)) {
         setActiveLibraryFolderId(folder.parentId ?? '')
+        setActiveLibraryDirectoryKey('')
         setBatchImagesOpen(false)
       }
       if (filesystemDirectory) {
@@ -872,20 +930,25 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
-  const openBatch = (batchId: TeacherQuestionBatchId): void => {
-    if (batchImagesOpen && activeBatchId === batchId) {
+  const openLibraryDirectory = (
+    directoryKey: LibraryDirectoryKey,
+    batches: TeacherWorkbenchState['questionBatches'],
+  ): void => {
+    if (batches.length === 0) return
+    if (batchImagesOpen && activeLibraryDirectoryKey === directoryKey) {
       setBatchImagesOpen(false)
       return
     }
-    setActiveBatchId(batchId)
+    setActiveLibraryDirectoryKey(directoryKey)
+    setActiveBatchId(batches.at(-1)?.id ?? '')
     setSelectedBatchImageIds(new Set())
     setStudentImagesOpen(false)
     setBatchImagesOpen(true)
   }
 
-  const toggleLibraryFolder = (folder: TeacherQuestionLibraryFolder): void => {
+  const toggleLibraryFolder = (folder: TeacherQuestionLibraryFolder, closeBatchImages = true): void => {
     setActiveLibraryFolderId(folder.id)
-    setBatchImagesOpen(false)
+    if (closeBatchImages) setBatchImagesOpen(false)
     setExpandedLibraryFolders((current) => {
       const next = new Set(current)
       if (next.has(folder.id)) next.delete(folder.id)
@@ -894,7 +957,8 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     })
   }
 
-  const handleLibraryHierarchyClick = (folder: TeacherQuestionLibraryFolder): void => {
+  const handleLibraryHierarchyClick = (row: Extract<LibraryHierarchyRow, { kind: 'folder' }>): void => {
+    const { folder } = row
     const current = libraryHierarchyClickRef.current
     if (current.key !== folder.id) {
       if (current.timer !== null) clearTimeout(current.timer)
@@ -907,7 +971,13 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
       const count = current.count
       current.count = 0
       current.timer = null
-      if (count <= 1) toggleLibraryFolder(folder)
+      if (count <= 1) {
+        if (row.batches.length === 0) toggleLibraryFolder(folder)
+        else {
+          setActiveLibraryFolderId(folder.id)
+          openLibraryDirectory(folder.id, row.batches)
+        }
+      }
       else if (count === 2) requestLibraryFolderCreate(folder)
       else if (count >= 3) requestLibraryFolderRename(folder)
     }, HIERARCHY_CLICK_WINDOW_MS)
@@ -926,15 +996,15 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
   }
 
   const toggleAllBatchImages = (): void => {
-    if (activeBatch === undefined) return
-    setSelectedBatchImageIds(current => current.size === activeBatch.images.length
+    if (selectableBatchEntries.length === 0) return
+    setSelectedBatchImageIds(current => selectableBatchEntries.every(entry => current.has(entry.image.id))
       ? new Set()
-      : new Set(activeBatch.images.map(image => image.id)))
+      : new Set(selectableBatchEntries.map(entry => entry.image.id)))
   }
 
   const saveSelectedBatchImages = async (): Promise<void> => {
-    if (activeBatch === undefined || selectedBatchImageIds.size === 0 || busy !== null) return
-    const selectedImages = activeBatch.images.filter(image => selectedBatchImageIds.has(image.id))
+    if (selectedBatchEntries.length === 0 || selectedReadOnlyBatch || busy !== null) return
+    const selectedImages = selectedBatchEntries.map(entry => entry.image)
     if (questionBankSaveTarget === null) {
       try {
         const directory = await pickWritableDirectory(
@@ -1195,12 +1265,6 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
-  const deleteBatch = async (batchId: TeacherQuestionBatchId, name: string): Promise<void> => {
-    if (!globalThis.confirm(t('questions.confirmDeleteBatch', { name }))) return
-    const result = await commands.deleteQuestionBatch({ batchId })
-    setToast(result.ok ? t('questions.deleted') : result.error.message)
-  }
-
   const deleteImage = async (target: TeacherQuestionImageTarget): Promise<void> => {
     if (!globalThis.confirm(t('confirm.delete'))) return
     const result = await commands.deleteQuestionImage({ target })
@@ -1380,17 +1444,41 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
           </DrawerHeader>
           <div className={css.legacyFolderList}>
             {libraryRows.length === 0 && <div className={css.legacyDrawerState}>{t('questions.emptyBatch')}</div>}
-            {libraryRows.map(row => row.kind === 'folder' ? (
+            {libraryRows.map(row => row.kind === 'root' ? (
+              <div key={LIBRARY_ROOT_KEY} className={css.legacyFolderRow}>
+                <button
+                  type="button"
+                  className={activeLibraryDirectoryKey === LIBRARY_ROOT_KEY ? css.legacyFolderButtonActive : css.legacyFolderButton}
+                  aria-label={t('questions.libraryRoot')}
+                  onClick={() => {
+                    setActiveLibraryFolderId('')
+                    openLibraryDirectory(LIBRARY_ROOT_KEY, row.batches)
+                  }}
+                >
+                  <span className={css.legacyHierarchyName}>{t('questions.libraryRoot')}</span>
+                  <small>{row.batches.reduce((total, batch) => total + batch.images.length, 0)}</small>
+                </button>
+              </div>
+            ) : (
               <div key={`folder:${row.folder.id}`} className={css.legacyFolderRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
+                {row.hasChildren && (
+                  <button
+                    type="button"
+                    className={css.legacyLibraryDisclosure}
+                    aria-label={t(row.expanded ? 'questions.collapseLibraryFolder' : 'questions.expandLibraryFolder', { name: row.folder.name })}
+                    aria-expanded={row.expanded}
+                    onClick={() => { toggleLibraryFolder(row.folder, false) }}
+                  >
+                    <span aria-hidden="true">{row.expanded ? '▾' : '▸'}</span>
+                  </button>
+                )}
                 <button
                   type="button"
                   className={row.folder.id === activeLibraryFolderId ? css.legacyFolderButtonActive : css.legacyFolderButton}
-                  aria-expanded={row.expanded}
-                  aria-label={`${libraryFolderMarker(row)}${row.hasChildren ? ' ' : ''}${row.folder.name}`}
+                  aria-label={row.folder.name}
                   title={t('questions.libraryFolderClickHint')}
-                  onClick={() => { handleLibraryHierarchyClick(row.folder) }}
+                  onClick={() => { handleLibraryHierarchyClick(row) }}
                 >
-                  <span className={css.legacyHierarchyMarker} aria-hidden="true">{libraryFolderMarker(row)}</span>
                   <span className={css.legacyHierarchyName} title={row.folder.name}>{truncateLibraryName(row.folder.name)}</span>
                   <small>{libraryFolderImageCount(row.folder.id, questionLibraryFolders, questionBatches)}</small>
                 </button>
@@ -1401,60 +1489,61 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                   onClick={() => { void deleteLibraryFolder(row.folder) }}
                 ><X size={13} /></button>
               </div>
-            ) : (
-              <div key={`batch:${row.batch.id}`} className={css.legacyFolderRow} style={{ marginLeft: `${String(row.depth * 16)}px` }}>
-                <button type="button" className={row.batch.id === activeBatchId ? css.legacyFolderButtonActive : css.legacyFolderButton} aria-label={`${row.batch.name} ${String(row.batch.images.length)}`} onClick={() => { openBatch(row.batch.id) }}>
-                  <span title={row.batch.name}>{truncateLibraryName(row.batch.name)}</span><small>{row.batch.images.length}</small>
-                </button>
-                {!readOnlyBatchIds.has(row.batch.id) && (
-                  <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteBatch(row.batch.id, row.batch.name) }}><X size={13} /></button>
-                )}
-              </div>
             ))}
           </div>
         </aside>
       )}
 
-      {batchImagesOpen && activeBatch !== undefined && (
+      {batchImagesOpen && activeBatchEntries.length > 0 && (
         <aside
           className={`${css.legacyDrawer} ${css.legacyBankImages} ${classDrawerOpen ? css.legacyBankImagesBesideClass : ''}`}
           aria-label={t('questions.batchImages')}
         >
           <div className={css.legacyImagesHeader}>
-            <button type="button" onClick={toggleAllBatchImages}>{selectedBatchImageIds.size === activeBatch.images.length ? t('questions.clearAll') : t('questions.selectAll')}</button>
+            <button type="button" onClick={toggleAllBatchImages}>
+              {selectableBatchEntries.length > 0
+                && selectableBatchEntries.every(entry => selectedBatchImageIds.has(entry.image.id))
+                ? t('questions.clearAll')
+                : t('questions.selectAll')}
+            </button>
             <button
               type="button"
-              disabled={selectedBatchImageIds.size === 0 || busy !== null
-                || (questionBankSaveTarget !== null && readOnlyBatchIds.has(activeBatch.id))}
+              disabled={selectedBatchEntries.length === 0 || selectedReadOnlyBatch || busy !== null}
               onClick={() => { void saveSelectedBatchImages() }}
             >
               {questionBankSaveTarget === null ? t('questions.saveAs') : t('questions.saveGenerated')}
             </button>
           </div>
           <div className={css.legacyImageScroll}>
-            {activeBatch.images.map(image => (
-              <StoredQuestionTile
-                key={image.id}
-                target={{ kind: 'batch', id: image.id }}
-                meta={image}
-                label={t('questions.questionAlt', { number: image.questionNo })}
-                checked={selectedBatchImageIds.has(image.id)}
-                commands={commands}
-                t={t}
-                onToggle={() => { toggleBatchImage(image.id) }}
-                onOpen={() => {
-                  setEditor({
-                    target: { kind: 'batch', id: image.id },
-                    questionNo: image.questionNo,
-                    fileName: image.fileName,
-                    readOnly: readOnlyBatchIds.has(activeBatch.id),
-                  })
-                }}
-                {...(readOnlyBatchIds.has(activeBatch.id) ? {} : {
-                  onDelete: () => { void deleteImage({ kind: 'batch', id: image.id }) },
-                })}
-              />
-            ))}
+            {activeBatchEntries.map(({ batch, image }) => {
+              const readOnly = readOnlyBatchIds.has(batch.id)
+              const selectable = questionBankSaveTarget === null || !readOnly
+              return (
+                <StoredQuestionTile
+                  key={image.id}
+                  target={{ kind: 'batch', id: image.id }}
+                  meta={image}
+                  label={t('questions.questionAlt', { number: image.questionNo })}
+                  mediaRevision={questionMediaRevision}
+                  checked={selectable && selectedBatchImageIds.has(image.id)}
+                  commands={commands}
+                  t={t}
+                  selectable={selectable}
+                  onToggle={() => { if (selectable) toggleBatchImage(image.id) }}
+                  onOpen={() => {
+                    setEditor({
+                      target: { kind: 'batch', id: image.id },
+                      questionNo: image.questionNo,
+                      fileName: image.fileName,
+                      readOnly,
+                    })
+                  }}
+                  {...(readOnly ? {} : {
+                    onDelete: () => { void deleteImage({ kind: 'batch', id: image.id }) },
+                  })}
+                />
+              )
+            })}
           </div>
         </aside>
       )}
@@ -1485,6 +1574,7 @@ export function QuestionWorkbench({ state, settings, commands, t }: QuestionWork
                 temporarySaveCount={assignment.temporarySaveCount}
                 {...(assignment.lastTemporarySavedAt === undefined ? {} : { lastTemporarySavedAt: assignment.lastTemporarySavedAt })}
                 label={assignment.fileName}
+                mediaRevision={questionMediaRevision}
                 checked={!readOnlyAssignmentIds.has(assignment.id) && selectedAssignmentIds.has(assignment.id)}
                 commands={commands}
                 t={t}
@@ -1708,6 +1798,7 @@ interface StoredQuestionTileProps {
   readonly meta: Pick<TeacherQuestionImage, 'fileName' | 'mediaType' | 'width' | 'height' | 'updatedAt'>
     | Pick<TeacherQuestionAssignment, 'fileName' | 'mediaType' | 'width' | 'height' | 'updatedAt'>
   readonly label: string
+  readonly mediaRevision: number
   readonly checked: boolean
   readonly temporarySaveCount?: number
   readonly lastTemporarySavedAt?: number
@@ -1732,7 +1823,7 @@ function StoredQuestionTile(props: StoredQuestionTileProps) {
       else setLoadError(result.error.message)
     })
     return () => { active = false }
-  }, [props.commands, props.meta.updatedAt, props.target.id, props.target.kind])
+  }, [props.commands, props.mediaRevision, props.meta.updatedAt, props.target.id, props.target.kind])
   return (
     <article className={css.legacyImageItem}>
       <button type="button" className={css.legacyImageStage} aria-label={props.label} onClick={props.onOpen}>
@@ -1767,19 +1858,31 @@ function buildQuestionLibraryRows(
   expanded: ReadonlySet<TeacherQuestionLibraryFolderId>,
 ): LibraryHierarchyRow[] {
   const rows: LibraryHierarchyRow[] = []
+  const rootBatches = batches.filter(batch => batch.folderId === undefined)
+  if (rootBatches.length > 0) rows.push({ kind: 'root', batches: rootBatches })
+  const directBatches = new Map<TeacherQuestionLibraryFolderId, TeacherWorkbenchState['questionBatches'][number][]>()
+  for (const batch of batches) {
+    if (batch.folderId === undefined) continue
+    const siblings = directBatches.get(batch.folderId)
+    if (siblings === undefined) directBatches.set(batch.folderId, [batch])
+    else siblings.push(batch)
+  }
   const append = (parentId: TeacherQuestionLibraryFolderId | undefined, depth: number): void => {
     const children = folders.filter(folder => folder.parentId === parentId)
       .toSorted((left, right) => left.createdAt - right.createdAt)
     for (const folder of children) {
       const hasChildren = folders.some(candidate => candidate.parentId === folder.id)
-        || batches.some(batch => batch.folderId === folder.id)
       const isExpanded = expanded.has(folder.id)
-      rows.push({ kind: 'folder', folder, depth, hasChildren, expanded: isExpanded })
+      rows.push({
+        kind: 'folder',
+        folder,
+        batches: directBatches.get(folder.id) ?? [],
+        depth,
+        hasChildren,
+        expanded: isExpanded,
+      })
       if (isExpanded) append(folder.id, depth + 1)
     }
-    const papers = batches.filter(batch => batch.folderId === parentId)
-      .toSorted((left, right) => right.createdAt - left.createdAt)
-    for (const batch of papers) rows.push({ kind: 'batch', batch, depth })
   }
   append(undefined, 0)
   return rows
@@ -1940,11 +2043,6 @@ function truncateLibraryName(value: string): string {
   return characters.length <= LIBRARY_NAME_VISIBLE_CHARACTERS
     ? value
     : `${characters.slice(0, LIBRARY_NAME_VISIBLE_CHARACTERS).join('')}…`
-}
-
-function libraryFolderMarker(row: Extract<LibraryHierarchyRow, { kind: 'folder' }>): string {
-  if (!row.hasChildren) return ''
-  return row.expanded ? '▾' : '▸'
 }
 
 interface FolderPickedImage {

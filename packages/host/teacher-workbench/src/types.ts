@@ -433,7 +433,7 @@ export interface TeacherQuestionImage {
 export interface TeacherQuestionBatch {
   /** Stable identity. */
   readonly id: TeacherQuestionBatchId
-  /** Optional library folder containing this paper. */
+  /** Optional library directory containing this paper's direct image files. */
   readonly folderId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing batch name. */
   readonly name: string
@@ -539,7 +539,7 @@ export interface TeacherWorkbenchState {
   readonly seatingLayouts: readonly TeacherSeatingLayout[]
   /** Imported exams in creation order. */
   readonly exams: readonly TeacherExam[]
-  /** Persisted paper batches available for browsing and assignment. */
+  /** Persisted paper metadata whose image files live directly in library directories. */
   readonly questionBatches: readonly TeacherQuestionBatch[]
   /** Durable nested folders organizing paper batches. */
   readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[]
@@ -843,13 +843,8 @@ export interface TeacherQuestionSegmentSuccess {
     readonly groupCount: number
     /** Maximum decoded image bytes sent in one automatic save part. */
     readonly maxSaveBatchBytes: number
-    /** Normalized source-crop bounds shared by every question from this PDF. */
-    readonly horizontalBounds: {
-      /** Minimum MinerU question-box left edge divided by its OCR page width. */
-      readonly leftRatio: number
-      /** Maximum MinerU question-box right edge divided by its OCR page width. */
-      readonly rightRatio: number
-    }
+    /** Maximum accepted question-region width divided by its OCR page width. */
+    readonly maxQuestionWidthRatio: number
     readonly questions: readonly TeacherSegmentedQuestion[]
   }
 }
@@ -959,7 +954,7 @@ export interface TeacherQuestionImageUpload {
 export interface TeacherQuestionBatchSaveRequest {
   /** Existing paper batch that receives this bounded continuation part. */
   readonly appendToBatchId?: TeacherQuestionBatchId
-  /** Destination library folder for a new batch. */
+  /** Destination library directory for a new batch's direct image files. */
   readonly folderId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing batch name. */
   readonly name: string
@@ -1024,7 +1019,7 @@ export interface TeacherQuestionMediaBrowseValue {
   readonly classes: readonly TeacherClass[]
   /** Roster students merged with student directories found below the configured student root. */
   readonly students: readonly TeacherStudent[]
-  /** Paper directories and images found below the configured batch root. */
+  /** Paper batches and direct images found below the configured library root. */
   readonly questionBatches: readonly TeacherQuestionBatch[]
   /** Durable and filesystem-derived directories visible in the question library. */
   readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[]

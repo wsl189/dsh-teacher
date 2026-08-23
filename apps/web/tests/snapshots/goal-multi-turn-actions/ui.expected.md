@@ -22,18 +22,18 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
+- button "Context injection skill-catalog":
+  - img
+  - img
+  - text: Context injection skill-catalog
 - 'button "Think The user''s goal is: \"做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的\" — which translates to: \"Do two turns, each turn output the file structure of a random package. Note that after you finish one turn, directly output the content and stop; our system will help you open another turn, and you just do something similar.\""':
   - img
   - img
   - text: "Think The user's goal is: \"做两个turn，每个turn输出随机一个包的文件结构。注意你做完一个turn之后，直接输出内容，停止，我们的系统会帮你再开一个turn，你看着做一个类似的\" — which translates to: \"Do two turns, each turn output the file structure of a random package. Note that after you finish one turn, directly output the content and stop; our system will help you open another turn, and you just do something similar.\""
-- button "Bash Show working directory and its contents":
+- button "Ran commands · Called tools":
   - img
   - img
-  - text: Bash Show working directory and its contents
-- 'button "Tool call get_goal · {}"':
-  - img
-  - img
-  - text: "Tool call get_goal · {}"
+  - text: Ran commands · Called tools
 - 'button "Think There''s a `packages` directory. Let me look inside to see what packages are available."':
   - img
   - img
@@ -104,14 +104,10 @@
   - img
   - img
   - text: "Think The random pick returned the same package as turn 1. Since turn 1 already covered `session-reference`, it would be better to pick a different one for variety. Let me re-roll, excluding the already-covered package."
-- button "Bash Re-roll excluding the package from turn 1":
+- button "Ran commands ×2":
   - img
   - img
-  - text: Bash Re-roll excluding the package from turn 1
-- button "Bash List all files in token-meter package":
-  - img
-  - img
-  - text: Bash List all files in token-meter package
+  - text: Ran commands ×2
 - 'button "Think This is turn 2 of 2. I''ve output the file structure for `packages/llm/token-meter`. Both turns are done. I should output the content, stop, and then mark the goal as complete since both turns are finished."':
   - img
   - img
@@ -205,6 +201,9 @@
 - textbox "Message the agent"
 - button "Commands":
   - img
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

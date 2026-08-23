@@ -872,7 +872,7 @@ export interface Config {
   geocodingEndpoint: string
   /** Maximum number of resolved location queries cached in memory. */
   geocodingCacheEntries: number
-  /** Root containing immutable paper batches and their cropped images. */
+  /** Root containing durable question-library directories and direct cropped-image files. */
   segmentsRoot: string
   /** Root containing grade/class/student assignment copies. */
   studentsRoot: string
@@ -911,7 +911,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/teacher-workbench/src/index.ts:163`](../packages/host/teacher-workbench/src/index.ts)
+来源：[`packages/host/teacher-workbench/src/index.ts:165`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

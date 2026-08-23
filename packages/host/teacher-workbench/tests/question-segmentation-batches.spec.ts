@@ -112,7 +112,7 @@ describe('segmentQuestionsInBatches', () => {
     await ctx.fiber.dispose()
   })
 
-  it('publishes PDF-wide normalized horizontal crop bounds after every semantic group is merged', async () => {
+  it('publishes the maximum normalized question width after every semantic group is merged', async () => {
     const runner = vi.fn(async (_ctx: Context, groupRequest: TeacherQuestionSegmentRequest) => ({
       ok: true as const,
       value: {
@@ -138,7 +138,7 @@ describe('segmentQuestionsInBatches', () => {
       questionSegmentationBatchPages: 1,
     }, runner)
 
-    expect(result.ok && result.value.horizontalBounds).toEqual({ leftRatio: 0.05, rightRatio: 0.9 })
+    expect(result.ok && result.value.maxQuestionWidthRatio).toBe(0.7)
     expect(result.ok && result.value.questions.map(question => question.regions[0])).toMatchObject([
       { left: 30, right: 300 },
       { left: 120, right: 540 },
@@ -155,7 +155,7 @@ describe('segmentQuestionsInBatches', () => {
 
     expect(result).toMatchObject({
       ok: true,
-      value: { horizontalBounds: { leftRatio: 0, rightRatio: 1 }, questions: [] },
+      value: { maxQuestionWidthRatio: 1, questions: [] },
     })
     await ctx.fiber.dispose()
   })

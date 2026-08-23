@@ -79,9 +79,13 @@ async function harness(
   ctx.storage.mount('domain', facility)
   ctx.provide('storageDomain', facility)
   if (withSettings) await ctx.plugin(MemorySettings)
-  const fiber = config === undefined
-    ? await ctx.plugin(TeacherWorkbenchService)
-    : await ctx.plugin(TeacherWorkbenchService, config)
+  let resolvedConfig = config
+  if (resolvedConfig === undefined) {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-teacher-workbench-default-'))
+    temporaryRoots.push(root)
+    resolvedConfig = testConfig(root)
+  }
+  const fiber = await ctx.plugin(TeacherWorkbenchService, resolvedConfig)
   ctx.provide('attachments', {
     imageLimits: {
       maxImageBytes: 32 * 1024 * 1024,
@@ -110,6 +114,31 @@ async function harness(
   } as never)
   await ctx.plugin(ToolTeacherWorkbench)
   return { ctx, fiber, pool, service: ctx.teacherWorkbench }
+}
+
+function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbenchService>[1] {
+  return {
+    geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
+    geocodingCacheEntries: 16,
+    segmentsRoot: join(root, 'segments'),
+    studentsRoot: join(root, 'students'),
+    sourcesRoot: join(root, 'sources'),
+    generatedRoot: join(root, 'generated'),
+    maxSourceDocumentBytes: 8 * 1024 * 1024,
+    maxQuestionImageBytes: 1024 * 1024,
+    maxQuestionBatchBytes: 4 * 1024 * 1024,
+    maxTimetableSourceCharacters: 120_000,
+    maxTimetableEntries: 1_000,
+    timetableAgentTimeoutMs: 120_000,
+    timetableVisionAgentTimeoutMs: 45_000,
+    maxQuestionLayoutPages: 50,
+    questionSegmentationBatchPages: 20,
+    maxQuestionLayoutElements: 5_000,
+    maxQuestionSourceChunkCharacters: 18_000,
+    maxSegmentedQuestions: 300,
+    maxQuestionBoundarySubmissions: 3,
+    questionSegmentationAgentTimeoutMs: 90_000,
+  }
 }
 
 async function callTool(
@@ -579,7 +608,7 @@ describe('TeacherWorkbenchService', () => {
       value: {
         groupCount: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
-        horizontalBounds: { leftRatio: 0.1, rightRatio: 0.9 },
+        maxQuestionWidthRatio: 0.3,
         questions: [{
           questionNo: 1,
           headPageIndex: 0,
@@ -589,7 +618,7 @@ describe('TeacherWorkbenchService', () => {
           questionNo: 2,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 120, top: 120, right: 180, bottom: 240, pageWidth: 200, pageHeight: 300 }],
+          regions: [{ pageIndex: 0, left: 120, top: 0, right: 180, bottom: 120, pageWidth: 200, pageHeight: 300 }],
         }],
       },
     })
@@ -611,16 +640,16 @@ describe('TeacherWorkbenchService', () => {
       id: result.batchId,
       name: '自动切题',
       images: [
-        { questionNo: 1, mediaType: 'image/png', width: 320 },
-        { questionNo: 2, mediaType: 'image/png', width: 320 },
+        { questionNo: 1, mediaType: 'image/png', width: 120 },
+        { questionNo: 2, mediaType: 'image/png', width: 120 },
       ],
     }])
-    const firstImage = document.state.questionBatches[0]?.images[0]
-    if (firstImage === undefined) throw new Error('first segmented question image is missing')
-    const storedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: firstImage.id } })
+    const secondImage = document.state.questionBatches[0]?.images[1]
+    if (secondImage === undefined) throw new Error('second segmented question image is missing')
+    const storedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: secondImage.id } })
     if (!storedImage.ok) throw new Error(storedImage.error.message)
     const directCropStats = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))
-      .extract({ left: 160, top: 0, width: 160, height: 200 })
+      .extract({ left: 20, top: 80, width: 60, height: 80 })
       .stats()
     expect(directCropStats.channels[1]?.min).toBeLessThan(80)
     expect(directCropStats.channels[2]?.min).toBeLessThan(80)
@@ -720,6 +749,143 @@ describe('TeacherWorkbenchService', () => {
       appendToBatchId: 'missing' as TeacherQuestionBatchId,
       name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(3, '#00ff00')],
     })).toMatchObject({ ok: false, error: { code: 'not-found' } })
+  })
+
+  it('creates durable Web hierarchies on disk and saves paper images directly in the selected folder', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-direct-folder-'))
+    temporaryRoots.push(root)
+    const segmentsRoot = join(root, 'segments')
+    const studentsRoot = join(root, 'students')
+    const b = await harness(undefined, testConfig(root))
+    contexts.push(b.ctx)
+    const classId = 'class-direct-folder' as TeacherClassId
+    const studentId = 'student-direct-folder' as TeacherStudentId
+    const studentFolderId = 'student-folder-direct' as TeacherQuestionFolderId
+    const libraryFolderId = 'library-folder-direct' as TeacherQuestionLibraryFolderId
+    const nestedLibraryFolderId = 'library-folder-direct-nested' as TeacherQuestionLibraryFolderId
+    const written = await b.service.write({
+      expectedRevision: 0,
+      state: {
+        ...INITIAL_TEACHER_WORKBENCH_STATE,
+        classes: [{ id: classId, usage: 'roster', academicYear: '2026-2027', name: '高二（2）班', grade: '高二', subject: '数学' }],
+        students: [{
+          id: studentId,
+          classId,
+          name: '李同学',
+          studentNumber: '2',
+          gender: '', guardian: '', relation: '', phone: '', address: '', extras: {},
+        }],
+        questionFolders: [{
+          id: studentFolderId,
+          studentId,
+          name: '错题订正',
+          createdAt: 1,
+          updatedAt: 1,
+        }],
+        questionLibraryFolders: [{
+          id: libraryFolderId,
+          name: '高二数学',
+          createdAt: 1,
+          updatedAt: 1,
+        }, {
+          id: nestedLibraryFolderId,
+          parentId: libraryFolderId,
+          name: '几何',
+          createdAt: 2,
+          updatedAt: 2,
+        }],
+      },
+    })
+    expect(written.ok).toBe(true)
+    expect((await stat(join(studentsRoot, '2026-2027', '高二(2)班'))).isDirectory()).toBe(true)
+    expect((await stat(join(studentsRoot, '2026-2027', '高二(2)班', '李同学'))).isDirectory()).toBe(true)
+    expect((await stat(join(studentsRoot, '2026-2027', '高二(2)班', '李同学', '错题订正'))).isDirectory()).toBe(true)
+    const selectedDirectory = join(segmentsRoot, '高二数学', '几何')
+    expect((await stat(selectedDirectory)).isDirectory()).toBe(true)
+
+    const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#123456' } }).png().toBuffer()
+    const saved = await b.service.saveQuestionBatch({
+      folderId: nestedLibraryFolderId,
+      name: '期中试卷',
+      sourceName: '期中试卷.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 1,
+        fileName: '第1题.png',
+        mediaType: 'image/png',
+        width: 12,
+        height: 8,
+        contentBase64: bytes.toString('base64'),
+      }],
+    })
+    if (!saved.ok || saved.value.batchId === undefined) throw new Error('missing saved batch')
+    const batch = saved.value.document.state.questionBatches.find(item => item.id === saved.value.batchId)!
+    const storedPath = join(selectedDirectory, `${String(batch.images[0]!.id)}.png`)
+    await expect(readFile(storedPath)).resolves.toEqual(bytes)
+    await expect(stat(join(selectedDirectory, '期中试卷'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(selectedDirectory, String(batch.id)))).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const browsed = await b.service.browseQuestionMedia({})
+    if (!browsed.ok) throw new Error(browsed.error.message)
+    expect(browsed.value.questionLibraryFolders.filter(folder => folder.id === nestedLibraryFolderId)).toHaveLength(1)
+    expect(browsed.value.readOnlyLibraryFolderIds).not.toContain(nestedLibraryFolderId)
+    expect(browsed.value.questionBatches).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: batch.id, folderId: nestedLibraryFolderId, images: [expect.objectContaining({ questionNo: 1 })] }),
+    ]))
+
+    const renamed = await b.service.renameQuestionMediaDirectory({
+      target: { kind: 'library-folder', id: nestedLibraryFolderId },
+      name: '解析几何',
+    })
+    expect(renamed.ok).toBe(true)
+    if (!renamed.ok) throw new Error(renamed.error.message)
+    expect(renamed.value.document.state.questionLibraryFolders.find(item => item.id === nestedLibraryFolderId))
+      .toMatchObject({ name: '解析几何' })
+    const renamedDirectory = join(segmentsRoot, '高二数学', '解析几何')
+    const renamedStoredPath = join(renamedDirectory, `${String(batch.images[0]!.id)}.png`)
+    await expect(stat(selectedDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(renamedStoredPath)).resolves.toEqual(bytes)
+    await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: batch.images[0]!.id } }))
+      .resolves.toMatchObject({ ok: true, value: { contentBase64: bytes.toString('base64') } })
+
+    const unrelated = join(renamedDirectory, '手工图片.png')
+    await writeFile(unrelated, bytes)
+    await expect(b.service.deleteQuestionBatch({ batchId: batch.id })).resolves.toMatchObject({ ok: true })
+    await expect(stat(renamedStoredPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(readFile(unrelated)).resolves.toEqual(bytes)
+    expect((await stat(renamedDirectory)).isDirectory()).toBe(true)
+
+    const retained = await b.service.saveQuestionBatch({
+      folderId: nestedLibraryFolderId,
+      name: '月考试卷',
+      sourceName: '月考试卷.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 2,
+        fileName: '第2题.png',
+        mediaType: 'image/png',
+        width: 12,
+        height: 8,
+        contentBase64: bytes.toString('base64'),
+      }],
+    })
+    if (!retained.ok || retained.value.batchId === undefined) throw new Error('missing retained batch')
+    const retainedBatch = retained.value.document.state.questionBatches.find(item => item.id === retained.value.batchId)!
+    const retainedImage = retainedBatch.images[0]!
+    await expect(b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'library-folder', id: nestedLibraryFolderId },
+    })).resolves.toMatchObject({
+      ok: true,
+      value: { document: { state: {
+        questionLibraryFolders: [expect.objectContaining({ id: libraryFolderId })],
+        questionBatches: [expect.objectContaining({ id: retainedBatch.id, folderId: libraryFolderId })],
+      } } },
+    })
+    await expect(stat(renamedDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+    const movedImagePath = join(segmentsRoot, '高二数学', `${String(retainedImage.id)}.png`)
+    await expect(readFile(movedImagePath)).resolves.toEqual(bytes)
+    await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: retainedImage.id } }))
+      .resolves.toMatchObject({ ok: true, value: { contentBase64: bytes.toString('base64') } })
   })
 
   it('serves migrated defaults before the first durable write', async () => {
@@ -938,14 +1104,18 @@ describe('TeacherWorkbenchService', () => {
   })
 
   it('keeps queued writes usable after a storage failure and rejects disposal-time writes', async () => {
-    const b = await harness()
+    const root = await mkdtemp(join(tmpdir(), 'dsh-teacher-workbench-rollback-'))
+    temporaryRoots.push(root)
+    const b = await harness(undefined, testConfig(root))
     contexts.push(b.ctx)
     const internal = b.service as unknown as { global: { set(value: unknown): Promise<void> } }
     vi.spyOn(internal.global, 'set').mockRejectedValueOnce(new Error('disk unavailable'))
     await expect(b.service.write({ expectedRevision: 0, state: withClasses(classItem('a', 'A班')) }))
       .rejects.toThrow('disk unavailable')
+    await expect(stat(join(root, 'students', '未分学年', '高一A班'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(b.service.write({ expectedRevision: 0, state: withClasses(classItem('b', 'B班')) }))
       .resolves.toMatchObject({ ok: true, value: { revision: 1 } })
+    expect((await stat(join(root, 'students', '未分学年', '高一B班'))).isDirectory()).toBe(true)
 
     await b.fiber.dispose()
     await expect(b.service.write({ expectedRevision: 1, state: withClasses() }))

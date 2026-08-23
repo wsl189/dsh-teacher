@@ -13,6 +13,7 @@
     - button "Agent presets":
       - img
       - text: Agent presets
+    - button "Side card"
   - button "Open configuration file"
   - button "Close":
     - img
@@ -43,3 +44,38 @@
   - button "Queue":
     - text: Queue
     - img
+  - text: Teacher workbench Teacher identity, daily features, score thresholds, and question-cutting settings
+  - region "Basic information":
+    - heading "Basic information" [level=3]
+    - text: Current academic year
+    - textbox "Current academic year":
+      - /placeholder: "2026"
+      - text: "2026"
+    - text: Teacher name
+    - textbox "Teacher name"
+    - text: School name
+    - textbox "School name"
+    - text: Default subject
+    - textbox "Default subject"
+    - text: Weather location
+    - textbox "Weather location"
+    - text: Speech recognition language
+    - combobox "Speech recognition language":
+      - option "简体中文（中国大陆）" [selected]
+      - option "繁體中文（台灣）"
+      - option "English (United States)"
+  - region "Score thresholds":
+    - heading "Score thresholds" [level=3]
+    - text: Full mark
+    - spinbutton "Full mark": "100"
+    - text: Excellent score
+    - spinbutton "Excellent score": "85"
+    - text: Pass score
+    - spinbutton "Pass score": "60"
+  - region "Question cutting":
+    - heading "Question cutting" [level=3]
+    - paragraph: The quality scale controls PDF raster and crop resolution; padding expands the layout area around question content.
+    - text: Crop quality scale
+    - spinbutton "Crop quality scale": "2"
+    - text: Crop padding
+    - spinbutton "Crop padding": "12"

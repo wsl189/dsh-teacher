@@ -136,6 +136,105 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByPlaceholderText(/同类题|讲义|PPT/u)).toBeNull()
   })
 
+  it('shows each filesystem question directory once while preserving direct images and nested folders', async () => {
+    const c = commands()
+    const paperFolderId = 'filesystem-paper-folder' as TeacherQuestionLibraryFolderId
+    const paperBatchId = 'filesystem-paper-batch' as TeacherQuestionBatchId
+    const paperImageId = 'filesystem-paper-image' as TeacherQuestionImageId
+    const monthFolderId = 'filesystem-month-folder' as TeacherQuestionLibraryFolderId
+    const monthBatchId = 'filesystem-month-batch' as TeacherQuestionBatchId
+    const monthImageId = 'filesystem-month-image' as TeacherQuestionImageId
+    const nestedFolderId = 'filesystem-month-nested-folder' as TeacherQuestionLibraryFolderId
+    c.browseQuestionMedia = vi.fn(async () => ({
+      ok: true,
+      value: {
+        classes: state.classes,
+        students: state.students,
+        questionBatches: [{
+          id: paperBatchId,
+          folderId: paperFolderId,
+          name: '金考卷',
+          sourceName: '金考卷',
+          pageRange: '',
+          createdAt: 2,
+          images: [{
+            id: paperImageId,
+            questionNo: 1,
+            fileName: '金考卷_1.png',
+            mediaType: 'image/png',
+            width: 100,
+            height: 80,
+            createdAt: 2,
+            updatedAt: 2,
+          }],
+        }, {
+          id: monthBatchId,
+          folderId: monthFolderId,
+          name: '月考',
+          sourceName: '月考',
+          pageRange: '',
+          createdAt: 3,
+          images: [{
+            id: monthImageId,
+            questionNo: 2,
+            fileName: '月考_2.png',
+            mediaType: 'image/png',
+            width: 100,
+            height: 80,
+            createdAt: 3,
+            updatedAt: 3,
+          }],
+        }],
+        questionLibraryFolders: [{
+          id: paperFolderId,
+          name: '金考卷',
+          createdAt: 2,
+          updatedAt: 2,
+        }, {
+          id: monthFolderId,
+          name: '月考',
+          createdAt: 3,
+          updatedAt: 3,
+        }, {
+          id: nestedFolderId,
+          parentId: monthFolderId,
+          name: '第一次',
+          createdAt: 4,
+          updatedAt: 4,
+        }],
+        questionFolders: state.questionFolders,
+        questionAssignments: state.questionAssignments,
+        readOnlyBatchIds: [paperBatchId, monthBatchId],
+        readOnlyLibraryFolderIds: [paperFolderId, monthFolderId, nestedFolderId],
+        readOnlyAssignmentIds: [],
+        readOnlyClassIds: [],
+        readOnlyStudentIds: [],
+        readOnlyFolderIds: [],
+      },
+    } as const))
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+
+    await waitFor(() => { expect(c.browseQuestionMedia).toHaveBeenCalled() })
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
+    const library = await screen.findByRole('complementary', { name: '试题图片库' })
+    const paperFolder = within(library).getByRole('button', { name: '金考卷' })
+    expect(within(library).getAllByText('金考卷')).toHaveLength(1)
+    expect(within(library).queryByRole('button', { name: '金考卷 1' })).toBeNull()
+    expect(within(library).queryByRole('button', { name: '展开目录“金考卷”' })).toBeNull()
+
+    fireEvent.click(paperFolder)
+    const bankImages = await screen.findByRole('complementary', { name: '试题库图片' })
+    expect(await within(bankImages).findByRole('button', { name: '第 1 题' })).toBeTruthy()
+
+    fireEvent.click(within(library).getByRole('button', { name: '月考' }))
+    expect(await within(bankImages).findByRole('button', { name: '第 2 题' })).toBeTruthy()
+    if (within(library).queryByRole('button', { name: '第一次' }) === null) {
+      fireEvent.click(within(library).getByRole('button', { name: '展开目录“月考”' }))
+    }
+    expect(await within(library).findByRole('button', { name: '第一次' })).toBeTruthy()
+    expect(screen.getByRole('complementary', { name: '试题库图片' })).toBeTruthy()
+  })
+
   it('shows students discovered from the configured fourth-level directory', async () => {
     const c = commands()
     const directoryStudentId = 'filesystem-student' as TeacherStudentId
@@ -303,7 +402,7 @@ describe('QuestionWorkbench reference shell', () => {
 
     fireEvent.click(within(studentImages).getByRole('button', { name: '试题图片库' }))
     const library = await screen.findByRole('complementary', { name: '试题图片库' })
-    const externalLibraryFolder = within(library).getByRole('button', { name: /^▸ 月考/u })
+    const externalLibraryFolder = within(library).getByRole('button', { name: '月考' })
     fireEvent.click(externalLibraryFolder)
     fireEvent.click(externalLibraryFolder)
     dialog = await screen.findByRole('dialog', { name: '新建文件夹' })
@@ -315,8 +414,10 @@ describe('QuestionWorkbench reference shell', () => {
         name: '第二次',
       })
     })
-    fireEvent.click(externalLibraryFolder)
-    const externalNestedLibraryFolder = await within(library).findByRole('button', { name: /^▸ 第一次/u })
+    if (within(library).queryByRole('button', { name: '第一次' }) === null) {
+      fireEvent.click(within(library).getByRole('button', { name: '展开目录“月考”' }))
+    }
+    const externalNestedLibraryFolder = await within(library).findByRole('button', { name: '第一次' })
     fireEvent.click(externalNestedLibraryFolder)
     fireEvent.click(externalNestedLibraryFolder)
     fireEvent.click(externalNestedLibraryFolder)
@@ -329,8 +430,10 @@ describe('QuestionWorkbench reference shell', () => {
         name: '第一次月考',
       })
     })
+    expect(within(library).queryByText('套题甲')).toBeNull()
     fireEvent.click(externalNestedLibraryFolder)
-    expect(await within(library).findByRole('button', { name: '套题甲 1' })).toBeTruthy()
+    const bankImages = await screen.findByRole('complementary', { name: '试题库图片' })
+    expect(await within(bankImages).findByRole('button', { name: '第 1 题' })).toBeTruthy()
 
     vi.stubGlobal('confirm', vi.fn(() => true))
     fireEvent.click(within(nestedDirectoryFolder.parentElement!).getByRole('button', { name: '删除' }))
@@ -420,8 +523,8 @@ describe('QuestionWorkbench reference shell', () => {
     const directoryStudent = within(classDrawer).getByRole('button', { name: '实时目录学生' })
     fireEvent.click(directoryStudent)
     fireEvent.click(directoryStudent)
-    const libraryRoot = within(library).getByRole('button', { name: /^▸ 实时月考/u })
-    fireEvent.click(libraryRoot)
+    expect(within(library).getByRole('button', { name: '实时月考' })).toBeTruthy()
+    fireEvent.click(within(library).getByRole('button', { name: '展开目录“实时月考”' }))
     await act(async () => { await vi.advanceTimersByTimeAsync(260) })
     expect(within(classDrawer).getByRole('button', { name: '实时复习' })).toBeTruthy()
     expect(within(library).getByRole('button', { name: '第一次' })).toBeTruthy()
@@ -430,7 +533,7 @@ describe('QuestionWorkbench reference shell', () => {
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
     expect(within(classDrawer).queryByRole('button', { name: '实时目录学生' })).toBeNull()
     expect(within(classDrawer).queryByRole('button', { name: '实时复习' })).toBeNull()
-    expect(within(library).queryByRole('button', { name: /^▸ 实时月考/u })).toBeNull()
+    expect(within(library).queryByRole('button', { name: '实时月考' })).toBeNull()
     expect(within(library).queryByRole('button', { name: '第一次' })).toBeNull()
   })
 
@@ -455,8 +558,8 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: '新建' }))
     await waitFor(() => { expect(c.createQuestionLibraryFolder).toHaveBeenCalledWith({ name: '专题训练' }) })
 
-    const rootFolder = within(library).getByRole('button', { name: /^▸ 高考模拟/u })
-    expect(rootFolder.getAttribute('title')).toBe('单击打开，双击新建子目录，三击重命名')
+    const rootFolder = within(library).getByRole('button', { name: '高考模拟' })
+    expect(rootFolder.getAttribute('title')).toBe('单击查看图片或展开目录，双击新建子目录，三击重命名')
     expect(within(library).queryByRole('button', { name: '在“高考模拟”下新建子目录' })).toBeNull()
     fireEvent.click(rootFolder)
     fireEvent.click(rootFolder)
@@ -466,7 +569,10 @@ describe('QuestionWorkbench reference shell', () => {
     await waitFor(() => {
       expect(c.createQuestionLibraryFolder).toHaveBeenLastCalledWith({ parentId: libraryFolderId, name: '六月' })
     })
-    const nestedFolder = within(library).getByRole('button', { name: /^▸ 五月/u })
+    if (within(library).queryByRole('button', { name: '五月' }) === null) {
+      fireEvent.click(within(library).getByRole('button', { name: '展开目录“高考模拟”' }))
+    }
+    const nestedFolder = within(library).getByRole('button', { name: '五月' })
     fireEvent.click(nestedFolder)
     fireEvent.click(nestedFolder)
     fireEvent.click(nestedFolder)
@@ -483,7 +589,7 @@ describe('QuestionWorkbench reference shell', () => {
     await waitFor(() => { expect(c.deleteQuestionLibraryFolder).toHaveBeenCalledWith(libraryFolderId) })
   })
 
-  it('limits question-library folder and batch labels to seven visible characters', async () => {
+  it('limits question-library folder labels and omits batch names from the directory tree', async () => {
     const libraryState: TeacherWorkbenchState = {
       ...state,
       questionLibraryFolders: [{
@@ -502,13 +608,52 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
     const library = screen.getByRole('complementary', { name: '试题图片库' })
     expect(within(library).getByTitle('高考模拟专题训练').textContent).toBe('高考模拟专题训…')
-    expect(within(library).getByRole('button', { name: '▸ 高考模拟专题训练' }).querySelector('[aria-hidden="true"]')?.textContent).toBe('▸')
     expect(within(library).getByTitle('月考').textContent).toBe('月考')
     expect(within(library).getByRole('button', { name: '月考' })).toBeTruthy()
-    fireEvent.click(within(library).getByRole('button', { name: '▸ 高考模拟专题训练' }))
-    await waitFor(() => {
-      expect(within(library).getByTitle('2025—2026学年第二学期').textContent).toBe('2025—20…')
-    })
+    expect(within(library).queryByText('2025—20…')).toBeNull()
+    fireEvent.click(within(library).getByRole('button', { name: '高考模拟专题训练' }))
+    expect(await screen.findByRole('complementary', { name: '试题库图片' })).toBeTruthy()
+  })
+
+  it('shows every batch image directly through its physical library directory', async () => {
+    const secondBatchId = 'batch-2' as TeacherQuestionBatchId
+    const secondImageId = 'image-2' as TeacherQuestionImageId
+    const libraryState: TeacherWorkbenchState = {
+      ...state,
+      questionLibraryFolders: [{
+        id: libraryFolderId, name: '第一次', createdAt: 1, updatedAt: 1,
+      }],
+      questionBatches: [{
+        ...state.questionBatches[0]!,
+        folderId: libraryFolderId,
+        name: '数学新高考金考卷',
+      }, {
+        ...state.questionBatches[0]!,
+        id: secondBatchId,
+        folderId: libraryFolderId,
+        name: '第二份月考试卷',
+        sourceName: '第二份月考试卷.pdf',
+        images: [{
+          ...state.questionBatches[0]!.images[0]!,
+          id: secondImageId,
+          questionNo: 2,
+          fileName: '第2题.png',
+        }],
+      }],
+    }
+    render(<QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={commands()} t={t} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
+    const library = screen.getByRole('complementary', { name: '试题图片库' })
+    const folder = within(library).getByRole('button', { name: '第一次' })
+    expect(folder.textContent).toContain('2')
+    expect(within(library).queryByText('数学新高考金考卷')).toBeNull()
+    expect(within(library).queryByText('第二份月考试卷')).toBeNull()
+
+    fireEvent.click(folder)
+    const images = await screen.findByRole('complementary', { name: '试题库图片' })
+    expect(within(images).getByRole('button', { name: '第 1 题' })).toBeTruthy()
+    expect(within(images).getByRole('button', { name: '第 2 题' })).toBeTruthy()
   })
 
   it('offers existing nested library directories after a PDF is uploaded', async () => {
@@ -564,8 +709,8 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByRole('complementary', { name: '试题库图片' })).toBeNull()
     expect(screen.queryByLabelText('学生图片')).toBeNull()
 
-    const batch = screen.getByRole('button', { name: /^期中试卷/u })
-    fireEvent.click(batch)
+    const rootDirectory = screen.getByRole('button', { name: '试题图片库根目录' })
+    fireEvent.click(rootDirectory)
     const bankImages = screen.getByRole('complementary', { name: '试题库图片' })
     expect(screen.queryByLabelText('学生图片')).toBeNull()
     fireEvent.click(within(bankImages).getByLabelText('选择'))
@@ -574,7 +719,7 @@ describe('QuestionWorkbench reference shell', () => {
       expect(c.assignQuestions).toHaveBeenCalledWith({ studentId, imageIds: [imageId] })
     })
 
-    fireEvent.click(batch)
+    fireEvent.click(rootDirectory)
     expect(screen.queryByRole('complementary', { name: '试题库图片' })).toBeNull()
   })
 
@@ -593,7 +738,7 @@ describe('QuestionWorkbench reference shell', () => {
     render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '试题图片库' }))
-    fireEvent.click(screen.getByRole('button', { name: /^期中试卷/u }))
+    fireEvent.click(screen.getByRole('button', { name: '试题图片库根目录' }))
     const bankImages = screen.getByRole('complementary', { name: '试题库图片' })
     fireEvent.click(within(bankImages).getByLabelText('选择'))
     fireEvent.click(within(bankImages).getByRole('button', { name: '另存为' }))

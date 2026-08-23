@@ -1234,11 +1234,9 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   ): Promise<TeacherWorkbenchActionResult> {
     const name = value.trim()
     if (name === '') return Promise.resolve({ ok: false, error: { code: 'invalid-state', message: '目录名不能为空' } })
-    return this.mutate(state => ({
-      ...state,
-      questionLibraryFolders: state.questionLibraryFolders.map(folder => folder.id === id
-        ? { ...folder, name, updatedAt: this.now() }
-        : folder),
+    return this.questionMutation(() => this.remote.renameQuestionMediaDirectory({
+      target: { kind: 'library-folder', id },
+      name,
     }))
   }
 
@@ -1248,18 +1246,9 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
    * @returns the settled persistence result.
    */
   deleteQuestionLibraryFolder(id: TeacherQuestionLibraryFolderId): Promise<TeacherWorkbenchActionResult> {
-    return this.mutate((state) => {
-      const root = state.questionLibraryFolders.find(folder => folder.id === id)
-      if (root === undefined) return state
-      const removed = questionLibraryFolderDescendants(state.questionLibraryFolders, id)
-      return {
-        ...state,
-        questionLibraryFolders: state.questionLibraryFolders.filter(folder => !removed.has(folder.id)),
-        questionBatches: state.questionBatches.map(batch => batch.folderId !== undefined && removed.has(batch.folderId)
-          ? root.parentId === undefined ? omitQuestionBatchFolder(batch) : { ...batch, folderId: root.parentId }
-          : batch),
-      }
-    })
+    return this.questionMutation(() => this.remote.deleteQuestionMediaDirectory({
+      target: { kind: 'library-folder', id },
+    }))
   }
 
   /**
@@ -1597,30 +1586,6 @@ function upsert<T extends { id: string }>(items: readonly T[], item: T): T[] {
   const next = [...items]
   next[index] = item
   return next
-}
-
-function questionLibraryFolderDescendants(
-  folders: readonly TeacherQuestionLibraryFolder[],
-  rootId: TeacherQuestionLibraryFolderId,
-): Set<TeacherQuestionLibraryFolderId> {
-  const removed = new Set<TeacherQuestionLibraryFolderId>([rootId])
-  let changed = true
-  while (changed) {
-    changed = false
-    for (const folder of folders) {
-      if (folder.parentId === undefined || !removed.has(folder.parentId) || removed.has(folder.id)) continue
-      removed.add(folder.id)
-      changed = true
-    }
-  }
-  return removed
-}
-
-function omitQuestionBatchFolder(
-  batch: TeacherWorkbenchState['questionBatches'][number],
-): TeacherWorkbenchState['questionBatches'][number] {
-  const { folderId: _folderId, ...rootBatch } = batch
-  return rootBatch
 }
 
 function resolveReminder(

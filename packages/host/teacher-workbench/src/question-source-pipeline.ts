@@ -17,7 +17,7 @@ import type {
   TeacherWorkbenchSourceId,
 } from './types.ts'
 
-type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
+type MaximumQuestionWidthRatio = TeacherQuestionSegmentSuccess['value']['maxQuestionWidthRatio']
 
 /** One complete agent-driven question-cutting request. */
 export interface StagedQuestionSegmentationRequest {
@@ -94,7 +94,7 @@ export async function segmentStagedQuestionPdf(
     bytes,
     pages,
     segmented.value.questions,
-    segmented.value.horizontalBounds,
+    segmented.value.maxQuestionWidthRatio,
     signal,
   )
   if (uploads.length === 0) throw new Error('question segmentation returned no images')
@@ -174,7 +174,7 @@ async function renderQuestionUploads(
   bytes: Uint8Array,
   pages: readonly TeacherQuestionLayoutPage[],
   questions: readonly TeacherSegmentedQuestion[],
-  horizontalBounds: QuestionHorizontalBounds,
+  maxQuestionWidthRatio: MaximumQuestionWidthRatio,
   signal: AbortSignal,
 ): Promise<TeacherQuestionImageUpload[]> {
   const pageLayouts = new Map(pages.map(page => [page.pageIndex, page] as const))
@@ -213,8 +213,11 @@ async function renderQuestionUploads(
         if (page === undefined || layout === undefined) throw new Error('rendered PDF page is missing')
         const top = Math.max(0, Math.floor(region.top * page.height / layout.height))
         const bottom = Math.min(page.height, Math.ceil(region.bottom * page.height / layout.height))
-        const left = Math.max(0, Math.min(page.width - 1, Math.floor(horizontalBounds.leftRatio * page.width)))
-        const right = Math.max(left + 1, Math.min(page.width, Math.ceil(horizontalBounds.rightRatio * page.width)))
+        const left = Math.max(0, Math.min(page.width - 1, Math.floor(region.left / region.pageWidth * page.width)))
+        const right = Math.max(
+          left + 1,
+          Math.min(page.width, left + Math.ceil(maxQuestionWidthRatio * page.width)),
+        )
         const width = Math.max(1, right - left)
         const height = Math.max(1, bottom - top)
         const cropped = await sharp(page.png).extract({ left, top, width, height }).png().toBuffer()

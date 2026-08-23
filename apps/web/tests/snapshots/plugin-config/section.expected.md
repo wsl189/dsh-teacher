@@ -13,6 +13,7 @@
     - button "Agent 预设":
       - img
       - text: Agent 预设
+    - button "侧边卡片"
   - button "打开配置文件"
   - button "关闭":
     - img
@@ -35,4 +36,12 @@
       - listitem:
         - 'button "展开设置: 网页搜索"':
           - text: 网页搜索 DeepSeek 搜索提供方。
+          - img
+      - listitem:
+        - 'button "展开设置: 文档提取"':
+          - text: 文档提取 用于可复用文档解析的自托管 MinerU 提取器。
+          - img
+      - listitem:
+        - 'button "展开设置: 试题切割工作区"':
+          - text: 试题切割工作区 设置切题试卷和学生试题副本的存储策略。
           - img

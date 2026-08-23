@@ -10,7 +10,6 @@ import type {
   TeacherQuestionLayoutPage,
   TeacherQuestionSegmentRequest,
   TeacherQuestionSegmentResult,
-  TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
 } from './types.ts'
 
@@ -38,15 +37,10 @@ type SegmentationRunner = (
   config: TeacherQuestionSegmentationAgentConfig,
 ) => Promise<TeacherQuestionSegmentationAgentResult>
 
-type QuestionHorizontalBounds = TeacherQuestionSegmentSuccess['value']['horizontalBounds']
-
-function questionHorizontalBounds(questions: readonly TeacherSegmentedQuestion[]): QuestionHorizontalBounds {
+function maxQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): number {
   const regions = questions.flatMap(question => question.regions)
-  if (regions.length === 0) return { leftRatio: 0, rightRatio: 1 }
-  return {
-    leftRatio: Math.min(...regions.map(region => region.left / region.pageWidth)),
-    rightRatio: Math.max(...regions.map(region => region.right / region.pageWidth)),
-  }
+  if (regions.length === 0) return 1
+  return Math.max(...regions.map(region => (region.right - region.left) / region.pageWidth))
 }
 
 /**
@@ -142,7 +136,7 @@ export async function segmentQuestionsInBatches(
     value: {
       groupCount: groups.length,
       maxSaveBatchBytes: config.maxQuestionBatchBytes,
-      horizontalBounds: questionHorizontalBounds(numberedQuestions),
+      maxQuestionWidthRatio: maxQuestionWidthRatio(numberedQuestions),
       questions: numberedQuestions,
     },
   }

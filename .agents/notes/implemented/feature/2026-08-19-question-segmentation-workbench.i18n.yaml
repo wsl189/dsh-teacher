@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-19-question-segmentation-workbench.md
-2026-08-19-question-segmentation-workbench.md: f6162d598333ed00b7734a8283285bcf28ea50ea
-2026-08-19-question-segmentation-workbench.zh.md: 2f8275945ceb9d1a2c988961fcdc48a931e99bc6
+2026-08-19-question-segmentation-workbench.md: c1f6a3312a9a7bd6859359fcad4eeb976954c14c
+2026-08-19-question-segmentation-workbench.zh.md: 21c94afb4f5fdf09ae757b85fd90deb163bf4ded

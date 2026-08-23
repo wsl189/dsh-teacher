@@ -67,7 +67,7 @@ describe('partitionQuestionUploads', () => {
 })
 
 describe('renderQuestionCrops', () => {
-  it('directly crops every question between the PDF-wide MinerU horizontal bounds', async () => {
+  it('keeps each question left edge and applies the PDF-wide maximum question width', async () => {
     const canvases: Array<{
       width: number
       height: number
@@ -114,28 +114,28 @@ describe('renderQuestionCrops', () => {
       questionNo: 1,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 10, top: 10, right: 60, bottom: 30, pageWidth: 100, pageHeight: 100 }],
+      regions: [{ pageIndex: 0, left: 5, top: 10, right: 45, bottom: 30, pageWidth: 100, pageHeight: 100 }],
     }, {
       questionNo: 2,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 40, top: 40, right: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
+      regions: [{ pageIndex: 0, left: 55, top: 40, right: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
     }]
 
     const uploads = await renderQuestionCrops(
       file,
       layout,
       questions,
-      { leftRatio: 0.1, rightRatio: 0.9 },
+      0.4,
       1,
     )
 
-    expect(uploads.map(upload => [upload.width, upload.height])).toEqual([[80, 20], [80, 20]])
+    expect(uploads.map(upload => [upload.width, upload.height])).toEqual([[40, 20], [40, 20]])
     expect(canvases[1]?.context.drawImage).toHaveBeenCalledWith(
-      canvases[0], 10, 10, 80, 20, 0, 0, 80, 20,
+      canvases[0], 5, 10, 40, 20, 0, 0, 40, 20,
     )
     expect(canvases[2]?.context.drawImage).toHaveBeenCalledWith(
-      canvases[0], 10, 40, 80, 20, 0, 0, 80, 20,
+      canvases[0], 55, 40, 40, 20, 0, 0, 40, 20,
     )
     expect(pdfMocks.destroy).toHaveBeenCalledOnce()
   })

@@ -4400,6 +4400,28 @@
   color: var(--legacy-muted);
 }
 
+.legacyLibraryDisclosure {
+  position: absolute;
+  top: 50%;
+  left: 10px;
+  z-index: 3;
+  display: inline-flex;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  transform: translateY(-50%);
+  align-items: center;
+  justify-content: center;
+  border-color: transparent !important;
+  background: transparent !important;
+  color: var(--legacy-muted);
+}
+
+.legacyQuestionShell .legacyLibraryDisclosure:hover:not(:disabled),
+.legacyQuestionShell .legacyLibraryDisclosure:focus-visible:not(:disabled) {
+  transform: translateY(-50%);
+}
+
 .legacyHierarchyName {
   display: block;
   overflow: hidden;

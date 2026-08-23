@@ -1,10 +1,9 @@
 - banner:
   - navigation "Session hierarchy":
-    - button "Ask a research subagent to"
+    - button "Ask a research subagent to" [disabled]
     - text: /
-    - 'button "Switch subagent: event-sourcing researcher"': event-sourcing researcher
-    - button "1 subagent":
-      - text: 1 subagent
+    - button "3 subagents" [expanded]:
+      - text: 3 subagents
       - img
   - img
   - text: Standard mode
@@ -14,29 +13,17 @@
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
-- text: Explain event sourcing in one sentence. {{clock}}
+- text: Ask a research subagent to explain event sourcing. {{clock}}
 - button "Copy":
   - img
 - button "Context injection @deepseek-ai/dsh-system-prompt":
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Think The user is asking for a one-sentence description of event sourcing. This is a straightforward knowledge question that doesn't require any skill loading or tool calls.":
+- button "Context injection skill-catalog":
   - img
   - img
-  - text: Think The user is asking for a one-sentence description of event sourcing. This is a straightforward knowledge question that doesn't require any skill loading or tool calls.
-- paragraph: Event sourcing is a pattern where all changes to an application's state are stored as an immutable, append-only sequence of events, rather than persisting only the current state, enabling full auditability, temporal queries, and event-driven architectures.
-- button "Copy":
-  - img
-- button "Good response":
-  - img
-- button "Bad response":
-  - img
-- button "Branch into a new conversation":
-  - img
-- text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s Now give the same explanation to a human reader. {{clock}}
-- button "Copy":
-  - img
+  - text: Context injection skill-catalog
 - button "Think The user is asking for a one-sentence description of event sourcing. This is a straightforward knowledge question that doesn't require any skill loading or tool calls.":
   - img
   - img
@@ -51,10 +38,29 @@
 - button "Branch into a new conversation":
   - img
 - text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
+- button "Context injection subagent-settled Background subagent {{uuid}} finished and will do no further work unless you send it more.":
+  - img
+  - img
+  - text: Context injection subagent-settled Background subagent {{uuid}} finished and will do no further work unless you send it more.
+- status:
+  - text: "This turn failedllm-replay: script exhausted — session requested model call #2 but its script has only 1; re-record the scenario"
+  - code: UNKNOWN
+- text: Now give the same explanation to a human reader. {{clock}}
+- button "Copy":
+  - img
+- status:
+  - text: "This turn failedllm-replay: script exhausted — session requested model call #3 but its script has only 1; re-record the scenario"
+  - code: UNKNOWN
 - textbox "Message the agent"
 - button "Commands":
   - img
-- 'button "Access mode, current: Custom"': Custom
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Select model, current DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
 - button "6% of context used"
 - button "Send message" [disabled]
-- text: 2 turns · 2 steps LLM {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 99% Input 15.6K tok · Output 158 tok
+- text: 3 turns · 3 steps LLM {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 99% Input 7.8K tok · Output 79 tok

@@ -1,7 +1,7 @@
 /** Filesystem and Office-artifact operations for teacher question images. */
 
 import { randomUUID } from 'node:crypto'
-import { copyFile, lstat, mkdir, readFile, rename, rm, unlink, writeFile } from 'node:fs/promises'
+import { copyFile, lstat, mkdir, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
 import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   AlignmentType,
@@ -26,6 +26,7 @@ import type {
   TeacherQuestionDocumentRequest,
   TeacherQuestionDocumentSkipped,
   TeacherQuestionFolderId,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionImage,
   TeacherQuestionImageId,
   TeacherQuestionImageMediaType,
@@ -43,7 +44,7 @@ import type {
 
 /** Live storage settings sampled once per operation. */
 export interface TeacherQuestionMediaConfig {
-  /** Absolute or process-relative paper-batch root. */
+  /** Absolute or process-relative question-library root. */
   readonly segmentsRoot: string
   /** Absolute or process-relative student hierarchy root. */
   readonly studentsRoot: string
@@ -77,6 +78,22 @@ export interface PreparedQuestionDirectoryRename {
   /** Complete state carrying the renamed student or nested folder and updated image paths. */
   readonly state: TeacherWorkbenchState
   /** Restore the physical directory when the durable state commit fails. */
+  rollback(): Promise<void>
+}
+
+/** Durable library deletion prepared together with reversible image moves. */
+export interface PreparedQuestionLibraryDirectoryDelete {
+  /** Complete state with the hierarchy removed and affected batches moved to its parent. */
+  readonly state: TeacherWorkbenchState
+  /** Permanently remove the detached directory after the durable state commits. */
+  commit(): Promise<void>
+  /** Restore the directory and every moved image when the durable state commit fails. */
+  rollback(): Promise<void>
+}
+
+/** Physical directory additions prepared before the durable document commits. */
+export interface PreparedQuestionDirectories {
+  /** Remove only still-empty directories created by this operation. */
   rollback(): Promise<void>
 }
 
@@ -149,6 +166,119 @@ export function validateQuestionDirectoryName(value: string): string {
 }
 
 /**
+ * Materialize every durable roster and question-library directory before a document write commits.
+ * @param config - current student and question-library roots.
+ * @param state - validated replacement state whose directory hierarchy must exist.
+ * @returns rollback for directories created by this operation and still empty at rollback time.
+ */
+export async function prepareQuestionStateDirectories(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+): Promise<PreparedQuestionDirectories> {
+  const targets: { readonly root: string; readonly label: string; readonly relativePath: string }[] = []
+  const classes = new Map(state.classes.map(item => [item.id, item] as const))
+  for (const item of state.classes) {
+    if (item.usage === 'roster') {
+      targets.push({ root: config.studentsRoot, label: '学生目录', relativePath: studentClassDirectory(item) })
+    }
+  }
+  for (const student of state.students) {
+    const owningClass = classes.get(student.classId)
+    if (owningClass?.usage !== 'roster') continue
+    targets.push({
+      root: config.studentsRoot,
+      label: '学生目录',
+      relativePath: studentQuestionDirectory(state, owningClass, student),
+    })
+  }
+  for (const folder of state.questionFolders) {
+    const student = state.students.find(item => item.id === folder.studentId)
+    const owningClass = student === undefined ? undefined : classes.get(student.classId)
+    if (student === undefined || owningClass?.usage !== 'roster') continue
+    targets.push({
+      root: config.studentsRoot,
+      label: '学生目录',
+      relativePath: studentQuestionDirectory(state, owningClass, student, folder.id),
+    })
+  }
+  for (const folder of state.questionLibraryFolders) {
+    targets.push({
+      root: config.segmentsRoot,
+      label: '试题切割目录',
+      relativePath: questionLibraryDirectory(state, folder.id),
+    })
+  }
+
+  const targetByPath = new Map<string, typeof targets[number]>()
+  for (const target of targets) {
+    const key = `${configuredRoot(target.root, target.label)}\0${normalizeStoredPath(target.relativePath)}`
+    if (targetByPath.has(key)) {
+      throw new TeacherQuestionMediaError('invalid-request', '目录名称在磁盘上重复')
+    }
+    targetByPath.set(key, target)
+  }
+  const uniqueTargets = [...targetByPath.values()].sort((left, right) => (
+    left.relativePath.split(sep).length - right.relativePath.split(sep).length
+  ))
+  const created: string[] = []
+  const rollback = async (): Promise<void> => { await removeCreatedQuestionDirectories(created) }
+  try {
+    const roots = new Map<string, string>()
+    const physicalTargets = new Set<string>()
+    for (const target of uniqueTargets) {
+      const configured = configuredRoot(target.root, target.label)
+      let root = roots.get(configured)
+      if (root === undefined) {
+        await mkdir(configured, { recursive: true })
+        root = await realpath(configured)
+        roots.set(configured, root)
+      }
+      const materialized = await materializeQuestionDirectory(root, target.relativePath, created)
+      const physicalTarget = await realpath(materialized)
+      if (physicalTargets.has(physicalTarget)) {
+        throw new TeacherQuestionMediaError('invalid-request', '目录名称在磁盘上重复')
+      }
+      physicalTargets.add(physicalTarget)
+    }
+    return { rollback }
+  } catch (error) {
+    await rollback()
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('storage-failure', '创建工作台目录失败', { cause: error })
+  }
+}
+
+async function materializeQuestionDirectory(
+  root: string,
+  relativePath: string,
+  created: string[] = [],
+): Promise<string> {
+  let current = root
+  for (const segment of relativePath.split(sep).filter(Boolean)) {
+    current = within(root, join(relative(root, current), segment))
+    try {
+      const entry = await lstat(current)
+      if (entry.isSymbolicLink() || !entry.isDirectory()) {
+        throw new TeacherQuestionMediaError('invalid-request', '目标路径不是普通目录')
+      }
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+      await mkdir(current)
+      created.push(current)
+    }
+  }
+  return current
+}
+
+async function removeCreatedQuestionDirectories(paths: readonly string[]): Promise<void> {
+  for (const path of paths.toReversed()) {
+    await rmdir(path).catch((error: unknown) => {
+      if (!isNodeError(error) || !['ENOENT', 'ENOTEMPTY', 'EEXIST'].includes(error.code ?? '')) throw error
+    })
+  }
+}
+
+/**
  * Prepare a durable student or nested-folder rename and move its physical directory when present.
  * @param config - current student storage root.
  * @param state - authoritative roster, folder, and assignment metadata.
@@ -164,10 +294,10 @@ export async function prepareDurableQuestionDirectoryRename(
   now: number,
   physicalDirectory?: string,
 ): Promise<PreparedQuestionDirectoryRename> {
-  if (request.target.kind === 'library-folder') {
-    throw new TeacherQuestionMediaError('invalid-request', '试题库持久目录应由工作区状态重命名')
-  }
   const name = validateQuestionDirectoryName(request.name)
+  if (request.target.kind === 'library-folder') {
+    return prepareDurableLibraryDirectoryRename(config, state, request.target.id, name, now, physicalDirectory)
+  }
   const root = configuredRoot(config.studentsRoot, '学生目录')
   const studentId = request.target.kind === 'student' ? request.target.id : state.questionFolders.find(
     folder => folder.id === request.target.id,
@@ -245,6 +375,153 @@ export async function prepareDurableQuestionDirectoryRename(
   }
 }
 
+async function prepareDurableLibraryDirectoryRename(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+  folderId: TeacherQuestionLibraryFolderId,
+  name: string,
+  now: number,
+  physicalDirectory?: string,
+): Promise<PreparedQuestionDirectoryRename> {
+  const folder = state.questionLibraryFolders.find(item => item.id === folderId)
+  if (folder === undefined) throw new TeacherQuestionMediaError('not-found', '试题库目录不存在')
+  const root = configuredRoot(config.segmentsRoot, '试题切割目录')
+  const oldDirectory = physicalDirectory === undefined
+    ? questionLibraryDirectory(state, folder.id)
+    : relative(root, physicalDirectory)
+  const renamedState: TeacherWorkbenchState = {
+    ...state,
+    questionLibraryFolders: state.questionLibraryFolders.map(item => item.id === folder.id
+      ? { ...item, name, updatedAt: now }
+      : item),
+  }
+  const newDirectory = physicalDirectory === undefined
+    ? questionLibraryDirectory(renamedState, folder.id)
+    : join(dirname(oldDirectory), questionMediaPathSegment(name))
+  const source = within(root, oldDirectory)
+  const destination = within(root, newDirectory)
+  if (source === destination) return { state: renamedState, rollback: async () => {} }
+  try {
+    const entry = await lstat(source)
+    if (entry.isSymbolicLink() || !entry.isDirectory()) {
+      throw new TeacherQuestionMediaError('invalid-request', '目标路径不是普通目录')
+    }
+    await mkdir(dirname(destination), { recursive: true })
+    await assertDirectoryMissing(destination)
+    await rename(source, destination)
+    return {
+      state: renamedState,
+      rollback: async () => { await rename(destination, source) },
+    }
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') {
+      try {
+        await assertDirectoryMissing(destination)
+        await mkdir(destination, { recursive: true })
+        return {
+          state: renamedState,
+          rollback: async () => {
+            await rmdir(destination).catch((rollbackError: unknown) => {
+              if (!isNodeError(rollbackError) || !['ENOENT', 'ENOTEMPTY'].includes(rollbackError.code ?? '')) {
+                throw rollbackError
+              }
+            })
+          },
+        }
+      } catch (createError) {
+        throw new TeacherQuestionMediaError('storage-failure', '重命名试题库目录失败', { cause: createError })
+      }
+    }
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('storage-failure', '重命名试题库目录失败', { cause: error })
+  }
+}
+
+/**
+ * Prepare a durable question-library deletion without breaking batches retained at its parent.
+ * @param config - current question-library root.
+ * @param state - authoritative folder and batch metadata.
+ * @param folderId - root of the folder hierarchy to delete.
+ * @returns updated state plus commit and rollback operations for its physical directory.
+ */
+export async function prepareDurableQuestionLibraryDirectoryDelete(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+  folderId: TeacherQuestionLibraryFolderId,
+): Promise<PreparedQuestionLibraryDirectoryDelete> {
+  const folder = state.questionLibraryFolders.find(item => item.id === folderId)
+  if (folder === undefined) throw new TeacherQuestionMediaError('not-found', '试题库目录不存在')
+  const removed = new Set<TeacherQuestionLibraryFolderId>([folder.id])
+  let changed = true
+  while (changed) {
+    changed = false
+    for (const candidate of state.questionLibraryFolders) {
+      if (candidate.parentId === undefined || !removed.has(candidate.parentId) || removed.has(candidate.id)) continue
+      removed.add(candidate.id)
+      changed = true
+    }
+  }
+  const nextState: TeacherWorkbenchState = {
+    ...state,
+    questionLibraryFolders: state.questionLibraryFolders.filter(item => !removed.has(item.id)),
+    questionBatches: state.questionBatches.map((batch) => {
+      if (batch.folderId === undefined || !removed.has(batch.folderId)) return batch
+      if (folder.parentId === undefined) {
+        const { folderId: _folderId, ...atRoot } = batch
+        return atRoot
+      }
+      return { ...batch, folderId: folder.parentId }
+    }),
+  }
+  const root = configuredRoot(config.segmentsRoot, '试题切割目录')
+  const sourceDirectory = within(root, questionLibraryDirectory(state, folder.id))
+  const destinationDirectory = within(root, questionLibraryDirectory(state, folder.parentId))
+  const backupDirectory = within(root, `.deleted-${String(folder.id)}-${randomUUID()}`)
+  const moved: { readonly source: string; readonly destination: string }[] = []
+  let detached = false
+  const restore = async (): Promise<void> => {
+    if (detached) await rename(backupDirectory, sourceDirectory)
+    for (const item of moved.toReversed()) await rename(item.destination, item.source)
+  }
+  try {
+    await mkdir(destinationDirectory, { recursive: true })
+    for (const batch of state.questionBatches) {
+      if (batch.folderId === undefined || !removed.has(batch.folderId)) continue
+      const batchDirectory = within(root, questionLibraryDirectory(state, batch.folderId))
+      for (const image of batch.images) {
+        const storedName = storedImageName(String(image.id), image.mediaType)
+        const source = within(batchDirectory, storedName)
+        const destination = within(destinationDirectory, storedName)
+        await assertFileMissing(destination)
+        await rename(source, destination)
+        moved.push({ source, destination })
+      }
+    }
+    try {
+      const entry = await lstat(sourceDirectory)
+      if (entry.isSymbolicLink() || !entry.isDirectory()) {
+        throw new TeacherQuestionMediaError('invalid-request', '目标路径不是普通目录')
+      }
+      await assertDirectoryMissing(backupDirectory)
+      await rename(sourceDirectory, backupDirectory)
+      detached = true
+    } catch (error) {
+      if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+    }
+  } catch (error) {
+    await restore().catch(() => {
+      // Preserve the preparation failure when restoring a concurrently changed directory also fails.
+    })
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('storage-failure', '删除试题库目录失败', { cause: error })
+  }
+  return {
+    state: nextState,
+    commit: async () => { await rm(backupDirectory, { recursive: true, force: true }) },
+    rollback: restore,
+  }
+}
+
 async function assertDirectoryMissing(path: string): Promise<void> {
   try {
     await lstat(path)
@@ -262,6 +539,7 @@ function normalizeStoredPath(value: string): string {
 /**
  * Validate and atomically materialize one bounded question-batch part.
  * @param config - current media roots and decoded-byte limits.
+ * @param state - authoritative library folders used to resolve the selected physical directory.
  * @param request - batch metadata and ordered raster payloads.
  * @param now - shared creation timestamp for the batch and its images.
  * @param existingBatch - existing logical paper that receives a continuation part.
@@ -269,6 +547,7 @@ function normalizeStoredPath(value: string): string {
  */
 export async function persistQuestionBatch(
   config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
   request: TeacherQuestionBatchSaveRequest,
   now: number,
   existingBatch?: TeacherQuestionBatch,
@@ -302,8 +581,6 @@ export async function persistQuestionBatch(
   const batchId = existingBatch?.id ?? randomUUID() as TeacherQuestionBatchId
   const folderId = existingBatch?.folderId ?? request.folderId
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
-  const temporary = within(root, `.pending-${String(batchId)}-${randomUUID()}`)
-  const finalDir = within(root, String(batchId))
   const images: TeacherQuestionImage[] = request.images.map((upload, index) => {
     const image = decoded[index]
     if (image === undefined) throw new TeacherQuestionMediaError('storage-failure', '切题图片准备不完整')
@@ -318,30 +595,39 @@ export async function persistQuestionBatch(
       updatedAt: now,
     }
   })
-  const appendedPaths: string[] = []
+  const createdPaths: string[] = []
+  const createdDirectories: string[] = []
+  let temporary = within(root, `.pending-${String(batchId)}-${randomUUID()}`)
+  const rollback = async (): Promise<void> => {
+    await removeQuestionFiles(createdPaths)
+    await removeCreatedQuestionDirectories(createdDirectories)
+  }
   try {
+    await mkdir(root, { recursive: true })
+    const physicalRoot = await realpath(root)
+    const destinationDirectory = await materializeQuestionDirectory(
+      physicalRoot,
+      questionLibraryDirectory(state, folderId),
+      createdDirectories,
+    )
+    temporary = within(physicalRoot, `.pending-${String(batchId)}-${randomUUID()}`)
     await mkdir(temporary, { recursive: true })
     await Promise.all(images.map(async (image, index) => {
       const decodedImage = decoded[index]
       if (decodedImage === undefined) throw new Error('missing decoded image')
       await writeFile(join(temporary, storedImageName(String(image.id), image.mediaType)), decodedImage.bytes, { flag: 'wx' })
     }))
-    await mkdir(root, { recursive: true })
-    if (existingBatch === undefined) {
-      await rename(temporary, finalDir)
-    } else {
-      for (const image of images) {
-        const storedName = storedImageName(String(image.id), image.mediaType)
-        const destination = within(finalDir, storedName)
-        await rename(within(temporary, storedName), destination)
-        appendedPaths.push(destination)
-      }
-      await rm(temporary, { recursive: true, force: true })
+    for (const image of images) {
+      const storedName = storedImageName(String(image.id), image.mediaType)
+      const destination = within(destinationDirectory, storedName)
+      await assertFileMissing(destination)
+      await rename(within(temporary, storedName), destination)
+      createdPaths.push(destination)
     }
+    await rm(temporary, { recursive: true, force: true })
   } catch (error) {
     await rm(temporary, { recursive: true, force: true })
-    if (existingBatch === undefined) await rm(finalDir, { recursive: true, force: true })
-    else await removeQuestionFiles(appendedPaths)
+    await rollback()
     throw new TeacherQuestionMediaError('storage-failure', '保存切题图片失败', { cause: error })
   }
   const batch: TeacherQuestionBatch = {
@@ -355,10 +641,18 @@ export async function persistQuestionBatch(
   }
   return {
     batch,
-    rollback: existingBatch === undefined
-      ? async () => { await rm(finalDir, { recursive: true, force: true }) }
-      : async () => { await removeQuestionFiles(appendedPaths) },
+    rollback,
   }
+}
+
+async function assertFileMissing(path: string): Promise<void> {
+  try {
+    await lstat(path)
+  } catch (error) {
+    if (isNodeError(error) && error.code === 'ENOENT') return
+    throw error
+  }
+  throw new TeacherQuestionMediaError('storage-failure', '切题图片存储名称冲突')
 }
 
 async function removeQuestionFiles(paths: readonly string[]): Promise<void> {
@@ -598,17 +892,20 @@ export async function replaceQuestionImage(
 }
 
 /**
- * Delete one batch directory after its metadata commit.
+ * Delete one batch's image files after its metadata commit.
  * @param config - current media roots and decoded-byte limits.
- * @param batchId - exact batch directory identity.
- * @returns resolution after best-effort recursive removal.
+ * @param state - pre-commit metadata used to resolve every owned image.
+ * @param batchId - exact batch identity.
+ * @returns resolution after every owned file is absent.
  */
 export async function deleteQuestionBatchFiles(
   config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
   batchId: TeacherQuestionBatchId,
 ): Promise<void> {
-  const root = configuredRoot(config.segmentsRoot, '试题切割目录')
-  await rm(within(root, String(batchId)), { recursive: true, force: true })
+  const batch = state.questionBatches.find(item => item.id === batchId)
+  if (batch === undefined) return
+  await removeQuestionFiles(batch.images.map(image => resolveBatchImage(config, state, image.id).path))
 }
 
 /**
@@ -1019,7 +1316,10 @@ function resolveBatchImage(
       mediaType: image.mediaType,
       width: image.width,
       height: image.height,
-      path: within(root, join(String(batch.id), storedImageName(String(image.id), image.mediaType))),
+      path: within(root, join(
+        questionLibraryDirectory(state, batch.folderId),
+        storedImageName(String(image.id), image.mediaType),
+      )),
     }
   }
   throw new TeacherQuestionMediaError('not-found', '切题图片不存在')
@@ -1196,15 +1496,53 @@ export function studentQuestionDirectory(
   student: TeacherStudent,
   folderId?: TeacherQuestionFolderId,
 ): string {
+  return join(
+    studentClassDirectory(owningClass),
+    questionMediaPathSegment(student.name),
+    ...questionFolderSegments(state, student, folderId),
+  )
+}
+
+/**
+ * Resolve the readable relative directory owned by one roster class.
+ * @param owningClass - roster class that supplies the academic hierarchy.
+ * @returns a safe path relative to the configured student root.
+ */
+export function studentClassDirectory(owningClass: TeacherClass): string {
   const grade = owningClass.grade.trim()
   const className = owningClass.name.trim()
   const group = grade !== '' && !className.includes(grade) ? `${grade}${className}` : className
   return join(
     questionMediaPathSegment(owningClass.academicYear?.trim() || '未分学年'),
     questionMediaPathSegment(group),
-    questionMediaPathSegment(student.name),
-    ...questionFolderSegments(state, student, folderId),
   )
+}
+
+/**
+ * Resolve a durable question-library folder to its physical path below the configured root.
+ * @param state - current question-library folder metadata.
+ * @param folderId - optional selected folder; omission resolves the library root.
+ * @returns a safe path relative to the configured question-library root.
+ */
+export function questionLibraryDirectory(
+  state: TeacherWorkbenchState,
+  folderId?: TeacherQuestionLibraryFolderId,
+): string {
+  if (folderId === undefined) return ''
+  const folders = new Map(state.questionLibraryFolders.map(folder => [folder.id, folder] as const))
+  const segments: string[] = []
+  const visited = new Set<string>()
+  let current = folders.get(folderId)
+  while (current !== undefined) {
+    if (visited.has(current.id) || visited.size >= 64) {
+      throw new TeacherQuestionMediaError('invalid-request', '试题库目录层级无效')
+    }
+    visited.add(current.id)
+    segments.unshift(questionMediaPathSegment(current.name))
+    current = current.parentId === undefined ? undefined : folders.get(current.parentId)
+  }
+  if (!visited.has(folderId)) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不存在')
+  return join(...segments)
 }
 
 function questionFolderSegments(

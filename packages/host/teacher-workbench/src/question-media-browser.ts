@@ -5,6 +5,7 @@ import { readFile, readdir, stat } from 'node:fs/promises'
 import { basename, extname, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import {
+  questionLibraryDirectory,
   questionMediaPathSegment,
   studentQuestionDirectory,
   TeacherQuestionMediaError,
@@ -176,25 +177,35 @@ async function discoverBatches(
 }> {
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
   const tree = await collectLibraryDirectories(root, config.maxImageBytes)
-  const durableById = new Map(state.questionBatches.map(batch => [String(batch.id), batch] as const))
-  const durableDirectories = new Map(tree.directories.flatMap((directory) => {
-    if (directory.relativePath.includes('/')) return []
-    const durable = durableById.get(directory.name)
-    return durable === undefined ? [] : [[directory.relativePath, durable] as const]
-  }))
   const batches: TeacherQuestionBatch[] = []
   const readOnlyBatchIds: TeacherQuestionBatchId[] = []
   const externalFolders: TeacherWorkbenchState['questionLibraryFolders'][number][] = []
   const readOnlyLibraryFolderIds: TeacherQuestionLibraryFolderId[] = []
-  const externalFolderIdsByPath = new Map<string, TeacherQuestionLibraryFolderId>()
+  const folderIdsByPath = new Map<string, TeacherQuestionLibraryFolderId>()
+  const durableFoldersByPath = new Map<string, TeacherWorkbenchState['questionLibraryFolders'][number]>()
+  for (const folder of state.questionLibraryFolders) {
+    const path = normalizeRelative(questionLibraryDirectory(state, folder.id))
+    if (durableFoldersByPath.has(path)) {
+      throw new TeacherQuestionMediaError('invalid-request', '试题库目录在磁盘上同名')
+    }
+    durableFoldersByPath.set(path, folder)
+    folderIdsByPath.set(path, folder.id)
+  }
 
   for (const directory of tree.directories) {
-    if (durableDirectories.has(topRelativePath(directory.relativePath))) continue
+    const durable = durableFoldersByPath.get(directory.relativePath)
+    if (durable !== undefined) {
+      discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'library-folder', id: durable.id }), {
+        root,
+        path: directory.absolutePath,
+      })
+      continue
+    }
     const id = stableId(
       'library-folder',
       `${root}\0${directory.relativePath}`,
     ) as TeacherQuestionLibraryFolderId
-    const parentId = externalFolderIdsByPath.get(parentRelativePath(directory.relativePath))
+    const parentId = folderIdsByPath.get(parentRelativePath(directory.relativePath))
     externalFolders.push({
       id,
       ...(parentId === undefined ? {} : { parentId }),
@@ -202,12 +213,31 @@ async function discoverBatches(
       createdAt: directory.updatedAt,
       updatedAt: directory.updatedAt,
     })
-    externalFolderIdsByPath.set(directory.relativePath, id)
+    folderIdsByPath.set(directory.relativePath, id)
     readOnlyLibraryFolderIds.push(id)
     discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'library-folder', id }), {
       root,
       path: directory.absolutePath,
     })
+  }
+
+  const claimedPaths = new Set<string>()
+  const imagesByDirectory = new Map<string, readonly ImageFile[]>([
+    ['', tree.rootImages],
+    ...tree.directories.map(directory => [directory.relativePath, directory.images] as const),
+  ])
+  for (const durable of state.questionBatches) {
+    const directory = normalizeRelative(questionLibraryDirectory(state, durable.folderId))
+    const byStoredName = new Map((imagesByDirectory.get(directory) ?? []).map(file => [file.fileName, file] as const))
+    const images: TeacherQuestionImage[] = []
+    for (const image of durable.images) {
+      const file = byStoredName.get(storedImageName(image))
+      if (file === undefined) continue
+      images.push(image)
+      claimedPaths.add(file.absolutePath)
+      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id: image.id }), discoveredFile(file))
+    }
+    if (images.length > 0) batches.push({ ...durable, images })
   }
 
   const appendExternalBatch = (
@@ -218,7 +248,7 @@ async function discoverBatches(
     folderId?: TeacherQuestionLibraryFolderId,
   ): void => {
     const batchId = stableId('batch', `${root}\0${identityPath}`) as TeacherQuestionBatchId
-    const images = imageFiles.map((file, index): TeacherQuestionImage => {
+    const images = imageFiles.filter(file => !claimedPaths.has(file.absolutePath)).map((file, index): TeacherQuestionImage => {
       const imagePath = normalizeRelative(relative(root, file.absolutePath))
       const id = stableId('batch-image', `${root}\0${imagePath}`) as TeacherQuestionImageId
       discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id }), discoveredFile(file))
@@ -233,6 +263,7 @@ async function discoverBatches(
         updatedAt: file.updatedAt,
       }
     })
+    if (images.length === 0) return
     batches.push({
       id: batchId,
       ...(folderId === undefined ? {} : { folderId }),
@@ -245,35 +276,15 @@ async function discoverBatches(
     readOnlyBatchIds.push(batchId)
   }
 
-  if (tree.rootImages.length > 0) {
-    appendExternalBatch('.', basename(root) || '根目录图片', `${basename(root) || '根目录图片'}.pdf`, tree.rootImages)
-  }
+  appendExternalBatch('.', basename(root) || '根目录图片', `${basename(root) || '根目录图片'}.pdf`, tree.rootImages)
 
   for (const directory of tree.directories) {
-    if (directory.images.length === 0) continue
-    const durable = durableDirectories.get(directory.relativePath)
-    if (durable !== undefined) {
-      const byStoredName = new Map(durable.images.map(image => [storedImageName(image), image] as const))
-      const images: TeacherQuestionImage[] = []
-      for (const file of directory.images) {
-        const image = byStoredName.get(file.relativePath)
-        if (image === undefined) continue
-        images.push(image)
-        discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id: image.id }), discoveredFile(file))
-      }
-      if (images.length > 0) {
-        batches.push({ ...durable, images })
-        continue
-      }
-    }
-    if (durableDirectories.has(topRelativePath(directory.relativePath))) continue
-    const folderId = externalFolderIdsByPath.get(directory.relativePath)
     appendExternalBatch(
       directory.relativePath,
       directory.name,
       `${directory.name}.pdf`,
       directory.images,
-      folderId,
+      folderIdsByPath.get(directory.relativePath),
     )
   }
   return {
@@ -736,11 +747,6 @@ function normalizeRelative(value: string): string {
 function parentRelativePath(value: string): string {
   const separator = value.lastIndexOf('/')
   return separator === -1 ? '' : value.slice(0, separator)
-}
-
-function topRelativePath(value: string): string {
-  const separator = value.indexOf('/')
-  return separator === -1 ? value : value.slice(0, separator)
 }
 
 function stableId(kind: string, value: string): string {

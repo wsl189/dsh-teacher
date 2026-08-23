@@ -4,6 +4,8 @@ import type {
   TeacherMobileBotId,
   TeacherQuestionBatchId,
   TeacherQuestionLibraryFolderId,
+  TeacherQuestionMediaDirectoryDeleteRequest,
+  TeacherQuestionMediaDirectoryRenameRequest,
   TeacherStudentId,
   TeacherWorkbenchDocument,
   TeacherWorkbenchState,
@@ -40,8 +42,53 @@ function fakeRemote(options: FakeOptions = {}) {
     document = { revision: document.revision + 1, state: request.state }
     return { ok: true, value: { ok: true, value: document } }
   })
+  const renameQuestionMediaDirectory = vi.fn(async (request: TeacherQuestionMediaDirectoryRenameRequest) => {
+    if (request.target.kind === 'library-folder') {
+      document = {
+        revision: document.revision + 1,
+        state: {
+          ...document.state,
+          questionLibraryFolders: document.state.questionLibraryFolders.map(folder => folder.id === request.target.id
+            ? { ...folder, name: request.name, updatedAt: 43 }
+            : folder),
+        },
+      }
+    }
+    return { ok: true, value: { ok: true, value: { document } } }
+  })
+  const deleteQuestionMediaDirectory = vi.fn(async (request: TeacherQuestionMediaDirectoryDeleteRequest) => {
+    if (request.target.kind === 'library-folder') {
+      const root = document.state.questionLibraryFolders.find(folder => folder.id === request.target.id)
+      if (root !== undefined) {
+        const removed = new Set<TeacherQuestionLibraryFolderId>([root.id])
+        let changed = true
+        while (changed) {
+          changed = false
+          for (const folder of document.state.questionLibraryFolders) {
+            if (folder.parentId === undefined || !removed.has(folder.parentId) || removed.has(folder.id)) continue
+            removed.add(folder.id)
+            changed = true
+          }
+        }
+        document = {
+          revision: document.revision + 1,
+          state: {
+            ...document.state,
+            questionLibraryFolders: document.state.questionLibraryFolders.filter(folder => !removed.has(folder.id)),
+            questionBatches: document.state.questionBatches.map((batch) => {
+              if (batch.folderId === undefined || !removed.has(batch.folderId)) return batch
+              if (root.parentId !== undefined) return { ...batch, folderId: root.parentId }
+              const { folderId: _folderId, ...atRoot } = batch
+              return atRoot
+            }),
+          },
+        }
+      }
+    }
+    return { ok: true, value: { ok: true, value: { document } } }
+  })
   return {
-    remote: { read, write } as unknown as TeacherWorkbenchRemote,
+    remote: { read, write, renameQuestionMediaDirectory, deleteQuestionMediaDirectory } as unknown as TeacherWorkbenchRemote,
     read,
     write,
     getDocument: () => document,
@@ -401,7 +448,7 @@ describe('TeacherWorkbenchController', () => {
     ])
     await controller.renameQuestionLibraryFolder(rootId, '联考试卷')
     expect(controller.getSnapshot().document!.state.questionLibraryFolders[0]).toMatchObject({
-      id: 'library-root', name: '联考试卷', updatedAt: 42,
+      id: 'library-root', name: '联考试卷', updatedAt: 43,
     })
     await controller.deleteQuestionLibraryFolder(rootId)
     expect(controller.getSnapshot().document!.state.questionLibraryFolders).toEqual([])

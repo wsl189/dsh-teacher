@@ -11,7 +11,7 @@
   - button "删除"
 - main "试题工作区空白区域":
   - strong: 试题工作区
-  - text: 使用右上角工具上传 PDF、打开试题库或添加学生 新路径试卷 · 1 道试题
+  - text: 使用右上角工具上传 PDF、打开试题库或添加学生 套题甲 · 1 道试题
 - button "关闭工作台"
 - complementary "学生列表":
   - heading "高一（1）班" [level=2]
@@ -37,24 +37,35 @@
   - heading "试题图片库" [level=2]
   - button "新建文件夹"
   - button "关闭工作台"
-  - button "▾ 新路径试卷" [expanded]: 新路径试卷 1
+  - button "新路径试卷": 新路径试卷 1
   - button "删除目录“新路径试卷”"
-  - button "新路径试卷 1"
-  - button "▾ 月考" [expanded]: 月考 1
+  - button "收起目录“月考”" [expanded]
+  - button "月考": 月考 1
   - button "删除目录“月考”"
-  - button "▾ 第一次" [expanded]: 第一次 1
+  - button "收起目录“第一次”" [expanded]
+  - button "第一次": 第一次 1
   - button "删除目录“第一次”"
-  - button "▾ 套题甲" [expanded]: 套题甲 1
+  - button "套题甲": 套题甲 1
   - button "删除目录“套题甲”"
-  - button "套题甲 1"
   - button "第二次月考": 第二次月考 0
   - button "删除目录“第二次月考”"
-  - button "▾ 空目录" [expanded]: 空目录 0
+  - button "收起目录“空目录”" [expanded]
+  - button "空目录": 空目录 0
   - button "删除目录“空目录”"
   - button "下一层": 下一层 0
   - button "删除目录“下一层”"
-  - button "▸ 模拟题库": 模拟题库 0
+  - button "展开目录“模拟题库”"
+  - button "模拟题库": 模拟题库 0
   - button "删除目录“模拟题库”"
   - button "实时新增图片目录": 实时新增图片目… 0
   - button "删除目录“实时新增图片目录”"
+- complementary "试题库图片":
+  - button "全选"
+  - button "另存为" [disabled]
+  - article:
+    - button "第 8 题":
+      - img "第 8 题"
+    - text: 月考_8.png
+    - checkbox "选择"
+    - text: 选择
 - status: 已重命名目录：第二次月考

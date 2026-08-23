@@ -401,6 +401,16 @@ describe('web e2e: durable teacher workbench', () => {
       { name: '张同学', studentNumber: '001' },
       { name: '李同学', studentNumber: '002' },
     ])
+    const physicalClassDirectory = join(
+      scaffold.harnessHome,
+      'teacher-workbench',
+      'students',
+      '未分学年',
+      '高一(1)班',
+    )
+    expect((await stat(physicalClassDirectory)).isDirectory()).toBe(true)
+    expect((await stat(join(physicalClassDirectory, '张同学'))).isDirectory()).toBe(true)
+    expect((await stat(join(physicalClassDirectory, '李同学'))).isDirectory()).toBe(true)
     await compareOrRefreshGolden(
       WORKBENCH_EXPECTED,
       await captureStableAria(page, '[data-workbench-surface]', scaffold.workspaceCwd),
@@ -636,6 +646,15 @@ describe('web e2e: durable teacher workbench', () => {
     await folderDialog.getByRole('button', { name: '新建' }).click()
     const folderButton = classDrawer.getByRole('button', { name: '月考', exact: true })
     await folderButton.waitFor({ timeout: 10_000 })
+    expect((await stat(join(
+      scaffold.harnessHome,
+      'teacher-workbench',
+      'students',
+      '未分学年',
+      '高一(1)班',
+      student.name,
+      '月考',
+    ))).isDirectory()).toBe(true)
 
     for (const button of [studentButton, folderButton]) {
       const label = button.locator('[class*="legacyHierarchyName"]')
@@ -703,9 +722,51 @@ describe('web e2e: durable teacher workbench', () => {
     await renameFolderDialog.getByLabel('目录名').fill('八月题库')
     await renameFolderDialog.getByRole('button', { name: '保存' }).click()
     await bankFolders.getByRole('button', { name: '八月题库', exact: true }).waitFor({ timeout: 10_000 })
+    const directSaveDirectory = join(
+      scaffold.harnessHome,
+      'teacher-workbench',
+      'segments',
+      '模拟题库',
+      '八月题库',
+    )
+    expect((await stat(directSaveDirectory)).isDirectory()).toBe(true)
+    const libraryDocument = await scaffold.ctx.teacherWorkbench.read({})
+    const directSaveFolder = libraryDocument.value.state.questionLibraryFolders.find(item => item.name === '八月题库')
+    if (directSaveFolder === undefined) throw new Error('direct-save library folder is missing')
+    const directSaved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
+      folderId: directSaveFolder.id,
+      name: '目录直存验证',
+      sourceName: '目录直存验证.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 1,
+        fileName: '第1题.png',
+        mediaType: 'image/png',
+        width: 1,
+        height: 1,
+        contentBase64: (await readFile(RASTER_FIXTURE)).toString('base64'),
+      }],
+    })
+    if (!directSaved.ok || directSaved.value.batchId === undefined) throw new Error('direct-save batch failed')
+    const directBatch = directSaved.value.document.state.questionBatches.find(item => item.id === directSaved.value.batchId)
+    if (directBatch === undefined) throw new Error('direct-save batch is missing')
+    expect((await stat(join(directSaveDirectory, `${String(directBatch.images[0]!.id)}.png`))).isFile()).toBe(true)
+    await expect(stat(join(directSaveDirectory, '目录直存验证'))).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(directSaveDirectory, String(directBatch.id)))).rejects.toMatchObject({ code: 'ENOENT' })
 
-    const batchButton = bankFolders.getByRole('button', { name: /布局验证试卷/u })
-    await batchButton.click()
+    const directSaveFolderButton = bankFolders.getByRole('button', { name: '八月题库', exact: true })
+    await expect.poll(async () => directSaveFolderButton.locator('small').textContent(), { timeout: 10_000 }).toBe('1')
+    expect(await bankFolders.getByText('目录直存验证', { exact: true }).count()).toBe(0)
+    await directSaveFolderButton.click()
+    const directBatchImages = page.getByRole('complementary', { name: '试题库图片' })
+    await directBatchImages.getByRole('button', { name: '第 1 题', exact: true }).waitFor({ timeout: 10_000 })
+    await directSaveFolderButton.click()
+    await directBatchImages.waitFor({ state: 'hidden', timeout: 10_000 })
+    await expect(scaffold.ctx.teacherWorkbench.deleteQuestionBatch({ batchId: directBatch.id }))
+      .resolves.toMatchObject({ ok: true })
+
+    const rootDirectoryButton = bankFolders.getByRole('button', { name: '试题图片库根目录', exact: true })
+    await rootDirectoryButton.click()
     const bankImages = page.getByRole('complementary', { name: '试题库图片' })
     await bankImages.waitFor({ timeout: 10_000 })
     expect(await studentImages.count()).toBe(0)
@@ -720,12 +781,12 @@ describe('web e2e: durable teacher workbench', () => {
       MODE,
     )
 
-    await batchButton.click()
+    await rootDirectoryButton.click()
     await bankImages.waitFor({ state: 'hidden', timeout: 10_000 })
     await bankFolders.getByRole('button', { name: '关闭工作台' }).click()
     await page.getByRole('button', { name: '试题图片库', exact: true }).click()
     await bankFolders.waitFor({ timeout: 10_000 })
-    await batchButton.click()
+    await rootDirectoryButton.click()
     await bankImages.waitFor({ timeout: 10_000 })
     expect(await bankImages.getByRole('button', { name: '另存为' }).isDisabled()).toBe(true)
     expect(tripwire.pageErrors).toEqual([])
@@ -820,32 +881,32 @@ describe('web e2e: durable teacher workbench', () => {
 
     await studentImages.getByRole('button', { name: '试题图片库' }).click()
     const bankFolders = page.getByRole('complementary', { name: '试题图片库' })
-    const batchDirectoryFolder = bankFolders.getByRole('button', { name: /^▸ 新路径试卷/u })
+    const batchDirectoryFolder = bankFolders.getByRole('button', { name: '新路径试卷', exact: true })
     await batchDirectoryFolder.waitFor({ timeout: 10_000 })
     await batchDirectoryFolder.click()
-    const batchButton = bankFolders.getByRole('button', { name: '新路径试卷 1', exact: true })
-    await batchButton.waitFor({ timeout: 10_000 })
-    await batchButton.click()
+    expect(await bankFolders.getByRole('button', { name: '新路径试卷 1', exact: true }).count()).toBe(0)
     const bankImages = page.getByRole('complementary', { name: '试题库图片' })
     await bankImages.getByRole('button', { name: '第 7 题', exact: true }).waitFor({ timeout: 10_000 })
     await bankImages.locator('img').first().waitFor({ timeout: 10_000 })
-    const libraryMonthFolder = bankFolders.getByRole('button', { name: /^▸ 月考/u })
+    const libraryMonthFolder = bankFolders.getByRole('button', { name: '月考', exact: true })
     await libraryMonthFolder.waitFor({ timeout: 10_000 })
     const [libraryMonthBox, libraryMonthMarkerBox] = await Promise.all([
       libraryMonthFolder.boundingBox(),
-      libraryMonthFolder.locator('[aria-hidden="true"]').boundingBox(),
+      bankFolders.getByRole('button', { name: '展开目录“月考”', exact: true }).boundingBox(),
     ])
     if (libraryMonthBox === null || libraryMonthMarkerBox === null) throw new Error('question-library folder marker has no layout box')
     expect(libraryMonthMarkerBox.x - libraryMonthBox.x).toBeGreaterThanOrEqual(10)
     expect(libraryMonthMarkerBox.x - libraryMonthBox.x).toBeLessThanOrEqual(20)
-    await libraryMonthFolder.click()
-    const firstExamFolder = bankFolders.getByRole('button', { name: /^[▸▾] 第一次/u })
+    await bankFolders.getByRole('button', { name: '展开目录“月考”', exact: true }).click()
+    const firstExamFolder = bankFolders.getByRole('button', { name: '第一次', exact: true })
     await firstExamFolder.waitFor({ timeout: 10_000 })
-    await firstExamFolder.click()
-    const nestedBatchFolder = bankFolders.getByRole('button', { name: /^▸ 套题甲/u })
+    await bankFolders.getByRole('button', { name: '展开目录“第一次”', exact: true }).click()
+    const nestedBatchFolder = bankFolders.getByRole('button', { name: '套题甲', exact: true })
     await nestedBatchFolder.waitFor({ timeout: 10_000 })
     await nestedBatchFolder.click()
-    await bankFolders.getByRole('button', { name: '套题甲 1', exact: true }).waitFor({ timeout: 10_000 })
+    expect(await bankFolders.getByRole('button', { name: '套题甲 1', exact: true }).count()).toBe(0)
+    await bankImages.getByRole('button', { name: '第 8 题', exact: true }).waitFor({ timeout: 10_000 })
+    await bankImages.getByRole('img', { name: '第 8 题', exact: true }).waitFor({ timeout: 10_000 })
     await firstExamFolder.click({ clickCount: 2 })
     directoryDialog = page.getByRole('dialog', { name: '新建文件夹' })
     await directoryDialog.getByLabel('目录名').fill('第二次')
@@ -860,8 +921,7 @@ describe('web e2e: durable teacher workbench', () => {
     await directoryDialog.waitFor({ state: 'hidden', timeout: 10_000 })
     await bankFolders.getByRole('button', { name: '第二次月考', exact: true }).waitFor({ timeout: 10_000 })
     expect((await stat(join(nestedBatchDirectory, '..', '第二次月考'))).isDirectory()).toBe(true)
-    const emptyFolder = bankFolders.getByRole('button', { name: /^▸ 空目录/u })
-    await emptyFolder.click()
+    await bankFolders.getByRole('button', { name: '展开目录“空目录”', exact: true }).click()
     await bankFolders.getByRole('button', { name: '下一层', exact: true }).waitFor({ timeout: 10_000 })
 
     const liveStudentDirectory = join(
