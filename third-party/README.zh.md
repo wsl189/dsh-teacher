@@ -1,8 +1,8 @@
-# Third-Party Plugins
+# 第三方插件
 
-English | [中文](README.zh.md)
+[English](README.md) | 中文
 
-This directory stores the third-party custom plugin bundles required to deploy dsh-teacher. These plugins are **not part of the project source**; they are installed independently into `~/.dsh/profiles/web/` (a per-machine user-level directory), so they must be reinstalled after cloning the project.
+本目录保存 dsh-teacher 部署所需的第三方定制插件安装包。这些插件**不属于项目源码**，是独立安装到 `~/.dsh/profiles/web/`（每台机器的用户级目录）的，因此克隆项目后需要重新安装。
 
 ## 插件清单
 
