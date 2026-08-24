@@ -96,11 +96,32 @@ export function apply(ctx: ClientContext): void {
     resolveSegmentation: () => {
       const parentSessionId = ctx.sessions.list.getSnapshot().current
       if (parentSessionId === undefined) return undefined
-      return (layout, padding) => ctx.remote.teacherWorkbench.segmentQuestions({
+      return (layout, padding, pagePreviews) => ctx.remote.teacherWorkbench.segmentQuestions({
         parentSessionId,
         fileName: layout.name,
         pages: layout.pages,
+        pagePreviews,
         padding,
+      }).then(carried => carried.ok
+        ? carried.value
+        : {
+          ok: false as const,
+          error: { code: 'tool-model-unavailable' as const, message: carried.error.message },
+        })
+        .catch((error: unknown) => ({
+          ok: false as const,
+          error: {
+            code: 'tool-model-unavailable' as const,
+            message: error instanceof Error ? error.message : String(error),
+          },
+        }))
+    },
+    resolveCropReview: () => {
+      const parentSessionId = ctx.sessions.list.getSnapshot().current
+      if (parentSessionId === undefined) return undefined
+      return request => ctx.remote.teacherWorkbench.reviewQuestionCrops({
+        ...request,
+        parentSessionId,
       }).then(carried => carried.ok
         ? carried.value
         : {

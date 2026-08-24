@@ -538,13 +538,22 @@ function resolveQuestionBatchDirectory(
     state,
     ...(existingBatch.folderId === undefined ? {} : { folderId: existingBatch.folderId }),
   }
-  if (request.folderId !== undefined) {
-    const folder = state.questionLibraryFolders.find(item => item.id === request.folderId)
-    if (folder === undefined) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不存在')
-    if (state.questionLibraryFolders.some(item => item.parentId === folder.id)) {
-      throw new TeacherQuestionMediaError('invalid-request', '保存目录必须是末级目录')
+  const destination = request.destination
+  switch (destination.kind) {
+    case 'library-root':
+      return { state }
+    case 'library-folder': {
+      const folder = state.questionLibraryFolders.find(item => item.id === destination.folderId)
+      if (folder === undefined) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不存在')
+      if (state.questionLibraryFolders.some(item => item.parentId === folder.id)) {
+        throw new TeacherQuestionMediaError('invalid-request', '保存目录必须是末级目录')
+      }
+      return { state, folderId: folder.id }
     }
-    return { state, folderId: folder.id }
+    case 'source-folder':
+      break
+    default:
+      return assertNeverQuestionBatchDestination(destination)
   }
 
   const sourceFileName = request.sourceName.split(/[\\/]/u).at(-1) ?? ''
@@ -588,7 +597,7 @@ export async function persistQuestionBatch(
     request.name.trim() !== existingBatch.name
     || safeFileName(request.sourceName, '试卷.pdf') !== existingBatch.sourceName
     || request.pageRange.trim() !== existingBatch.pageRange
-    || (request.folderId !== undefined && request.folderId !== existingBatch.folderId)
+    || !questionBatchDestinationMatches(state, request, existingBatch)
   )) {
     throw new TeacherQuestionMediaError('invalid-request', '追加分片与原试卷信息不一致')
   }
@@ -675,6 +684,33 @@ export async function persistQuestionBatch(
     ...(resolvedDirectory.createdFolder === undefined ? {} : { createdFolder: resolvedDirectory.createdFolder }),
     rollback,
   }
+}
+
+function questionBatchDestinationMatches(
+  state: TeacherWorkbenchState,
+  request: TeacherQuestionBatchSaveRequest,
+  existingBatch: TeacherQuestionBatch,
+): boolean {
+  switch (request.destination.kind) {
+    case 'library-root':
+      return existingBatch.folderId === undefined
+    case 'library-folder':
+      return request.destination.folderId === existingBatch.folderId
+    case 'source-folder': {
+      if (existingBatch.folderId === undefined) return false
+      const folder = state.questionLibraryFolders.find(item => item.id === existingBatch.folderId)
+      if (folder === undefined) return false
+      const sourceName = request.sourceName.split(/[\\/]/u).at(-1) ?? ''
+      return folder.parentId === undefined
+        && questionMediaPathSegment(folder.name) === questionMediaPathSegment(sourceName.replace(/\.pdf$/iu, '').trim())
+    }
+    default:
+      return assertNeverQuestionBatchDestination(request.destination)
+  }
+}
+
+function assertNeverQuestionBatchDestination(destination: never): never {
+  throw new TypeError(`unsupported question batch destination: ${JSON.stringify(destination)}`)
 }
 
 async function assertFileMissing(path: string): Promise<void> {
@@ -1382,7 +1418,7 @@ async function decodeImage(
 }
 
 function decodeCanonicalBase64(contentBase64: string, maxBytes: number): Buffer {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(contentBase64)) {
+  if (contentBase64.length === 0 || contentBase64.length % 4 !== 0) {
     throw new TeacherQuestionMediaError('invalid-request', '图片内容不是规范 Base64')
   }
   if (contentBase64.length > Math.ceil(maxBytes / 3) * 4) {

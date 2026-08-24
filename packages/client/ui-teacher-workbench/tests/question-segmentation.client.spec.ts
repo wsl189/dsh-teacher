@@ -7,6 +7,7 @@ import {
   type DetectedQuestion,
   partitionQuestionUploads,
   readPdfPageCount,
+  renderQuestionPagePreviews,
   renderQuestionCrops,
 } from '../src/client/question-segmentation.ts'
 
@@ -41,6 +42,47 @@ describe('readPdfPageCount', () => {
     expect((globalThis as { pdfjsWorker?: unknown }).pdfjsWorker).toEqual({
       WorkerMessageHandler: pdfMocks.workerHandler,
     })
+  })
+})
+
+describe('renderQuestionPagePreviews', () => {
+  it('renders every selected page at the bounded visual-review scale', async () => {
+    const seenPages: number[] = []
+    const seenScales: number[] = []
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        getPage: async (pageNumber: number) => {
+          seenPages.push(pageNumber)
+          return {
+            getViewport: ({ scale }: { scale: number }) => {
+              seenScales.push(scale)
+              return { width: 100 * scale, height: 80 * scale }
+            },
+            render: () => ({ promise: Promise.resolve() }),
+          }
+        },
+      }),
+      destroy: pdfMocks.destroy,
+    })
+    vi.stubGlobal('document', {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({ fillStyle: '', fillRect: vi.fn() }),
+        toBlob: (callback: (blob: Blob | null) => void) => {
+          callback(new Blob([Uint8Array.of(1)], { type: 'image/png' }))
+        },
+      }),
+    })
+    const file = { arrayBuffer: async () => Uint8Array.of(1).buffer } as File
+
+    await expect(renderQuestionPagePreviews(file, [1, 3], 4)).resolves.toEqual([
+      { pageIndex: 1, mediaType: 'image/png', width: 200, height: 160, contentBase64: 'AQ==' },
+      { pageIndex: 3, mediaType: 'image/png', width: 200, height: 160, contentBase64: 'AQ==' },
+    ])
+    expect(seenPages).toEqual([2, 4])
+    expect(seenScales).toEqual([2, 2])
+    expect(pdfMocks.destroy).toHaveBeenCalledOnce()
   })
 })
 
@@ -116,6 +158,7 @@ describe('renderQuestionCrops', () => {
       pages: [{ pageIndex: 0, width: 100, height: 100, elements: [] }],
     }
     const questions: readonly DetectedQuestion[] = [{
+      sourceHeadId: 'p0e0' as never,
       questionNo: 1,
       headPageIndex: 0,
       groupIndex: 0,
@@ -124,6 +167,7 @@ describe('renderQuestionCrops', () => {
         excludedAreas: [[10, 12, 20, 18]], pageWidth: 100, pageHeight: 100,
       }],
     }, {
+      sourceHeadId: 'p0e1' as never,
       questionNo: 2,
       headPageIndex: 0,
       groupIndex: 0,

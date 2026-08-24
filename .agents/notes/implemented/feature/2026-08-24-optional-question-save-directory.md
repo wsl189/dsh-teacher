@@ -12,7 +12,7 @@ The PDF page-range sheet selected the question-library root by default and expos
 
 The save-directory control starts unselected for every newly chosen PDF. Its explicit choices contain only durable leaf directories and display their complete hierarchy paths; the library root and directories with children are not selectable.
 
-Omitting `folderId` for a new paper batch makes the Host derive a safe root-level folder name from the source PDF filename without its `.pdf` suffix. The Host reuses a durable root folder with that physical name or creates the durable identity and physical directory in the same rollback-capable operation as the first image part. An explicit `folderId` must identify a current leaf, and images are stored directly in that leaf. Continuation parts retain the first part's directory when they omit the field.
+The Web cutter sends an explicit source-folder destination when the control remains blank. The Host derives a safe root-level folder name from the source PDF filename without its `.pdf` suffix, then reuses a durable root folder with that physical name or creates the durable identity and physical directory in the same rollback-capable operation as the first image part. A selected destination must identify a current leaf, and images are stored directly in that leaf. Every continuation part repeats the first part's destination.
 
 The automatic directory remains consistent with the [physical-only question-library tree](../bug-fix/2026-08-24-physical-only-question-library-tree.md): it appears because a physical folder exists, while the paper-batch name and id remain metadata rather than hierarchy nodes.
 

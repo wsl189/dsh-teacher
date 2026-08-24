@@ -9,9 +9,12 @@ import sharp from 'sharp'
 import { readWorkbenchSource } from './source-documents.ts'
 import type { TeacherWorkbenchService } from './index.ts'
 import type {
+  TeacherQuestionBatchDestination,
   TeacherQuestionBatchId,
   TeacherQuestionImageUpload,
+  TeacherQuestionLayoutElementId,
   TeacherQuestionLayoutPage,
+  TeacherQuestionPagePreview,
   TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
   TeacherWorkbenchSourceId,
@@ -29,6 +32,8 @@ export interface StagedQuestionSegmentationRequest {
   readonly pageRange: string
   /** Teacher-facing saved batch name. */
   readonly batchName: string
+  /** User-selected existing library destination. */
+  readonly destination: Exclude<TeacherQuestionBatchDestination, { readonly kind: 'source-folder' }>
   /** Extra OCR page units retained around semantic boundaries. */
   readonly padding: number
 }
@@ -82,19 +87,69 @@ export async function segmentStagedQuestionPdf(
     batchNumber += 1
   }
   pages.sort((left, right) => left.pageIndex - right.pageIndex)
+  const pagePreviews = await renderPagePreviews(bytes, pages.map(page => page.pageIndex), signal)
   const segmented = await service.segmentQuestions({
     parentSessionId,
     fileName: request.sourceName,
     pages,
+    pagePreviews,
     padding: request.padding,
   })
   if (!segmented.ok) throw new Error(segmented.error.message)
   throwIfAborted(signal)
+  let questions = [...segmented.value.questions]
+  let outputWidthRatio = segmented.value.maxQuestionWidthRatio
+  for (const group of segmented.value.groups) {
+    let groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
+    let reviewQuestions = groupQuestions
+    let recutAttempt = 0
+    for (;;) {
+      const crops = await renderQuestionUploads(bytes, pages, reviewQuestions, outputWidthRatio, signal)
+      const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
+        ? group.corePageIndexes
+        : [...new Set(reviewQuestions.flatMap(question => (
+          question.regions.map(region => region.pageIndex)
+        )))]
+      const previewPages = new Set(adjacentInspectionPages(pages, localPageIndexes))
+      const inspectionPages = new Set(group.inspectionPageIndexes)
+      const reviewed = await service.reviewQuestionCrops({
+        parentSessionId,
+        fileName: request.sourceName,
+        groupIndex: group.groupIndex,
+        corePageIndexes: group.corePageIndexes,
+        recutAttempt,
+        reviewQuestionIds: reviewQuestions.map(question => question.sourceHeadId),
+        pages: pages.filter(page => inspectionPages.has(page.pageIndex)),
+        pagePreviews: pagePreviews.filter(preview => (
+          previewPages.has(preview.pageIndex) && inspectionPages.has(preview.pageIndex)
+        )),
+        questions: groupQuestions,
+        crops,
+        padding: request.padding,
+      })
+      if (!reviewed.ok) throw new Error(reviewed.error.message)
+      if (reviewed.value.decision === 'accepted') break
+      if (reviewed.value.decision === 'revised') {
+        questions = replaceQuestionGroup(
+          questions,
+          group.groupIndex,
+          reviewed.value.questions,
+          segmented.value.groupCount,
+        )
+        groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
+        outputWidthRatio = maximumQuestionWidthRatio(questions)
+      }
+      recutAttempt += 1
+      if (recutAttempt >= segmented.value.maxRecutAttempts) break
+      reviewQuestions = affectedQuestions(groupQuestions, reviewed.value.affectedQuestionIds)
+      if (reviewQuestions.length === 0) break
+    }
+  }
   const uploads = await renderQuestionUploads(
     bytes,
     pages,
-    segmented.value.questions,
-    segmented.value.maxQuestionWidthRatio,
+    questions,
+    outputWidthRatio,
     signal,
   )
   if (uploads.length === 0) throw new Error('question segmentation returned no images')
@@ -104,6 +159,7 @@ export async function segmentStagedQuestionPdf(
   for (const images of parts) {
     const saved = await service.saveQuestionBatch({
       ...(batchId === undefined ? {} : { appendToBatchId: batchId }),
+      destination: request.destination,
       name: request.batchName,
       sourceName: request.sourceName,
       pageRange: selection.label,
@@ -168,6 +224,74 @@ async function extractLayoutBatch(
     if (pageIndex === undefined) throw new Error('MinerU returned an unknown PDF page')
     return { ...page, pageIndex }
   })
+}
+
+async function renderPagePreviews(
+  bytes: Uint8Array,
+  pageIndexes: readonly number[],
+  signal: AbortSignal,
+): Promise<TeacherQuestionPagePreview[]> {
+  const previews: TeacherQuestionPagePreview[] = []
+  for (const pageIndex of pageIndexes) {
+    throwIfAborted(signal)
+    const content = await renderSinglePage(bytes, pageIndex, 2)
+    const metadata = await sharp(content).metadata()
+    previews.push({
+      pageIndex,
+      mediaType: 'image/png',
+      width: metadata.width,
+      height: metadata.height,
+      contentBase64: Buffer.from(content).toString('base64'),
+    })
+  }
+  return previews
+}
+
+function maximumQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): number {
+  const regions = questions.flatMap(question => question.regions)
+  return regions.length === 0
+    ? 1
+    : Math.max(...regions.map(region => (region.right - region.left) / region.pageWidth))
+}
+
+function adjacentInspectionPages(
+  pages: readonly TeacherQuestionLayoutPage[],
+  corePageIndexes: readonly number[],
+): readonly number[] {
+  const core = new Set(corePageIndexes)
+  const positions = pages.flatMap((page, index) => core.has(page.pageIndex) ? [index] : [])
+  const first = Math.min(...positions)
+  const last = Math.max(...positions)
+  if (!Number.isFinite(first) || !Number.isFinite(last)) throw new Error('question group has no source layout page')
+  return pages
+    .slice(Math.max(0, first - 1), Math.min(pages.length, last + 2))
+    .map(page => page.pageIndex)
+}
+
+function replaceQuestionGroup(
+  current: readonly TeacherSegmentedQuestion[],
+  groupIndex: number,
+  replacement: readonly TeacherSegmentedQuestion[],
+  groupCount: number,
+): TeacherSegmentedQuestion[] {
+  if (replacement.some(question => question.groupIndex !== groupIndex)) {
+    throw new Error('reviewed question group identity is inconsistent')
+  }
+  const merged: TeacherSegmentedQuestion[] = []
+  for (let index = 0; index < groupCount; index += 1) {
+    merged.push(...(index === groupIndex
+      ? replacement
+      : current.filter(question => question.groupIndex === index)))
+  }
+  return merged.map((question, index) => ({ ...question, questionNo: index + 1 }))
+}
+
+function affectedQuestions(
+  after: readonly TeacherSegmentedQuestion[],
+  affected: readonly TeacherQuestionLayoutElementId[],
+): TeacherSegmentedQuestion[] {
+  const ids = new Set<TeacherQuestionLayoutElementId>(affected)
+  return after.filter(question => ids.has(question.sourceHeadId))
 }
 
 async function renderQuestionUploads(

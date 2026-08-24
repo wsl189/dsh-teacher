@@ -4,6 +4,7 @@ import type {
   OcrLayoutDocument,
   OcrLayoutPage,
   TeacherQuestionPageRegion,
+  TeacherQuestionPagePreview,
   TeacherQuestionImageUpload,
   TeacherQuestionSegmentSuccess,
   TeacherSegmentedQuestion,
@@ -120,6 +121,49 @@ export async function readPdfPageCount(file: File): Promise<number> {
   const pdf = await loading.promise
   try {
     return pdf.numPages
+  } finally {
+    await loading.destroy()
+  }
+}
+
+/**
+ * Render selected PDF pages for multimodal boundary understanding without changing final crop resolution.
+ * @param file - original browser-held PDF.
+ * @param pageIndexes - exact zero-based pages requested by semantic segmentation.
+ * @param renderScale - configured PDF render scale, capped for preview transport.
+ * @returns one PNG preview for every requested page in source order.
+ */
+export async function renderQuestionPagePreviews(
+  file: File,
+  pageIndexes: readonly number[],
+  renderScale: number,
+): Promise<TeacherQuestionPagePreview[]> {
+  const pdfjs = await loadPdfJs()
+  const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
+  const pdf = await loading.promise
+  try {
+    const previews: TeacherQuestionPagePreview[] = []
+    for (const pageIndex of pageIndexes) {
+      const page = await pdf.getPage(pageIndex + 1)
+      const viewport = page.getViewport({ scale: Math.max(1, Math.min(2, renderScale)) })
+      const canvas = document.createElement('canvas')
+      canvas.width = Math.max(1, Math.ceil(viewport.width))
+      canvas.height = Math.max(1, Math.ceil(viewport.height))
+      const context = canvas.getContext('2d', { alpha: false })
+      if (context === null) throw new Error('浏览器无法创建 PDF 预览画布')
+      context.fillStyle = '#ffffff'
+      context.fillRect(0, 0, canvas.width, canvas.height)
+      await page.render({ canvas, canvasContext: context, viewport }).promise
+      const blob = await canvasBlob(canvas)
+      previews.push({
+        pageIndex,
+        mediaType: 'image/png',
+        width: canvas.width,
+        height: canvas.height,
+        contentBase64: await blobBase64(blob),
+      })
+    }
+    return previews
   } finally {
     await loading.destroy()
   }

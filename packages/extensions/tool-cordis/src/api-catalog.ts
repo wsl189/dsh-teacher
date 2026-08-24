@@ -2029,6 +2029,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'validated source-page crop regions or a stable failure.',
       },
       {
+        signature: '@Remote(\'reviewQuestionCrops\') reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult>',
+        description: 'Visually review preliminary question crops and correct one processing group when needed.',
+        parameters: [{ name: 'request', description: 'crop images, source-page previews, OCR geometry, and current group regions.' }],
+        returns: 'accepted preliminary regions or one Host-validated corrected group.',
+      },
+      {
         signature: '@Remote(\'saveQuestionBatch\') saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult>',
         description: 'Persist one browser-rendered paper-batch part and commit its metadata.',
         parameters: [{ name: 'request', description: 'batch metadata and ordered raster payloads.' }],
@@ -5010,6 +5016,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionBatchDeleteRequest {\n    readonly batchId: TeacherQuestionBatchId;\n}',
   },
   {
+    name: 'TeacherQuestionBatchDestination',
+    declaration: 'export type TeacherQuestionBatchDestination = {\n    readonly kind: \'source-folder\';\n} | {\n    readonly kind: \'library-root\';\n} | {\n    readonly kind: \'library-folder\';\n    readonly folderId: TeacherQuestionLibraryFolderId;\n};',
+  },
+  {
     name: 'TeacherQuestionBatchDocumentRequest',
     declaration: 'export interface TeacherQuestionBatchDocumentRequest {\n    readonly kind: \'word\' | \'ppt\';\n    readonly source?: \'assigned\' | \'temporary\';\n    readonly students: readonly TeacherQuestionStudentDocumentOptions[];\n}',
   },
@@ -5027,7 +5037,19 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionBatchSaveRequest',
-    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly appendToBatchId?: TeacherQuestionBatchId;\n    readonly folderId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
+    declaration: 'export interface TeacherQuestionBatchSaveRequest {\n    readonly appendToBatchId?: TeacherQuestionBatchId;\n    readonly destination: TeacherQuestionBatchDestination;\n    readonly name: string;\n    readonly sourceName: string;\n    readonly pageRange: string;\n    readonly images: readonly TeacherQuestionImageUpload[];\n}',
+  },
+  {
+    name: 'TeacherQuestionCropReviewRequest',
+    declaration: 'export interface TeacherQuestionCropReviewRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly recutAttempt: number;\n    readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[];\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews: readonly TeacherQuestionPagePreview[];\n    readonly questions: readonly TeacherSegmentedQuestion[];\n    readonly crops: readonly TeacherQuestionImageUpload[];\n    readonly padding: number;\n}',
+  },
+  {
+    name: 'TeacherQuestionCropReviewResult',
+    declaration: 'export type TeacherQuestionCropReviewResult = TeacherQuestionCropReviewSuccess | TeacherQuestionSegmentRejected;',
+  },
+  {
+    name: 'TeacherQuestionCropReviewSuccess',
+    declaration: 'export interface TeacherQuestionCropReviewSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly decision: \'accepted\' | \'revised\' | \'unresolved\';\n        readonly affectedQuestionIds: readonly TeacherQuestionLayoutElementId[];\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionDocumentImageUpload',
@@ -5114,6 +5136,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionLayoutElement {\n    readonly type: \'text\' | \'equation\' | \'image\' | \'table\' | \'other\';\n    readonly text: string;\n    readonly bbox: readonly [\n        number,\n        number,\n        number,\n        number\n    ];\n}',
   },
   {
+    name: 'TeacherQuestionLayoutElementId',
+    declaration: 'export type TeacherQuestionLayoutElementId = Branded<\'TeacherQuestionLayoutElementId\'>;',
+  },
+  {
     name: 'TeacherQuestionLayoutPage',
     declaration: 'export interface TeacherQuestionLayoutPage {\n    readonly pageIndex: number;\n    readonly width: number;\n    readonly height: number;\n    readonly elements: readonly TeacherQuestionLayoutElement[];\n}',
   },
@@ -5170,6 +5196,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionMutationSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly document: TeacherWorkbenchDocument;\n        readonly batchId?: TeacherQuestionBatchId;\n    };\n}',
   },
   {
+    name: 'TeacherQuestionPagePreview',
+    declaration: 'export interface TeacherQuestionPagePreview {\n    readonly pageIndex: number;\n    readonly mediaType: \'image/png\' | \'image/jpeg\' | \'image/webp\';\n    readonly width: number;\n    readonly height: number;\n    readonly contentBase64: string;\n}',
+  },
+  {
     name: 'TeacherQuestionPageRegion',
     declaration: 'export interface TeacherQuestionPageRegion {\n    readonly pageIndex: number;\n    readonly left: number;\n    readonly top: number;\n    readonly right: number;\n    readonly rightLimit: number;\n    readonly bottom: number;\n    readonly excludedAreas: readonly (readonly [\n        number,\n        number,\n        number,\n        number\n    ])[];\n    readonly pageWidth: number;\n    readonly pageHeight: number;\n}',
   },
@@ -5178,8 +5208,12 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherQuestionRejected {\n    readonly ok: false;\n    readonly error: TeacherQuestionFailure;\n}',
   },
   {
+    name: 'TeacherQuestionSegmentationGroup',
+    declaration: 'export interface TeacherQuestionSegmentationGroup {\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly inspectionPageIndexes: readonly number[];\n}',
+  },
+  {
     name: 'TeacherQuestionSegmentErrorCode',
-    declaration: 'export type TeacherQuestionSegmentErrorCode = \'invalid-request\' | \'session-unavailable\' | \'tool-model-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
+    declaration: 'export type TeacherQuestionSegmentErrorCode = \'invalid-request\' | \'session-unavailable\' | \'tool-model-unavailable\' | \'vision-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
   },
   {
     name: 'TeacherQuestionSegmentRejected',
@@ -5187,7 +5221,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentRequest',
-    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionSegmentResult',
@@ -5195,7 +5229,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentSuccess',
-    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly maxSaveBatchBytes: number;\n        readonly maxQuestionWidthRatio: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
+    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly groups: readonly TeacherQuestionSegmentationGroup[];\n        readonly maxSaveBatchBytes: number;\n        readonly maxRecutAttempts: number;\n        readonly maxQuestionWidthRatio: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionStudentDocumentOptions',
@@ -5283,7 +5317,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherSegmentedQuestion',
-    declaration: 'export interface TeacherSegmentedQuestion {\n    readonly questionNo: number;\n    readonly headPageIndex: number;\n    readonly groupIndex: number;\n    readonly regions: readonly TeacherQuestionPageRegion[];\n}',
+    declaration: 'export interface TeacherSegmentedQuestion {\n    readonly sourceHeadId: TeacherQuestionLayoutElementId;\n    readonly questionNo: number;\n    readonly headPageIndex: number;\n    readonly groupIndex: number;\n    readonly regions: readonly TeacherQuestionPageRegion[];\n}',
   },
   {
     name: 'TeacherStudent',

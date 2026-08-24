@@ -52,6 +52,7 @@ import {
 } from './question-media-directories.ts'
 import { normalizeTimetableWithAgent } from './timetable-agent.ts'
 import { segmentQuestionsInBatches } from './question-segmentation-batches.ts'
+import { reviewQuestionCropsWithAgent } from './question-segmentation-agent.ts'
 import { registerQuestionSegmentationSkill } from './question-segmentation-skill.ts'
 import {
   listScheduledReminderTasks,
@@ -73,6 +74,8 @@ import type {
   TeacherQuestionBatchDocumentRequest,
   TeacherQuestionBatchDocumentResult,
   TeacherQuestionBatchSaveRequest,
+  TeacherQuestionCropReviewRequest,
+  TeacherQuestionCropReviewResult,
   TeacherQuestionDocumentRequest,
   TeacherQuestionDocumentResult,
   TeacherQuestionImageDeleteRequest,
@@ -118,11 +121,16 @@ const DEFAULT_TIMETABLE_ENTRIES = 1_000
 const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_QUESTION_LAYOUT_PAGES = 50
-const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 20
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 4
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES = 12
 const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
 const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 18_000
 const DEFAULT_SEGMENTED_QUESTIONS = 300
 const DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS = 5
+const DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS = 2
+const DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO = 0.18
+const DEFAULT_QUESTION_RECUT_ATTEMPTS = 2
+const DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL = 4
 const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_SOURCE_DOCUMENT_BYTES = 100 * 1024 * 1024
 const DEFAULT_REMINDER_RETRY_MS = 60_000
@@ -195,6 +203,8 @@ export interface Config {
   maxQuestionLayoutPages: number
   /** Selected PDF pages owned by one automatic question-segmentation group. */
   questionSegmentationBatchPages: number
+  /** Maximum fallible question-head candidates owned by one automatic question-segmentation group. */
+  questionSegmentationBatchCandidates: number
   /** Maximum OCR elements admitted to one question-segmentation agent run. */
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
@@ -203,6 +213,14 @@ export interface Config {
   maxSegmentedQuestions: number
   /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
   maxQuestionBoundarySubmissions: number
+  /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
+  maxQuestionBoundaryAgentRuns: number
+  /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
+  maxQuestionAutoOwnedGapRatio: number
+  /** Maximum local recuts admitted for one defective question image. */
+  maxQuestionRecutAttempts: number
+  /** Maximum page or crop images returned by one child-agent image-tool call. */
+  maxQuestionVisionImagesPerToolCall: number
   /** Wall-clock deadline for one question-segmentation agent run. */
   questionSegmentationAgentTimeoutMs: number
 }
@@ -226,11 +244,18 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     timetableVisionAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS),
     maxQuestionLayoutPages: z.natural().min(1).max(1_000).default(DEFAULT_QUESTION_LAYOUT_PAGES),
     questionSegmentationBatchPages: z.natural().min(1).max(998).default(DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES),
+    questionSegmentationBatchCandidates: z.natural().min(1).max(10_000)
+      .default(DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES),
     maxQuestionLayoutElements: z.natural().min(1).max(100_000).default(DEFAULT_QUESTION_LAYOUT_ELEMENTS),
     maxQuestionSourceChunkCharacters: z.natural().min(4_000).max(100_000)
       .default(DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS),
     maxSegmentedQuestions: z.natural().min(1).max(10_000).default(DEFAULT_SEGMENTED_QUESTIONS),
     maxQuestionBoundarySubmissions: z.natural().min(1).max(20).default(DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS),
+    maxQuestionBoundaryAgentRuns: z.natural().min(1).max(5).default(DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS),
+    maxQuestionAutoOwnedGapRatio: z.number().min(0.01).max(1).default(DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO),
+    maxQuestionRecutAttempts: z.natural().min(1).max(5).default(DEFAULT_QUESTION_RECUT_ATTEMPTS),
+    maxQuestionVisionImagesPerToolCall: z.natural().min(1).max(20)
+      .default(DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL),
     questionSegmentationAgentTimeoutMs: z.natural().min(1_000).max(3_600_000)
       .default(DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS),
     reminderRetryMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_REMINDER_RETRY_MS),
@@ -265,10 +290,15 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     timetableVisionAgentTimeoutMs: DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS,
     maxQuestionLayoutPages: DEFAULT_QUESTION_LAYOUT_PAGES,
     questionSegmentationBatchPages: DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES,
+    questionSegmentationBatchCandidates: DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES,
     maxQuestionLayoutElements: DEFAULT_QUESTION_LAYOUT_ELEMENTS,
     maxQuestionSourceChunkCharacters: DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS,
     maxSegmentedQuestions: DEFAULT_SEGMENTED_QUESTIONS,
     maxQuestionBoundarySubmissions: DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS,
+    maxQuestionBoundaryAgentRuns: DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS,
+    maxQuestionAutoOwnedGapRatio: DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO,
+    maxQuestionRecutAttempts: DEFAULT_QUESTION_RECUT_ATTEMPTS,
+    maxQuestionVisionImagesPerToolCall: DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL,
     questionSegmentationAgentTimeoutMs: DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS,
     reminderRetryMs: DEFAULT_REMINDER_RETRY_MS,
   }) {
@@ -422,6 +452,16 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('segmentQuestions')
   segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult> {
     return segmentQuestionsInBatches(this.ctx, request, this.configSource())
+  }
+
+  /**
+   * Visually review preliminary question crops and correct one processing group when needed.
+   * @param request - crop images, source-page previews, OCR geometry, and current group regions.
+   * @returns accepted preliminary regions or one Host-validated corrected group.
+   */
+  @Remote('reviewQuestionCrops')
+  reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult> {
+    return reviewQuestionCropsWithAgent(this.ctx, request, this.configSource())
   }
 
   /**

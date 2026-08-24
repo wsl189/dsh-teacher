@@ -35,6 +35,8 @@ import type {
   TeacherQuickNoteId,
   TeacherQuestionFolder,
   TeacherQuestionFolderId,
+  TeacherQuestionBatchDestination,
+  TeacherQuestionLibraryFolderId,
   TeacherStudent,
   TeacherStudentId,
   TeacherReminder,
@@ -193,7 +195,7 @@ export function registerTeacherWorkbenchTools(ctx: Context, service: TeacherWork
 
   ctx.tools.register(defineTool({
     name: 'teacher_question_workbench',
-    description: `Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: ${QUESTION_ACTIONS.join(', ')}. segment_pdf uses {sourceId,sourceName,pageRange?,batchName?,padding?} from uploaded-document context, keeps each accepted region's MinerU left, top, and bottom coordinates, and gives every output the PDF-wide maximum normalized question width. Source pixels stop at the nearest overlapping right-side content boundary; any remaining width is white padding instead of pixels from another column. Its stored crops use a root-level physical directory named after sourceName, and repeated names reuse that directory. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.`,
+    description: `Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: ${QUESTION_ACTIONS.join(', ')}. segment_pdf has no default save destination and uses {sourceId,sourceName,destinationKind:library-root|library-folder,folderId?,pageRange?,batchName?,padding?} from uploaded-document context. Use library-root only when the current user explicitly names the question-library root. Use library-folder with the folderId from teacher_workbench_read only when the current user explicitly names that folder's complete path. Otherwise ask which destination to use and do not call segment_pdf. It keeps each accepted region's MinerU left, top, and bottom coordinates and gives every output the PDF-wide maximum normalized question width. Source pixels stop at the nearest overlapping right-side content boundary; any remaining width is white padding instead of pixels from another column. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.`,
     parameters: {
       action: { type: 'string', required: true, enum: [...QUESTION_ACTIONS] },
       data: { type: 'object', required: true, additionalProperties: true },
@@ -203,9 +205,11 @@ export function registerTeacherWorkbenchTools(ctx: Context, service: TeacherWork
       if (args.action === 'segment_pdf') {
         if (exec.agent === undefined) throw new Error('question segmentation requires an owning agent session')
         const sourceName = textField(args.data, 'sourceName')
+        const state = (await service.read({})).value.state
         const result = await segmentStagedQuestionPdf(ctx, service, {
           sourceId: textField(args.data, 'sourceId') as never,
           sourceName,
+          destination: questionSegmentationDestination(state, args.data, exec.agent),
           pageRange: optionalText(args.data, 'pageRange') ?? '',
           batchName: optionalText(args.data, 'batchName')?.trim() || sourceName.replace(/\.pdf$/iu, ''),
           padding: optionalNumber(args.data, 'padding') ?? 8,
@@ -766,8 +770,58 @@ function currentTurnUserText(agent: Agent): string {
     if (event.type !== 'user/message' || event.data.source.kind !== 'user') return []
     return event.data.content.flatMap(block => block.type === 'text' ? [block.text] : [])
   }).join('\n').trim()
-  if (text === '') throw new Error('the current agent turn has no direct user text for daily-management routing')
+  if (text === '') throw new Error('the current agent turn has no direct user text')
   return text
+}
+
+function questionSegmentationDestination(
+  state: TeacherWorkbenchState,
+  data: Record<string, unknown>,
+  agent: Agent,
+): Exclude<TeacherQuestionBatchDestination, { readonly kind: 'source-folder' }> {
+  const kind = optionalEnum(data, 'destinationKind', ['library-root', 'library-folder'] as const)
+  if (kind === undefined) {
+    throw new Error('segment_pdf has no default save destination; ask the user to choose the question-library root or provide one complete folder path before cutting')
+  }
+  const requestText = normalizedQuestionDestination(currentTurnUserText(agent))
+  if (kind === 'library-root') {
+    if (optionalText(data, 'folderId') !== undefined) throw new Error('folderId is not allowed for the question-library root')
+    const rootNames = ['试题图片库根目录', '试题图片根目录', '图片根目录', 'question library root']
+    if (!rootNames.some(name => requestText.includes(normalizedQuestionDestination(name)))) {
+      throw new Error('the current user request does not explicitly name the question-library root; ask which save destination to use before cutting')
+    }
+    return { kind: 'library-root' }
+  }
+
+  const folderId = textField(data, 'folderId') as TeacherQuestionLibraryFolderId
+  const path = questionLibraryFolderPath(state, folderId)
+  if (state.questionLibraryFolders.some(folder => folder.parentId === folderId)) {
+    throw new Error(`question-library destination must be a leaf path: ${path}`)
+  }
+  if (!requestText.includes(normalizedQuestionDestination(path))) {
+    throw new Error(`the current user request does not explicitly name question-library path ${JSON.stringify(path)}; ask for the complete save path before cutting`)
+  }
+  return { kind: 'library-folder', folderId }
+}
+
+function questionLibraryFolderPath(state: TeacherWorkbenchState, folderId: TeacherQuestionLibraryFolderId): string {
+  const folders = new Map(state.questionLibraryFolders.map(folder => [folder.id, folder] as const))
+  const visited = new Set<TeacherQuestionLibraryFolderId>()
+  const names: string[] = []
+  let currentId: TeacherQuestionLibraryFolderId | undefined = folderId
+  while (currentId !== undefined) {
+    if (visited.has(currentId)) throw new Error('question-library destination contains a directory cycle')
+    visited.add(currentId)
+    const folder = folders.get(currentId)
+    if (folder === undefined) throw new Error(`question-library folder not found: ${String(currentId)}`)
+    names.push(folder.name)
+    currentId = folder.parentId
+  }
+  return names.reverse().join('/')
+}
+
+function normalizedQuestionDestination(value: string): string {
+  return normalized(value).replaceAll('\\', '/').replace(/\s*\/\s*/gu, '/')
 }
 
 function routeFromLiteralKeyword(text: string): DailyCreationRoute | undefined {

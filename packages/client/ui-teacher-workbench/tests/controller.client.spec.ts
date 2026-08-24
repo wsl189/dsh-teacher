@@ -190,6 +190,7 @@ describe('TeacherWorkbenchController', () => {
     const controller = new TeacherWorkbenchController(fake.remote)
 
     await expect(controller.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '试卷', sourceName: '试卷.pdf', pageRange: '全部页', images: [{
         questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AA==',
       }],

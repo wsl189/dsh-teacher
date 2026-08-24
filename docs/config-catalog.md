@@ -896,6 +896,8 @@ export interface Config {
   maxQuestionLayoutPages: number
   /** Selected PDF pages owned by one automatic question-segmentation group. */
   questionSegmentationBatchPages: number
+  /** Maximum fallible question-head candidates owned by one automatic question-segmentation group. */
+  questionSegmentationBatchCandidates: number
   /** Maximum OCR elements admitted to one question-segmentation agent run. */
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
@@ -904,12 +906,20 @@ export interface Config {
   maxSegmentedQuestions: number
   /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
   maxQuestionBoundarySubmissions: number
+  /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
+  maxQuestionBoundaryAgentRuns: number
+  /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
+  maxQuestionAutoOwnedGapRatio: number
+  /** Maximum local recuts admitted for one defective question image. */
+  maxQuestionRecutAttempts: number
+  /** Maximum page or crop images returned by one child-agent image-tool call. */
+  maxQuestionVisionImagesPerToolCall: number
   /** Wall-clock deadline for one question-segmentation agent run. */
   questionSegmentationAgentTimeoutMs: number
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:165`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:173`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

@@ -266,6 +266,13 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('segmentQuestions') segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>
 
 /**
+ * Visually review preliminary question crops and correct one processing group when needed.
+ * @param request - crop images, source-page previews, OCR geometry, and current group regions.
+ * @returns accepted preliminary regions or one Host-validated corrected group.
+ */
+@Remote('reviewQuestionCrops') reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult>
+
+/**
  * Persist one browser-rendered paper-batch part and commit its metadata.
  * @param request - batch metadata and ordered raster payloads.
  * @returns the committed document and generated batch id, or a stable failure.

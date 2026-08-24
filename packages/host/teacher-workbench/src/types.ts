@@ -770,6 +770,20 @@ export interface TeacherQuestionLayoutPage {
   readonly elements: readonly TeacherQuestionLayoutElement[]
 }
 
+/** Browser- or Host-rendered source page available to the segmentation child through an image tool. */
+export interface TeacherQuestionPagePreview {
+  /** Zero-based index in the original PDF. */
+  readonly pageIndex: number
+  /** Verified raster format. */
+  readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp'
+  /** Encoded preview width in pixels. */
+  readonly width: number
+  /** Encoded preview height in pixels. */
+  readonly height: number
+  /** Canonical base64-encoded raster bytes. */
+  readonly contentBase64: string
+}
+
 /** Detect semantic question boundaries in an already extracted PDF layout. */
 export interface TeacherQuestionSegmentRequest {
   /** Live root session that owns the short-lived child agent. */
@@ -778,6 +792,8 @@ export interface TeacherQuestionSegmentRequest {
   readonly fileName: string
   /** Exact selected pages and their OCR geometry. */
   readonly pages: readonly TeacherQuestionLayoutPage[]
+  /** Visual previews for every selected page when the caller can render the source PDF. */
+  readonly pagePreviews?: readonly TeacherQuestionPagePreview[]
   /** Extra vertical page units retained around accepted boundaries. */
   readonly padding: number
 }
@@ -806,6 +822,8 @@ export interface TeacherQuestionPageRegion {
 
 /** One top-level question accepted by the segmentation validator. */
 export interface TeacherSegmentedQuestion {
+  /** Opaque OCR head identity stable across review revisions inside one processing group. */
+  readonly sourceHeadId: TeacherQuestionLayoutElementId
   /** Unique source-order display number assigned after boundary validation. */
   readonly questionNo: number
   /** Original PDF page containing the accepted top-level question marker. */
@@ -816,11 +834,45 @@ export interface TeacherSegmentedQuestion {
   readonly regions: readonly TeacherQuestionPageRegion[]
 }
 
+/** Review one preliminary crop set and return accepted or corrected source regions. */
+export interface TeacherQuestionCropReviewRequest {
+  /** Live root session that owns the short-lived review child. */
+  readonly parentSessionId: SessionId
+  /** Original PDF display name used only as task context. */
+  readonly fileName: string
+  /** Processing-group identity retained on corrected questions. */
+  readonly groupIndex: number
+  /** Pages whose question heads belong to this processing group. */
+  readonly corePageIndexes: readonly number[]
+  /** Zero-based recut count for the supplied crop images. */
+  readonly recutAttempt: number
+  /** Stable question identities whose current images require review; empty when verifying a zero-question group. */
+  readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[]
+  /** Inspection pages and OCR geometry for the complete processing group. */
+  readonly pages: readonly TeacherQuestionLayoutPage[]
+  /** Visual previews covering the reviewed questions and their local context. */
+  readonly pagePreviews: readonly TeacherQuestionPagePreview[]
+  /** Complete current processing-group boundaries used if a revision is required. */
+  readonly questions: readonly TeacherSegmentedQuestion[]
+  /** Crop images for exactly `reviewQuestionIds`; empty groups still receive source-page review. */
+  readonly crops: readonly TeacherQuestionImageUpload[]
+  /** Extra page units retained around any corrected boundaries. */
+  readonly padding: number
+}
+
+/** Page ownership retained for one semantic processing group. */
+export interface TeacherQuestionSegmentationGroup {
+  readonly groupIndex: number
+  readonly corePageIndexes: readonly number[]
+  readonly inspectionPageIndexes: readonly number[]
+}
+
 /** Stable question-segmentation failure codes. */
 export type TeacherQuestionSegmentErrorCode =
   | 'invalid-request'
   | 'session-unavailable'
   | 'tool-model-unavailable'
+  | 'vision-unavailable'
   | 'source-too-large'
   | 'timed-out'
   | 'model-failed'
@@ -845,8 +897,12 @@ export interface TeacherQuestionSegmentSuccess {
   readonly value: {
     /** Number of semantic page groups processed for this request. */
     readonly groupCount: number
+    /** Stable page ownership used by local visual review and boundary revision. */
+    readonly groups: readonly TeacherQuestionSegmentationGroup[]
     /** Maximum decoded image bytes sent in one automatic save part. */
     readonly maxSaveBatchBytes: number
+    /** Maximum local recuts admitted for one defective image before its last render is saved. */
+    readonly maxRecutAttempts: number
     /** Maximum accepted question-region width divided by its OCR page width. */
     readonly maxQuestionWidthRatio: number
     readonly questions: readonly TeacherSegmentedQuestion[]
@@ -855,6 +911,23 @@ export interface TeacherQuestionSegmentSuccess {
 
 /** Semantic question-boundary result returned to the browser. */
 export type TeacherQuestionSegmentResult = TeacherQuestionSegmentSuccess | TeacherQuestionSegmentRejected
+
+/** Successful crop-review result for one semantic processing group. */
+export interface TeacherQuestionCropReviewSuccess {
+  /** Success discriminant. */
+  readonly ok: true
+  /** Reviewed source regions plus the local follow-up required by the caller. */
+  readonly value: {
+    /** Accepted images need no recut; revised boundaries need one; unresolved findings keep the current regions. */
+    readonly decision: 'accepted' | 'revised' | 'unresolved'
+    /** Stable identities whose crops or shared boundaries require local rerendering. */
+    readonly affectedQuestionIds: readonly TeacherQuestionLayoutElementId[]
+    readonly questions: readonly TeacherSegmentedQuestion[]
+  }
+}
+
+/** Crop-review result returned to browser and Host renderers. */
+export type TeacherQuestionCropReviewResult = TeacherQuestionCropReviewSuccess | TeacherQuestionSegmentRejected
 
 /** Stable weather-provider failure codes presented by the workbench UI. */
 export type TeacherWeatherErrorCode = 'location-not-found' | 'provider-unavailable' | 'invalid-response'
@@ -954,12 +1027,18 @@ export interface TeacherQuestionImageUpload {
   readonly contentBase64: string
 }
 
+/** Physical destination for a new batch: a source-name root child, the library root itself, or one durable leaf. */
+export type TeacherQuestionBatchDestination =
+  | { readonly kind: 'source-folder' }
+  | { readonly kind: 'library-root' }
+  | { readonly kind: 'library-folder'; readonly folderId: TeacherQuestionLibraryFolderId }
+
 /** Atomic paper-batch save request. */
 export interface TeacherQuestionBatchSaveRequest {
   /** Existing paper batch that receives this bounded continuation part. */
   readonly appendToBatchId?: TeacherQuestionBatchId
-  /** Leaf destination for a new batch; omission creates or reuses a root-level directory named after the PDF. */
-  readonly folderId?: TeacherQuestionLibraryFolderId
+  /** Explicit physical destination retained across every continuation part. */
+  readonly destination: TeacherQuestionBatchDestination
   /** Teacher-facing batch name. */
   readonly name: string
   /** Original PDF display name. */

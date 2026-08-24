@@ -101,11 +101,14 @@
         timetableAgentTimeoutMs: 3600000
         timetableVisionAgentTimeoutMs: 3600000
         maxQuestionLayoutPages: 50
-        questionSegmentationBatchPages: 20
+        questionSegmentationBatchPages: 4
+        questionSegmentationBatchCandidates: 12
         maxQuestionLayoutElements: 5000
         maxQuestionSourceChunkCharacters: 18000
         maxSegmentedQuestions: 300
         maxQuestionBoundarySubmissions: 5
+        maxQuestionBoundaryAgentRuns: 2
+        maxQuestionAutoOwnedGapRatio: 0.18
         questionSegmentationAgentTimeoutMs: 3600000
         reminderRetryMs: 60000
 

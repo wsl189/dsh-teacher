@@ -633,6 +633,7 @@ describe('web e2e: durable teacher workbench', () => {
     let batch = document.value.state.questionBatches.find(item => item.name === '布局验证试卷')
     if (batch === undefined) {
       const saved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
+        destination: { kind: 'source-folder' },
         name: '布局验证试卷',
         sourceName: 'layout.pdf',
         pageRange: '1',
@@ -787,7 +788,7 @@ describe('web e2e: durable teacher workbench', () => {
     await pageRangeDialog.waitFor({ state: 'hidden', timeout: 10_000 })
 
     const directSaved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
-      folderId: directSaveFolder.id,
+      destination: { kind: 'library-folder', folderId: directSaveFolder.id },
       name: '目录直存验证',
       sourceName: '目录直存验证.pdf',
       pageRange: '1',

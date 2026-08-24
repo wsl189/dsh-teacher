@@ -6,7 +6,10 @@ import type {
   OcrLayoutDocument,
   TeacherQuestionBatchId,
   TeacherQuestionBatchSaveRequest,
+  TeacherQuestionCropReviewRequest,
   TeacherQuestionImageUpload,
+  TeacherQuestionLayoutElementId,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionSegmentResult,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import {
@@ -23,28 +26,31 @@ const layout = (name: string): OcrLayoutDocument => ({
   pages: [{ pageIndex: 0, width: 100, height: 100, elements: [] }],
 })
 
-const segmented = (): TeacherQuestionSegmentResult => ({
+const segmented = (questionCount = 1): TeacherQuestionSegmentResult => ({
   ok: true,
   value: {
     groupCount: 1,
+    groups: [{ groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] }],
     maxSaveBatchBytes: 1_000,
+    maxRecutAttempts: 1,
     maxQuestionWidthRatio: 0.5,
-    questions: [{
-      questionNo: 1,
+    questions: Array.from({ length: questionCount }, (_, index) => ({
+      sourceHeadId: `p0e${String(index)}` as TeacherQuestionLayoutElementId,
+      questionNo: index + 1,
       headPageIndex: 0,
       groupIndex: 0,
       regions: [{
         pageIndex: 0,
         left: 0,
-        top: 0,
+        top: index * 20,
         right: 50,
         rightLimit: 100,
-        bottom: 50,
+        bottom: index * 20 + 20,
         excludedAreas: [],
         pageWidth: 100,
         pageHeight: 100,
       }],
-    }],
+    })),
   },
 })
 
@@ -66,6 +72,286 @@ const request = (fileName: string): QuestionCuttingEnqueueRequest => ({
 })
 
 describe('QuestionCuttingController', () => {
+  it('previews every core page during the first complete-group review', async () => {
+    const multiPageLayout: OcrLayoutDocument = {
+      name: '整页漏题.pdf',
+      provider: 'mineru',
+      pages: [0, 1, 2].map(pageIndex => ({ pageIndex, width: 100, height: 100, elements: [] })),
+    }
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const question = {
+      ...initial.value.questions[0]!,
+      sourceHeadId: 'p2e0' as TeacherQuestionLayoutElementId,
+      headPageIndex: 2,
+      regions: [{
+        pageIndex: 2, left: 0, top: 0, right: 50, rightLimit: 100, bottom: 20,
+        excludedAreas: [], pageWidth: 100, pageHeight: 100,
+      }],
+    }
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      expect(review.pagePreviews.map(preview => preview.pageIndex)).toEqual([0, 1, 2])
+      return {
+        ok: true as const,
+        value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+      }
+    })
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async () => ({ ok: true, value: multiPageLayout }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: {
+            ...initial.value,
+            groups: [{ groupIndex: 0, corePageIndexes: [0, 1, 2], inspectionPageIndexes: [0, 1, 2] }],
+            questions: [question],
+          },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch: async () => ({ ok: true, batchId: 'all-pages' as TeacherQuestionBatchId }),
+      },
+      {
+        key: () => 'all-core-pages',
+        renderCrops: async (_file, _layout, questions) => questions.map(item => ({
+          ...upload(`${String(item.sourceHeadId)}.png`), questionNo: item.questionNo,
+        })),
+        renderPagePreviews: async () => [0, 1, 2].map(pageIndex => ({
+          pageIndex, mediaType: 'image/png' as const, width: 1, height: 1, contentBase64: 'AQ==',
+        })),
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue({ ...request('整页漏题.pdf'), pageIndexes: [0, 1, 2], pageRange: '1-3' })
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledOnce()
+    await controller.dispose()
+  })
+
+  it('reviews an empty preliminary group and adds a visually detected missing question', async () => {
+    const initial = segmented(0)
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const recovered = {
+      sourceHeadId: 'p0e0' as TeacherQuestionLayoutElementId,
+      questionNo: 1,
+      headPageIndex: 0,
+      groupIndex: 0,
+      regions: [{
+        pageIndex: 0, left: 0, top: 0, right: 50, rightLimit: 100, bottom: 20,
+        excludedAreas: [], pageWidth: 100, pageHeight: 100,
+      }],
+    }
+    let reviewPass = 0
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      reviewPass += 1
+      if (reviewPass === 1) {
+        expect(review.reviewQuestionIds).toEqual([])
+        expect(review.crops).toEqual([])
+        expect(review.pagePreviews.map(preview => preview.pageIndex)).toEqual([0])
+        return {
+          ok: true as const,
+          value: {
+            decision: 'revised' as const,
+            affectedQuestionIds: [recovered.sourceHeadId],
+            questions: [recovered],
+          },
+        }
+      }
+      expect(review.reviewQuestionIds).toEqual([recovered.sourceHeadId])
+      return {
+        ok: true as const,
+        value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+      }
+    })
+    const rendered: string[][] = []
+    const renderCrops = vi.fn(async (
+      _file: File,
+      _layout: OcrLayoutDocument,
+      questions: TeacherQuestionCropReviewRequest['questions'],
+    ) => {
+      rendered.push(questions.map(question => question.sourceHeadId))
+      return questions.map(question => ({
+        ...upload(`${String(question.sourceHeadId)}.png`),
+        questionNo: question.questionNo,
+      }))
+    })
+    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'recovered' as TeacherQuestionBatchId }))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: { ...initial.value, maxRecutAttempts: 2 },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'zero-question-recovery',
+        renderCrops,
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('漏题恢复.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(rendered).toEqual([[], ['p0e0'], ['p0e0']])
+    expect(saveBatch).toHaveBeenCalledWith(expect.objectContaining({
+      images: [expect.objectContaining({ fileName: 'p0e0.png' })],
+    }))
+    await controller.dispose()
+  })
+
+  it('rerenders only the defective crop, confirms it, and preserves the fixed group width', async () => {
+    const initial = segmented(3)
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const segmentQuestions = vi.fn(async (): Promise<TeacherQuestionSegmentResult> => ({
+      ...initial,
+      value: { ...initial.value, maxRecutAttempts: 2 },
+    }))
+    let reviewPass = 0
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      reviewPass += 1
+      if (reviewPass > 1) {
+        return {
+          ok: true as const,
+          value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+        }
+      }
+      return {
+        ok: true as const,
+        value: {
+          decision: 'revised' as const,
+          affectedQuestionIds: ['p0e1' as TeacherQuestionLayoutElementId],
+          questions: review.questions.map(question => ({
+            ...question,
+            regions: question.sourceHeadId === 'p0e1'
+              ? question.regions.map(region => ({ ...region, right: 40 }))
+              : question.regions,
+          })),
+        },
+      }
+    })
+    const renders: Array<{ ids: string[]; rights: number[]; widthRatio: number }> = []
+    const renderCrops = vi.fn(async (
+      _file: File,
+      _layout: OcrLayoutDocument,
+      questions: TeacherQuestionCropReviewRequest['questions'],
+      widthRatio: number,
+    ) => {
+      const rights = questions.map(question => question.regions[0]?.right)
+      if (rights.some(right => right === undefined)) throw new Error('render fixture has no question region')
+      renders.push({
+        ids: questions.map(question => question.sourceHeadId),
+        rights: rights as number[],
+        widthRatio,
+      })
+      return questions.map((question, index) => ({
+        ...upload(`${String(question.sourceHeadId)}-right-${String(rights[index])}.png`),
+        questionNo: question.questionNo,
+        width: Math.round(widthRatio * 100),
+      }))
+    })
+    const saveBatch = vi.fn(async (_request: TeacherQuestionBatchSaveRequest) => (
+      { ok: true as const, batchId: 'corrected' as TeacherQuestionBatchId }
+    ))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => segmentQuestions,
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'corrected-job',
+        renderCrops,
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('需要重切.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(renders).toEqual([
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 50, 50], widthRatio: 0.5 },
+      { ids: ['p0e1'], rights: [40], widthRatio: 0.5 },
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 40, 50], widthRatio: 0.5 },
+    ])
+    const savedImages = saveBatch.mock.calls[0]?.[0].images ?? []
+    expect(savedImages.some(image => image.fileName === 'p0e1-right-40.png' && image.width === 50)).toBe(true)
+    await controller.dispose()
+  })
+
+  it('saves the second local recut when the crop remains defective instead of failing the PDF', async () => {
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      const right = review.recutAttempt === 0 ? 45 : 35
+      return {
+        ok: true as const,
+        value: {
+          decision: 'revised' as const,
+          affectedQuestionIds: review.reviewQuestionIds,
+          questions: review.questions.map(question => ({
+            ...question,
+            regions: question.regions.map(region => ({ ...region, right })),
+          })),
+        },
+      }
+    })
+    const renderedRights: number[] = []
+    const renderCrops = vi.fn(async (
+      _file: File,
+      _layout: OcrLayoutDocument,
+      questions: TeacherQuestionCropReviewRequest['questions'],
+    ) => {
+      const right = questions[0]?.regions[0]?.right
+      if (right === undefined) throw new Error('render fixture has no question region')
+      renderedRights.push(right)
+      return [{ ...upload(`right-${String(right)}.png`) }]
+    })
+    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'last-recut' as TeacherQuestionBatchId }))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: { ...initial.value, maxRecutAttempts: 2 },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'persistent-defect',
+        renderCrops,
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('持续异常.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(renderedRights).toEqual([50, 45, 35])
+    expect(saveBatch).toHaveBeenCalledWith(expect.objectContaining({
+      images: [expect.objectContaining({ fileName: 'right-35.png' })],
+    }))
+    await controller.dispose()
+  })
+
   it('accepts consecutive PDFs, runs them sequentially, and completes without a mounted subscriber', async () => {
     let releaseFirst: (() => void) | undefined
     const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve })
@@ -92,6 +378,13 @@ describe('QuestionCuttingController', () => {
     const resolveSegmentation = vi.fn()
       .mockReturnValueOnce(firstSegment)
       .mockReturnValueOnce(secondSegment)
+    const resolveCropReview = vi.fn(() => async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      operations.push('review')
+      return {
+        ok: true as const,
+        value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+      }
+    })
     const renderCrops = vi.fn(async (file: File, ...args: readonly unknown[]) => {
       operations.push(`render:${file.name}`)
       const progress = args.at(-1) as (completedQuestions: number, totalQuestions: number) => void
@@ -105,11 +398,14 @@ describe('QuestionCuttingController', () => {
     let key = 0
     let now = 1_000
     const controller = new QuestionCuttingController(
-      { extractLayout, resolveSegmentation, saveBatch },
+      { extractLayout, resolveSegmentation, resolveCropReview, saveBatch },
       {
         key: () => `job-${String(++key)}`,
         now: () => now += 1_000,
         renderCrops,
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
         partitionUploads: images => [images],
       },
     )
@@ -117,7 +413,10 @@ describe('QuestionCuttingController', () => {
     const unsubscribe = controller.subscribe(listener)
 
     controller.enqueue(request('第一份.pdf'))
-    controller.enqueue(request('第二份.pdf'))
+    controller.enqueue({
+      ...request('第二份.pdf'),
+      folderId: 'selected-folder' as TeacherQuestionLibraryFolderId,
+    })
 
     expect(resolveSegmentation).toHaveBeenCalledTimes(2)
     expect(extractLayout).toHaveBeenCalledTimes(1)
@@ -136,11 +435,19 @@ describe('QuestionCuttingController', () => {
       'extract:第一份.pdf',
       'segment:第一份.pdf',
       'render:第一份.pdf',
+      'review',
+      'render:第一份.pdf',
       'save:第一份.pdf',
       'extract:第二份.pdf',
       'segment:第二份.pdf',
       'render:第二份.pdf',
+      'review',
+      'render:第二份.pdf',
       'save:第二份.pdf',
+    ])
+    expect(saveBatch.mock.calls.map(([saved]) => saved.destination)).toEqual([
+      { kind: 'source-folder' },
+      { kind: 'library-folder', folderId: 'selected-folder' },
     ])
     expect(controller.getSnapshot().jobs.map(job => ({
       fileName: job.fileName,
@@ -162,6 +469,10 @@ describe('QuestionCuttingController', () => {
       {
         extractLayout,
         resolveSegmentation: () => async () => segmented(),
+        resolveCropReview: () => async review => ({
+          ok: true,
+          value: { decision: 'accepted', affectedQuestionIds: [], questions: review.questions },
+        }),
         saveBatch: async () => ({ ok: true, batchId: 'batch-ok' as TeacherQuestionBatchId }),
       },
       {
@@ -170,6 +481,9 @@ describe('QuestionCuttingController', () => {
           return () => `job-${String(++value)}`
         })(),
         renderCrops: async file => [upload(`${file.name}.png`)],
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
         partitionUploads: images => [images],
       },
     )

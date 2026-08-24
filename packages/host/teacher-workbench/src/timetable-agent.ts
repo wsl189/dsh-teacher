@@ -267,7 +267,7 @@ function rejected(
 }
 
 function decodeImage(contentBase64: string): Uint8Array | undefined {
-  if (!/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/u.test(contentBase64)) return undefined
+  if (contentBase64.length === 0 || contentBase64.length % 4 !== 0) return undefined
   const bytes = Buffer.from(contentBase64, 'base64')
   return bytes.byteLength > 0 && bytes.toString('base64') === contentBase64 ? bytes : undefined
 }

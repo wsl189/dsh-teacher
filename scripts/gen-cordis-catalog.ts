@@ -558,6 +558,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   TeacherWorkbenchSourceStageResult: 'storage.md',
   TeacherQuestionSegmentRequest: 'storage.md',
   TeacherQuestionSegmentResult: 'storage.md',
+  TeacherQuestionCropReviewRequest: 'storage.md',
+  TeacherQuestionCropReviewResult: 'storage.md',
   TeacherWorkbenchWriteRequest: 'storage.md',
   TeacherWorkbenchWriteResult: 'storage.md',
   Workspace: 'workspace.md',

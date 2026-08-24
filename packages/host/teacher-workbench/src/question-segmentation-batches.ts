@@ -2,6 +2,7 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import {
+  countQuestionHeadCandidates,
   segmentQuestionsWithAgent,
   type TeacherQuestionSegmentationAgentConfig,
   type TeacherQuestionSegmentationAgentResult,
@@ -17,8 +18,12 @@ import type {
 export interface TeacherQuestionSegmentationBatchConfig extends TeacherQuestionSegmentationAgentConfig {
   /** Selected source pages owned by one semantic processing group. */
   readonly questionSegmentationBatchPages: number
+  /** Maximum fallible question-head candidates owned by one semantic processing group. */
+  readonly questionSegmentationBatchCandidates: number
   /** Maximum decoded image bytes accepted by one automatic save part. */
   readonly maxQuestionBatchBytes: number
+  /** Maximum local recuts admitted for one defective image before persistence. */
+  readonly maxQuestionRecutAttempts: number
 }
 
 /** Page ownership and overlap passed to one semantic agent run. */
@@ -44,31 +49,51 @@ function maxQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): 
 }
 
 /**
- * Plan fixed-size core groups with adjacent-page overlap.
+ * Plan density-bounded core groups with adjacent-page overlap.
  * @param pageIndexes - ordered, unique original PDF page indexes.
  * @param batchPages - maximum core pages owned by one group.
+ * @param candidateCounts - fallible question-head candidate counts aligned with `pageIndexes`.
+ * @param batchCandidates - maximum candidates owned by one group; one dense page always remains indivisible.
  * @returns processing groups in source order.
  */
 export function planQuestionSegmentationPageGroups(
   pageIndexes: readonly number[],
   batchPages: number,
+  candidateCounts: readonly number[],
+  batchCandidates: number,
 ): readonly TeacherQuestionSegmentationPageGroup[] {
   if (!Number.isSafeInteger(batchPages) || batchPages < 1) throw new TypeError('batchPages must be a positive integer')
+  if (!Number.isSafeInteger(batchCandidates) || batchCandidates < 1) {
+    throw new TypeError('batchCandidates must be a positive integer')
+  }
+  if (candidateCounts.length !== pageIndexes.length
+    || candidateCounts.some(count => !Number.isSafeInteger(count) || count < 0)) {
+    throw new TypeError('candidateCounts must contain one non-negative integer per page')
+  }
   for (const [index, pageIndex] of pageIndexes.entries()) {
     if (!Number.isSafeInteger(pageIndex) || pageIndex < 0 || (index > 0 && pageIndex <= (pageIndexes[index - 1] ?? -1))) {
       throw new TypeError('pageIndexes must be unique non-negative integers in source order')
     }
   }
   const groups: TeacherQuestionSegmentationPageGroup[] = []
-  for (let offset = 0; offset < pageIndexes.length; offset += batchPages) {
-    const corePageIndexes = pageIndexes.slice(offset, offset + batchPages)
+  for (let offset = 0; offset < pageIndexes.length;) {
+    let end = offset
+    let candidates = 0
+    while (end < pageIndexes.length && end - offset < batchPages) {
+      const nextCandidates = candidateCounts[end] ?? 0
+      if (end > offset && candidates + nextCandidates > batchCandidates) break
+      candidates += nextCandidates
+      end += 1
+    }
+    const corePageIndexes = pageIndexes.slice(offset, end)
     const inspectionStart = Math.max(0, offset - 1)
-    const inspectionEnd = Math.min(pageIndexes.length, offset + batchPages + 1)
+    const inspectionEnd = Math.min(pageIndexes.length, end + 1)
     groups.push({
       groupIndex: groups.length,
       corePageIndexes,
       inspectionPageIndexes: pageIndexes.slice(inspectionStart, inspectionEnd),
     })
+    offset = end
   }
   return groups
 }
@@ -92,6 +117,8 @@ export async function segmentQuestionsInBatches(
     groups = planQuestionSegmentationPageGroups(
       request.pages.map(page => page.pageIndex),
       config.questionSegmentationBatchPages,
+      request.pages.map(countQuestionHeadCandidates),
+      config.questionSegmentationBatchCandidates,
     )
   } catch (error) {
     return {
@@ -123,7 +150,14 @@ export async function segmentQuestionsInBatches(
       }
       pages.push(page)
     }
-    const result = await run(ctx, { ...request, pages }, config)
+    const inspectionPages = new Set(group.inspectionPageIndexes)
+    const result = await run(ctx, {
+      ...request,
+      pages,
+      ...(request.pagePreviews === undefined ? {} : {
+        pagePreviews: request.pagePreviews.filter(preview => inspectionPages.has(preview.pageIndex)),
+      }),
+    }, config)
     if (!result.ok) return result
     const corePages = new Set(group.corePageIndexes)
     questions.push(...result.value.questions
@@ -135,7 +169,9 @@ export async function segmentQuestionsInBatches(
     ok: true,
     value: {
       groupCount: groups.length,
+      groups,
       maxSaveBatchBytes: config.maxQuestionBatchBytes,
+      maxRecutAttempts: config.maxQuestionRecutAttempts,
       maxQuestionWidthRatio: maxQuestionWidthRatio(numberedQuestions),
       questions: numberedQuestions,
     },

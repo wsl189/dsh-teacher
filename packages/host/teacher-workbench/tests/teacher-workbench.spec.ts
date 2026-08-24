@@ -133,10 +133,15 @@ function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbench
     timetableVisionAgentTimeoutMs: 45_000,
     maxQuestionLayoutPages: 50,
     questionSegmentationBatchPages: 20,
+    questionSegmentationBatchCandidates: 300,
     maxQuestionLayoutElements: 5_000,
     maxQuestionSourceChunkCharacters: 18_000,
     maxSegmentedQuestions: 300,
     maxQuestionBoundarySubmissions: 3,
+    maxQuestionBoundaryAgentRuns: 2,
+    maxQuestionAutoOwnedGapRatio: 0.18,
+    maxQuestionRecutAttempts: 2,
+    maxQuestionVisionImagesPerToolCall: 4,
     questionSegmentationAgentTimeoutMs: 90_000,
   }
 }
@@ -538,10 +543,15 @@ describe('TeacherWorkbenchService', () => {
       timetableVisionAgentTimeoutMs: 45_000,
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
+      questionSegmentationBatchCandidates: 300,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
+      maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionAutoOwnedGapRatio: 0.18,
+      maxQuestionRecutAttempts: 2,
+      maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 120_000,
     })
     contexts.push(b.ctx)
@@ -576,10 +586,15 @@ describe('TeacherWorkbenchService', () => {
       timetableVisionAgentTimeoutMs: 45_000,
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
+      questionSegmentationBatchCandidates: 300,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
+      maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionAutoOwnedGapRatio: 0.18,
+      maxQuestionRecutAttempts: 2,
+      maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 120_000,
     }
     const b = await harness(undefined, config)
@@ -607,9 +622,12 @@ describe('TeacherWorkbenchService', () => {
       ok: true,
       value: {
         groupCount: 1,
+        groups: [{ groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] }],
         maxSaveBatchBytes: 16 * 1024 * 1024,
+        maxRecutAttempts: 1,
         maxQuestionWidthRatio: 0.7,
         questions: [{
+          sourceHeadId: 'p0e0' as never,
           questionNo: 1,
           headPageIndex: 0,
           groupIndex: 0,
@@ -618,6 +636,7 @@ describe('TeacherWorkbenchService', () => {
             excludedAreas: [], pageWidth: 200, pageHeight: 300,
           }],
         }, {
+          sourceHeadId: 'p0e1' as never,
           questionNo: 2,
           headPageIndex: 0,
           groupIndex: 0,
@@ -628,16 +647,42 @@ describe('TeacherWorkbenchService', () => {
         }],
       },
     })
+    vi.spyOn(b.service, 'reviewQuestionCrops').mockImplementation(request => Promise.resolve({
+      ok: true,
+      value: { decision: 'accepted', affectedQuestionIds: [], questions: request.questions },
+    }))
+    const missingDestination = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'segment_pdf',
+      data: {
+        sourceId: staged.value.id,
+        sourceName: 'paper.pdf',
+      },
+    }, promptAgent('请帮我切题'))
+    expect(missingDestination.isError).toBe(true)
+    expect(missingDestination.content.find(block => block.type === 'text')?.text)
+      .toContain('has no default save destination')
+    const guessedDestination = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'segment_pdf',
+      data: {
+        sourceId: staged.value.id,
+        sourceName: 'paper.pdf',
+        destinationKind: 'library-root',
+      },
+    }, promptAgent('请帮我切题'))
+    expect(guessedDestination.isError).toBe(true)
+    expect(guessedDestination.content.find(block => block.type === 'text')?.text)
+      .toContain('does not explicitly name the question-library root')
     const cut = await callTool(b.ctx, 'teacher_question_workbench', {
       action: 'segment_pdf',
       data: {
         sourceId: staged.value.id,
         sourceName: 'paper.pdf',
+        destinationKind: 'library-root',
         pageRange: '1',
         batchName: '自动切题',
         padding: 8,
       },
-    }, { id: 'session-1' })
+    }, promptAgent('请帮我切题并保存到试题图片库根目录'))
     expect(cut.isError).toBe(false)
     const result = cut.value as { batchId: TeacherQuestionBatchId; questionCount: number; groupCount: number }
     expect(result).toMatchObject({ questionCount: 2, groupCount: 1 })
@@ -650,9 +695,13 @@ describe('TeacherWorkbenchService', () => {
         { questionNo: 2, mediaType: 'image/png', width: 280 },
       ],
     }])
+    expect(document.state.questionBatches[0]?.folderId).toBeUndefined()
+    expect(document.state.questionLibraryFolders).toEqual([])
     const firstImage = document.state.questionBatches[0]?.images[0]
     const secondImage = document.state.questionBatches[0]?.images[1]
     if (firstImage === undefined || secondImage === undefined) throw new Error('segmented question image is missing')
+    expect((await stat(join(root, 'segments', `${String(firstImage.id)}.png`))).isFile()).toBe(true)
+    await expect(stat(join(root, 'segments', 'paper'))).rejects.toMatchObject({ code: 'ENOENT' })
     const storedFirstImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: firstImage.id } })
     if (!storedFirstImage.ok) throw new Error(storedFirstImage.error.message)
     const padded = await sharp(Buffer.from(storedFirstImage.value.contentBase64, 'base64'))
@@ -728,10 +777,15 @@ describe('TeacherWorkbenchService', () => {
       timetableVisionAgentTimeoutMs: 45_000,
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
+      questionSegmentationBatchCandidates: 300,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
+      maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionAutoOwnedGapRatio: 0.18,
+      maxQuestionRecutAttempts: 2,
+      maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,
     })
     contexts.push(b.ctx)
@@ -745,6 +799,7 @@ describe('TeacherWorkbenchService', () => {
     })
 
     const first = await b.service.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(1, '#ff0000')],
     })
     expect(first.ok).toBe(true)
@@ -756,6 +811,7 @@ describe('TeacherWorkbenchService', () => {
     expect((await stat(join(root, 'segments', 'math', `${String(firstBatch.images[0]!.id)}.png`))).isFile()).toBe(true)
     const second = await b.service.saveQuestionBatch({
       appendToBatchId: first.value.batchId,
+      destination: { kind: 'source-folder' },
       name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(2, '#0000ff')],
     })
 
@@ -771,6 +827,7 @@ describe('TeacherWorkbenchService', () => {
       },
     })
     const separate = await b.service.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '另一批次', sourceName: 'math.pdf', pageRange: '1', images: [await image(3, '#00ff00')],
     })
     expect(separate).toMatchObject({ ok: true })
@@ -780,6 +837,7 @@ describe('TeacherWorkbenchService', () => {
       .toBe(automaticFolder.id)
     expect(await b.service.saveQuestionBatch({
       appendToBatchId: 'missing' as TeacherQuestionBatchId,
+      destination: { kind: 'source-folder' },
       name: '合并试卷', sourceName: 'math.pdf', pageRange: '全部页', images: [await image(4, '#00ff00')],
     })).toMatchObject({ ok: false, error: { code: 'not-found' } })
   })
@@ -838,7 +896,7 @@ describe('TeacherWorkbenchService', () => {
 
     const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#123456' } }).png().toBuffer()
     await expect(b.service.saveQuestionBatch({
-      folderId: libraryFolderId,
+      destination: { kind: 'library-folder', folderId: libraryFolderId },
       name: '父目录拒绝验证',
       sourceName: '父目录拒绝验证.pdf',
       pageRange: '1',
@@ -852,7 +910,7 @@ describe('TeacherWorkbenchService', () => {
       }],
     })).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request', message: '保存目录必须是末级目录' } })
     const saved = await b.service.saveQuestionBatch({
-      folderId: nestedLibraryFolderId,
+      destination: { kind: 'library-folder', folderId: nestedLibraryFolderId },
       name: '期中试卷',
       sourceName: '期中试卷.pdf',
       pageRange: '1',
@@ -903,7 +961,7 @@ describe('TeacherWorkbenchService', () => {
     expect((await stat(renamedDirectory)).isDirectory()).toBe(true)
 
     const retained = await b.service.saveQuestionBatch({
-      folderId: nestedLibraryFolderId,
+      destination: { kind: 'library-folder', folderId: nestedLibraryFolderId },
       name: '月考试卷',
       sourceName: '月考试卷.pdf',
       pageRange: '1',
@@ -1203,10 +1261,15 @@ describe('TeacherWorkbenchService', () => {
       timetableVisionAgentTimeoutMs: 45_000,
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
+      questionSegmentationBatchCandidates: 300,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
+      maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionAutoOwnedGapRatio: 0.18,
+      maxQuestionRecutAttempts: 2,
+      maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,
     })
     contexts.push(b.ctx)
@@ -1256,6 +1319,7 @@ describe('TeacherWorkbenchService', () => {
     })
     expect(seeded.ok).toBe(true)
     const saved = await b.service.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '期中试卷',
       sourceName: 'math.pdf',
       pageRange: '1-2',
@@ -1276,6 +1340,7 @@ describe('TeacherWorkbenchService', () => {
       .png()
       .toBuffer()
     const editable = await b.service.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '图片编辑测试',
       sourceName: 'edit.png',
       pageRange: '',
@@ -1598,10 +1663,15 @@ describe('TeacherWorkbenchService', () => {
       timetableVisionAgentTimeoutMs: 45_000,
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
+      questionSegmentationBatchCandidates: 300,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
+      maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionAutoOwnedGapRatio: 0.18,
+      maxQuestionRecutAttempts: 2,
+      maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,
     }, true)
     contexts.push(b.ctx)
@@ -1624,6 +1694,7 @@ describe('TeacherWorkbenchService', () => {
     expect(seeded.ok).toBe(true)
     const oldBytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#993333' } }).png().toBuffer()
     const saved = await b.service.saveQuestionBatch({
+      destination: { kind: 'source-folder' },
       name: '旧目录试卷',
       sourceName: 'math.pdf',
       pageRange: '1',

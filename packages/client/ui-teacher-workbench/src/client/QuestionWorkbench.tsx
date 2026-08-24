@@ -1811,6 +1811,7 @@ function questionCuttingStageLabel(job: QuestionCuttingJob, t: TeacherWorkbenchT
     case 'queued': return t('questions.progressQueued')
     case 'extracting': return t('questions.progressExtracting')
     case 'segmenting': return t('questions.progressSegmenting')
+    case 'reviewing': return t('questions.progressReviewing')
     case 'rendering': return t('questions.progressRendering')
     case 'saving': return t('questions.progressSaving')
     case 'completed': return t('questions.progressCompleted', { count: job.savedCount })

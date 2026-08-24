@@ -20,6 +20,7 @@ const MODEL = 'layout-reader'
 const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbench')
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/question-segmentation', import.meta.url))
 const RESULT_EXPECTED = join(SNAPSHOT_DIR, 'result.expected.json')
+const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
 function toolCall(name: string, args: object, ordinal: number): StreamChunk[] {
   const id = CallId(`question-segmentation-${String(ordinal)}`)
@@ -35,41 +36,79 @@ function toolCall(name: string, args: object, ordinal: number): StreamChunk[] {
 /** Deterministic model seam that follows the run-scoped tools published by the real child loop. */
 class QuestionSegmentationAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  private readonly boundaryPhases = new Map<string, number>()
+  private readonly reviewPhases = new Map<string, number>()
 
   override providerInfo(provider: string): LlmProviderInfo {
     return { id: provider, name: 'Question segmentation test' }
   }
 
   override listModels(provider: string): Promise<readonly LlmModelInfo[]> {
-    return Promise.resolve([{ provider, id: MODEL, name: 'Layout reader' }])
+    return Promise.resolve([{ provider, id: MODEL, name: 'Layout reader', inputModalities: ['text', 'image'] }])
   }
 
   override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
-    return Promise.resolve({ provider, id: model, name: 'Layout reader', contextWindow: 128_000 })
+    return Promise.resolve({
+      provider, id: model, name: 'Layout reader', contextWindow: 128_000, inputModalities: ['text', 'image'],
+    })
   }
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
+    const reviewPages = options.tools?.find(tool => tool.name.startsWith('question_review_page_'))?.name
+    const reviewCrops = options.tools?.find(tool => tool.name.startsWith('question_review_crop_'))?.name
+    const reviewFindings = options.tools?.find(tool => tool.name.startsWith('submit_question_crop_findings_'))?.name
+    if (reviewPages !== undefined && reviewCrops !== undefined && reviewFindings !== undefined) {
+      const phase = this.reviewPhases.get(reviewFindings) ?? 0
+      this.reviewPhases.set(reviewFindings, phase + 1)
+      if (phase === 0) {
+        yield * toolCall(reviewPages, { ids: ['page-1', 'page-2'] }, this.requests.length)
+        return
+      }
+      if (phase === 1) {
+        yield * toolCall(reviewCrops, { ids: ['crop-p0e3', 'crop-p0e6'] }, this.requests.length)
+        return
+      }
+      if (phase === 2) {
+        yield * toolCall(reviewFindings, {
+          verifiedCrops: [
+            {
+              cropId: 'crop-p0e3',
+              answerDemand: 'solve both requested subparts',
+              evidence: 'question 1 stem, subparts, and figure are visible',
+            },
+            {
+              cropId: 'crop-p0e6',
+              answerDemand: 'complete the requested proof using the supplied figure',
+              evidence: 'question 2 stem, figure, and page continuation are visible',
+            },
+          ],
+          findings: [],
+        }, this.requests.length)
+        return
+      }
+      const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
+      if (token === undefined) throw new Error('accepted crop-review token is missing from the child history')
+      yield * toolCall('structured_output', { validationToken: token }, this.requests.length)
+      return
+    }
     const source = options.tools?.find(tool => tool.name.startsWith('question_layout_'))?.name
+    const preview = options.tools?.find(tool => tool.name.startsWith('question_page_preview_'))?.name
     const submit = options.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))?.name
-    const phase = (this.requests.length - 1) % 4
+    if (source === undefined || preview === undefined || submit === undefined) {
+      throw new Error('question boundary tools are incomplete')
+    }
+    const phase = this.boundaryPhases.get(submit) ?? 0
+    this.boundaryPhases.set(submit, phase + 1)
     if (phase === 0 && source !== undefined) {
-      yield * toolCall(source, { chunk: 0 }, 1)
+      yield * toolCall(source, { chunk: 0 }, this.requests.length)
       return
     }
-    if (phase === 1 && submit !== undefined) {
-      yield * toolCall(submit, {
-        headConvention: 'Arabic labels followed by punctuation begin independent top-level questions.',
-        questions: [
-          { headElementId: 'p0e3' },
-          { headElementId: 'p0e6' },
-        ],
-        excludedElementIds: ['p0e2', 'p1e2'],
-        endElementId: 'p1e5',
-      }, 2)
+    if (phase === 1) {
+      yield * toolCall(preview, { ids: ['page-1', 'page-2'] }, this.requests.length)
       return
     }
-    if (phase === 2 && submit !== undefined) {
+    if (phase === 2) {
       yield * toolCall(submit, {
         headConvention: 'Arabic punctuation and bracketed 题 labels begin independent top-level questions.',
         questions: [
@@ -78,13 +117,14 @@ class QuestionSegmentationAdapter extends LlmAdapter {
           { headElementId: 'p1e3' },
         ],
         excludedElementIds: ['p0e2', 'p1e2'],
-        endElementId: 'p1e5',
-      }, 3)
+        retainedImageElementIds: ['p0e5', 'p0e7'],
+        stopBeforeElementId: 'p1e5',
+      }, this.requests.length)
       return
     }
     const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
     if (token === undefined) throw new Error('accepted boundary token is missing from the child history')
-    yield * toolCall('structured_output', { validationToken: token }, 4)
+    yield * toolCall('structured_output', { validationToken: token }, this.requests.length)
   }
 }
 
@@ -106,6 +146,7 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
     })
     await scaffold.ctx.settings.replace(TEACHER_WORKBENCH_SETTINGS_NAMESPACE, {
       questionSegmentationBatchPages: 1,
+      questionSegmentationBatchCandidates: 20,
     })
   }, 120_000)
 
@@ -119,40 +160,76 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
       meta: { cwd: scaffold.workspaceCwd },
       agentOptions: { provider: PROVIDER, model: MODEL },
     })
+    const pages = [{
+      pageIndex: 0,
+      width: 720,
+      height: 1000,
+      elements: [
+        { type: 'text' as const, text: '数学试卷', bbox: [180, 20, 540, 60] as const },
+        { type: 'text' as const, text: '答题前请填写姓名', bbox: [40, 70, 500, 95] as const },
+        { type: 'text' as const, text: '一、选择题', bbox: [40, 100, 300, 125] as const },
+        { type: 'text' as const, text: '1. 已知函数 f(x)', bbox: [40, 140, 500, 175] as const },
+        { type: 'text' as const, text: '(1) 求定义域；(2) 求最值', bbox: [60, 200, 500, 235] as const },
+        { type: 'image' as const, text: '', bbox: [260, 260, 610, 480] as const },
+        { type: 'text' as const, text: '2．如图，在三角形 ABC 中', bbox: [40, 520, 600, 555] as const },
+        { type: 'image' as const, text: '', bbox: [300, 600, 620, 940] as const },
+      ],
+    }, {
+      pageIndex: 1,
+      width: 720,
+      height: 1000,
+      elements: [
+        { type: 'text' as const, text: '接上页，求角 A', bbox: [45, 60, 500, 95] as const },
+        { type: 'equation' as const, text: 'AB=AC', bbox: [80, 150, 260, 185] as const },
+        { type: 'text' as const, text: '2.1.1 不等式的性质及应用', bbox: [160, 300, 560, 330] as const },
+        { type: 'text' as const, text: '[题3] 已知 a>b>0', bbox: [40, 370, 600, 405] as const },
+        { type: 'text' as const, text: '判断下列不等式', bbox: [60, 430, 500, 465] as const },
+        { type: 'text' as const, text: '数学试卷参考答案及评分标准', bbox: [150, 520, 570, 560] as const },
+        { type: 'text' as const, text: '1. x>0', bbox: [40, 590, 400, 620] as const },
+      ],
+    }]
+    const pagePreviews = pages.map(page => ({
+      pageIndex: page.pageIndex,
+      mediaType: 'image/png' as const,
+      width: 1,
+      height: 1,
+      contentBase64: PIXEL,
+    }))
     const result = await scaffold.ctx.teacherWorkbench.segmentQuestions({
       parentSessionId: parent.agent.id,
       fileName: '通用版式数学试卷.pdf',
       padding: 10,
-      pages: [{
-        pageIndex: 0,
-        width: 720,
-        height: 1000,
-        elements: [
-          { type: 'text', text: '数学试卷', bbox: [180, 20, 540, 60] },
-          { type: 'text', text: '答题前请填写姓名', bbox: [40, 70, 500, 95] },
-          { type: 'text', text: '一、选择题', bbox: [40, 100, 300, 125] },
-          { type: 'text', text: '1. 已知函数 f(x)', bbox: [40, 140, 500, 175] },
-          { type: 'text', text: '(1) 求定义域；(2) 求最值', bbox: [60, 200, 500, 235] },
-          { type: 'image', text: '', bbox: [260, 260, 610, 480] },
-          { type: 'text', text: '2．如图，在三角形 ABC 中', bbox: [40, 520, 600, 555] },
-          { type: 'image', text: '', bbox: [300, 600, 620, 940] },
-        ],
-      }, {
-        pageIndex: 1,
-        width: 720,
-        height: 1000,
-        elements: [
-          { type: 'text', text: '接上页，求角 A', bbox: [45, 60, 500, 95] },
-          { type: 'equation', text: 'AB=AC', bbox: [80, 150, 260, 185] },
-          { type: 'text', text: '2.1.1 不等式的性质及应用', bbox: [160, 300, 560, 330] },
-          { type: 'text', text: '[题3] 已知 a>b>0', bbox: [40, 370, 600, 405] },
-          { type: 'text', text: '判断下列不等式', bbox: [60, 430, 500, 465] },
-          { type: 'text', text: '数学试卷参考答案及评分标准', bbox: [150, 520, 570, 560] },
-          { type: 'text', text: '1. x>0', bbox: [40, 590, 400, 620] },
-        ],
-      }],
+      pages,
+      pagePreviews,
     })
+    if (!result.ok) throw new Error(result.error.message)
     expect(result).toMatchObject({ ok: true })
+    const review = await scaffold.ctx.teacherWorkbench.reviewQuestionCrops({
+      parentSessionId: parent.agent.id,
+      fileName: '通用版式数学试卷.pdf',
+      groupIndex: 0,
+      corePageIndexes: [0],
+      recutAttempt: 0,
+      reviewQuestionIds: result.value.questions
+        .filter(question => question.groupIndex === 0)
+        .map(question => question.sourceHeadId),
+      pages,
+      pagePreviews,
+      questions: result.value.questions.filter(question => question.groupIndex === 0),
+      crops: result.value.questions
+        .filter(question => question.groupIndex === 0)
+        .map(question => ({
+          questionNo: question.questionNo,
+          fileName: `第${String(question.questionNo)}题.png`,
+          mediaType: 'image/png' as const,
+          width: 1,
+          height: 1,
+          contentBase64: PIXEL,
+        })),
+      padding: 10,
+    })
+    if (!review.ok) throw new Error(review.error.message)
+    expect(review).toMatchObject({ ok: true, value: { decision: 'accepted', affectedQuestionIds: [] } })
     const evidence = {
       modelCalls: adapter.requests.length,
       ordinaryConversationTools: scaffold.ctx.tools.schemas()
@@ -169,10 +246,16 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
         .find(tool => tool.name === 'teacher_timetable')?.description,
       exposedTools: {
         source: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('question_layout_'))),
+        pagePreview: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('question_page_preview_'))),
         submission: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('submit_question_boundaries_'))),
+        cropReviewPage: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('question_review_page_'))),
+        cropReviewCrop: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('question_review_crop_'))),
+        cropReviewFindings: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('submit_question_crop_findings_'))),
+        cropReviewRevision: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('revise_question_boundaries_'))),
         structuredOutput: adapter.requests.some(request => request.tools?.some(tool => tool.name === 'structured_output')),
       },
       result,
+      review,
     }
     await compareOrRefreshGolden(RESULT_EXPECTED, JSON.stringify(evidence, null, 2), MODE)
   }, 30_000)
