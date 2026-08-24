@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { OcrError } from '@deepseek-ai/dsh-ocr'
+import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { Config as ConfigSchema, MinerUProvider, type Config } from '../src/index.ts'
 
@@ -252,6 +253,54 @@ describe('MinerUProvider', () => {
     expect(result.pages.map(page => page.elements.map(element => element.text))).toEqual([
       ['[题1] 第一页'],
       ['[题2] 第二页', '后续正文'],
+    ])
+  })
+
+  it('recovers a missing numbered question from isolated landscape columns', async () => {
+    const line = (text: string, bbox: [number, number, number, number]) => ({
+      bbox,
+      spans: [{ type: 'text', content: text }],
+    })
+    const response = (pageSize: [number, number], blocks: readonly unknown[]) => Response.json({
+      results: { paper: { middle_json: JSON.stringify({
+        pdf_info: [{ page_idx: 0, page_size: pageSize, para_blocks: blocks }],
+      }) } },
+    })
+    const block = (text: string, bbox: [number, number, number, number]) => ({
+      type: 'text', bbox, lines: [line(text, bbox)],
+    })
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const file = (init?.body as FormData).get('files') as File
+      if (file.name.endsWith('-left.pdf')) {
+        return response([50, 60], [
+          block('1. left first', [5, 5, 45, 15]),
+          block('2. recovered', [5, 25, 45, 35]),
+        ])
+      }
+      if (file.name.endsWith('-right.pdf')) {
+        return response([50, 60], [block('3. right third', [5, 5, 45, 15])])
+      }
+      return response([100, 60], [
+        block('1. corrupted across columns', [5, 5, 95, 15]),
+        block('3. right third', [55, 25, 95, 35]),
+      ])
+    })
+    const pdf = await PDFDocument.create()
+    pdf.addPage([100, 60])
+    const bytes = await pdf.save()
+    const provider = new MinerUProvider(config({ maxFileBytes: 100_000 }), fetch)
+
+    const result = await provider.extractLayout({
+      name: 'paper.pdf',
+      mediaType: 'application/pdf',
+      contentBase64: Buffer.from(bytes).toString('base64'),
+    })
+
+    expect(fetch).toHaveBeenCalledTimes(3)
+    expect(result.pages[0]?.elements).toEqual([
+      { type: 'text', text: '1. left first', bbox: [5, 5, 45, 15] },
+      { type: 'text', text: '2. recovered', bbox: [5, 25, 45, 35] },
+      { type: 'text', text: '3. right third', bbox: [55, 25, 95, 35] },
     ])
   })
 

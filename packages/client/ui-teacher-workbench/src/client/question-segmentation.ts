@@ -178,6 +178,15 @@ export async function renderQuestionCrops(
           Math.min(source.width, Math.ceil(region.rightLimit / region.pageWidth * source.width)),
         )
         const right = Math.min(rightLimit, left + targetWidth)
+        const excludedAreas = region.excludedAreas.flatMap((area) => {
+          const areaLeft = Math.max(0, Math.floor(area[0] / region.pageWidth * source.width) - left)
+          const areaTop = Math.max(0, Math.floor(area[1] * scaleY) - top)
+          const areaRight = Math.min(right - left, Math.ceil(area[2] / region.pageWidth * source.width) - left)
+          const areaBottom = Math.min(bottom - top, Math.ceil(area[3] * scaleY) - top)
+          return areaRight > areaLeft && areaBottom > areaTop
+            ? [{ left: areaLeft, top: areaTop, width: areaRight - areaLeft, height: areaBottom - areaTop }]
+            : []
+        })
         return {
           source,
           left,
@@ -185,6 +194,7 @@ export async function renderQuestionCrops(
           width: Math.max(1, right - left),
           targetWidth,
           height: Math.max(1, bottom - top),
+          excludedAreas,
         }
       })
       const separator = slices.length > 1 ? 12 : 0
@@ -210,6 +220,9 @@ export async function renderQuestionCrops(
           slice.width,
           slice.height,
         )
+        for (const area of slice.excludedAreas) {
+          context.fillRect(area.left, y + area.top, area.width, area.height)
+        }
         y += slice.height + separator
       }
       const blob = await canvasBlob(output)

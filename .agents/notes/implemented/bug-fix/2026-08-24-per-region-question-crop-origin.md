@@ -16,7 +16,9 @@ After all semantic page groups merge, the Host computes `maxQuestionWidthRatio` 
 
 For each page slice, the Host also records `rightLimit`: the nearest left edge of vertically overlapping content outside that question, or the source page edge when no such content exists. This value is a hard source-pixel limit independent of the region's content-derived `right` coordinate.
 
-The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer samples at most one maximum normalized width after that region's left edge, capped by `rightLimit`. It places those unscaled source pixels on a white canvas whose width still equals the maximum normalized width. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
+When accepted heads occupy both halves of one page, unclaimed single-column elements use the latest preceding head on the same side; unclaimed divider-crossing elements do not enlarge either column. A later head in the same horizontal span is also a hard vertical stop. Semantically excluded boxes that do not overlap an owned element are carried as `excludedAreas` rather than forcing one horizontal stop through adjacent content.
+
+The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer samples at most one maximum normalized width after that region's left edge, capped by `rightLimit`, then paints `excludedAreas` white. It places those unscaled source pixels on a white canvas whose width still equals the maximum normalized width. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
 
 ## Alternatives considered
 
@@ -26,10 +28,10 @@ The browser PDF.js renderer and the ordinary-conversation Host renderer preserve
 
 **Clamp only at the source page edge.** This preserves equal output widths but still samples a neighboring column whenever a wide question elsewhere in the PDF increases the shared width.
 
-**Classify complete page columns before cropping.** A full column model is unnecessary for the safety property. The nearest vertically overlapping non-owned element already provides a local pixel limit without assuming a fixed number or width of columns.
+**Classify arbitrary page-column topology before cropping.** A general column model is unnecessary for the observed two-page spreads. Accepted heads on each side provide the ownership evidence, and the nearest vertically overlapping non-owned element supplies a local pixel limit without assuming fixed column widths.
 
 ## Consequences
 
-Questions in different columns keep different horizontal origins and one consistent output width on equal-size pages. A region constrained by a page edge or neighboring column has white space to its right instead of unrelated source pixels.
+Questions in different columns keep different horizontal origins and one consistent output width on equal-size pages. A region constrained by a page edge or neighboring column has white space to its right instead of unrelated source pixels. Excluded section copy can be removed without clipping an adjacent diagram whose vertical range overlaps it.
 
 A genuinely wide accepted question increases the canvas width used by every crop but cannot override another region's source limit. Existing saved images are not rewritten; users recut a source PDF to apply this geometry. Client and Host regressions use horizontally separated regions and assert both the local crop origin and the absence of neighboring-column pixels beyond `rightLimit`.

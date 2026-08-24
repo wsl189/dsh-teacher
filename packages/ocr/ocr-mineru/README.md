@@ -26,6 +26,8 @@ The provider advertises `maxFileBytes` and `layoutBatchPages` through `ocr.layou
 
 Structured normalization rejects a child line whose center lies outside its enclosing paragraph box. When a cleaned `para_blocks` entry has lost its text but a same-box `preproc_blocks` entry retains usable content, the provider restores that entry from the preprocessing geometry. Either condition marks the page as suspicious; for a multi-page PDF response, only suspicious pages are requested again as single-page ranges and replace their batch result. Ordinary pages retain the faster batched request, while cross-page paragraph merging cannot silently move a question to an adjacent page.
 
+After that repair, a landscape PDF page whose leading ordinary question numbers contain a forward gap is parsed again as independent left and right half-page PDF crops. Half-page coordinates are scaled and offset back into the source page. A recovered group fills a missing number, while a recovered single-column group replaces the same numbered original group only when the original crosses the page divider. Pages without that signal make no column-recovery requests, so one suspicious spread pays for two additional MinerU calls instead of forcing the complete document through single-column parsing.
+
 This output is geometry, not a ready-made domain segmentation. The teacher workbench gives opaque element ids to a restricted question-boundary agent loop, while the Host validates its semantic decisions and maps accepted ids back to these coordinates. MinerU and the model therefore never become the authority for question-bank coordinates, and image quality remains tied to the configured browser render scale.
 
 ## Formats and Failures

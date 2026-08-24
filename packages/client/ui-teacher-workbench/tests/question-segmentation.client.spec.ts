@@ -114,12 +114,18 @@ describe('renderQuestionCrops', () => {
       questionNo: 1,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 5, top: 10, right: 45, rightLimit: 50, bottom: 30, pageWidth: 100, pageHeight: 100 }],
+      regions: [{
+        pageIndex: 0, left: 5, top: 10, right: 45, rightLimit: 50, bottom: 30,
+        excludedAreas: [[10, 12, 20, 18]], pageWidth: 100, pageHeight: 100,
+      }],
     }, {
       questionNo: 2,
       headPageIndex: 0,
       groupIndex: 0,
-      regions: [{ pageIndex: 0, left: 55, top: 40, right: 90, rightLimit: 90, bottom: 60, pageWidth: 100, pageHeight: 100 }],
+      regions: [{
+        pageIndex: 0, left: 55, top: 40, right: 90, rightLimit: 90, bottom: 60,
+        excludedAreas: [], pageWidth: 100, pageHeight: 100,
+      }],
     }]
     const progress = vi.fn()
 
@@ -137,6 +143,7 @@ describe('renderQuestionCrops', () => {
     expect(canvases[1]?.context.drawImage).toHaveBeenCalledWith(
       canvases[0], 5, 10, 40, 20, 0, 0, 40, 20,
     )
+    expect(canvases[1]?.context.fillRect).toHaveBeenCalledWith(5, 2, 10, 6)
     expect(canvases[2]?.context.drawImage).toHaveBeenCalledWith(
       canvases[0], 55, 40, 35, 20, 0, 0, 35, 20,
     )

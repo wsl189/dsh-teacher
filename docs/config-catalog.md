@@ -1561,7 +1561,7 @@ type MinerUEffort = typeof EFFORT_VALUES[number]
 type MinerULanguage = typeof LANGUAGE_VALUES[number]
 ```
 
-Source: [`packages/ocr/ocr-mineru/src/index.ts:87`](../packages/ocr/ocr-mineru/src/index.ts)
+Source: [`packages/ocr/ocr-mineru/src/index.ts:88`](../packages/ocr/ocr-mineru/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 

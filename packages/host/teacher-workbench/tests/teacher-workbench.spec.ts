@@ -613,12 +613,18 @@ describe('TeacherWorkbenchService', () => {
           questionNo: 1,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 20, top: 0, right: 80, rightLimit: 100, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+          regions: [{
+            pageIndex: 0, left: 20, top: 0, right: 80, rightLimit: 100, bottom: 120,
+            excludedAreas: [], pageWidth: 200, pageHeight: 300,
+          }],
         }, {
           questionNo: 2,
           headPageIndex: 0,
           groupIndex: 0,
-          regions: [{ pageIndex: 0, left: 120, top: 0, right: 180, rightLimit: 200, bottom: 120, pageWidth: 200, pageHeight: 300 }],
+          regions: [{
+            pageIndex: 0, left: 120, top: 0, right: 180, rightLimit: 200, bottom: 120,
+            excludedAreas: [[130, 50, 145, 80]], pageWidth: 200, pageHeight: 300,
+          }],
         }],
       },
     })
@@ -656,11 +662,17 @@ describe('TeacherWorkbenchService', () => {
     expect(paddedStats.channels.slice(0, 3).every(channel => channel.min === 255)).toBe(true)
     const storedImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: secondImage.id } })
     if (!storedImage.ok) throw new Error(storedImage.error.message)
-    const directCropStats = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))
-      .extract({ left: 20, top: 80, width: 60, height: 80 })
-      .stats()
+    const directCrop = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))
+      .extract({ left: 50, top: 100, width: 30, height: 60 })
+      .toBuffer()
+    const directCropStats = await sharp(directCrop).stats()
     expect(directCropStats.channels[1]?.min).toBeLessThan(80)
     expect(directCropStats.channels[2]?.min).toBeLessThan(80)
+    const erasedCrop = await sharp(Buffer.from(storedImage.value.contentBase64, 'base64'))
+      .extract({ left: 20, top: 100, width: 30, height: 60 })
+      .toBuffer()
+    const erasedCropStats = await sharp(erasedCrop).stats()
+    expect(erasedCropStats.channels.slice(0, 3).every(channel => channel.min === 255)).toBe(true)
   })
 
   it('ships the reference headteacher templates and rejects cross-class seating occupants', () => {

@@ -90,6 +90,15 @@ describe('segmentQuestionsWithAgent', () => {
       const inspected = String(await source.execute({ chunk: 0 }, {} as never))
       expect(inspected).toContain('"elementId":"p0e4"')
       expect(inspected).toContain('"type":"image"')
+      await expect(submit.execute({
+        headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
+        questions: [
+          { headElementId: 'p0e3' },
+          { headElementId: 'p0e6' },
+        ],
+        excludedElementIds: ['p0e1', 'p0e2'],
+        endElementId: 'p1e2',
+      }, {} as never)).resolves.toContain('question head p0e3 must use preceding numbered candidate p0e2')
       const rejected = String(await submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
         questions: [
@@ -98,12 +107,14 @@ describe('segmentQuestionsWithAgent', () => {
         ],
       }, {} as never))
       expect(rejected).toContain('endElementId must be p1e2')
+      expect(rejected).toContain('numbered question-head candidate p0e1 must be selected or excluded')
       const accepted = String(await submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
         questions: [
           { headElementId: 'p0e2' },
           { headElementId: 'p0e6' },
         ],
+        excludedElementIds: ['p0e1'],
         endElementId: 'p1e2',
       }, {} as never))
       const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
@@ -126,13 +137,19 @@ describe('segmentQuestionsWithAgent', () => {
         questions: [{
           questionNo: 1, headPageIndex: 0, groupIndex: 0,
           regions: [{
-            pageIndex: 0, left: 30, top: 95, right: 620, rightLimit: 720, bottom: 570, pageWidth: 720, pageHeight: 1000,
+            pageIndex: 0, left: 30, top: 95, right: 620, rightLimit: 720, bottom: 570, excludedAreas: [], pageWidth: 720, pageHeight: 1000,
           }],
         }, {
           questionNo: 2, headPageIndex: 0, groupIndex: 0,
           regions: [
-            { pageIndex: 0, left: 30, top: 590, right: 630, rightLimit: 720, bottom: 950, pageWidth: 720, pageHeight: 1000 },
-            { pageIndex: 1, left: 35, top: 50, right: 510, rightLimit: 720, bottom: 195, pageWidth: 720, pageHeight: 1000 },
+            {
+              pageIndex: 0, left: 30, top: 590, right: 630, rightLimit: 720, bottom: 950,
+              excludedAreas: [], pageWidth: 720, pageHeight: 1000,
+            },
+            {
+              pageIndex: 1, left: 35, top: 50, right: 510, rightLimit: 720, bottom: 195,
+              excludedAreas: [], pageWidth: 720, pageHeight: 1000,
+            },
           ],
         }],
       },
@@ -148,6 +165,9 @@ describe('segmentQuestionsWithAgent', () => {
       ] },
     })
     expect(options).toHaveProperty('persona', QUESTION_SEGMENTATION_SKILL.content)
+    const promptText = (options as { prompt: readonly { readonly text?: string }[] }).prompt[0]?.text
+    expect(promptText).toContain('"questionHeadCandidateIds":["p0e1","p0e2","p0e6"]')
+    expect(promptText).toContain('"autoExcludedSectionHeadingIds":[]')
     expect(QUESTION_SEGMENTATION_SKILL.content).toContain('page break never ends a question')
     expect(QUESTION_SEGMENTATION_SKILL.content).toContain('geometric or statistical figures')
     expect(QUESTION_SEGMENTATION_SKILL.content).toContain('infer the convention used by this source')
@@ -167,22 +187,13 @@ describe('segmentQuestionsWithAgent', () => {
         const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
         if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
         await source.execute({ chunk: 0 }, {} as never)
-        await expect(submit.execute({
-          headConvention: 'A score-bearing numeric label starts each top-level problem, including OCR-damaged labels.',
-          questions: [
-            { headElementId: 'p0e0', additionalElementIds: ['p0e4', 'p0e5'] },
-            { headElementId: 'p0e2' },
-            { headElementId: 'p0e8' },
-          ],
-        }, {} as never)).resolves.toContain('must include non-question section heading p0e6')
         const accepted = String(await submit.execute({
           headConvention: 'A score-bearing numeric label starts each top-level problem, including OCR-damaged labels.',
           questions: [
-            { headElementId: 'p0e0', additionalElementIds: ['p0e4', 'p0e5'] },
+            { headElementId: 'p0e0' },
             { headElementId: 'p0e2' },
             { headElementId: 'p0e8' },
           ],
-          excludedElementIds: ['p0e6'],
         }, {} as never))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
@@ -210,6 +221,7 @@ describe('segmentQuestionsWithAgent', () => {
           { type: 'text', text: '本题共2小题，每小题12分', bbox: [438, 228, 700, 238] },
           { type: 'text', text: '19.(17分)', bbox: [440, 240, 485, 255] },
           { type: 'text', text: '证明不等式', bbox: [455, 270, 700, 300] },
+          { type: 'image', text: '', bbox: [350, 330, 490, 420] },
         ],
       }],
     }
@@ -220,15 +232,24 @@ describe('segmentQuestionsWithAgent', () => {
         questions: [
           {
             questionNo: 1, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 20, top: 10, right: 420, rightLimit: 440, bottom: 200, pageWidth: 841, pageHeight: 595 }],
+            regions: [{
+              pageIndex: 0, left: 20, top: 10, right: 420, rightLimit: 440, bottom: 200,
+              excludedAreas: [], pageWidth: 841, pageHeight: 595,
+            }],
           },
           {
             questionNo: 2, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 430, top: 10, right: 710, rightLimit: 841, bottom: 75, pageWidth: 841, pageHeight: 595 }],
+            regions: [{
+              pageIndex: 0, left: 430, top: 10, right: 710, rightLimit: 841, bottom: 75,
+              excludedAreas: [], pageWidth: 841, pageHeight: 595,
+            }],
           },
           {
             questionNo: 3, headPageIndex: 0, groupIndex: 0,
-            regions: [{ pageIndex: 0, left: 430, top: 238, right: 710, rightLimit: 841, bottom: 310, pageWidth: 841, pageHeight: 595 }],
+            regions: [{
+              pageIndex: 0, left: 430, top: 238, right: 710, rightLimit: 841, bottom: 310,
+              excludedAreas: [], pageWidth: 841, pageHeight: 595,
+            }],
           },
         ],
       },
@@ -297,6 +318,57 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('does not let a center decoration associated with excluded copy extend the final question', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'Arabic labels begin top-level questions.',
+          questions: [{ headElementId: 'p0e0' }],
+          excludedElementIds: ['p0e3', 'p0e4'],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'),
+      fileName: '末题水印.pdf',
+      padding: 10,
+      pages: [{
+        pageIndex: 0, width: 841, height: 595,
+        elements: [
+          { type: 'text', text: '19.(17分)', bbox: [46, 19, 90, 32] },
+          { type: 'text', text: '证明函数恰有两个极值点', bbox: [60, 33, 408, 105] },
+          { type: 'image', text: '', bbox: [351, 331, 521, 406] },
+          { type: 'text', text: '支持正版', bbox: [385, 422, 492, 448] },
+          { type: 'text', text: '抵制盗印', bbox: [384, 448, 492, 475] },
+        ],
+      }],
+    }
+
+    const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
+    expect(result.ok && result.value.questions[0]?.regions[0]).toMatchObject({
+      bottom: 115,
+      excludedAreas: [],
+    })
+    await ctx.fiber.dispose()
+  })
+
   it('accepts numbering restarts after an excluded paper boundary and clips preceding titles', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
@@ -356,6 +428,106 @@ describe('segmentQuestionsWithAgent', () => {
     expect(result.ok && result.value.questions.map(question => question.questionNo)).toEqual([1, 2, 3, 4])
     expect(result.ok && result.value.questions[1]?.regions[0]?.bottom).toBe(290)
     expect(result.ok && result.value.questions[2]?.regions[0]?.top).toBe(400)
+    await ctx.fiber.dispose()
+  })
+
+  it('does not attach a restarted paper preamble to the preceding final question', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'Each paper restarts ordinary Arabic numbering at one.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p1e3' }],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'),
+      fileName: '连续试卷.pdf',
+      padding: 10,
+      pages: [{
+        pageIndex: 0, width: 841, height: 595,
+        elements: [
+          { type: 'text', text: '19.(17分)', bbox: [40, 20, 100, 40] },
+          { type: 'text', text: '证明函数结论', bbox: [50, 50, 600, 100] },
+        ],
+      }, {
+        pageIndex: 1, width: 841, height: 595,
+        elements: [
+          { type: 'text', text: '第二套数学试卷', bbox: [180, 20, 600, 60] },
+          { type: 'text', text: '一、选择题', bbox: [40, 210, 600, 230] },
+          { type: 'text', text: '本题只有一个正确选项', bbox: [50, 235, 600, 250] },
+          { type: 'text', text: '1. 已知集合 A', bbox: [40, 300, 600, 330] },
+          { type: 'text', text: '选择正确答案', bbox: [50, 340, 600, 370] },
+        ],
+      }],
+    }
+
+    const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
+    expect(result.ok && result.value.questions[0]?.regions).toEqual([{
+      pageIndex: 0, left: 30, top: 10, right: 610, rightLimit: 841, bottom: 110,
+      excludedAreas: [], pageWidth: 841, pageHeight: 595,
+    }])
+    expect(result.ok && result.value.questions[1]?.regions[0]?.top).toBe(290)
+    await ctx.fiber.dispose()
+  })
+
+  it('removes repeated lower-page decorations and their associated images', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'Each page contains one numbered final question.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p1e0' }, { headElementId: 'p2e0' }],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const pages = [0, 1, 2].map((pageIndex): TeacherQuestionSegmentRequest['pages'][number] => ({
+      pageIndex, width: 841, height: 595,
+      elements: [
+        { type: 'text', text: '19.(17分)', bbox: [40, 20, 100, 40] },
+        { type: 'text', text: `第${String(pageIndex + 1)}套证明题`, bbox: [50, 50, 600, 100] },
+        { type: 'image', text: '', bbox: [350, 320, 520, 405] },
+        { type: 'text', text: '支持正版', bbox: [385, 420, 492, 448] },
+      ],
+    }))
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'), fileName: '重复页底装饰.pdf', padding: 10, pages,
+    }, CONFIG)
+    expect(result.ok && result.value.questions.map(question => question.regions[0]?.bottom)).toEqual([110, 110, 110])
     await ctx.fiber.dispose()
   })
 
@@ -434,12 +606,12 @@ describe('segmentQuestionsWithAgent', () => {
         await expect(submit.execute({
           headConvention: 'Bracketed 题 labels start independent exercises.',
           questions: [{ headElementId: 'p0e0' }],
-          excludedElementIds: ['p0e2'],
-        }, {} as never)).resolves.toContain('must include tagged question-head candidate p0e3')
+          excludedElementIds: ['p0e3'],
+        }, {} as never)).resolves.toContain('must include tagged question-head candidate p0e4')
         const accepted = String(await submit.execute({
           headConvention: 'Bracketed 题 labels start independent exercises.',
-          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e3' }],
-          excludedElementIds: ['p0e2'],
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e4' }],
+          excludedElementIds: ['p0e3'],
         }, {} as never))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
@@ -459,6 +631,7 @@ describe('segmentQuestionsWithAgent', () => {
         elements: [
           { type: 'text', text: '[题4变式4] 若命题为真', bbox: [58, 527, 535, 560] },
           { type: 'text', text: '则实数 a 的范围为', bbox: [58, 575, 535, 609] },
+          { type: 'image', text: '', bbox: [450, 610, 540, 700] },
           { type: 'text', text: '2.1.1 不等式的性质及应用', bbox: [202, 624, 411, 643] },
           { type: 'text', text: '[题1（多选)] 下列不等式成立的是', bbox: [57, 652, 537, 680] },
           { type: 'text', text: 'A. 甲  B. 乙', bbox: [57, 698, 524, 724] },
@@ -468,7 +641,111 @@ describe('segmentQuestionsWithAgent', () => {
 
     const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
     expect(result.ok && result.value.questions).toHaveLength(2)
-    expect(result.ok && result.value.questions[0]?.regions[0]?.bottom).toBeLessThanOrEqual(624)
+    expect(result.ok && result.value.questions[0]?.regions[0]).toMatchObject({
+      bottom: 652,
+      excludedAreas: [[202, 624, 411, 643]],
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('rejects excluding an ordinary candidate that closes a selected numeric gap', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        await expect(submit.execute({
+          headConvention: 'Consecutive Arabic labels start questions.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e4' }],
+          excludedElementIds: ['p0e2'],
+        }, {} as never)).resolves.toContain('p0e2 closes a selected numeric sequence gap')
+        const accepted = String(await submit.execute({
+          headConvention: 'Consecutive Arabic labels start questions.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e2' }, { headElementId: 'p0e4' }],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'), fileName: '连续编号.pdf', padding: 10,
+      pages: [{
+        pageIndex: 0, width: 595, height: 841,
+        elements: [
+          { type: 'text', text: '1. 第一题', bbox: [40, 20, 500, 50] },
+          { type: 'text', text: '第一题正文', bbox: [50, 60, 500, 100] },
+          { type: 'text', text: '2. 第二题', bbox: [40, 120, 500, 150] },
+          { type: 'text', text: '第二题正文', bbox: [50, 160, 500, 200] },
+          { type: 'text', text: '3. 第三题', bbox: [40, 220, 500, 250] },
+          { type: 'text', text: '第三题正文', bbox: [50, 260, 500, 300] },
+        ],
+      }],
+    }
+
+    await expect(segmentQuestionsWithAgent(ctx, layout, CONFIG)).resolves.toMatchObject({
+      ok: true, value: { questions: [{ questionNo: 1 }, { questionNo: 2 }, { questionNo: 3 }] },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('drops a lane-leading page marker instead of stretching the previous column question', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'Arabic labels start questions in both columns.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e2' }, { headElementId: 'p0e5' }],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const layout: TeacherQuestionSegmentRequest = {
+      parentSessionId: SessionId('parent'), fileName: '双栏页码.pdf', padding: 10,
+      pages: [{
+        pageIndex: 0, width: 841, height: 595,
+        elements: [
+          { type: 'text', text: '1. 左栏第一题', bbox: [20, 20, 400, 40] },
+          { type: 'text', text: '第一题正文', bbox: [30, 50, 400, 120] },
+          { type: 'text', text: '2. 左栏第二题', bbox: [20, 200, 400, 220] },
+          { type: 'text', text: '第二题正文', bbox: [30, 230, 400, 260] },
+          { type: 'text', text: '1', bbox: [790, 5, 800, 15] },
+          { type: 'text', text: '3. 右栏第三题', bbox: [440, 20, 800, 40] },
+          { type: 'text', text: '第三题正文', bbox: [450, 50, 800, 120] },
+        ],
+      }],
+    }
+
+    const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
+    expect(result.ok && result.value.questions[1]?.regions[0]).toMatchObject({
+      left: 10, top: 190, right: 410, bottom: 270,
+    })
     await ctx.fiber.dispose()
   })
 
@@ -504,6 +781,47 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('does not charge malformed element references against the complete-draft limit', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    const parent = { session: { id: SessionId('parent') } }
+    ctx.provide('agents', { get: () => parent } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const malformed = String(await submit.execute({
+          headConvention: 'Numeric starts.',
+          questions: [{ headElementId: 'missing' }],
+        }, {} as never))
+        expect(malformed).toContain('do not consume the complete-draft submission limit')
+        const accepted = String(await submit.execute({
+          headConvention: 'Numeric starts.',
+          questions: [{ headElementId: 'p0e2' }, { headElementId: 'p0e6' }],
+          excludedElementIds: ['p0e1'],
+          endElementId: 'p1e2',
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed', output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    await expect(segmentQuestionsWithAgent(ctx, request(), {
+      ...CONFIG,
+      maxQuestionBoundarySubmissions: 1,
+    })).resolves.toMatchObject({ ok: true })
+    await ctx.fiber.dispose()
+  })
+
   it('rejects unknown IDs, normalizes head order, and reports missing services and oversized layouts', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
@@ -523,6 +841,7 @@ describe('segmentQuestionsWithAgent', () => {
         const accepted = String(await submit.execute({
           headConvention: 'Numeric starts.',
           questions: [{ headElementId: 'p0e6' }, { headElementId: 'p0e2' }],
+          excludedElementIds: ['p0e1'],
           endElementId: 'p1e2',
         }, {} as never))
         expect(accepted).toContain('validationToken=')

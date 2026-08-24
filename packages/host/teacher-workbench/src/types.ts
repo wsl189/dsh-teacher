@@ -796,6 +796,8 @@ export interface TeacherQuestionPageRegion {
   readonly rightLimit: number
   /** Exclusive crop bottom in OCR page units. */
   readonly bottom: number
+  /** Semantically excluded source rectangles painted white inside this crop. */
+  readonly excludedAreas: readonly (readonly [number, number, number, number])[]
   /** OCR page width used for proportional browser rendering. */
   readonly pageWidth: number
   /** OCR page height used for proportional browser rendering. */

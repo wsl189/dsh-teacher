@@ -223,7 +223,27 @@ async function renderQuestionUploads(
         const right = Math.min(rightLimit, left + targetWidth)
         const width = Math.max(1, right - left)
         const height = Math.max(1, bottom - top)
-        const cropped = await sharp(page.png).extract({ left, top, width, height }).png().toBuffer()
+        const excludedAreas = region.excludedAreas.flatMap((area) => {
+          const areaLeft = Math.max(0, Math.floor(area[0] / region.pageWidth * page.width) - left)
+          const areaTop = Math.max(0, Math.floor(area[1] / region.pageHeight * page.height) - top)
+          const areaRight = Math.min(width, Math.ceil(area[2] / region.pageWidth * page.width) - left)
+          const areaBottom = Math.min(height, Math.ceil(area[3] / region.pageHeight * page.height) - top)
+          return areaRight > areaLeft && areaBottom > areaTop
+            ? [{ left: areaLeft, top: areaTop, width: areaRight - areaLeft, height: areaBottom - areaTop }]
+            : []
+        })
+        const sourceCrop = await sharp(page.png)
+          .extract({ left, top, width, height })
+          .png()
+          .toBuffer()
+        const cropped = await sharp(sourceCrop)
+          .composite(excludedAreas.map(area => ({
+            input: { create: { width: area.width, height: area.height, channels: 4, background: '#ffffff' } },
+            left: area.left,
+            top: area.top,
+          })))
+          .png()
+          .toBuffer()
         slices.push({
           bytes: new Uint8Array(cropped),
           width,

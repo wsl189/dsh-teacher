@@ -33,6 +33,7 @@
   "license": "MIT",
   "dependencies": {
     "@deepseek-ai/schemastery": "workspace:^",
+    "pdf-lib": "^1.17.1",
     "sharp": "^0.35.3",
     "zod": "^4.4.3"
   },

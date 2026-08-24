@@ -19,6 +19,7 @@ import {
 } from '@deepseek-ai/dsh-ocr'
 import z from '@deepseek-ai/schemastery'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { z as validation } from 'zod'
 
@@ -193,6 +194,7 @@ export class MinerUProvider implements OcrProvider {
     const decoded = decodeRequest(request, config.maxFileBytes)
     const ranges = layoutRanges(request.pageRange, config.layoutBatchPages)
     const pages: OcrLayoutPage[] = []
+    let sourcePdf: Promise<PDFDocument> | undefined
     for (const pageRange of ranges) {
       const batch = await this.extractLayoutRange(config, request, decoded, pageRange, signal)
       if (request.mediaType === 'application/pdf' && batch.length > 1) {
@@ -205,6 +207,19 @@ export class MinerUProvider implements OcrProvider {
             throw new OcrError('MinerU single-page layout recovery returned an unexpected page count', 'invalid-response')
           }
           batch[index] = replacement
+        }
+      }
+      if (request.mediaType === 'application/pdf') {
+        for (const [index, normalized] of batch.entries()) {
+          if (!hasNumberedSequenceGap(normalized.page)) continue
+          sourcePdf ??= PDFDocument.load(decoded.bytes)
+          batch[index] = await this.recoverNumberedColumns(
+            config,
+            request,
+            await sourcePdf,
+            normalized,
+            signal,
+          )
         }
       }
       pages.push(...batch.map(normalized => normalized.page))
@@ -231,6 +246,34 @@ export class MinerUProvider implements OcrProvider {
     if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
     const middle = parseMiddleJson(encoded)
     return middle.pdf_info.map(page => normalizePage(page, pageRange?.start ?? 0))
+  }
+
+  private async recoverNumberedColumns(
+    config: Config,
+    request: OcrLayoutRequest,
+    source: PDFDocument,
+    original: NormalizedLayoutPage,
+    signal?: AbortSignal,
+  ): Promise<NormalizedLayoutPage> {
+    if (original.page.width <= original.page.height) return original
+    const halves = await Promise.all((['left', 'right'] as const).map(async (side) => {
+      const bytes = await cropPdfPageHalf(source, original.page.pageIndex, side)
+      if (bytes.byteLength > config.maxFileBytes) {
+        throw new OcrError('MinerU column recovery exceeds the configured upload limit', 'file-too-large')
+      }
+      const name = `${request.name.replace(/\.pdf$/iu, '')}-page-${String(original.page.pageIndex + 1)}-${side}.pdf`
+      const [page] = await this.extractLayoutRange(config, {
+        name,
+        mediaType: 'application/pdf',
+        contentBase64: Buffer.from(bytes).toString('base64'),
+      }, { bytes, uploadName: name }, undefined, signal)
+      if (page === undefined) throw new OcrError('MinerU column recovery returned no page', 'empty-result')
+      return mapHalfPage(page.page, original.page, side)
+    }))
+    return {
+      page: mergeRecoveredColumns(original.page, halves),
+      suspicious: false,
+    }
   }
 
   private async callMinerU(
@@ -460,6 +503,113 @@ interface NormalizedLayoutPage {
 interface NormalizedBlock {
   readonly elements: readonly OcrLayoutElement[]
   readonly suspicious: boolean
+}
+
+interface NumberedElementGroup {
+  readonly number: number
+  readonly elements: readonly OcrLayoutElement[]
+}
+
+const numberedHeadPattern = /^\s*((?:[0-9０-９]\s*)+)[.．、](?!\s*[0-9０-９]\s*[.．])\s*\S/u
+
+function leadingQuestionNumber(text: string): number | undefined {
+  const matched = numberedHeadPattern.exec(text.normalize('NFKC'))?.[1]
+  if (matched === undefined) return undefined
+  const value = Number(matched.replace(/\s/gu, ''))
+  return Number.isSafeInteger(value) && value > 0 ? value : undefined
+}
+
+function hasNumberedSequenceGap(page: OcrLayoutPage): boolean {
+  let previous: number | undefined
+  for (const element of page.elements) {
+    const current = leadingQuestionNumber(element.text)
+    if (current === undefined) continue
+    if (previous !== undefined && current > previous + 1) return true
+    previous = current
+  }
+  return false
+}
+
+function numberedGroups(elements: readonly OcrLayoutElement[]): readonly NumberedElementGroup[] {
+  const groups: Array<{ number: number; elements: OcrLayoutElement[] }> = []
+  for (const element of elements) {
+    const number = leadingQuestionNumber(element.text)
+    if (number !== undefined) groups.push({ number, elements: [element] })
+    else groups.at(-1)?.elements.push(element)
+  }
+  return groups
+}
+
+async function cropPdfPageHalf(
+  source: PDFDocument,
+  pageIndex: number,
+  side: 'left' | 'right',
+): Promise<Uint8Array> {
+  if (pageIndex < 0 || pageIndex >= source.getPageCount()) {
+    throw new OcrError('MinerU column recovery referenced an unknown page', 'invalid-response')
+  }
+  const target = await PDFDocument.create()
+  const [page] = await target.copyPages(source, [pageIndex])
+  if (page === undefined) throw new OcrError('MinerU column recovery could not copy its page', 'invalid-response')
+  const { width, height } = page.getSize()
+  const halfWidth = width / 2
+  const left = side === 'left' ? 0 : halfWidth
+  page.setCropBox(left, 0, halfWidth, height)
+  page.setMediaBox(left, 0, halfWidth, height)
+  target.addPage(page)
+  return target.save({ useObjectStreams: true })
+}
+
+function mapHalfPage(
+  half: OcrLayoutPage,
+  target: OcrLayoutPage,
+  side: 'left' | 'right',
+): readonly OcrLayoutElement[] {
+  const targetHalfWidth = target.width / 2
+  const scaleX = targetHalfWidth / half.width
+  const scaleY = target.height / half.height
+  const offsetX = side === 'left' ? 0 : targetHalfWidth
+  return half.elements.map(element => ({
+    ...element,
+    bbox: [
+      offsetX + element.bbox[0] * scaleX,
+      element.bbox[1] * scaleY,
+      offsetX + element.bbox[2] * scaleX,
+      element.bbox[3] * scaleY,
+    ] as OcrBoundingBox,
+  }))
+}
+
+function mergeRecoveredColumns(
+  original: OcrLayoutPage,
+  halves: readonly (readonly OcrLayoutElement[])[],
+): OcrLayoutPage {
+  const divider = original.width / 2
+  const originalGroups = numberedGroups(original.elements)
+  const recoveredGroups = halves.flatMap(numberedGroups)
+  const originalNumbers = new Set(originalGroups.map(group => group.number))
+  const removed = new Set<OcrLayoutElement>()
+  const added: OcrLayoutElement[] = []
+  for (const recovered of recoveredGroups) {
+    const matching = originalGroups.find(group => group.number === recovered.number)
+    if (matching === undefined) {
+      if (!originalNumbers.has(recovered.number)) added.push(...recovered.elements)
+      continue
+    }
+    const crossesDivider = matching.elements.some(element => element.bbox[0] < divider && element.bbox[2] > divider)
+    const recoveredCrossesDivider = recovered.elements.some(element => element.bbox[0] < divider && element.bbox[2] > divider)
+    if (!crossesDivider || recoveredCrossesDivider) continue
+    matching.elements.forEach(element => removed.add(element))
+    added.push(...recovered.elements)
+  }
+  if (added.length === 0) return original
+  const elements = [...original.elements.filter(element => !removed.has(element)), ...added]
+  elements.sort((left, right) => {
+    const leftLane = (left.bbox[0] + left.bbox[2]) / 2 < divider ? 0 : 1
+    const rightLane = (right.bbox[0] + right.bbox[2]) / 2 < divider ? 0 : 1
+    return leftLane - rightLane || left.bbox[1] - right.bbox[1] || left.bbox[0] - right.bbox[0]
+  })
+  return { ...original, elements }
 }
 
 function normalizePage(page: MinerUMiddlePage, pageOffset: number): NormalizedLayoutPage {
