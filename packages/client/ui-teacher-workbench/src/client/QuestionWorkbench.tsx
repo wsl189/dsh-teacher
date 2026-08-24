@@ -791,10 +791,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
 
   const deleteLibraryFolder = async (folder: TeacherQuestionLibraryFolder): Promise<void> => {
     const filesystemDirectory = readOnlyLibraryFolderIds.has(folder.id)
-    const confirmation = filesystemDirectory
-      ? t('questions.confirmDeleteFolder', { name: folder.name })
-      : t('questions.confirmDeleteLibraryFolder', { name: folder.name })
-    if (!globalThis.confirm(confirmation)) return
+    if (!globalThis.confirm(t('questions.confirmDeleteFolder', { name: folder.name }))) return
     setBusy('folder')
     const result = filesystemDirectory
       ? await commands.deleteQuestionMediaDirectory({ target: { kind: 'library-folder', id: folder.id } })

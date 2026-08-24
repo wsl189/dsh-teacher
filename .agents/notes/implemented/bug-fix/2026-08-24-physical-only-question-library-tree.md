@@ -26,7 +26,7 @@ Each directory row owns every durable or filesystem-derived batch whose images a
 
 ## Consequences
 
-Directory names and counts match the filesystem tree, including the configured root. Uploading one or several PDFs into an explicitly selected directory changes that directory's image count without adding PDF-named children; an automatic PDF-named row appears only because the matching physical folder exists. Batch-wide deletion is no longer a directory-row action; individual image and physical-directory deletion remain in the Web UI, while the Host and model-facing operation retain exact batch deletion.
+Directory names and counts match the filesystem tree, including the configured root. Uploading one or several PDFs into an explicitly selected directory changes that directory's image count without adding PDF-named children; an automatic PDF-named row appears only because the matching physical folder exists. Batch-wide deletion is no longer a directory-row action; individual image deletion remains in the Web UI, while the Host and model-facing operation retain exact batch deletion. Deleting a physical directory recursively removes its subtree, owned batches, and dependent student copies; it never reparents images into the configured root or another parent directory.
 
 ## Testing
 

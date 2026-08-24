@@ -491,7 +491,8 @@ describe('QuestionWorkbench reference shell', () => {
     const bankImages = await screen.findByRole('complementary', { name: '试题库图片' })
     expect(await within(bankImages).findByRole('button', { name: '第 1 题' })).toBeTruthy()
 
-    vi.stubGlobal('confirm', vi.fn(() => true))
+    const confirm = vi.fn(() => true)
+    vi.stubGlobal('confirm', confirm)
     fireEvent.click(within(nestedDirectoryFolder.parentElement!).getByRole('button', { name: '删除' }))
     await waitFor(() => {
       expect(c.deleteQuestionMediaDirectory).toHaveBeenCalledWith({
@@ -499,6 +500,7 @@ describe('QuestionWorkbench reference shell', () => {
       })
     })
     fireEvent.click(within(library).getByRole('button', { name: '删除目录“第一次”' }))
+    expect(confirm).toHaveBeenCalledWith('确认删除目录“第一次”及其下全部内容吗？')
     await waitFor(() => {
       expect(c.deleteQuestionMediaDirectory).toHaveBeenCalledWith({
         target: { kind: 'library-folder', id: externalNestedLibraryFolderId },

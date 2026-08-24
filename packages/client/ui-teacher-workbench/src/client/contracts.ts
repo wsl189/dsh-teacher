@@ -137,7 +137,7 @@ export interface TeacherWorkbenchCommands {
   createQuestionLibraryFolder: (input: TeacherQuestionLibraryFolderInput) => Promise<TeacherWorkbenchActionResult>
   /** Rename one question-library directory. */
   renameQuestionLibraryFolder: (id: TeacherQuestionLibraryFolderId, name: string) => Promise<TeacherWorkbenchActionResult>
-  /** Delete one question-library directory hierarchy while preserving its batches. */
+  /** Delete one question-library directory hierarchy and all images stored below it. */
   deleteQuestionLibraryFolder: (id: TeacherQuestionLibraryFolderId) => Promise<TeacherWorkbenchActionResult>
   /** Delete one nested question directory and all descendants. */
   deleteQuestionFolder: (id: TeacherQuestionFolderId) => Promise<TeacherWorkbenchActionResult>

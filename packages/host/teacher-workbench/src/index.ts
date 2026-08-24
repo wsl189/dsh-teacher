@@ -548,9 +548,21 @@ export class TeacherWorkbenchService extends TypertRemoteService {
           await prepared.rollback()
           throw error
         }
+        const retainedAssignments = new Set(prepared.state.questionAssignments.map(assignment => assignment.id))
+        const removedAssignments = current.state.questionAssignments.filter(
+          assignment => !retainedAssignments.has(assignment.id),
+        )
         await prepared.commit().catch(() => {
-          // The committed state and retained batch images remain valid when removing the detached residue fails.
+          // The committed state remains valid when removing the detached residue fails.
         })
+        await Promise.all(removedAssignments.map(async (assignment) => {
+          await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
+            kind: 'assignment',
+            id: assignment.id,
+          }).catch(() => {
+            // The assignment is already absent from durable state, so an orphaned copy cannot be addressed again.
+          })
+        }))
         this.discoveredQuestionFiles = new Map()
         this.discoveredQuestionDirectories = new Map()
         return questionMutationSuccess(document)

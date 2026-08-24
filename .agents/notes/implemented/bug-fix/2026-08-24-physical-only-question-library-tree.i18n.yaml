@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-24-physical-only-question-library-tree.md
-2026-08-24-physical-only-question-library-tree.md: e472c9ff9c13e516311ba4633a6808b2f27064af
-2026-08-24-physical-only-question-library-tree.zh.md: 2043c5c4f9b61b8dd59c8e690021ea8b321978ab
+2026-08-24-physical-only-question-library-tree.md: b74d95c9580f28a241ba0b1e757425a2bb6b4e7e
+2026-08-24-physical-only-question-library-tree.zh.md: 5552364ba41a8c3af5d5bcb713a7c0598042cb75

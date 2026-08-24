@@ -84,13 +84,13 @@ export interface PreparedQuestionDirectoryRename {
   rollback(): Promise<void>
 }
 
-/** Durable library deletion prepared together with reversible image moves. */
+/** Durable library deletion prepared together with a reversible directory detach. */
 export interface PreparedQuestionLibraryDirectoryDelete {
-  /** Complete state with the hierarchy removed and affected batches moved to its parent. */
+  /** Complete state with the hierarchy, owned batches, and dependent assignments removed. */
   readonly state: TeacherWorkbenchState
   /** Permanently remove the detached directory after the durable state commits. */
   commit(): Promise<void>
-  /** Restore the directory and every moved image when the durable state commit fails. */
+  /** Restore the detached directory when the durable state commit fails. */
   rollback(): Promise<void>
 }
 
@@ -441,7 +441,7 @@ async function prepareDurableLibraryDirectoryRename(
 }
 
 /**
- * Prepare a durable question-library deletion without breaking batches retained at its parent.
+ * Prepare recursive deletion of a durable question-library hierarchy and its owned images.
  * @param config - current question-library root.
  * @param state - authoritative folder and batch metadata.
  * @param folderId - root of the folder hierarchy to delete.
@@ -464,42 +464,25 @@ export async function prepareDurableQuestionLibraryDirectoryDelete(
       changed = true
     }
   }
+  const removedImageIds = new Set<TeacherQuestionImageId>()
+  for (const batch of state.questionBatches) {
+    if (batch.folderId === undefined || !removed.has(batch.folderId)) continue
+    for (const image of batch.images) removedImageIds.add(image.id)
+  }
   const nextState: TeacherWorkbenchState = {
     ...state,
     questionLibraryFolders: state.questionLibraryFolders.filter(item => !removed.has(item.id)),
-    questionBatches: state.questionBatches.map((batch) => {
-      if (batch.folderId === undefined || !removed.has(batch.folderId)) return batch
-      if (folder.parentId === undefined) {
-        const { folderId: _folderId, ...atRoot } = batch
-        return atRoot
-      }
-      return { ...batch, folderId: folder.parentId }
-    }),
+    questionBatches: state.questionBatches.filter(batch => batch.folderId === undefined || !removed.has(batch.folderId)),
+    questionAssignments: state.questionAssignments.filter(assignment => !removedImageIds.has(assignment.sourceImageId)),
   }
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
   const sourceDirectory = within(root, questionLibraryDirectory(state, folder.id))
-  const destinationDirectory = within(root, questionLibraryDirectory(state, folder.parentId))
   const backupDirectory = within(root, `.deleted-${String(folder.id)}-${randomUUID()}`)
-  const moved: { readonly source: string; readonly destination: string }[] = []
   let detached = false
   const restore = async (): Promise<void> => {
     if (detached) await rename(backupDirectory, sourceDirectory)
-    for (const item of moved.toReversed()) await rename(item.destination, item.source)
   }
   try {
-    await mkdir(destinationDirectory, { recursive: true })
-    for (const batch of state.questionBatches) {
-      if (batch.folderId === undefined || !removed.has(batch.folderId)) continue
-      const batchDirectory = within(root, questionLibraryDirectory(state, batch.folderId))
-      for (const image of batch.images) {
-        const storedName = storedImageName(String(image.id), image.mediaType)
-        const source = within(batchDirectory, storedName)
-        const destination = within(destinationDirectory, storedName)
-        await assertFileMissing(destination)
-        await rename(source, destination)
-        moved.push({ source, destination })
-      }
-    }
     try {
       const entry = await lstat(sourceDirectory)
       if (entry.isSymbolicLink() || !entry.isDirectory()) {

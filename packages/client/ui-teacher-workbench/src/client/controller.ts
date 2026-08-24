@@ -1241,7 +1241,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
-   * Delete one question-library directory hierarchy and move its batches to the parent.
+   * Delete one question-library directory hierarchy and all images stored below it.
    * @param id - root directory identity to remove.
    * @returns the settled persistence result.
    */
@@ -1508,7 +1508,10 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
       try {
         const carried = await call()
         if (!carried.ok) return this.failure(carried.error.code, carried.error.message)
-        if (!carried.value.ok) return this.failure(carried.value.error.code, carried.value.error.message)
+        if (!carried.value.ok) {
+          this.publish({ status: 'ready', document: this.snapshot.document, error: null })
+          return { ok: false, error: carried.value.error }
+        }
         this.publish({ status: 'ready', document: carried.value.value.document, error: null })
         return carried.value.value.batchId === undefined
           ? OK

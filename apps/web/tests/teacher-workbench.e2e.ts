@@ -815,8 +815,23 @@ describe('web e2e: durable teacher workbench', () => {
     await directBatchImages.getByRole('button', { name: '第 1 题', exact: true }).waitFor({ timeout: 10_000 })
     await directSaveFolderButton.click()
     await directBatchImages.waitFor({ state: 'hidden', timeout: 10_000 })
-    await expect(scaffold.ctx.teacherWorkbench.deleteQuestionBatch({ batchId: directBatch.id }))
-      .resolves.toMatchObject({ ok: true })
+    const directSaveDelete = directSaveFolderButton.locator('..').getByRole('button', {
+      name: '删除目录“八月题库”',
+    })
+    await directSaveFolderButton.hover()
+    let directSaveConfirmation = ''
+    page.once('dialog', async (dialog) => {
+      directSaveConfirmation = dialog.message()
+      await dialog.accept()
+    })
+    await directSaveDelete.click()
+    expect(directSaveConfirmation).toBe('确认删除目录“八月题库”及其下全部内容吗？')
+    await directSaveFolderButton.waitFor({ state: 'hidden', timeout: 10_000 })
+    await expect(stat(directSaveDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(directSaveDirectory, '..', `${String(directBatch.images[0]!.id)}.png`)))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+    const deletedDirectoryDocument = await scaffold.ctx.teacherWorkbench.read({})
+    expect(deletedDirectoryDocument.value.state.questionBatches.some(item => item.id === directBatch.id)).toBe(false)
 
     const automaticDirectoryButton = bankFolders.getByRole('button', { name: 'layout', exact: true })
     await automaticDirectoryButton.click()

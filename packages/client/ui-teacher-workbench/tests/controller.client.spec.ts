@@ -75,12 +75,9 @@ function fakeRemote(options: FakeOptions = {}) {
           state: {
             ...document.state,
             questionLibraryFolders: document.state.questionLibraryFolders.filter(folder => !removed.has(folder.id)),
-            questionBatches: document.state.questionBatches.map((batch) => {
-              if (batch.folderId === undefined || !removed.has(batch.folderId)) return batch
-              if (root.parentId !== undefined) return { ...batch, folderId: root.parentId }
-              const { folderId: _folderId, ...atRoot } = batch
-              return atRoot
-            }),
+            questionBatches: document.state.questionBatches.filter(
+              batch => batch.folderId === undefined || !removed.has(batch.folderId),
+            ),
           },
         }
       }
@@ -454,7 +451,7 @@ describe('TeacherWorkbenchController', () => {
     expect(controller.getSnapshot().document!.state.questionLibraryFolders).toEqual([])
   })
 
-  it('moves batches to the parent when deleting a question-library hierarchy', async () => {
+  it('deletes batches below a removed question-library hierarchy', async () => {
     const fake = fakeRemote()
     fake.setDocument({
       revision: 1,
@@ -492,9 +489,27 @@ describe('TeacherWorkbenchController', () => {
     await controller.ensure()
     await controller.deleteQuestionLibraryFolder('library-root' as TeacherQuestionLibraryFolderId)
     expect(controller.getSnapshot().document!.state.questionLibraryFolders.map(folder => folder.id)).toEqual(['library-parent'])
-    expect(controller.getSnapshot().document!.state.questionBatches[0]).toMatchObject({
-      id: 'batch-a', folderId: 'library-parent',
+    expect(controller.getSnapshot().document!.state.questionBatches).toEqual([])
+  })
+
+  it('keeps the workbench ready when a question-media mutation is rejected by the Host', async () => {
+    const fake = fakeRemote()
+    const deleteQuestionMediaDirectory = vi.fn(async () => ({
+      ok: true as const,
+      value: {
+        ok: false as const,
+        error: { code: 'storage-failure' as const, message: '删除试题库目录失败' },
+      },
+    }))
+    const controller = new TeacherWorkbenchController({
+      ...fake.remote,
+      deleteQuestionMediaDirectory,
     })
+    await controller.ensure()
+
+    await expect(controller.deleteQuestionLibraryFolder('library-root' as TeacherQuestionLibraryFolderId))
+      .resolves.toEqual({ ok: false, error: { code: 'storage-failure', message: '删除试题库目录失败' } })
+    expect(controller.getSnapshot()).toMatchObject({ status: 'ready', error: null, document: { revision: 0 } })
   })
 
   it('updates existing identities and name-only roster imports', async () => {

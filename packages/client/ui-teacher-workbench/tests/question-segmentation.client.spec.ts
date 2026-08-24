@@ -3,7 +3,12 @@ import type { OcrLayoutRequest } from '@deepseek-ai/dsh-api-remotes/client'
 import { PDFDocument } from 'pdf-lib'
 import { extractWorkbenchLayout, type TeacherWorkbenchOcrRemote } from '../src/client/extract-document.ts'
 import { parseQuestionPageRange } from '../src/client/question-page-range.ts'
-import { partitionQuestionUploads, readPdfPageCount, renderQuestionCrops } from '../src/client/question-segmentation.ts'
+import {
+  type DetectedQuestion,
+  partitionQuestionUploads,
+  readPdfPageCount,
+  renderQuestionCrops,
+} from '../src/client/question-segmentation.ts'
 
 const pdfMocks = vi.hoisted(() => ({
   destroy: vi.fn(async () => {}),
@@ -110,7 +115,7 @@ describe('renderQuestionCrops', () => {
       provider: 'mineru',
       pages: [{ pageIndex: 0, width: 100, height: 100, elements: [] }],
     }
-    const questions = [{
+    const questions: readonly DetectedQuestion[] = [{
       questionNo: 1,
       headPageIndex: 0,
       groupIndex: 0,

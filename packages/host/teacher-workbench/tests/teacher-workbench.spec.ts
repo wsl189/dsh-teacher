@@ -919,20 +919,35 @@ describe('TeacherWorkbenchService', () => {
     if (!retained.ok || retained.value.batchId === undefined) throw new Error('missing retained batch')
     const retainedBatch = retained.value.document.state.questionBatches.find(item => item.id === retained.value.batchId)!
     const retainedImage = retainedBatch.images[0]!
+    const assigned = await b.service.assignQuestions({
+      studentId,
+      folderId: studentFolderId,
+      imageIds: [retainedImage.id],
+    })
+    if (!assigned.ok) throw new Error(assigned.error.message)
+    const retainedAssignment = assigned.value.document.state.questionAssignments[0]!
+    const retainedAssignmentPath = join(studentsRoot, retainedAssignment.relativePath)
+    await expect(readFile(retainedAssignmentPath)).resolves.toEqual(bytes)
+    const retainedStoredPath = join(renamedDirectory, `${String(retainedImage.id)}.png`)
+    await rm(retainedStoredPath)
     await expect(b.service.deleteQuestionMediaDirectory({
       target: { kind: 'library-folder', id: nestedLibraryFolderId },
     })).resolves.toMatchObject({
       ok: true,
       value: { document: { state: {
         questionLibraryFolders: [expect.objectContaining({ id: libraryFolderId })],
-        questionBatches: [expect.objectContaining({ id: retainedBatch.id, folderId: libraryFolderId })],
+        questionBatches: [],
+        questionAssignments: [],
       } } },
     })
     await expect(stat(renamedDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
     const movedImagePath = join(segmentsRoot, '高二数学', `${String(retainedImage.id)}.png`)
-    await expect(readFile(movedImagePath)).resolves.toEqual(bytes)
+    await expect(stat(movedImagePath)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(retainedAssignmentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: retainedImage.id } }))
-      .resolves.toMatchObject({ ok: true, value: { contentBase64: bytes.toString('base64') } })
+      .resolves.toMatchObject({ ok: false, error: { code: 'not-found' } })
+    await expect(b.service.readQuestionImage({ target: { kind: 'assignment', id: retainedAssignment.id } }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'not-found' } })
   })
 
   it('serves migrated defaults before the first durable write', async () => {
