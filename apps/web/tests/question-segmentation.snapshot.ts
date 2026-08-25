@@ -109,17 +109,22 @@ class QuestionSegmentationAdapter extends LlmAdapter {
       return
     }
     if (phase === 2) {
-      yield * toolCall(submit, {
-        headConvention: 'Arabic punctuation and bracketed 题 labels begin independent top-level questions.',
-        questions: [
-          { headElementId: 'p0e3' },
-          { headElementId: 'p0e6' },
-          { headElementId: 'p1e3' },
-        ],
-        excludedElementIds: ['p0e2', 'p1e2'],
-        retainedImageElementIds: ['p0e5', 'p0e7'],
-        stopBeforeElementId: 'p1e5',
-      }, this.requests.length)
+      const groupIndex = [...this.boundaryPhases.keys()].indexOf(submit)
+      yield * toolCall(submit, groupIndex === 0
+        ? {
+          headConvention: 'Arabic punctuation begins independent top-level questions on the core page.',
+          questions: [{ headElementId: 'p0e3' }, { headElementId: 'p0e6' }],
+          excludedElementIds: ['p0e2'],
+          retainedImageElementIds: ['p0e5', 'p0e7'],
+          stopBeforeElementId: 'p1e2',
+        }
+        : {
+          headConvention: 'Bracketed 题 labels begin independent top-level questions on the core page.',
+          questions: [{ headElementId: 'p1e3' }],
+          excludedElementIds: ['p1e2'],
+          retainedImageElementIds: [],
+          stopBeforeElementId: 'p1e5',
+        }, this.requests.length)
       return
     }
     const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
@@ -254,6 +259,9 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
         cropReviewRevision: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('revise_question_boundaries_'))),
         structuredOutput: adapter.requests.some(request => request.tools?.some(tool => tool.name === 'structured_output')),
       },
+      cropReviewPromptMentionsWhitePadding: adapter.requests.some(request => (
+        JSON.stringify(request.messages).includes('blank white pixels on the right are intentional padding')
+      )),
       result,
       review,
     }

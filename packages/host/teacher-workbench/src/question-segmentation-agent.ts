@@ -94,9 +94,22 @@ interface AcceptedCropReview {
   readonly questions: readonly TeacherSegmentedQuestion[]
 }
 
+const cropRepairIntents = [
+  'expand-top',
+  'trim-top',
+  'expand-bottom',
+  'trim-bottom',
+  'reassign-content',
+  'remove-crop',
+] as const
+
+type CropRepairIntent = typeof cropRepairIntents[number]
+
 interface CropReviewFinding {
   readonly cropId?: string
   readonly pageId?: string
+  readonly missingQuestionHead?: string
+  readonly repairIntents?: readonly CropRepairIntent[]
   readonly issue: string
   readonly evidence: string
 }
@@ -205,15 +218,26 @@ function isCitationOnlyQuestionHead(element: IndexedElement): boolean {
     || (parenthesizedReferencePattern.test(suffix) && bibliographicReferencePattern.test(suffix))
 }
 
-function possibleQuestionHeadIds(elements: readonly IndexedElement[]): readonly TeacherQuestionLayoutElementId[] {
-  const firstAnswerHint = elements.find(element => (
+function isPossibleQuestionHead(element: IndexedElement): boolean {
+  return (element.element.type === 'text' || element.element.type === 'equation')
+    && (numberedQuestionHeadPattern.test(element.element.text)
+      || taggedQuestionHeadPattern.test(element.element.text))
+}
+
+function possibleQuestionHeadIds(
+  elements: readonly IndexedElement[],
+  corePageIndexes?: ReadonlySet<number>,
+): readonly TeacherQuestionLayoutElementId[] {
+  const eligible = corePageIndexes === undefined
+    ? elements
+    : elements.filter(element => corePageIndexes.has(element.page.pageIndex))
+  const firstAnswerHint = eligible.find(element => (
     (element.element.type === 'text' || element.element.type === 'equation')
       && answerHeadingPattern.test(element.element.text)
   ))
-  return elements
+  return eligible
     .filter(element => element.ordinal < (firstAnswerHint?.ordinal ?? elements.length)
-      && (numberedQuestionHeadPattern.test(element.element.text)
-        || taggedQuestionHeadPattern.test(element.element.text)))
+      && isPossibleQuestionHead(element))
     .map(element => element.id)
 }
 
@@ -229,8 +253,13 @@ export function countQuestionHeadCandidates(page: TeacherQuestionLayoutPage): nu
   )).length
 }
 
-function imageElementIds(elements: readonly IndexedElement[]): readonly string[] {
-  return elements.flatMap(element => element.element.type === 'image' ? [element.id as string] : [])
+function imageElementIds(elements: readonly IndexedElement[], corePageIndexes?: ReadonlySet<number>): readonly string[] {
+  return elements.flatMap(element => (
+    element.element.type === 'image'
+      && (corePageIndexes === undefined || corePageIndexes.has(element.page.pageIndex))
+      ? [element.id as string]
+      : []
+  ))
 }
 
 /** Structured-output schema requiring a server-issued accepted-draft token. */
@@ -302,6 +331,14 @@ function validateRequest(
   if (elements === 0) return 'selected pages contain no OCR elements'
   if (elements > config.maxQuestionLayoutElements) {
     return `selected layout exceeds ${String(config.maxQuestionLayoutElements)} OCR elements`
+  }
+  if (request.corePageIndexes !== undefined) {
+    const selectedPageIndexes = new Set(request.pages.map(page => page.pageIndex))
+    if (request.corePageIndexes.length === 0
+      || new Set(request.corePageIndexes).size !== request.corePageIndexes.length
+      || request.corePageIndexes.some(pageIndex => !selectedPageIndexes.has(pageIndex))) {
+      return 'corePageIndexes must be unique selected page indexes and must not be empty'
+    }
   }
   const previews = request.pagePreviews
   if (previews === undefined) return undefined
@@ -426,7 +463,7 @@ function cropPreviewSources(
     const headText = headById.get(question.sourceHeadId)?.element.text.trim().slice(0, 160) ?? ''
     return {
       id: `crop-${String(question.sourceHeadId)}`,
-      label: `crop for head ${String(question.sourceHeadId)} (${String(crop.width)}x${String(crop.height)} pixels); OCR head text: ${JSON.stringify(headText)}`,
+      label: `crop for head ${String(question.sourceHeadId)} (${String(crop.width)}x${String(crop.height)} pixels); blank white right padding is intentional; OCR head text: ${JSON.stringify(headText)}`,
       mediaType: crop.mediaType,
       contentBase64: crop.contentBase64,
     }
@@ -578,7 +615,11 @@ function cropRegions(
       const clusterLeft = Math.min(...cluster.map(item => item.element.bbox[0]))
       const clusterRight = Math.max(...cluster.map(item => item.element.bbox[2]))
       const matching = slices.find(slice => (
-        clusterRight + padding >= slice.left && slice.right + padding >= clusterLeft
+        clusterRight + padding >= slice.left
+          && slice.right + padding >= clusterLeft
+          && !(page === head.page
+            && (cluster.some(item => item.id === head.id) || slice.elements.some(item => item.id === head.id))
+            && Math.min(clusterLeft, slice.left) < head.element.bbox[0] - padding)
       ))
       if (matching === undefined) {
         slices.push({ elements: [...cluster], left: clusterLeft, right: clusterRight })
@@ -623,7 +664,9 @@ function cropRegions(
       const nextLeft = Math.min(page.width, ...verticalBlockers
         .filter(item => item.element.bbox[0] >= ownedRight)
         .map(item => item.element.bbox[0]))
-      const left = Math.max(0, ownedLeft - padding, previousRight)
+      // A same-page ownership claim may reach another lane, but it cannot move the head-bearing slice's origin.
+      const leftAnchor = owned.some(item => item.id === head.id) ? head.element.bbox[0] : ownedLeft
+      const left = Math.max(0, leftAnchor - padding, previousRight)
       const bufferedPreviousBottom = previousBottom === 0
         ? 0
         : Math.ceil((previousBottom + ownedTop) / 2)
@@ -897,6 +940,7 @@ function validateBoundaryDraft(
   requiredHeadCandidateIds: ReadonlySet<string>,
   requiredImageElementIds: ReadonlySet<string>,
   maxAutoOwnedGapRatio: number,
+  corePageIndexes?: ReadonlySet<number>,
 ): BoundaryValidation {
   const errors: string[] = []
   const referenceErrors: string[] = []
@@ -914,6 +958,9 @@ function validateBoundaryDraft(
       errors.push(error)
       referenceErrors.push(error)
       continue
+    }
+    if (corePageIndexes !== undefined && !corePageIndexes.has(head.page.pageIndex)) {
+      errors.push(`${label}.headElementId belongs to an adjacent context page, not a core page owned by this run`)
     }
     if (isSemanticBoundaryElement(head)) {
       errors.push(`${label}.headElementId references a section or answer heading, not an independent question`)
@@ -1080,6 +1127,10 @@ function validateBoundaryDraft(
     errors.push(`image elements require an explicit retained, excluded, or additional ownership decision: ${unclassifiedImages.join(', ')}`)
   }
   const semanticStops = elements.filter(isSemanticBoundaryElement)
+  const contextHeadStops = corePageIndexes === undefined
+    ? []
+    : elements.filter(element => !corePageIndexes.has(element.page.pageIndex) && isPossibleQuestionHead(element))
+  const ownershipStops = [...semanticStops, ...contextHeadStops]
   const excluded = new Set([
     ...declaredExcluded,
     ...semanticStops.map(element => element.id as string),
@@ -1117,7 +1168,7 @@ function validateBoundaryDraft(
     elements,
     selected,
     end,
-    semanticStops,
+    ownershipStops,
     excluded,
     claimed,
     declaredRetainedImages,
@@ -1136,7 +1187,7 @@ function validateBoundaryDraft(
     selectedHeadIds.has(element.id as string)
       || element === end
       || selected.some(question => question.end === element)
-      || semanticStops.includes(element)
+      || ownershipStops.includes(element)
   ))
   const questions = selected.map((item, index): TeacherSegmentedQuestion => {
     const owned = elements.filter(element => owners.get(element.id as string) === index)
@@ -1191,6 +1242,9 @@ function submissionTool(
   state: BoundarySubmissionState,
   sourceComplete: () => boolean,
 ) {
+  const corePageIndexes = request.corePageIndexes === undefined
+    ? undefined
+    : new Set(request.corePageIndexes)
   return defineTool({
     name,
     description: 'Submit one complete semantic boundary draft. The Host validates element references, ordering, ownership, and crop geometry without imposing one numbering or document format.',
@@ -1249,9 +1303,10 @@ function submissionTool(
         request.pages,
         request.padding,
         config.maxSegmentedQuestions,
-        new Set(possibleQuestionHeadIds(elements)),
-        new Set(imageElementIds(elements)),
+        new Set(possibleQuestionHeadIds(elements, corePageIndexes)),
+        new Set(imageElementIds(elements, corePageIndexes)),
         config.maxQuestionAutoOwnedGapRatio,
+        corePageIndexes,
       )
       if (validated.referenceErrors.length === 0) {
         state.submissions += 1
@@ -1368,9 +1423,10 @@ function cropReviewFindingsTool(
   state: CropReviewState,
   accepted: Map<string, AcceptedCropReview>,
   maxSubmissions: number,
+  allowMissingQuestionFindings: boolean,
 ) {
   const findingKey = (finding: CropReviewFinding): string => finding.cropId === undefined
-    ? `page:${finding.pageId ?? ''}`
+    ? `missing:${finding.pageId ?? ''}:${finding.missingQuestionHead ?? ''}`
     : `crop:${finding.cropId}`
   const remainingCropIds = (): readonly string[] => [...validCropIds].filter(id => (
     !state.draftVerifications.has(id) && !state.draftFindings.has(`crop:${id}`)
@@ -1393,7 +1449,7 @@ function cropReviewFindingsTool(
     state.findings = findings
     state.seenRevisionDrafts.clear()
     if (findings.length > 0) {
-      return `${replacesEarlierFindings ? 'DEFECTS_UPDATED' : 'DEFECTS_RECORDED'}\ninspect the listed OCR source chunks, then submit local corrections for cited crops; put each confirmed spurious crop in removedCropIds after recording one finding with both cropId and pageId; use a complete-group draft only for a page-only defect describing a question with no crop`
+      return `${replacesEarlierFindings ? 'DEFECTS_UPDATED' : 'DEFECTS_RECORDED'}\ninspect the listed OCR source chunks, then submit local corrections for cited crops; put each confirmed spurious crop in removedCropIds after recording one finding with both cropId and pageId; every pageId-only missing-question finding requires missingQuestionHead and a complete-group draft`
     }
     const token = randomUUID()
     accepted.set(token, {
@@ -1406,7 +1462,7 @@ function cropReviewFindingsTool(
   }
   return defineTool({
     name,
-    description: 'Record one inspected crop or source-page defect at a time, then finalize the complete classification. A verified crop uses cropId, answerDemand, and evidence. An incomplete crop uses cropId and may also cite pageId. A pageId-only defect is reserved for an independent source question with no listed crop. A spurious crop uses one finding containing both cropId and pageId. Call with finalize=true after every crop is classified. Complete verifiedCrops and findings arrays remain available for one-call submission.',
+    description: 'Record one inspected crop or source-page defect at a time, then finalize the complete classification. A verified crop uses cropId, answerDemand, and evidence. Every crop defect declares one or more repairIntents: expand-top, trim-top, expand-bottom, trim-bottom, reassign-content, or remove-crop. An independent source question with no listed crop uses pageId and missingQuestionHead without repairIntents. Call with finalize=true after every crop is classified. Complete verifiedCrops and findings arrays remain available for one-call submission.',
     parameters: {
       verifiedCrops: {
         type: 'array',
@@ -1432,6 +1488,15 @@ function cropReviewFindingsTool(
           properties: {
             cropId: { type: 'string' },
             pageId: { type: 'string' },
+            missingQuestionHead: {
+              type: 'string',
+              description: 'Visible printed head of an independent source question that has no listed crop. Valid only with pageId and without cropId.',
+            },
+            repairIntents: {
+              type: 'array',
+              items: { type: 'string', enum: [...cropRepairIntents] },
+              description: 'Required for a crop defect. Declare every boundary direction or content/removal operation that the correction must perform.',
+            },
             issue: { type: 'string', required: true },
             evidence: { type: 'string', required: true },
           },
@@ -1439,6 +1504,15 @@ function cropReviewFindingsTool(
       },
       cropId: { type: 'string' },
       pageId: { type: 'string' },
+      missingQuestionHead: {
+        type: 'string',
+        description: 'Visible printed head of an independent source question that has no listed crop. Valid only with pageId and without cropId.',
+      },
+      repairIntents: {
+        type: 'array',
+        items: { type: 'string', enum: [...cropRepairIntents] },
+        description: 'Required for one defective crop. Declare every boundary direction or content/removal operation that the correction must perform.',
+      },
       answerDemand: {
         type: 'string',
         description: 'For one verified crop, the visible response the learner must produce.',
@@ -1464,11 +1538,14 @@ function cropReviewFindingsTool(
         return Promise.resolve('REJECTED\ncomplete-array submission requires both verifiedCrops and findings')
       }
       if (hasBatch && (args.cropId !== undefined || args.pageId !== undefined || args.answerDemand !== undefined
-        || args.issue !== undefined || args.evidence !== undefined || args.finalize !== undefined)) {
+        || args.missingQuestionHead !== undefined || args.repairIntents !== undefined
+        || args.issue !== undefined || args.evidence !== undefined
+        || args.finalize !== undefined)) {
         return Promise.resolve('REJECTED\ndo not mix complete arrays with one-record or finalize fields')
       }
       if (!hasBatch && args.finalize === true) {
         const hasRecord = args.cropId !== undefined || args.pageId !== undefined || args.answerDemand !== undefined
+          || args.missingQuestionHead !== undefined || args.repairIntents !== undefined
           || args.issue !== undefined || args.evidence !== undefined
         if (!hasRecord) return Promise.resolve(finalize())
       }
@@ -1477,6 +1554,7 @@ function cropReviewFindingsTool(
           return Promise.resolve('REJECTED\none-record submission requires visible evidence')
         }
         if (args.issue !== undefined) {
+          const repairIntents = args.repairIntents ?? []
           if (args.issue.trim() === '') return Promise.resolve('REJECTED\ndefect issue must not be empty')
           if (args.answerDemand !== undefined) {
             return Promise.resolve('REJECTED\na record cannot be both verified and defective')
@@ -1490,15 +1568,35 @@ function cropReviewFindingsTool(
           if (args.pageId !== undefined && !validPageIds.has(args.pageId)) {
             return Promise.resolve('REJECTED\npageId is not a supplied source page')
           }
-          const citedCropInEvidence = args.cropId === undefined
-            ? [...validCropIds].find(id => `${args.issue}\n${args.evidence}`.includes(id))
-            : undefined
-          if (citedCropInEvidence !== undefined) {
-            return Promise.resolve(`REJECTED\npageId-only findings are only for questions with no crop; resubmit this defect with cropId=${citedCropInEvidence} and optional pageId`)
+          if (args.cropId === undefined) {
+            if (!allowMissingQuestionFindings) {
+              return Promise.resolve('REJECTED\npageId-only missing-question findings are forbidden during a crop-local recut; unlisted questions remain unchanged')
+            }
+            if (args.pageId === undefined) {
+              return Promise.resolve('REJECTED\na missing-question finding requires pageId')
+            }
+            if (args.missingQuestionHead === undefined || args.missingQuestionHead.trim() === '') {
+              return Promise.resolve('REJECTED\na pageId-only finding requires missingQuestionHead for the source question with no listed crop')
+            }
+            if (repairIntents.length > 0) {
+              return Promise.resolve('REJECTED\na pageId-only missing-question finding must not contain crop repairIntents')
+            }
+          } else if (args.missingQuestionHead !== undefined) {
+            return Promise.resolve('REJECTED\nmissingQuestionHead is only valid for a pageId-only missing-question finding')
+          } else if (repairIntents.length === 0) {
+            return Promise.resolve('REJECTED\na crop defect requires at least one repairIntent')
+          } else if (new Set(repairIntents).size !== repairIntents.length) {
+            return Promise.resolve('REJECTED\nrepairIntents must not contain duplicates')
+          } else if (repairIntents.includes('remove-crop') && repairIntents.length !== 1) {
+            return Promise.resolve('REJECTED\nremove-crop must be the only repairIntent for a spurious crop')
           }
           const finding: CropReviewFinding = {
             ...(args.cropId === undefined ? {} : { cropId: args.cropId }),
             ...(args.pageId === undefined ? {} : { pageId: args.pageId }),
+            ...(args.missingQuestionHead === undefined
+              ? {}
+              : { missingQuestionHead: args.missingQuestionHead.trim() }),
+            ...(args.repairIntents === undefined ? {} : { repairIntents: args.repairIntents }),
             issue: args.issue,
             evidence: args.evidence,
           }
@@ -1511,6 +1609,12 @@ function cropReviewFindingsTool(
         }
         if (args.pageId !== undefined) {
           return Promise.resolve('REJECTED\nverified record must cite its cropId, not a source page')
+        }
+        if (args.missingQuestionHead !== undefined) {
+          return Promise.resolve('REJECTED\nverified record must not contain missingQuestionHead')
+        }
+        if (args.repairIntents !== undefined) {
+          return Promise.resolve('REJECTED\nverified record must not contain repairIntents')
         }
         if (args.answerDemand === undefined || args.answerDemand.trim() === '') {
           return Promise.resolve('REJECTED\nverified record requires the visible answer demand')
@@ -1531,6 +1635,7 @@ function cropReviewFindingsTool(
       const defectiveCropIds = new Set<string>()
       for (const [index, finding] of batchFindings.entries()) {
         const label = `findings[${String(index)}]`
+        const repairIntents = finding.repairIntents ?? []
         if (finding.cropId === undefined && finding.pageId === undefined) {
           return Promise.resolve(`REJECTED\n${label} must cite cropId or pageId`)
         }
@@ -1540,11 +1645,27 @@ function cropReviewFindingsTool(
         if (finding.pageId !== undefined && !validPageIds.has(finding.pageId)) {
           return Promise.resolve(`REJECTED\n${label}.pageId is not a supplied source page`)
         }
-        const citedCropInEvidence = finding.cropId === undefined
-          ? [...validCropIds].find(id => `${finding.issue}\n${finding.evidence}`.includes(id))
-          : undefined
-        if (citedCropInEvidence !== undefined) {
-          return Promise.resolve(`REJECTED\n${label} is page-only but describes ${citedCropInEvidence}; add that cropId so the correction stays local`)
+        if (finding.cropId === undefined) {
+          if (!allowMissingQuestionFindings) {
+            return Promise.resolve(`REJECTED\n${label} pageId-only missing-question finding is forbidden during a crop-local recut; unlisted questions remain unchanged`)
+          }
+          if (finding.pageId === undefined) {
+            return Promise.resolve(`REJECTED\n${label} missing-question finding requires pageId`)
+          }
+          if (finding.missingQuestionHead === undefined || finding.missingQuestionHead.trim() === '') {
+            return Promise.resolve(`REJECTED\n${label} pageId-only finding requires missingQuestionHead for the source question with no listed crop`)
+          }
+          if (repairIntents.length > 0) {
+            return Promise.resolve(`REJECTED\n${label} pageId-only missing-question finding must not contain crop repairIntents`)
+          }
+        } else if (finding.missingQuestionHead !== undefined) {
+          return Promise.resolve(`REJECTED\n${label}.missingQuestionHead is only valid without cropId`)
+        } else if (repairIntents.length === 0) {
+          return Promise.resolve(`REJECTED\n${label} crop defect requires at least one repairIntent`)
+        } else if (new Set(repairIntents).size !== repairIntents.length) {
+          return Promise.resolve(`REJECTED\n${label}.repairIntents must not contain duplicates`)
+        } else if (repairIntents.includes('remove-crop') && repairIntents.length !== 1) {
+          return Promise.resolve(`REJECTED\n${label} remove-crop must be the only repairIntent for a spurious crop`)
         }
         if (finding.issue.trim() === '' || finding.evidence.trim() === '') {
           return Promise.resolve(`REJECTED\n${label} must contain a concise issue and visible evidence`)
@@ -1552,6 +1673,10 @@ function cropReviewFindingsTool(
         findings.push({
           ...(finding.cropId === undefined ? {} : { cropId: finding.cropId }),
           ...(finding.pageId === undefined ? {} : { pageId: finding.pageId }),
+          ...(finding.missingQuestionHead === undefined
+            ? {}
+            : { missingQuestionHead: finding.missingQuestionHead.trim() }),
+          ...(finding.repairIntents === undefined ? {} : { repairIntents: finding.repairIntents }),
           issue: finding.issue,
           evidence: finding.evidence,
         })
@@ -1655,7 +1780,7 @@ function cropReviewRevisionTool(
 ) {
   return defineTool({
     name,
-    description: 'Correct visually defective boundaries after every OCR chunk is inspected. Crop-cited findings are merged by stable question head and cannot modify uncited questions. removedCropIds locally deletes confirmed spurious crops whose finding cites both cropId and pageId. A page-only finding is reserved for a wholly missing question and may replace the complete group.',
+    description: 'Correct visually defective boundaries after every OCR chunk is inspected. Crop-cited findings are merged by stable question head and cannot modify uncited questions. removedCropIds locally deletes confirmed spurious crops whose finding cites both cropId and pageId. A page-only finding with missingQuestionHead identifies a wholly missing question and requires replacement of the complete group.',
     parameters: {
       headConvention: { type: 'string', required: true },
       questions: {
@@ -1725,6 +1850,7 @@ function cropReviewRevisionTool(
       }
       state.seenRevisionDrafts.add(fingerprint)
       const citedIds = new Set<TeacherQuestionLayoutElementId>()
+      const findingByQuestionId = new Map<TeacherQuestionLayoutElementId, CropReviewFinding>()
       const currentById = new Map(request.questions.map(question => [question.sourceHeadId, question] as const))
       const pageOnlyFindings = (state.findings ?? []).filter(finding => (
         finding.pageId !== undefined && finding.cropId === undefined
@@ -1732,7 +1858,10 @@ function cropReviewRevisionTool(
       for (const finding of state.findings ?? []) {
         if (finding.cropId === undefined) continue
         const id = cropQuestionIdByPreviewId.get(finding.cropId)
-        if (id !== undefined) citedIds.add(id)
+        if (id !== undefined) {
+          citedIds.add(id)
+          findingByQuestionId.set(id, finding)
+        }
       }
       const requestedRemovalCropIds = args.removedCropIds ?? []
       if (new Set(requestedRemovalCropIds).size !== requestedRemovalCropIds.length) {
@@ -1793,9 +1922,10 @@ function cropReviewRevisionTool(
         request.pages,
         request.padding,
         config.maxSegmentedQuestions,
-        hasGroupFinding ? new Set(possibleQuestionHeadIds(elements)) : new Set(),
-        hasGroupFinding ? new Set(imageElementIds(elements)) : new Set(),
+        hasGroupFinding ? new Set(possibleQuestionHeadIds(elements, new Set(request.corePageIndexes))) : new Set(),
+        hasGroupFinding ? new Set(imageElementIds(elements, new Set(request.corePageIndexes))) : new Set(),
         config.maxQuestionAutoOwnedGapRatio,
+        new Set(request.corePageIndexes),
       )
       if (validated.referenceErrors.length === 0) {
         state.revisionSubmissions += 1
@@ -1831,6 +1961,24 @@ function cropReviewRevisionTool(
         const current = currentById.get(id as TeacherQuestionLayoutElementId)
         const validatedQuestion = validatedById.get(id as TeacherQuestionLayoutElementId)
         if (validatedQuestion === undefined) continue
+        const finding = findingByQuestionId.get(id as TeacherQuestionLayoutElementId)
+        if (current !== undefined && (patch.verticalRegionEdits?.length ?? 0) > 0) {
+          const repairIntents = new Set(finding?.repairIntents ?? [])
+          for (const edit of patch.verticalRegionEdits ?? []) {
+            const region = current.regions.find(candidate => candidate.pageIndex === edit.pageIndex)
+            if (region === undefined) continue
+            const requiredIntents: CropRepairIntent[] = []
+            if (edit.top !== undefined && edit.top < region.top) requiredIntents.push('expand-top')
+            if (edit.top !== undefined && edit.top > region.top) requiredIntents.push('trim-top')
+            if (edit.bottom !== undefined && edit.bottom > region.bottom) requiredIntents.push('expand-bottom')
+            if (edit.bottom !== undefined && edit.bottom < region.bottom) requiredIntents.push('trim-bottom')
+            for (const requiredIntent of requiredIntents) {
+              if (!repairIntents.has(requiredIntent)) {
+                return Promise.resolve(`REJECTED\nverticalRegionEdits for ${id} move in the ${requiredIntent} direction, but its finding does not authorize that repairIntent`)
+              }
+            }
+          }
+        }
         let correction = validatedQuestion
         const preservesExistingBoundary = current !== undefined
           && patch.stopBeforeElementId === undefined
@@ -1911,6 +2059,71 @@ function cropReviewRevisionTool(
       if (unchangedCitedIds.length > 0) {
         return Promise.resolve(`REJECTED\nthe corrected draft leaves cited defective crop geometry unchanged: ${unchangedCitedIds.join(', ')}`)
       }
+      for (const [id, finding] of findingByQuestionId) {
+        const intents = finding.repairIntents ?? []
+        const current = currentById.get(id)
+        const corrected = correctedById.get(id)
+        if (intents.includes('remove-crop')) {
+          if (!removedQuestionIds.has(id)) {
+            return Promise.resolve(`REJECTED\n${String(id)} declares remove-crop but is not listed in removedCropIds`)
+          }
+          continue
+        }
+        if (removedQuestionIds.has(id)) {
+          return Promise.resolve(`REJECTED\nremoved crop ${String(id)} requires the remove-crop repairIntent`)
+        }
+        if (current === undefined || corrected === undefined) continue
+        const pairedRegions = current.regions.flatMap((region) => {
+          const next = corrected.regions.find(candidate => candidate.pageIndex === region.pageIndex)
+          return next === undefined ? [] : [{ current: region, corrected: next }]
+        })
+        const intentSatisfied = (intent: CropRepairIntent): boolean => {
+          switch (intent) {
+            case 'expand-top': return pairedRegions.some(pair => pair.corrected.top < pair.current.top)
+            case 'trim-top': return pairedRegions.some(pair => pair.corrected.top > pair.current.top)
+            case 'expand-bottom': return pairedRegions.some(pair => pair.corrected.bottom > pair.current.bottom)
+            case 'trim-bottom': return pairedRegions.some(pair => pair.corrected.bottom < pair.current.bottom)
+            case 'reassign-content': return changedIds.has(id)
+            case 'remove-crop': return false
+          }
+        }
+        const unsatisfied = intents.filter(intent => !intentSatisfied(intent))
+        if (unsatisfied.length > 0) {
+          return Promise.resolve(`REJECTED\ncorrected crop ${String(id)} does not perform its declared repairIntents: ${unsatisfied.join(', ')}`)
+        }
+        for (const pair of pairedRegions) {
+          if (intents.includes('expand-bottom')
+            && pair.corrected.bottom > pair.current.bottom) {
+            const crossedNeighbor = request.questions.find(candidate => candidate.sourceHeadId !== id
+              && candidate.regions.some(region => region.pageIndex === pair.current.pageIndex
+                && pair.current.bottom <= region.top
+                && pair.corrected.bottom > region.top
+                && pair.current.right > region.left
+                && pair.current.left < region.right))
+            if (crossedNeighbor !== undefined) {
+              const neighborFinding = findingByQuestionId.get(crossedNeighbor.sourceHeadId)
+              if (!(neighborFinding?.repairIntents ?? []).includes('trim-top')) {
+                return Promise.resolve(`REJECTED\nexpanding ${String(id)} into neighboring crop ${String(crossedNeighbor.sourceHeadId)} requires a cited trim-top finding for that neighbor`)
+              }
+            }
+          }
+          if (intents.includes('expand-top')
+            && pair.corrected.top < pair.current.top) {
+            const crossedNeighbor = request.questions.find(candidate => candidate.sourceHeadId !== id
+              && candidate.regions.some(region => region.pageIndex === pair.current.pageIndex
+                && pair.current.top >= region.bottom
+                && pair.corrected.top < region.bottom
+                && pair.current.right > region.left
+                && pair.current.left < region.right))
+            if (crossedNeighbor !== undefined) {
+              const neighborFinding = findingByQuestionId.get(crossedNeighbor.sourceHeadId)
+              if (!(neighborFinding?.repairIntents ?? []).includes('trim-bottom')) {
+                return Promise.resolve(`REJECTED\nexpanding ${String(id)} into neighboring crop ${String(crossedNeighbor.sourceHeadId)} requires a cited trim-bottom finding for that neighbor`)
+              }
+            }
+          }
+        }
+      }
       const token = randomUUID()
       accepted.set(token, {
         token,
@@ -1954,15 +2167,17 @@ export async function segmentQuestionsWithAgent(
   }, config.questionSegmentationAgentTimeoutMs)
   const elements = indexElements(request.pages)
   const chunks = sourceChunks(elements, config.maxQuestionSourceChunkCharacters)
-  const headCandidateIds = possibleQuestionHeadIds(elements)
-  const firstAnswerHint = elements.find(element => (
+  const corePageIndexes = new Set(request.corePageIndexes ?? request.pages.map(page => page.pageIndex))
+  const coreElements = elements.filter(element => corePageIndexes.has(element.page.pageIndex))
+  const headCandidateIds = possibleQuestionHeadIds(elements, corePageIndexes)
+  const firstAnswerHint = coreElements.find(element => (
     (element.element.type === 'text' || element.element.type === 'equation')
       && answerHeadingPattern.test(element.element.text)
   ))
   const semanticHints = {
     possibleQuestionHeadIds: headCandidateIds,
-    imageElementIds: imageElementIds(elements),
-    possibleSectionHeadingIds: elements
+    imageElementIds: imageElementIds(elements, corePageIndexes),
+    possibleSectionHeadingIds: coreElements
       .filter(element => element.ordinal < (firstAnswerHint?.ordinal ?? elements.length)
         && sectionHeadingPattern.test(element.element.text))
       .map(element => element.id),
@@ -2036,7 +2251,7 @@ export async function segmentQuestionsWithAgent(
         : ' A previous child ended without returning a token accepted in that run. Do not call structured_output until the boundary tool returns ACCEPTED and its exact validationToken.'
       const prompt: SubagentStartRequest['prompt'] = [{
         type: 'text',
-        text: `Segment the selected PDF pages into complete top-level questions.${recoveryInstruction} Inspect every exact sourceChunkIndex through ${sourceToolName}. ${previewSources.length === 0 ? '' : `Inspect every previewId through ${previewToolName}, requesting no more than ${String(config.maxQuestionVisionImagesPerToolCall)} ids per call. `}Infer this source's own question convention from all OCR and visual evidence, then submit one complete draft to ${submissionToolName}. First apply the answer-obligation test to every proposed head: identify what the learner is visibly asked to choose, fill, calculate, explain, prove, draw, judge, or otherwise produce. A number, topic label, definition, property, formula, method step, theory summary, worked solution, or answer explanation does not create a question by itself. A worked example that opens with a problem stem and asks for a value, choice, proof, or other response still contains an independent question: select that stem and stop before its printed answer or analysis. Only explanatory or worked-solution prose without a learner response demand is non-question content. A processing group may validly contain zero questions; submit an empty questions array and classify every candidate instead of inventing a task. semanticHints are fallible recall aids. Every possibleQuestionHeadId requires one explicit decision: use it as headElementId, put it in nonQuestionHeadElementIds when it is not an independent head but should remain eligible content, or put it in excludedElementIds only when its pixels must be removed. A bracketed source label or citation without its own stem, options, subparts, table, or figure is not an independent question and belongs in nonQuestionHeadElementIds. Every imageElementId also requires an individual preview-backed decision: retain a question diagram in retainedImageElementIds, assign it through exactly one question's additionalElementIds when automatic ownership would be wrong, or exclude only visually confirmed furniture. Do not classify an id range as one role merely because its ids are adjacent. Never silently ignore a candidate or force it into a question role. A section title, answer heading, explanation, footer, or other transition after a complete question is outside that question. When such material starts before the next top-level question, stop the preceding crop at its first OCR element; merely keeping the next question head as the boundary would include the intervening material. A detached block after a large blank gap is not automatically part of the final question: explicitly assign a semantically related distant figure through additionalElementIds, and stop or exclude unrelated answers, anti-piracy copy, watermarks, and later-paper material. stopBeforeElementId is exclusive: it names that first OCR element outside a question, never the final element inside it. Usually omit it and let the next question head stop the crop; set it when unrelated material begins earlier. The root stopBeforeElementId follows the same exclusive rule after the final question. Use additionalElementIds only for unmistakable content left outside its owner by OCR order, and never also name one as stopBeforeElementId. After Host acceptance, call structured_output with only the validationToken.\n${JSON.stringify({ fileName: request.fileName, selectedPages: request.pages.map(page => page.pageIndex), elementCount: elements.length, sourceChunkIndexes: chunks.map((_chunk, index) => index), previewIds: previewSources.map(source => source.id), semanticHints })}`,
+        text: `Segment the selected PDF pages into complete top-level questions.${recoveryInstruction} Inspect every exact sourceChunkIndex through ${sourceToolName}. ${previewSources.length === 0 ? '' : `Inspect every previewId through ${previewToolName}, requesting no more than ${String(config.maxQuestionVisionImagesPerToolCall)} ids per call. `}Only heads on corePageIndexes belong to this run. Adjacent inspection pages are read-only context for deciding whether a core-page question continues; never submit one of their heads. Their detected question heads already stop automatic ownership, so they do not need classification. Infer this source's own question convention from all OCR and visual evidence, then submit one complete draft to ${submissionToolName}. First apply the answer-obligation test to every proposed head: identify what the learner is visibly asked to choose, fill, calculate, explain, prove, draw, judge, or otherwise produce. A number, topic label, definition, property, formula, method step, theory summary, worked solution, or answer explanation does not create a question by itself. A worked example that opens with a problem stem and asks for a value, choice, proof, or other response still contains an independent question: select that stem and stop before its printed answer or analysis. Only explanatory or worked-solution prose without a learner response demand is non-question content. A processing group may validly contain zero questions; submit an empty questions array and classify every candidate instead of inventing a task. semanticHints are fallible recall aids and list only core-page decisions. Every possibleQuestionHeadId requires one explicit decision: use it as headElementId, put it in nonQuestionHeadElementIds when it is not an independent head but should remain eligible content, or put it in excludedElementIds only when its pixels must be removed. A bracketed source label or citation without its own stem, options, subparts, table, or figure is not an independent question and belongs in nonQuestionHeadElementIds. Every imageElementId also requires an individual preview-backed decision: retain a question diagram in retainedImageElementIds, assign it through exactly one question's additionalElementIds when automatic ownership would be wrong, or exclude only visually confirmed furniture. An adjacent-page continuation image may still be assigned explicitly even though it is not in imageElementIds. Do not classify an id range as one role merely because its ids are adjacent. Never silently ignore a candidate or force it into a question role. A section title, answer heading, explanation, footer, or other transition after a complete question is outside that question. When such material starts before the next top-level question, stop the preceding crop at its first OCR element; merely keeping the next question head as the boundary would include the intervening material. A detached block after a large blank gap is not automatically part of the final question: explicitly assign a semantically related distant figure through additionalElementIds, and stop or exclude unrelated answers, anti-piracy copy, watermarks, and later-paper material. stopBeforeElementId is exclusive: it names that first OCR element outside a question, never the final element inside it. Usually omit it and let the next question head stop the crop; set it when unrelated material begins earlier. The root stopBeforeElementId follows the same exclusive rule after the final question. Use additionalElementIds only for unmistakable content left outside its owner by OCR order, and never also name one as stopBeforeElementId. After Host acceptance, call structured_output with only the validationToken.\n${JSON.stringify({ fileName: request.fileName, corePageIndexes: [...corePageIndexes], inspectionPageIndexes: request.pages.map(page => page.pageIndex), elementCount: elements.length, sourceChunkIndexes: chunks.map((_chunk, index) => index), previewIds: previewSources.map(source => source.id), semanticHints })}`,
       }]
       run = await subagents.start('spawn', {
         label: `Question segmentation: ${request.fileName}${agentRun === 0 ? '' : ` (recovery ${String(agentRun + 1)})`}`,
@@ -2145,6 +2360,7 @@ export async function reviewQuestionCropsWithAgent(
   const cropQuestionIdByPreviewId: ReadonlyMap<string, TeacherQuestionLayoutElementId> = new Map(request.questions.map(question => (
     [`crop-${String(question.sourceHeadId)}`, question.sourceHeadId] as const
   )))
+  const reviewsCompleteGroup = request.reviewQuestionIds.length === request.questions.length
   const sourceToolName = `question_review_layout_${randomUUID().replaceAll('-', '')}`
   const pageToolName = `question_review_page_${randomUUID().replaceAll('-', '')}`
   const cropToolName = `question_review_crop_${randomUUID().replaceAll('-', '')}`
@@ -2211,6 +2427,7 @@ export async function reviewQuestionCropsWithAgent(
         reviewState,
         accepted,
         config.maxQuestionBoundarySubmissions,
+        reviewsCompleteGroup,
       )),
       'teacher-workbench: question crop findings',
     )
@@ -2238,12 +2455,18 @@ export async function reviewQuestionCropsWithAgent(
       reviewState.draftVerifications.clear()
       reviewState.seenRevisionDrafts.clear()
       accepted.clear()
+      const coreCoverageInstruction = reviewsCompleteGroup
+        ? ' This is the complete-group review. Match every independent problem whose head is on corePageIndexes to one listed crop; adjacent preview pages are read-only continuation context and their independent problems do not need crops in this group.'
+        : ' This is a crop-local recut review. Classify only the listed cropIds. Every unlisted question remains present and unchanged even when visible on a supplied source page; use it only as boundary context. Do not report an unlisted question as missing, do not submit a pageId-only finding or missingQuestionHead, and do not replace the complete group.'
       const recoveryInstruction = agentRun === 0
-        ? ''
-        : ' A previous crop-review child ended without returning a token accepted in that run. Start the visual classification again, use only the listed cropIds and pagePreviewIds, and do not call structured_output until a review tool returns ACCEPTED with its exact validationToken.'
+        ? coreCoverageInstruction
+        : ` A previous crop-review child ended without returning a token accepted in that run. Start the visual classification again, use only the listed cropIds and pagePreviewIds, and do not call structured_output until a review tool returns ACCEPTED with its exact validationToken.${coreCoverageInstruction}`
+      const reviewClassificationInstruction = reviewsCompleteGroup
+        ? 'Match every independent source-page problem to exactly one crop. A pageId-only finding is permitted only when an independent source problem has no listed crop at all, even when some of its pixels appear inside another crop; set missingQuestionHead to that problem\'s visible printed head and cite the containing crop in evidence when applicable. This explicit missing-question record requires a complete-group repair. Missing content from an existing crop, including a diagram or options printed elsewhere on the source page, must cite that cropId and may include pageId in the same finding; never set missingQuestionHead for it. If content missing from one crop appears in another, cite both cropIds as separate findings with complementary repairIntents so both boundaries change. Record one classification at a time: use cropId, answerDemand, and evidence for a complete crop; use issue, evidence, cropId, and every required repairIntent for an existing-crop defect; use issue, evidence, pageId, and missingQuestionHead only for an independent problem with no listed crop. When cropIds is empty, finalize immediately only if the source contains no independent problem; otherwise record each missing problem and add it through a candidate-complete group correction. A finding with missingQuestionHead requires a complete processing-group draft that explicitly classifies every possible question-head candidate and image element.'
+        : 'Classify every listed crop exactly once and ignore unlisted questions except as read-only boundary context. Missing content from a listed crop must cite that cropId and may include pageId. If pixels belonging to one listed crop appear in another listed crop, cite both cropIds with complementary repairIntents so both local boundaries change. Never submit a pageId-only finding or missingQuestionHead in this crop-local recut. Record a complete crop with cropId, answerDemand, and evidence; record an existing-crop defect with issue, evidence, cropId, and every required repairIntent. Host validation preserves every unlisted question and rejects a complete-group replacement.'
       const prompt: SubagentStartRequest['prompt'] = [{
         type: 'text',
-        text: `Review the listed crops from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First inspect every pagePreviewId through ${pageToolName}; then inspect every cropId through ${cropToolName}. Keep source pages and crops in separate calls and request at most ${String(maxImages)} ids per call. Printed source text and each crop label's OCR head text identify the problem; no internal sequence position is a printed question number. Content visible on a source page is context, not proof that it appears inside a crop. Before verifying any crop, fill answerDemand with the visible response the learner must produce; numbering, a topic title, definitions, formulas, theory summaries, and explanatory prose are not answer demands. A worked example with a visible problem stem still needs one crop containing only that stem, even when the source prints its answer and analysis immediately afterward. A crop is defective when it has no independent answer demand, omits any stem, option, subpart, continuation, answer blank, or figure, or includes any adjacent question, next-section title, answer or explanation, footer, decoration, or neighboring-column content that is not part of the question. A page-sized crop containing several theory topics or summary sections without one answer demand is a spurious question: submit one finding containing both cropId and pageId, then put that cropId in removedCropIds so the Host removes only that crop. Compare each crop's first and last owned pixels with the source; trace unfinished clauses to the next source line and inspect every referenced or adjacent figure through its final edge or vertex. A visually detached lower-page block is not part of the preceding question merely because no later question head was detected; verify its semantic connection or report contamination. Match every independent source-page problem to exactly one crop. A pageId-only finding is permitted only when an independent source problem has no listed crop at all, even when some of its pixels appear inside another crop; this permits a complete-group repair. Missing content from an existing crop, including a diagram or options printed elsewhere on the source page, must cite that cropId and may include pageId in the same finding; never add a separate pageId-only finding for it. If content missing from one crop appears in another, cite both cropIds as separate findings so both local boundaries can change. Record one classification at a time through ${findingsToolName}: use cropId, answerDemand, and evidence for a complete crop; use issue, evidence, and cropId or pageId for a defect. After every cropId has exactly one classification and any missing source-page problem is recorded, call ${findingsToolName} with finalize=true; the final classification record may include finalize=true in the same call. The tool also accepts complete verifiedCrops and findings arrays when you deliberately submit the entire classification in one call. When cropIds is empty, inspect all source pages, then finalize immediately only if they contain no independent problem; otherwise record a pageId-only finding and add the missing questions through complete-group correction. A later one-record call replaces an earlier classification for the same crop before finalization. If OCR inspection later proves a finalized observation was not a defect, replace the complete classifications before submitting a correction. If defects are recorded, inspect each exact sourceChunkIndex through ${sourceToolName}, then submit corrections to ${reviseToolName}. For any finding that cites a cropId, submit only the cited question heads and the Host will merge them into the unchanged group even when pageId is also present as evidence; the Host rejects changes to uncited questions. Put every spurious crop in removedCropIds; its combined cropId and pageId finding authorizes local deletion without a complete-group draft. Use a complete processing-group draft only for a pageId-only finding that describes a wholly missing question, and explicitly classify every possible question-head candidate and image element in that replacement. stopBeforeElementId is exclusive: it names the first OCR element outside a question, including an intervening section title or answer heading, never its last option, subpart, continuation line, or figure. When visible pixels have no usable OCR element, use verticalRegionEdits with exact pageIndex and top or bottom in the OCR page units reported by the layout tool; do not invent an element id for whitespace or a drawn line. Increasing top removes pixels from the crop top; decreasing top adds them; increasing bottom adds bottom pixels. Coordinate-only edits apply to the existing question region and cannot change left, right, rightLimit, or unrelated boundaries. The Host rejects a correction that crosses another question head or leaves any cited crop geometry unchanged. After acceptance call structured_output immediately without reopening images.\n${JSON.stringify({
+        text: `Review the listed crops from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First inspect every pagePreviewId through ${pageToolName}; then inspect every cropId through ${cropToolName}. Keep source pages and crops in separate calls and request at most ${String(maxImages)} ids per call. Printed source text and each crop label's OCR head text identify the problem; no internal sequence position is a printed question number. Content visible on a source page is context, not proof that it appears inside a crop. Crops share one output width, so blank white pixels on the right are intentional padding and contain no source-page content; report neighboring-column contamination only when its text or graphics are visibly present inside the crop image. Before verifying any crop, fill answerDemand with the visible response the learner must produce; numbering, a topic title, definitions, formulas, theory summaries, and explanatory prose are not answer demands. A worked example with a visible problem stem still needs one crop containing only that stem, even when the source prints its answer and analysis immediately afterward. A crop is defective when it has no independent answer demand, omits any stem, option, subpart, continuation, answer blank, or figure, or includes any adjacent question, next-section title, answer or explanation, footer, decoration, or neighboring-column content that is not part of the question. A page-sized crop containing several theory topics or summary sections without one answer demand is a spurious question: submit one finding containing both cropId and pageId with repairIntents=["remove-crop"], then put that cropId in removedCropIds so the Host removes only that crop. Compare each crop's first and last owned pixels with the source; trace unfinished clauses to the next source line and inspect every referenced or adjacent figure through its final edge or vertex. Before marking a crop complete, scan its full height and name the actual topmost and bottommost visible non-white content in evidence, not merely the intended question boundary. Compare every adjacent crop pair: a line, option, continuation, or figure missing from one crop but visible at the edge of the other requires two findings with complementary boundary repairIntents. A leading answer line in the next crop is not harmless whitespace when it completes the preceding prompt. A detached watermark, publisher mark, answer block, or other unrelated pixels below the last required line or figure are contamination even when separated by a large white gap; report only that crop for local correction. A visually detached lower-page block is not part of the preceding question merely because no later question head was detected; verify its semantic connection or report contamination. repairIntents are structural obligations: use expand-top or expand-bottom for missing edge pixels, trim-top or trim-bottom for extra edge pixels, reassign-content for an OCR element or figure that must change owner without a directional edge edit, and remove-crop only for a spurious crop. List every applicable intent and never use reassign-content to avoid naming a known edge direction. ${reviewClassificationInstruction} After every cropId has exactly one classification, call ${findingsToolName} with finalize=true; the final classification record may include finalize=true in the same call. The tool also accepts complete verifiedCrops and findings arrays when you deliberately submit the entire classification in one call. A later one-record call replaces an earlier classification for the same crop or, during complete-group review, the same pageId-plus-missingQuestionHead before finalization. If OCR inspection later proves a finalized observation was not a defect, replace the complete classifications before submitting a correction. If defects are recorded, inspect each exact sourceChunkIndex through ${sourceToolName}, then submit corrections to ${reviseToolName}. For any finding that cites a cropId, submit only the cited question heads and the Host will merge them into the unchanged group even when pageId is also present as evidence; the Host rejects changes to uncited questions. Put every spurious crop in removedCropIds; its combined cropId and pageId finding authorizes local deletion without a complete-group draft. stopBeforeElementId is exclusive: it names the first OCR element outside a question, including an intervening section title or answer heading, never its last option, subpart, continuation line, or figure. When visible pixels have no usable OCR element, use verticalRegionEdits with exact pageIndex and top or bottom in the OCR page units reported by the layout tool; do not invent an element id for whitespace or a drawn line. Increasing top removes pixels from the crop top; decreasing top adds them; increasing bottom adds bottom pixels. Every edited side must move in a direction authorized by that crop's repairIntents. Expanding into a neighboring crop requires a cited complementary trim finding for that neighbor, so transferred pixels do not remain duplicated. Coordinate-only edits apply to the existing question region and cannot change left, right, rightLimit, or unrelated boundaries. The Host rejects a correction that crosses another question head, contradicts a repairIntent, or leaves any cited crop geometry unchanged. After acceptance call structured_output immediately without reopening images.\n${JSON.stringify({
           groupIndex: request.groupIndex,
           recutAttempt: request.recutAttempt,
           fullGroupCoverage: request.reviewQuestionIds.length === request.questions.length,

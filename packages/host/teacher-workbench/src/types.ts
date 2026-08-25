@@ -792,6 +792,8 @@ export interface TeacherQuestionSegmentRequest {
   readonly fileName: string
   /** Exact selected pages and their OCR geometry. */
   readonly pages: readonly TeacherQuestionLayoutPage[]
+  /** Pages whose question heads belong to this semantic run; omitted when every selected page is owned. */
+  readonly corePageIndexes?: readonly number[]
   /** Visual previews for every selected page when the caller can render the source PDF. */
   readonly pagePreviews?: readonly TeacherQuestionPagePreview[]
   /** Extra vertical page units retained around accepted boundaries. */

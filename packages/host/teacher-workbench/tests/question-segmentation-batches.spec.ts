@@ -66,9 +66,11 @@ describe('planQuestionSegmentationPageGroups', () => {
 describe('segmentQuestionsInBatches', () => {
   it('runs bounded overlapping groups and keeps each question only with its head-page owner', async () => {
     const seenPages: number[][] = []
+    const seenCorePages: number[][] = []
     const runner = vi.fn(async (_ctx: Context, groupRequest: TeacherQuestionSegmentRequest) => {
       const pageIndexes = groupRequest.pages.map(page => page.pageIndex)
       seenPages.push(pageIndexes)
+      seenCorePages.push([...(groupRequest.corePageIndexes ?? [])])
       return {
         ok: true as const,
         value: {
@@ -88,6 +90,7 @@ describe('segmentQuestionsInBatches', () => {
     const result = await segmentQuestionsInBatches(ctx, request(45), CONFIG, runner)
 
     expect(seenPages.map(pages => [pages[0], pages.at(-1)])).toEqual([[0, 20], [19, 40], [39, 44]])
+    expect(seenCorePages.map(pages => [pages[0], pages.at(-1)])).toEqual([[0, 19], [20, 39], [40, 44]])
     expect(result.ok && result.value.questions.map(question => question.questionNo)).toEqual(
       Array.from({ length: 45 }, (_, index) => index + 1),
     )

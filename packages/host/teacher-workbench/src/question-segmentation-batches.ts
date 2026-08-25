@@ -154,6 +154,7 @@ export async function segmentQuestionsInBatches(
     const result = await run(ctx, {
       ...request,
       pages,
+      corePageIndexes: group.corePageIndexes,
       ...(request.pagePreviews === undefined ? {} : {
         pagePreviews: request.pagePreviews.filter(preview => inspectionPages.has(preview.pageIndex)),
       }),

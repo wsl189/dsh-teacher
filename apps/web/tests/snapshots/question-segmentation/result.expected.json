@@ -23,6 +23,7 @@
     "cropReviewRevision": true,
     "structuredOutput": true
   },
+  "cropReviewPromptMentionsWhitePadding": true,
   "result": {
     "ok": true,
     "value": {
