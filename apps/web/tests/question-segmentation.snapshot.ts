@@ -36,6 +36,7 @@ function toolCall(name: string, args: object, ordinal: number): StreamChunk[] {
 /** Deterministic model seam that follows the run-scoped tools published by the real child loop. */
 class QuestionSegmentationAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  failCropReviews = false
   private readonly boundaryPhases = new Map<string, number>()
   private readonly reviewPhases = new Map<string, number>()
 
@@ -59,6 +60,7 @@ class QuestionSegmentationAdapter extends LlmAdapter {
     const reviewCrops = options.tools?.find(tool => tool.name.startsWith('question_review_crop_'))?.name
     const reviewFindings = options.tools?.find(tool => tool.name.startsWith('submit_question_crop_findings_'))?.name
     if (reviewPages !== undefined && reviewCrops !== undefined && reviewFindings !== undefined) {
+      if (this.failCropReviews) throw new Error('simulated crop-review provider failure')
       const phase = this.reviewPhases.get(reviewFindings) ?? 0
       this.reviewPhases.set(reviewFindings, phase + 1)
       if (phase === 0) {
@@ -76,11 +78,23 @@ class QuestionSegmentationAdapter extends LlmAdapter {
               cropId: 'crop-p0e3',
               answerDemand: 'solve both requested subparts',
               evidence: 'question 1 stem, subparts, and figure are visible',
+              topmostVisibleContent: 'the printed question 1 head',
+              bottommostVisibleContent: 'the complete required figure',
+              leftmostVisibleContent: 'the printed question number',
+              rightmostVisibleContent: 'the final figure vertex before blank padding',
+              requiredVisuals: 'the source figure is visible in the crop',
+              attentionEvidence: 'the source figure reaches the crop edge but every line and vertex remains visible',
             },
             {
               cropId: 'crop-p0e6',
               answerDemand: 'complete the requested proof using the supplied figure',
               evidence: 'question 2 stem, figure, and page continuation are visible',
+              topmostVisibleContent: 'the printed question 2 head',
+              bottommostVisibleContent: 'the final continuation equation',
+              leftmostVisibleContent: 'the printed question number',
+              rightmostVisibleContent: 'the final equation before blank padding',
+              requiredVisuals: 'the source figure is visible in the crop',
+              attentionEvidence: 'the source figure and page-edge continuation are complete without header or footer pixels',
             },
           ],
           findings: [],
@@ -209,7 +223,7 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
     })
     if (!result.ok) throw new Error(result.error.message)
     expect(result).toMatchObject({ ok: true })
-    const review = await scaffold.ctx.teacherWorkbench.reviewQuestionCrops({
+    const reviewRequest = {
       parentSessionId: parent.agent.id,
       fileName: '通用版式数学试卷.pdf',
       groupIndex: 0,
@@ -232,9 +246,18 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
           contentBase64: PIXEL,
         })),
       padding: 10,
-    })
+    }
+    const review = await scaffold.ctx.teacherWorkbench.reviewQuestionCrops(reviewRequest)
     if (!review.ok) throw new Error(review.error.message)
     expect(review).toMatchObject({ ok: true, value: { decision: 'accepted', affectedQuestionIds: [] } })
+    adapter.failCropReviews = true
+    const degradedReview = await scaffold.ctx.teacherWorkbench.reviewQuestionCrops(reviewRequest)
+    adapter.failCropReviews = false
+    if (!degradedReview.ok) throw new Error(degradedReview.error.message)
+    expect(degradedReview).toMatchObject({
+      ok: true,
+      value: { decision: 'unresolved', affectedQuestionIds: reviewRequest.reviewQuestionIds },
+    })
     const evidence = {
       modelCalls: adapter.requests.length,
       ordinaryConversationTools: scaffold.ctx.tools.schemas()
@@ -262,8 +285,14 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
       cropReviewPromptMentionsWhitePadding: adapter.requests.some(request => (
         JSON.stringify(request.messages).includes('blank white pixels on the right are intentional padding')
       )),
+      cropReviewPromptRequiresVisualEvidence: adapter.requests.some(request => (
+        JSON.stringify(request.messages).includes('topmostVisibleContent')
+          && JSON.stringify(request.messages).includes('requiredVisuals')
+          && JSON.stringify(request.messages).includes('visualAttention')
+      )),
       result,
       review,
+      degradedReview,
     }
     await compareOrRefreshGolden(RESULT_EXPECTED, JSON.stringify(evidence, null, 2), MODE)
   }, 30_000)

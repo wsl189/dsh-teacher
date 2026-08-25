@@ -174,7 +174,7 @@ export async function renderQuestionPagePreviews(
  * @param file - original browser-held PDF.
  * @param layout - normalized OCR page dimensions used for proportional mapping.
  * @param questions - reviewed detection regions in source order.
- * @param maxQuestionWidthRatio - widest normalized MinerU question region in the PDF.
+ * @param maxQuestionWidthRatio - widest normalized safe-lane extent from a fixed question left edge.
  * @param renderScale - bounded PDF.js raster scale.
  * @param progress - optional callback after each complete question crop.
  * @returns browser-produced PNG payloads ready for Host persistence.

@@ -251,7 +251,7 @@ function maximumQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[
   const regions = questions.flatMap(question => question.regions)
   return regions.length === 0
     ? 1
-    : Math.max(...regions.map(region => (region.right - region.left) / region.pageWidth))
+    : Math.max(...regions.map(region => (region.rightLimit - region.left) / region.pageWidth))
 }
 
 function adjacentInspectionPages(

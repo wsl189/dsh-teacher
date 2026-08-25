@@ -905,7 +905,7 @@ export interface TeacherQuestionSegmentSuccess {
     readonly maxSaveBatchBytes: number
     /** Maximum local recuts admitted for one defective image before its last render is saved. */
     readonly maxRecutAttempts: number
-    /** Maximum accepted question-region width divided by its OCR page width. */
+    /** Maximum accepted safe-lane extent from a question's fixed left edge, divided by its OCR page width. */
     readonly maxQuestionWidthRatio: number
     readonly questions: readonly TeacherSegmentedQuestion[]
   }

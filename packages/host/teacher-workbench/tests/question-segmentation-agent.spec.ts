@@ -84,6 +84,14 @@ function provideModelInfo(ctx: Context, inputModalities: readonly ('text' | 'ima
 }
 
 const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
+const VERIFIED_VISUAL_CHECK = {
+  topmostVisibleContent: 'the printed question head',
+  bottommostVisibleContent: 'the final required answer line',
+  leftmostVisibleContent: 'the printed question number at the left edge',
+  rightmostVisibleContent: 'the final owned formula before blank padding',
+  requiredVisuals: 'none',
+  attentionEvidence: 'every listed geometry warning was checked against the source and crop pixels',
+} as const
 
 function provideAttachments(ctx: Context): void {
   let id = 0
@@ -485,6 +493,164 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('keeps an owned diagram complete when a separate section heading overlaps its vertical band', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'The numbered stem begins the question.',
+          questions: [{ headElementId: 'p0e0' }],
+          retainedImageElementIds: ['p0e1'],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '图文错层.pdf',
+      padding: 5,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '1. 根据右图求值', bbox: [20, 10, 300, 20] },
+          { type: 'image', text: '', bbox: [320, 30, 380, 90] },
+          { type: 'text', text: '二、解答题：写出完整过程', bbox: [20, 85, 300, 100] },
+        ],
+      }],
+    }, CONFIG)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        questions: [{
+          regions: [{
+            top: 5,
+            bottom: 95,
+            excludedAreas: [[20, 85, 300, 100]],
+          }],
+        }],
+      },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps the next selected question head as a hard boundary through an oversized image block', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        const accepted = String(await submit.execute({
+          headConvention: 'Each numbered stem begins one question.',
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e2' }],
+          retainedImageElementIds: ['p0e1'],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '跨题组合图.pdf',
+      padding: 5,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '1. 根据图象选择答案', bbox: [20, 10, 300, 20] },
+          { type: 'image', text: '', bbox: [20, 30, 500, 180] },
+          { type: 'text', text: '2. 根据火炬图象选择答案', bbox: [20, 120, 350, 130] },
+          { type: 'text', text: 'A. 甲  B. 乙  C. 丙  D. 丁', bbox: [30, 140, 400, 160] },
+        ],
+      }],
+    }, CONFIG)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        questions: [
+          { regions: [{ top: 5, bottom: 120 }] },
+          { regions: [{ top: 115, bottom: 165 }] },
+        ],
+      },
+    })
+    await ctx.fiber.dispose()
+  })
+
+  it('requires excluded images to remove their compact captions as one visual block', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async () => {
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
+        await source.execute({ chunk: 0 }, {} as never)
+        await expect(submit.execute({
+          headConvention: 'The numbered stem begins the question.',
+          questions: [{ headElementId: 'p0e0' }],
+          excludedElementIds: ['p0e1'],
+        }, {} as never)).resolves.toContain('excluded image p0e1 has connected caption element(s) p0e2')
+        const accepted = String(await submit.execute({
+          headConvention: 'The numbered stem begins the question.',
+          questions: [{ headElementId: 'p0e0' }],
+          excludedElementIds: ['p0e1', 'p0e2'],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    await expect(segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '二维码标注.pdf',
+      padding: 5,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '1. 求函数定义域', bbox: [20, 10, 300, 20] },
+          { type: 'image', text: '', bbox: [300, 30, 340, 70] },
+          { type: 'text', text: '动态演示', bbox: [300, 72, 340, 78] },
+        ],
+      }],
+    }, CONFIG)).resolves.toMatchObject({ ok: true })
+    await ctx.fiber.dispose()
+  })
+
   it('uses one shared cut line when adjacent question-head boxes overlap within the crop padding', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
@@ -550,7 +716,11 @@ describe('segmentQuestionsWithAgent', () => {
       start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
         expect(startRequest.prompt[0]?.text).toContain('next-section title, answer or explanation, footer, decoration')
         expect(startRequest.prompt[0]?.text).toContain('blank white pixels on the right are intentional padding')
-        expect(startRequest.prompt[0]?.text).toContain('name the actual topmost and bottommost visible non-white content in evidence')
+        expect(startRequest.prompt[0]?.text).toContain('leftmostVisibleContent, and rightmostVisibleContent')
+        expect(startRequest.prompt[0]?.text).toContain('report visible right-edge residue with trim-right')
+        expect(startRequest.prompt[0]?.text).toContain('sourceRightLimitEdits may only reduce rightLimit')
+        expect(startRequest.prompt[0]?.text).toContain('require their actual dark pixels in the crop')
+        expect(startRequest.prompt[0]?.text).toContain('Never infer that a response mark is visible')
         expect(startRequest.prompt[0]?.text).toContain('report only that crop for local correction')
         expect(startRequest.prompt[0]?.text).toContain('This is the complete-group review')
         const source = [...registered.values()].find(tool => tool.name.startsWith('question_review_layout_'))
@@ -567,6 +737,7 @@ describe('segmentQuestionsWithAgent', () => {
         await findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e4',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求参数取值',
             evidence: 'the second crop starts at question 2 and ends with its final instruction',
           }],
@@ -706,10 +877,12 @@ describe('segmentQuestionsWithAgent', () => {
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求集合交集',
             evidence: 'question 1 ends after its option row',
           }, {
             cropId: 'crop-p0e6',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求角的大小',
             evidence: 'question 6 ends after its option row',
           }],
@@ -836,6 +1009,7 @@ describe('segmentQuestionsWithAgent', () => {
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求集合交集',
             evidence: 'question 1 ends after its option row',
           }],
@@ -848,6 +1022,7 @@ describe('segmentQuestionsWithAgent', () => {
         }, {} as never)).resolves.toContain('forbidden during a crop-local recut')
         const accepted = String(await findings.execute({
           cropId: 'crop-p0e0',
+          ...VERIFIED_VISUAL_CHECK,
           answerDemand: '求集合交集',
           evidence: 'question 1 starts at its printed head and ends after its option row',
           finalize: true,
@@ -938,6 +1113,7 @@ describe('segmentQuestionsWithAgent', () => {
         await findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p1e0',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求函数的定义域',
             evidence: 'the stem starts with the given function and ends after the requested domain',
           }],
@@ -1048,8 +1224,10 @@ describe('segmentQuestionsWithAgent', () => {
     } as never)
     provideModelInfo(ctx, ['text', 'image'])
     provideAttachments(ctx)
+    let runs = 0
     ctx.provide('subagents', {
       start: async () => {
+        runs += 1
         const source = [...registered.values()].find(tool => tool.name.startsWith('question_review_layout_'))
         const pages = [...registered.values()].find(tool => tool.name.startsWith('question_review_page_'))
         const crops = [...registered.values()].find(tool => tool.name.startsWith('question_review_crop_'))
@@ -1115,6 +1293,62 @@ describe('segmentQuestionsWithAgent', () => {
       ok: true,
       value: { decision: 'unresolved', affectedQuestionIds: ['p0e0'], questions: [question] },
     })
+    expect(runs).toBe(1)
+    await ctx.fiber.dispose()
+  })
+
+  it('keeps the last crop after bounded retries when the review child stops with an error', async () => {
+    const ctx = new Context()
+    provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', {
+      currentToolSelection: () => ({ provider: 'p', model: 'm', reasoningEffort: 'high' }),
+    } as never)
+    provideModelInfo(ctx, ['text', 'image'])
+    provideAttachments(ctx)
+    let runs = 0
+    ctx.provide('subagents', {
+      start: async () => {
+        runs += 1
+        return {
+          id: SessionId(`child-${String(runs)}`),
+          localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'error' as const, output: [] }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const question = {
+      sourceHeadId: 'p0e0' as TeacherQuestionLayoutElementId,
+      questionNo: 1, headPageIndex: 0, groupIndex: 0,
+      regions: [{
+        pageIndex: 0, left: 15, top: 5, right: 305, rightLimit: 600, bottom: 45,
+        excludedAreas: [], pageWidth: 600, pageHeight: 800,
+      }],
+    }
+
+    await expect(reviewQuestionCropsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '单题.pdf',
+      groupIndex: 0,
+      corePageIndexes: [0],
+      recutAttempt: 0,
+      reviewQuestionIds: [question.sourceHeadId],
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [{ type: 'text', text: '1. 求函数定义域', bbox: [20, 10, 300, 40] }],
+      }],
+      pagePreviews: [{ pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL }],
+      questions: [question],
+      crops: [{
+        questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL,
+      }],
+      padding: 5,
+    }, CONFIG)).resolves.toMatchObject({
+      ok: true,
+      value: { decision: 'unresolved', affectedQuestionIds: ['p0e0'], questions: [question] },
+    })
+    expect(runs).toBe(CONFIG.maxQuestionBoundaryAgentRuns)
     await ctx.fiber.dispose()
   })
 
@@ -1322,6 +1556,110 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('lets visual review trim source pixels only on the cited crop right edge', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', {
+      currentToolSelection: () => ({ provider: 'p', model: 'm', reasoningEffort: 'high' }),
+    } as never)
+    provideModelInfo(ctx, ['text', 'image'])
+    provideAttachments(ctx)
+    ctx.provide('subagents', {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+        expect(startRequest.prompt[0]?.text).toContain('sourceRightLimitEdits may only reduce rightLimit')
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_review_layout_'))
+        const pages = [...registered.values()].find(tool => tool.name.startsWith('question_review_page_'))
+        const crops = [...registered.values()].find(tool => tool.name.startsWith('question_review_crop_'))
+        const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
+        const revise = [...registered.values()].find(tool => tool.name.startsWith('revise_question_boundaries_'))
+        if (source === undefined || pages === undefined || crops === undefined
+          || findings === undefined || revise === undefined) {
+          throw new Error('crop review tools were not registered')
+        }
+        await pages.execute({ ids: ['page-1'] }, {} as never)
+        await crops.execute({ ids: ['crop-p0e0'] }, {} as never)
+        await findings.execute({
+          verifiedCrops: [],
+          findings: [{
+            cropId: 'crop-p0e0',
+            repairIntents: ['trim-right'],
+            issue: 'a vertical registration strip appears after the question content',
+            evidence: 'the crop right edge contains a binding line absent from the question',
+          }],
+        }, {} as never)
+        await source.execute({ chunk: 0 }, {} as never)
+        await expect(revise.execute({
+          headConvention: 'Numbered lines start independent questions.',
+          questions: [{ headElementId: 'p0e0', sourceRightLimitEdits: [{ pageIndex: 0, rightLimit: 300 }] }],
+        }, {} as never)).resolves.toContain('must retain all owned pixels')
+        const accepted = String(await revise.execute({
+          headConvention: 'Numbered lines start independent questions.',
+          questions: [{ headElementId: 'p0e0', sourceRightLimitEdits: [{ pageIndex: 0, rightLimit: 360 }] }],
+        }, {} as never))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`review was not accepted: ${accepted}`)
+        return {
+          id: SessionId('child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+    const questions = [{
+      sourceHeadId: 'p0e0' as TeacherQuestionLayoutElementId,
+      questionNo: 1, headPageIndex: 0, groupIndex: 0,
+      regions: [{
+        pageIndex: 0, left: 15, top: 5, right: 305, rightLimit: 600, bottom: 45,
+        excludedAreas: [], pageWidth: 600, pageHeight: 800,
+      }],
+    }, {
+      sourceHeadId: 'p0e2' as TeacherQuestionLayoutElementId,
+      questionNo: 2, headPageIndex: 0, groupIndex: 0,
+      regions: [{
+        pageIndex: 0, left: 15, top: 95, right: 305, rightLimit: 600, bottom: 135,
+        excludedAreas: [], pageWidth: 600, pageHeight: 800,
+      }],
+    }]
+
+    const result = await reviewQuestionCropsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '装订栏.pdf',
+      groupIndex: 0,
+      corePageIndexes: [0],
+      recutAttempt: 0,
+      reviewQuestionIds: [questions[0]!.sourceHeadId],
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '1. 求函数定义域', bbox: [20, 10, 300, 20] },
+          { type: 'text', text: '解集是', bbox: [30, 30, 300, 40] },
+          { type: 'text', text: '2. 求参数取值', bbox: [20, 100, 300, 110] },
+          { type: 'text', text: '说明理由', bbox: [30, 120, 300, 130] },
+        ],
+      }],
+      pagePreviews: [{ pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL }],
+      questions,
+      crops: [{
+        questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL,
+      }],
+      padding: 5,
+    }, CONFIG)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: {
+        decision: 'revised',
+        affectedQuestionIds: ['p0e0'],
+        questions: [
+          { sourceHeadId: 'p0e0', regions: [{ left: 15, right: 305, rightLimit: 360 }] },
+          questions[1],
+        ],
+      },
+    })
+    await ctx.fiber.dispose()
+  })
+
   it('enforces directional paired repair for content transferred between adjacent crops', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
@@ -1347,6 +1685,7 @@ describe('segmentQuestionsWithAgent', () => {
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e2',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求参数取值',
             evidence: 'question 2 contains its complete stem after the leading answer line',
           }],
@@ -1670,7 +2009,12 @@ describe('segmentQuestionsWithAgent', () => {
     provideModelInfo(ctx, ['text', 'image'])
     provideAttachments(ctx)
     ctx.provide('subagents', {
-      start: async () => {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+        expect(startRequest.prompt[0]?.text).toContain('visualAttention')
+        expect(startRequest.prompt[0]?.text).toContain('concatenates source regions')
+        expect(startRequest.prompt[0]?.text).toContain('are erased from this crop')
+        expect(startRequest.prompt[0]?.text).toContain('touch or extend beyond this crop edge')
+        expect(startRequest.prompt[0]?.text).toContain('printed page number, footer mark')
         const pages = [...registered.values()].find(tool => tool.name.startsWith('question_review_page_'))
         const crops = [...registered.values()].find(tool => tool.name.startsWith('question_review_crop_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
@@ -1681,6 +2025,7 @@ describe('segmentQuestionsWithAgent', () => {
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求函数定义域',
             evidence: 'question stem through final line is visible',
           }],
@@ -1689,9 +2034,27 @@ describe('segmentQuestionsWithAgent', () => {
           .resolves.toContain('inspect every requested source-page preview and question crop')
         await pages.execute({ ids: ['page-1'] }, {} as never)
         await expect(findings.execute({
-          verifiedCrops: [{ cropId: 'crop-p0e0', answerDemand: '', evidence: 'complete visible crop' }],
+          verifiedCrops: [{
+            cropId: 'crop-p0e0',
+            ...VERIFIED_VISUAL_CHECK,
+            answerDemand: '',
+            evidence: 'complete visible crop',
+          }],
           findings: [],
         }, {} as never)).resolves.toContain('answerDemand must identify the visible response')
+        await expect(findings.execute({
+          verifiedCrops: [{
+            cropId: 'crop-p0e0',
+            answerDemand: '求函数定义域',
+            evidence: 'question stem through final line is visible',
+            topmostVisibleContent: 'the printed question head',
+            bottommostVisibleContent: 'the final required answer line',
+            leftmostVisibleContent: 'the printed question number at the left edge',
+            rightmostVisibleContent: 'the complete source diagram before blank padding',
+            requiredVisuals: 'the source diagram is visible at the right of the crop',
+          }],
+          findings: [],
+        }, {} as never)).resolves.toContain('has visualAttention flags')
         await expect(findings.execute({ verifiedCrops: [], findings: [] }, {} as never))
           .resolves.toContain('every requested crop requires a verified or defective classification: crop-p0e0')
         await expect(findings.execute({
@@ -1705,6 +2068,7 @@ describe('segmentQuestionsWithAgent', () => {
         }, {} as never)).resolves.toContain('DEFECTS_RECORDED')
         const accepted = String(await findings.execute({
           cropId: 'crop-p0e0',
+          ...VERIFIED_VISUAL_CHECK,
           answerDemand: '求函数定义域',
           evidence: 'question stem through final line is visible',
           finalize: true,
@@ -1723,6 +2087,9 @@ describe('segmentQuestionsWithAgent', () => {
       questionNo: 1, headPageIndex: 0, groupIndex: 0,
       regions: [{
         pageIndex: 0, left: 10, top: 10, right: 500, rightLimit: 600, bottom: 100,
+        excludedAreas: [[400, 40, 450, 90] as const], pageWidth: 600, pageHeight: 800,
+      }, {
+        pageIndex: 0, left: 10, top: 740, right: 200, rightLimit: 600, bottom: 798,
         excludedAreas: [], pageWidth: 600, pageHeight: 800,
       }],
     }
@@ -1735,7 +2102,11 @@ describe('segmentQuestionsWithAgent', () => {
       reviewQuestionIds: [question.sourceHeadId],
       pages: [{
         pageIndex: 0, width: 600, height: 800,
-        elements: [{ type: 'text', text: '1. 求函数定义域', bbox: [10, 10, 500, 100] }],
+        elements: [
+          { type: 'text', text: '1. 求函数定义域', bbox: [10, 10, 500, 100] },
+          { type: 'image', text: '', bbox: [400, 40, 450, 90] },
+          { type: 'image', text: '', bbox: [10, 740, 200, 798] },
+        ],
       }],
       pagePreviews: [{ pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL }],
       questions: [question],
@@ -1787,6 +2158,7 @@ describe('segmentQuestionsWithAgent', () => {
         const accepted = String(await findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
+            ...VERIFIED_VISUAL_CHECK,
             answerDemand: 'complete the requested calculation',
             evidence: 'the complete stem and final instruction are both visible',
           }],
@@ -1977,7 +2349,7 @@ describe('segmentQuestionsWithAgent', () => {
             sourceHeadId: 'p0e0',
             questionNo: 1, headPageIndex: 0, groupIndex: 0,
             regions: [{
-              pageIndex: 0, left: 20, top: 10, right: 420, rightLimit: 440, bottom: 200,
+              pageIndex: 0, left: 20, top: 10, right: 420, rightLimit: 430, bottom: 200,
               excludedAreas: [], pageWidth: 841, pageHeight: 595,
             }],
           },
@@ -2118,7 +2490,7 @@ describe('segmentQuestionsWithAgent', () => {
 
     const result = await segmentQuestionsWithAgent(ctx, layout, CONFIG)
     expect(result.ok && result.value.questions[0]?.regions[0]?.top).toBe(10)
-    expect(result.ok && result.value.questions[1]?.regions[0]?.rightLimit).toBe(450)
+    expect(result.ok && result.value.questions[1]?.regions[0]?.rightLimit).toBe(440)
     expect(result.ok && result.value.questions[2]?.regions[0]).toMatchObject({ right: 820, bottom: 160 })
     await ctx.fiber.dispose()
   })

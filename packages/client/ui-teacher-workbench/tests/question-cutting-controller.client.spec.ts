@@ -33,7 +33,7 @@ const segmented = (questionCount = 1): TeacherQuestionSegmentResult => ({
     groups: [{ groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] }],
     maxSaveBatchBytes: 1_000,
     maxRecutAttempts: 1,
-    maxQuestionWidthRatio: 0.5,
+    maxQuestionWidthRatio: 1,
     questions: Array.from({ length: questionCount }, (_, index) => ({
       sourceHeadId: `p0e${String(index)}` as TeacherQuestionLayoutElementId,
       questionNo: index + 1,
@@ -283,12 +283,12 @@ describe('QuestionCuttingController', () => {
 
     expect(reviewCrops).toHaveBeenCalledTimes(2)
     expect(renders).toEqual([
-      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 50, 50], widthRatio: 0.5 },
-      { ids: ['p0e1'], rights: [40], widthRatio: 0.5 },
-      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 40, 50], widthRatio: 0.5 },
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 50, 50], widthRatio: 1 },
+      { ids: ['p0e1'], rights: [40], widthRatio: 1 },
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 40, 50], widthRatio: 1 },
     ])
     const savedImages = saveBatch.mock.calls[0]?.[0].images ?? []
-    expect(savedImages.some(image => image.fileName === 'p0e1-right-40.png' && image.width === 50)).toBe(true)
+    expect(savedImages.some(image => image.fileName === 'p0e1-right-40.png' && image.width === 100)).toBe(true)
     await controller.dispose()
   })
 

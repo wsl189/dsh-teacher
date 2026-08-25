@@ -145,7 +145,7 @@ describe('segmentQuestionsInBatches', () => {
     await ctx.fiber.dispose()
   })
 
-  it('publishes the maximum normalized question width after every semantic group is merged', async () => {
+  it('publishes the maximum safe lane width after every semantic group is merged', async () => {
     const runner = vi.fn(async (_ctx: Context, groupRequest: TeacherQuestionSegmentRequest) => ({
       ok: true as const,
       value: {
@@ -159,7 +159,7 @@ describe('segmentQuestionsInBatches', () => {
             left: page.pageIndex === 0 ? 30 : 120,
             top: 20,
             right: page.pageIndex === 0 ? 300 : 540,
-            rightLimit: 600,
+            rightLimit: page.pageIndex === 0 ? 420 : 600,
             bottom: 50,
             excludedAreas: [],
             pageWidth: 600,
@@ -174,7 +174,7 @@ describe('segmentQuestionsInBatches', () => {
       questionSegmentationBatchPages: 1,
     }, runner)
 
-    expect(result.ok && result.value.maxQuestionWidthRatio).toBe(0.7)
+    expect(result.ok && result.value.maxQuestionWidthRatio).toBe(0.8)
     expect(result.ok && result.value.questions.map(question => question.regions[0])).toMatchObject([
       { left: 30, right: 300 },
       { left: 120, right: 540 },

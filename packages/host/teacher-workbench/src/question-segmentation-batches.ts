@@ -45,7 +45,7 @@ type SegmentationRunner = (
 function maxQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): number {
   const regions = questions.flatMap(question => question.regions)
   if (regions.length === 0) return 1
-  return Math.max(...regions.map(region => (region.right - region.left) / region.pageWidth))
+  return Math.max(...regions.map(region => (region.rightLimit - region.left) / region.pageWidth))
 }
 
 /**
