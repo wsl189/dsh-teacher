@@ -1,0 +1,5 @@
+# The shipped IM plugin provides mobileNotifications from configured bots.
+# This scenario owns a deterministic fake target instead, while the shipped-
+# composition scenario separately proves that IM is mounted by default.
+- id: xmanrui-dsh-im
+  disabled: true

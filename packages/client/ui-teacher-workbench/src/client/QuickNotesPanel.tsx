@@ -3,7 +3,6 @@
 import { useMemo, useState } from 'react'
 import { Bell, Pencil, Plus, Trash2 } from 'lucide-react'
 import type { TeacherQuickNote, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherReminderInput } from './controller.ts'
 import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
@@ -15,8 +14,6 @@ import css from './TeacherWorkbench.module.css'
 export interface QuickNotesPanelProps {
   /** Complete durable workbench state. */
   state: TeacherWorkbenchState
-  /** Voice-recognition settings. */
-  settings: TeacherWorkbenchSettings
   /** Durable workbench commands. */
   commands: TeacherWorkbenchCommands
   /** Workbench translator. */
@@ -25,10 +22,10 @@ export interface QuickNotesPanelProps {
 
 /**
  * Render the compact memos panel.
- * @param props - durable notes, voice settings, commands, and copy.
+ * @param props - durable notes, commands, and copy.
  * @returns a note list with manual and speech-recognition entry.
  */
-export function QuickNotesPanel({ state, settings, commands, t }: QuickNotesPanelProps) {
+export function QuickNotesPanel({ state, commands, t }: QuickNotesPanelProps) {
   const [editing, setEditing] = useState<TeacherQuickNote | 'new' | null>(null)
   const [voiceDraft, setVoiceDraft] = useState('')
   const notes = useMemo(
@@ -47,7 +44,7 @@ export function QuickNotesPanel({ state, settings, commands, t }: QuickNotesPane
           <span>{t('daily.notes.count', { count: notes.length })}</span>
         </div>
         <div className={css.dailyPanelActions}>
-          <VoiceInputButton language={settings.speechLanguage} onTranscript={openVoiceDraft} t={t} />
+          <VoiceInputButton transcribe={commands.transcribeVoice} onTranscript={openVoiceDraft} t={t} />
           <button
             type="button"
             className={css.dailyIconButton}
@@ -88,7 +85,6 @@ export function QuickNotesPanel({ state, settings, commands, t }: QuickNotesPane
         <NoteEditor
           note={editing === 'new' ? undefined : editing}
           initialContent={editing === 'new' ? voiceDraft : editing.content}
-          language={settings.speechLanguage}
           commands={commands}
           t={t}
           onClose={() => { setEditing(null) }}
@@ -101,7 +97,6 @@ export function QuickNotesPanel({ state, settings, commands, t }: QuickNotesPane
 function NoteEditor(props: {
   note: TeacherQuickNote | undefined
   initialContent: string
-  language: string
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
   onClose: () => void
@@ -143,7 +138,7 @@ function NoteEditor(props: {
             onChange={(event) => { setContent(event.target.value) }}
           />
           <VoiceInputButton
-            language={props.language}
+            transcribe={props.commands.transcribeVoice}
             onTranscript={(transcript) => {
               setContent(current => current.trim() === '' ? transcript : `${current.trimEnd()}\n${transcript}`)
             }}

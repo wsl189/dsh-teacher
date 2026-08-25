@@ -1,6 +1,7 @@
 /** Registers the conversation components, shared store, and service callbacks. */
 import type { Context } from '@deepseek-ai/cordis'
 import { resolveSlotLabel, type BoundActions } from '@deepseek-ai/dsh-client-ui-slots'
+import { blobToBase64 } from '@deepseek-ai/dsh-client-ui-primitives'
 import {
   resolveWorkspacePath, type ISessions, type SessionId,
 } from '@deepseek-ai/dsh-client-runtime/client'
@@ -49,7 +50,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 
 /** Services required by the conversation plugin. */
 export const inject = [
-  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr',
+  'slots', 'layout', 'sessions', 'workspaces', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech',
   'remote.teacherWorkbench', 'settingsScope',
   'conversationEvents', 'conversationViews',
 ]
@@ -306,6 +307,7 @@ export function apply(ctx: Context): void {
           addDocuments: undefined,
           removeDocument: undefined,
           draftDocumentFile: undefined,
+          transcribeVoice: undefined,
           resolveSubmitMode: (running, gesture, steeringAvailable) =>
             submissionPolicy.resolve(running, gesture, steeringAvailable),
           toggleCommandMenu: undefined,
@@ -348,6 +350,15 @@ export function apply(ctx: Context): void {
         addDocuments: (files) => { conversation.addDraftDocuments(sessionId, files) },
         removeDocument: (id) => { conversation.removeDraftDocument(id) },
         draftDocumentFile: id => conversation.draftDocumentFile(id),
+        transcribeVoice: async (audio) => {
+          const carried = await ctx.remote.speech.transcribe({
+            mediaType: audio.type,
+            contentBase64: await blobToBase64(audio),
+          })
+          if (!carried.ok) throw voiceRemoteError('provider-failure', carried.error.message)
+          if (!carried.value.ok) throw voiceRemoteError(carried.value.error.code, carried.value.error.message)
+          return carried.value.value.text
+        },
         resolveSubmitMode: (running, gesture, steeringAvailable) =>
           submissionPolicy.resolve(running, gesture, steeringAvailable),
         toggleCommandMenu: inputTriggers === undefined
@@ -492,4 +503,10 @@ export function apply(ctx: Context): void {
     }),
   }, DetailsPanel)
 
+}
+
+function voiceRemoteError(code: string, message: string): Error {
+  const error = new Error(message)
+  error.name = code
+  return error
 }

@@ -97,6 +97,46 @@
       "source": "packages/ocr/ocr/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechErrorCode",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechTranscribeRequest",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechTranscript",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechTranscribeSuccess",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechFailure",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechTranscribeRejected",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechTranscribeResult",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/speech.md",
+      "symbol": "SpeechProvider",
+      "source": "packages/speech/speech/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/core.md",
       "symbol": "Branded",
       "source": "packages/util/brand/src/index.ts"

@@ -49,6 +49,9 @@
       "path": "../../ocr/ocr"
     },
     {
+      "path": "../../speech/speech"
+    },
+    {
       "path": "../../interaction/commands"
     },
     {

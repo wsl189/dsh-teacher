@@ -260,15 +260,37 @@
   padding-left: 0;
 }
 
-/* Footer seats: additive actions stack above Settings. Each occupant owns its
-   button geometry and hover chrome. */
+/* Footer seats: additive actions stack above the bottom row. Settings expands
+   into the available row width; an optional desktop update action sits at its
+   right edge. Each occupant owns its button geometry and hover chrome. */
 .footArea {
   flex: none;
   display: flex;
   flex-direction: column;
 }
 
-.settingsArea,
+.bottomActions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  width: 100%;
+}
+
+.settingsArea {
+  flex: 1;
+  min-width: 0;
+}
+
+.updateArea {
+  flex: none;
+  min-width: 0;
+}
+
+.updateArea:empty {
+  display: none;
+}
+
 .footerActions {
   flex: none;
   min-width: 0;
@@ -283,8 +305,15 @@
   align-items: center;
 }
 
+.collapsed .bottomActions {
+  flex-direction: column;
+  gap: 0;
+  width: auto;
+}
+
 .collapsed .settingsArea,
-.collapsed .footerActions {
+.collapsed .footerActions,
+.collapsed .updateArea {
   display: flex;
   justify-content: center;
   width: auto;

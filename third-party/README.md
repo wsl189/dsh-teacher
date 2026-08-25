@@ -1,69 +1,28 @@
-# Third-Party Plugins
+# Third-party source artifacts
 
 English | [中文](README.zh.md)
 
-This directory stores the third-party custom plugin bundles required to deploy dsh-teacher. These plugins are **not part of the project source**; they are installed independently into `~/.dsh/profiles/web/` (a per-machine user-level directory), so they must be reinstalled after cloning the project.
+This directory pins reviewed third-party plugin artifacts used by the dsh-teacher distribution. They are project build inputs, not per-machine installation files: `@deepseek-ai/dsh-web-app` declares them as dependencies and mounts them in its shipped profile, so source launches and the Windows EXE need no separate `dsh plugin add` step.
 
-## 插件清单
+## Inventory
 
-| 目录 | 安装包 | 版本 | 来源 | 说明 |
-|---|---|---|---|---|
-| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | 基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 的定制版（官方 npm 最新为 1.0.2） | 连接 QQ/微信/飞书/钉钉/企业微信等 9 种 IM 平台；定制新增：QQ 图片/文件发送、移动提醒推送、语音转文字 |
-| `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | 基于 npm 官方 `dsh-plugin-cron` 0.1.3 的定制版 | cron 定时任务调度；定制修改：侧边栏交互、折叠侧栏、工作台提醒投影 |
+| Directory | Artifact | Version | Upstream | Distribution role |
+|---|---|---:|---|---|
+| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | Nine IM platforms, QQ file delivery, mobile reminders, and QQ ASR settings. |
+| `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | [abiaoa1314/dsh-plugin-cron](https://github.com/abiaoa1314/dsh-plugin-cron) | Durable cron jobs, model tools, and browser management. |
 
-> 两个安装包均为定制版，与官方发布内容不一致，请使用本目录内的 tgz，不要从 npm/GitHub 直接安装官方版（会缺少定制功能）。
+The Web bundle also pins `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 from npm. That AGPL-3.0 package registers DOCX, XLSX, and PPTX viewers with the built-in better-sidebar file registry.
 
-## 安装步骤（新电脑部署）
+## Configuration and migration
 
-```bash
-# 1. 安装 dsh-im（IM 连接：QQ 等）
-dsh plugin --profile web add third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
+Executable code ships with the repository and EXE; machine-specific state does not. Bot credentials, QQ settings, cron jobs, and related data remain under `DSH_HOME` (`~/.dsh` or `%USERPROFILE%\.dsh`). Configure bots through **Settings → Plugins → Connected Platforms**. The `dsh-im/cordis.patch.yml.example` file remains only as a reference for deployments that need an explicit `qq.outboundMediaRoots` override.
 
-# 2. 安装 cron 定时任务插件
-dsh plugin --profile web add third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz
+To migrate a machine, install the new EXE or clone and build the repository, then copy the required `DSH_HOME` data separately. Do not reinstall these three plugins into the generated user profile; duplicate rows can register duplicate tools and sidebar entries.
 
-# 3. 恢复 profile 配置（QQ 可发送文件目录等）
-#    把 dsh-im/cordis.patch.yml.example 的内容合并进 ~/.dsh/profiles/web/cordis.patch.yml
-```
+## Verification
 
-### 验证
+The real shipped-composition browser lane asserts that all three client modules are in the module graph. It also pins the Host-level `cron_*` and `qq_send_local_file` tools, while the voice-input lane sends browser recordings through the shared QQ configuration.
 
-安装后重启 web 服务，检查：
+## Artifact notes
 
-- QQ 机器人可收发消息（dsh-im）
-- 定时任务侧边栏入口出现（dsh-plugin-cron）
-- 教师工作台的待办/备忘/账本提醒可选手机推送平台（dsh-im mobileNotifications）
-- 模型侧可用 `qq_send_local_file`、`cron_add` 等工具
-
-## 与官方版的差异摘要
-
-### dsh-im（官方 1.0.2 → 定制 1.0.3）
-
-新增文件：
-
-- `src/channels/qq/outbound-media.mjs`：`qq_send_local_file` 工具，向 QQ 会话发送图片/文件
-- `plugin-src/host/mobile-notifications.mjs`：`ctx.mobileNotifications` 服务，供教师工作台推送手机提醒
-- `src/channels/qq/speech-transcriber.mjs`：QQ 语音消息转文字（Whisper）
-
-另有 40+ 文件与官方版有差异（控制器、桥接、客户端等）。
-
-### dsh-plugin-cron（官方 0.1.3 → 定制 0.1.3）
-
-- 侧边栏入口位置与交互调整（显示启用/运行中任务数，点击直接右侧打开）
-- 折叠侧栏支持（保留时钟图标）
-- 管理页「操作手册」「新增定时任务」默认收起
-- 安装教师工作台时，定时任务列表只读投影其未完成手机提醒
-
-> 注意：cron 定制版安装包内仅有编译产物 `lib/`，不含源码目录；dsh-im 定制版 tgz 内含完整 `src/` 源码。
-
-## 配置参考
-
-`dsh-im/cordis.patch.yml.example` 内容（可发送文件根目录按需修改）：
-
-```yaml
-- id: xmanrui-dsh-im
-  config:
-    qq:
-      outboundMediaRoots:
-        - /home/wsl/Desktop
-```
+The dsh-im archive contains its source and MIT license. The cron archive contains compiled `lib/` output, its bundle patch, README, and MIT license. Update either pinned archive only after reviewing its executable closure, provenance, licenses, and shipped-composition behavior together.

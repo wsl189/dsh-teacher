@@ -4,8 +4,9 @@
  * owns column geometry (fold state machine and brand-row New Session shortcut);
  * primary sections register between the brand row and the workspace browser;
  * `sidebar.workspaces` owns the browser below them, and the foot is the
- * `sidebar.settings` registrant's (ui-settings), followed by optional footer
- * actions in `sidebar.footer.action`.
+ * `sidebar.settings` registrant's (ui-settings), paired with the optional
+ * `sidebar.update` desktop action, while additive footer actions remain in
+ * `sidebar.footer.action` above that bottom row.
  */
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls ui-layout's SlotMap merge (the 'sidebar' entry) into every
@@ -44,6 +45,11 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      * The sidebar passes only its column state — it holds no settings state.
      */
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps }
+    /**
+     * Optional desktop-update action to the right of Settings in the expanded
+     * footer row. Browser-only deployments leave the seat empty.
+     */
+    'sidebar.update': { kind: 'single'; scope: 'root'; owner: SidebarUpdateOwnerProps }
     /**
      * Optional actions beside Settings at the sidebar foot. Declared by this
      * package's 'sidebar' entry; each action receives only the column state.
@@ -92,6 +98,12 @@ export interface SidebarSettingsOwnerProps {
   wide: boolean
 }
 
+/** Owner share of the optional desktop-update action beside Settings. */
+export interface SidebarUpdateOwnerProps {
+  /** Whether the sidebar renders wide content (false = 56px rail). */
+  wide: boolean
+}
+
 /** Owner share of an action rendered beside Settings at the sidebar foot. */
 export interface SidebarFooterActionOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
@@ -127,6 +139,7 @@ export type SidebarRootComponentProps =
     | 'sidebar.primary.section'
     | 'sidebar.workspaces'
     | 'sidebar.settings'
+    | 'sidebar.update'
     | 'sidebar.footer.action'
   >
   & SidebarRootInjected & PropsLocale<'sidebar'>

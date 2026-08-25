@@ -15,6 +15,14 @@ import ts from 'typescript'
 
 const CONCURRENCY_ENV = 'DSH_PUBLINT_CONCURRENCY'
 const repositoryRoot = resolve(import.meta.dirname, '..')
+// These reviewed archives are repository and Electron build inputs. Exact
+// path-and-spec matching makes any artifact update fail publint until audited.
+const authorizedLocalDependencies: Readonly<Record<string, Readonly<Record<string, string>>>> = {
+  'packages/bundle/web-app': {
+    '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz',
+    'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
+  },
+}
 const { values: options } = parseArgs({
   args: process.argv.slice(2),
   options: { 'packages-root': { type: 'string' } },
@@ -30,6 +38,7 @@ interface PackageTarget {
 interface PackageManifest {
   name?: string
   files?: unknown
+  dependencies?: unknown
 }
 
 type PublintResult =
@@ -185,10 +194,11 @@ async function runPublint(target: PackageTarget): Promise<PublintResult> {
       pkgDir: 'package',
       pack: { files },
     })
+    const messages = result.messages.filter(message => !authorizedLocalDependency(target, message))
     const manifest = result.pkg as Record<string, unknown>
-    return result.messages.some(message => message.type === 'error') || closureViolations.length > 0
-      ? { path: target.path, status: 'failed', messages: result.messages, closureViolations, manifest }
-      : { path: target.path, status: 'passed', messages: result.messages, closureViolations, manifest }
+    return messages.some(message => message.type === 'error') || closureViolations.length > 0
+      ? { path: target.path, status: 'failed', messages, closureViolations, manifest }
+      : { path: target.path, status: 'passed', messages, closureViolations, manifest }
   } catch (error: unknown) {
     return {
       path: target.path,
@@ -199,6 +209,16 @@ async function runPublint(target: PackageTarget): Promise<PublintResult> {
       failure: error instanceof Error ? error.message : String(error),
     }
   }
+}
+
+function authorizedLocalDependency(target: PackageTarget, message: Message): boolean {
+  if (message.code !== 'LOCAL_DEPENDENCY' || message.path[0] !== 'dependencies') return false
+  const dependency = message.path[1]
+  if (typeof dependency !== 'string') return false
+  const authorized = authorizedLocalDependencies[target.path]?.[dependency]
+  if (authorized === undefined || typeof target.manifest.dependencies !== 'object'
+    || target.manifest.dependencies === null) return false
+  return (target.manifest.dependencies as Record<string, unknown>)[dependency] === authorized
 }
 
 async function runAll(targets: PackageTarget[], concurrency: number): Promise<PublintResult[]> {

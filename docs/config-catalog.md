@@ -2161,6 +2161,44 @@ export interface Config {
 
 Source: [`packages/skill/skill-filesystem/src/index.ts:49`](../packages/skill/skill-filesystem/src/index.ts)
 
+<a id="deepseek-aidsh-speech"></a>
+
+## `@deepseek-ai/dsh-speech`
+
+```ts config-catalog
+/** Speech provider-selection configuration. */
+export interface SpeechRuntimeConfig {
+  /** Explicit provider id; omitted when exactly one usable provider is registered. */
+  readonly provider?: string
+}
+```
+
+Source: [`packages/speech/speech/src/index.ts:39`](../packages/speech/speech/src/index.ts)
+
+<a id="deepseek-aidsh-speech-qq"></a>
+
+## `@deepseek-ai/dsh-speech-qq`
+
+Requires: `speech` · `credentials`
+
+```ts config-catalog
+/** Provider configuration owned by deployment composition. */
+export interface Config {
+  /** Absolute dsh-im QQ configuration document path. */
+  readonly configPath: string
+  /** Credential reference written by the QQ settings surface. */
+  readonly credentialRef: string
+  /** Per-transcription network deadline in milliseconds. */
+  readonly timeoutMs: number
+  /** Maximum decoded browser recording size. */
+  readonly maxAudioBytes: number
+  /** Maximum JSON response bytes accepted from the transcription service. */
+  readonly maxResponseBytes: number
+}
+```
+
+Source: [`packages/speech/speech-qq/src/index.ts:53`](../packages/speech/speech-qq/src/index.ts)
+
 <a id="deepseek-aidsh-spill-local"></a>
 
 ## `@deepseek-ai/dsh-spill-local`
@@ -3354,6 +3392,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-client-ui-conversation` ([`packages/client/ui-conversation/src/index.ts`](../packages/client/ui-conversation/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-cordis` ([`packages/extensions/ui-cordis/src/index.ts`](../packages/extensions/ui-cordis/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-deliverables` — requires `systemPrompt` ([`packages/client/ui-deliverables/src/index.ts`](../packages/client/ui-deliverables/src/index.ts))
+- `@deepseek-ai/dsh-client-ui-desktop-update` ([`packages/client/ui-desktop-update/src/index.ts`](../packages/client/ui-desktop-update/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-browse` ([`packages/client/ui-directory-picker-browse/src/index.ts`](../packages/client/ui-directory-picker-browse/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-directory-picker-native` ([`packages/client/ui-directory-picker-native/src/index.ts`](../packages/client/ui-directory-picker-native/src/index.ts))
 - `@deepseek-ai/dsh-client-ui-goal` ([`packages/client/ui-goal/src/index.ts`](../packages/client/ui-goal/src/index.ts))

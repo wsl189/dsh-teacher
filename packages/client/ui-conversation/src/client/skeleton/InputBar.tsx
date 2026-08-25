@@ -85,6 +85,8 @@ type VoiceErrorTranslate = (key:
   | 'voice.noMicrophone'
   | 'voice.noSpeech'
   | 'voice.networkError'
+  | 'voice.notConfigured'
+  | 'voice.fileTooLarge'
   | 'voice.failed') => string
 
 function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
@@ -96,15 +98,20 @@ function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
     case 'audio-capture':
     case 'NotFoundError':
     case 'NotReadableError': return t('voice.noMicrophone')
-    case 'no-speech': return t('voice.noSpeech')
-    case 'network': return t('voice.networkError')
+    case 'no-speech':
+    case 'empty-result': return t('voice.noSpeech')
+    case 'provider-disabled': return t('voice.notConfigured')
+    case 'file-too-large': return t('voice.fileTooLarge')
+    case 'network':
+    case 'provider-unavailable':
+    case 'provider-failure': return t('voice.networkError')
     default: return t('voice.failed')
   }
 }
 
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
-  addDocuments, removeDocument, draftDocumentFile,
+  addDocuments, removeDocument, draftDocumentFile, transcribeVoice,
   resolveSubmitMode, toggleCommandMenu, stop, command, t,
   renderSlot, useNotices, useLexicon, useMenuLauncher, useDocuments,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
@@ -334,7 +341,7 @@ export function InputBar({
     if (el !== null) restoreCaret(el, caret)
     keyboard.track(keyboard.snapshot.draft, caret)
   }, [keyboard, locked, machineBusy])
-  const voice = useVoiceInput(appendTranscript, (code) => {
+  const voice = useVoiceInput(transcribeVoice, appendTranscript, (code) => {
     showToast(voiceErrorText(code, t))
   })
   const spaceHold = useRef<{
@@ -495,7 +502,7 @@ export function InputBar({
         return
       }
       if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey || e.repeat
-        || locked || machineBusy || !voice.supported) return
+        || locked || machineBusy || voice.transcribing || !voice.supported) return
       e.preventDefault()
       const hold = {
         timer: 0,
@@ -521,7 +528,7 @@ export function InputBar({
     e.preventDefault()
     if (e.repeat) return // held-down Enter must not machine-gun sends
     if (locked || machineBusy) return
-    if (documentsSettling || documentsFailed || voice.starting || voice.listening) return
+    if (documentsSettling || documentsFailed || voice.starting || voice.listening || voice.transcribing) return
     const accelerated = e.ctrlKey || e.metaKey
     // Empty-draft accelerated Enter acts on the queue instead of the (empty)
     // draft: the machine rejects empty drafts, so the gesture steers every
@@ -695,7 +702,8 @@ export function InputBar({
   const primaryStops = running && subagent === null
   const interruptible = running && continuable
   const primaryLabel = primaryStops ? t('input.stop') : t('input.send')
-  const sendBlocked = machineBusy || documentsSettling || documentsFailed || voice.starting || voice.listening
+  const sendBlocked = machineBusy || documentsSettling || documentsFailed
+    || voice.starting || voice.listening || voice.transcribing
   const onPrimary = (): void => {
     if (primaryStops) {
       stop?.()
@@ -994,16 +1002,20 @@ export function InputBar({
             <Tooltip
               label={!voice.supported
                 ? t('voice.unsupported')
-                : voice.listening ? t('voice.stop') : t('voice.start')}
+                : voice.transcribing
+                  ? t('voice.transcribing')
+                  : voice.listening ? t('voice.stop') : t('voice.start')}
               side="top"
               delayMs={500}
             >
               <button
                 type="button"
                 className={clsx(css.add, voice.listening && css.voiceActive)}
-                aria-label={voice.listening ? t('voice.stop') : t('voice.start')}
+                aria-label={voice.transcribing
+                  ? t('voice.transcribing')
+                  : voice.listening ? t('voice.stop') : t('voice.start')}
                 aria-pressed={voice.listening}
-                disabled={locked || machineBusy || !voice.supported}
+                disabled={locked || machineBusy || voice.transcribing || !voice.supported}
                 onMouseDown={keepFocus}
                 onClick={() => { voice.toggle() }}
               >

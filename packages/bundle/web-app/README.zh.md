@@ -4,6 +4,14 @@
 
 dsh 浏览器表层组合包。[`cordis.patch.yml`](cordis.patch.yml) 叠加在 [`dsh-base`](../base/README.zh.md) 之上：设置 coding persona，插入 Web 宿主行（webserver、API 网关、workspace、投影缓存、存储）、浏览器插件名录与始终挂载的客户端插件重载链（[`dsh-client-hmr`](../../client/hmr/README.zh.md)，在重建 watcher 改写客户端 bundle 之前保持空闲），并挂载本包的 `web-runtime` 粘合插件（配置为 `{openBrowser, printUrl, surfaceContext, trustedHosts}`）。该插件通过 `@deepseek-ai/dsh-web-frontend` 的 exports 解析已构建的前端 dist，只采样一次依赖 bind 的 LAN 信任信息并将其作为 `webRuntime` 提供给浏览器信任栅栏和客户端名录，挂载 [`frontend-static`](../../host/frontend-static/README.zh.md) 回退席位所有者，并在 `surfaceContext` 为 true 时注册 Harness 源码与 Web 表层提示词段落，以及 bash 可见的 `DSH_WEB_URL` 运行时变量。自身 Loader 配置树结算后，它在 `printUrl` 为 true 时打印 `dsh web:` URL 行；`openBrowser` 为 true 且继承的 `SSH_CONNECTION` 与 `SSH_TTY` 均为空或不存在时，才会用默认浏览器打开规范宿主机 URL。SSH 启动仍保留 URL 行，但会跳过浏览器交接，因为本地转发地址由 SSH 客户端或编辑器持有。交接前，运行时会打印英文提示 `dsh web: opening the default browser; pass --no-open to disable`。短生命周期 Node helper 使用规范的脱敏子进程环境运行受维护的平台 opener。在 Windows 上，helper 会保持存活，直至短生命周期的 PowerShell launcher 退出，因为 `open` 会在 launcher 把 URL 交给 shell 之前、仅在 spawn 时返回；其他平台则在 opener 接受 spawn 后结束。helper 失败时会向 stderr 写入包含原因和手动访问 URL 的诊断，不会停止服务器，且任何路径都不会等待浏览器退出。本组合包还持有应用命令行：普通 `web-startup` 提供方（[`src/startup.ts`](src/startup.ts)）注入 `ctx.cmdlineArgs`（[`dsh-cmdline`](../../boot/cmdline/README.zh.md)），解析 `--host`、`--port`、可重复的 `--trusted-host`、`--no-open` 以及应用自己的 `--help`，再提供 `webStartup`；本机启动默认会打开浏览器，`--no-open` 则只对本次调用关闭该行为。它会在发布该服务前拒绝 `--host 0.0.0.0`，因为 CLI 目前有意不支持绑定所有网络接口。由 flag 配置的行会注入该服务，并在惰性配置中直接读取它，因此参数解析完成前不会有任何东西绑定端口，`dsh --profile web --help` 也不会启动服务器。[`dsh-headless`](../headless/README.zh.md) 是同一 base 之上的同级表层，不挂载本组合包。
 
+浏览器名录始终包含 [ui-desktop-update](../../client/ui-desktop-update/README.zh.md)。普通浏览器中的该配置项不会注册侧边栏占位者；只有已安装 Electron preload 明确提供能力后，更新操作才会出现。
+
+## 内置扩展与语音输入
+
+发行版 Host 与客户端名录直接从本组合包的依赖闭包挂载 `@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3 和采用 AGPL-3.0 的 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2。因此源码检出或 Windows 安装版都不需要再向每个 profile 单独安装插件。可执行代码随应用发布；机器人凭据、cron 记录、QQ 配置与用户数据仍保存在 `DSH_HOME` 下，需要另行迁移。
+
+本组合包还挂载 [`dsh-speech`](../../speech/speech/README.zh.md) 及其 [`qq-config` 提供方](../../speech/speech-qq/README.zh.md)。提供方会为每次完整录音重新读取 dsh-im 的 QQ 语音文档与凭据，因此对话和教师工作台麦克风控件直接跟随 QQ 设置页，不需要第二套语音配置命名空间，也不需要重启 Host。ASR 服务器与模型仍是外部部署服务。
+
 ## 内置侧边栏工作台
 
 Web 组合包把 `dsh-better-sidebar` 声明为运行时依赖，并通过 `web-better-sidebar` 配置项挂载。工作台默认收起，为每个标准 Web profile 提供右侧文件资源管理器、编辑器、终端、Git、浏览器与扩展注册表。如果 profile 仍在 `dsh-web-app` 之后列出独立的 `dsh-better-sidebar` 组合包，该配置仍然有效：独立组合包会检测前面的内置配置项，并禁用多余挂载。

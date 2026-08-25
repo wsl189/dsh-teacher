@@ -588,6 +588,8 @@ export interface ComposerBarInjected {
   removeDocument: ((id: DraftDocumentId) => void) | undefined
   /** Resolve the browser file retained for one background-OCR document. */
   draftDocumentFile: ((id: DraftDocumentId) => File | undefined) | undefined
+  /** Transcribe one browser microphone recording through the Host speech provider. */
+  transcribeVoice: ((audio: Blob) => Promise<string>) | undefined
   /** Resolve one keyboard submission gesture against the current running state and persisted preference. */
   resolveSubmitMode: (
     running: boolean,

@@ -9,6 +9,7 @@ import pluginInventoryRemote from '@deepseek-ai/dsh-host-plugin-inventory/remote
 import teacherWorkbenchRemote from '@deepseek-ai/dsh-host-teacher-workbench/remote'
 import messageFeedbackRemote from '@deepseek-ai/dsh-message-feedback/remote'
 import ocrRemote from '@deepseek-ai/dsh-ocr/remote'
+import speechRemote from '@deepseek-ai/dsh-speech/remote'
 import sessionReferencesRemote from '@deepseek-ai/dsh-session-reference/remote'
 import type { TypertClientRemote } from '@deepseek-ai/dsh-typert-protocol'
 
@@ -21,6 +22,7 @@ export type {} from '@deepseek-ai/dsh-host-plugin-inventory/remote'
 export type {} from '@deepseek-ai/dsh-host-teacher-workbench/remote'
 export type {} from '@deepseek-ai/dsh-message-feedback/remote'
 export type {} from '@deepseek-ai/dsh-ocr/remote'
+export type {} from '@deepseek-ai/dsh-speech/remote'
 export type {} from '@deepseek-ai/dsh-session-reference/remote'
 // The forwarded-event allowlist's selection seat: without it in the consumer's
 // compilation face `TypertRemoteEvent` is `never` and every `$on` call fails.
@@ -114,6 +116,15 @@ export type {
   OcrLayoutSuccess,
   OcrPageRange,
 } from '@deepseek-ai/dsh-ocr/types'
+export type {
+  SpeechErrorCode,
+  SpeechFailure,
+  SpeechTranscript,
+  SpeechTranscribeRejected,
+  SpeechTranscribeRequest,
+  SpeechTranscribeResult,
+  SpeechTranscribeSuccess,
+} from '@deepseek-ai/dsh-speech/types'
 export type {
   TeacherCalendarItem,
   TeacherCalendarItemId,
@@ -276,7 +287,7 @@ export async function apply(ctx: Context): Promise<() => Promise<void>> {
     for (const contribution of [
       commandsRemote, goalsRemote, dynamicRemote, fileReferencesRemote,
       pluginInventoryRemote, teacherWorkbenchRemote, messageFeedbackRemote,
-      ocrRemote, sessionReferencesRemote,
+      ocrRemote, speechRemote, sessionReferencesRemote,
     ]) {
       disposers.push(await ctx.remote.$mount(contribution))
     }

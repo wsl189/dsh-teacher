@@ -1,0 +1,30 @@
+appId: ai.deepseek.dsh.teacher
+productName: DSH Teacher
+asar: false
+directories:
+  output: release
+files:
+  - lib/**/*
+  - package.json
+  - '!lib/**/*.map'
+npmRebuild: true
+generateUpdatesFilesForAllChannels: true
+win:
+  executableName: DSH Teacher
+  artifactName: DSH-Teacher-${version}-${arch}-Setup.${ext}
+  target:
+    - target: nsis
+      arch:
+        - x64
+nsis:
+  oneClick: false
+  perMachine: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: always
+  createStartMenuShortcut: true
+  shortcutName: DSH Teacher
+  deleteAppDataOnUninstall: false
+publish:
+  provider: github
+  owner: wsl189
+  repo: dsh-teacher

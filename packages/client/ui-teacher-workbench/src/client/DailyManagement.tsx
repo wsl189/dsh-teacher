@@ -20,7 +20,7 @@ export interface DailyManagementProps {
   savingLabel: string | null
   /** Complete durable workbench state. */
   state: TeacherWorkbenchState
-  /** Feature settings used by weather and speech recognition. */
+  /** Feature settings used by weather and teaching modules. */
   settings: TeacherWorkbenchSettings
   /** Durable workbench commands. */
   commands: TeacherWorkbenchCommands
@@ -55,11 +55,10 @@ export function DailyManagement(props: DailyManagementProps) {
         t={props.t}
       />
       <div className={`${css.dailyBoard} ${expanded === 'ledger' || expanded === 'calendar' ? css.dailyBoardExpanded : ''}`}>
-        <DailyTodoPanel state={props.state} settings={props.settings} commands={props.commands} t={props.t} />
-        <QuickNotesPanel state={props.state} settings={props.settings} commands={props.commands} t={props.t} />
+        <DailyTodoPanel state={props.state} commands={props.commands} t={props.t} />
+        <QuickNotesPanel state={props.state} commands={props.commands} t={props.t} />
         <LedgerPanel
           state={props.state}
-          settings={props.settings}
           commands={props.commands}
           expanded={expanded === 'ledger'}
           onExpand={() => { setExpanded('ledger') }}

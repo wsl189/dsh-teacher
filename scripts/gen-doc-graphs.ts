@@ -250,6 +250,15 @@ const SERVICE_ROLES: ServiceRole[] = [
     note: 'Providers return bounded reading-order Markdown; browser consumers use the generated OCR Remote and filesystem agents use the conditional read_document tool.',
   },
   {
+    key: 'speech',
+    pkg: 'speech',
+    title: 'Recorded-audio transcription',
+    mode: 'seam',
+    implementations: ['speech-qq'],
+    consumers: ['api-remotes'],
+    note: 'The selected provider validates and transcribes bounded browser recordings; generated Remotes return provider-neutral text to conversation and workbench clients.',
+  },
+  {
     key: 'workspaceRegistry',
     pkg: 'workspace',
     title: 'Workspace entity registry',

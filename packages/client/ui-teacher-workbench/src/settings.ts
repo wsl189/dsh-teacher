@@ -17,8 +17,6 @@ export interface TeacherWorkbenchSettings {
   defaultSubject: string
   /** District, county, or city query resolved by the weather provider. */
   weatherLocation: string
-  /** BCP 47 language tag passed to browser speech recognition. */
-  speechLanguage: string
   /** Full score used to label score rates. */
   scoreFullMark: number
   /** Score at or above which an entry is excellent. */
@@ -38,7 +36,6 @@ export const DEFAULT_TEACHER_WORKBENCH_SETTINGS: TeacherWorkbenchSettings = Obje
   schoolName: '',
   defaultSubject: '',
   weatherLocation: '',
-  speechLanguage: 'zh-CN',
   scoreFullMark: 100,
   excellentScore: 85,
   passScore: 60,
@@ -53,7 +50,6 @@ export const TeacherWorkbenchSettingsSchema: z<TeacherWorkbenchSettings> = z.obj
   schoolName: z.string().default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.schoolName),
   defaultSubject: z.string().default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.defaultSubject),
   weatherLocation: z.string().pattern(/^.{0,80}$/u).default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.weatherLocation),
-  speechLanguage: z.string().pattern(/^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$/).default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.speechLanguage),
   scoreFullMark: z.number().step(1).min(1).max(1000).default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.scoreFullMark),
   excellentScore: z.number().step(1).min(0).max(1000).default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.excellentScore),
   passScore: z.number().step(1).min(0).max(1000).default(DEFAULT_TEACHER_WORKBENCH_SETTINGS.passScore),

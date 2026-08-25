@@ -84,6 +84,31 @@
         maxResponseBytes: 8388608
         layoutBatchPages: 4
 
+    - id: speech
+      name: '@deepseek-ai/dsh-speech'
+      config:
+        provider: qq-config
+
+    # The provider reads the exact QQ ASR document and credential reference
+    # owned by dsh-im, once per recording, so UI voice input follows live QQ
+    # settings without a second configuration surface or Host restart.
+    - id: speech-qq
+      name: '@deepseek-ai/dsh-speech-qq'
+      config:
+        configPath: !!js dshHomePath('integrations/dsh-qq/config.json')
+        credentialRef: DSH_QQ_ASR_API_KEY
+        timeoutMs: 120000
+        maxAudioBytes: 20971520
+        maxResponseBytes: 65536
+
+    # Product-bundled third-party extensions. Their configuration and durable
+    # data remain under DSH_HOME; only their executable closure ships here.
+    - id: xmanrui-dsh-im
+      name: '@xmanrui/dsh-im'
+
+    - id: dsh-plugin-cron
+      name: dsh-plugin-cron
+
     - id: teacher-workbench
       name: '@deepseek-ai/dsh-host-teacher-workbench'
       config:
@@ -243,6 +268,11 @@
     - id: ui-sidebar
       name: '@deepseek-ai/dsh-client-ui-sidebar'
 
+    # Occupies the sidebar update seat only when the Electron preload exposes
+    # a GitHub Releases updater bridge; ordinary browsers render nothing.
+    - id: ui-desktop-update
+      name: '@deepseek-ai/dsh-client-ui-desktop-update'
+
     - id: ui-teacher-workbench
       name: '@deepseek-ai/dsh-client-ui-teacher-workbench'
 
@@ -351,6 +381,9 @@
     # detects this package row and disables the redundant instance.
     - id: web-better-sidebar
       name: 'dsh-better-sidebar'
+
+    - id: web-better-sidebar-office
+      name: '@huanlin/dsh-plugin-better-sidebar-plugin-office'
 
 # ── the agent plane moves behind agent presets ─────────────────────────────
 #

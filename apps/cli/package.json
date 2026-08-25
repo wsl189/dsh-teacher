@@ -14,6 +14,10 @@
   "bin": {
     "dsh": "lib/bin.js"
   },
+  "exports": {
+    "./desktop-backend": "./lib/desktop-backend.js",
+    "./package.json": "./package.json"
+  },
   "files": [
     "lib/*.js",
     "config"

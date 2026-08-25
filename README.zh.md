@@ -14,7 +14,15 @@ DeepSeek Harness 目前处于 _开发者预览_ 阶段，正在快速迭代。**
 
 ## 运行
 
-> **本 fork 包含 npm 官方发布的 `@deepseek-ai/dsh` 所没有的定制功能**——内置 better-sidebar 工作台、教师工作台（试题切割、学生目录）、输入框上传文件的右侧预览，以及 overlay 挂载时隐藏右上角收起按钮的规则。`npx @deepseek-ai/dsh web` 安装的是官方 npm 包，**不会有这些功能**。请始终从本仓库运行。
+> **本 fork 包含 npm 官方发布的 `@deepseek-ai/dsh` 所没有的定制功能**——内置 better-sidebar 工作台、IM 连接、cron 管理、Office 预览、教师工作台（试题切割、学生目录）、共用 QQ 设置的语音输入、输入框上传文件的右侧预览，以及 overlay 挂载时隐藏右上角收起按钮的规则。`npx @deepseek-ai/dsh web` 安装的是官方 npm 包，**不会有这些功能**。请始终从本仓库运行。
+
+### Windows 安装包
+
+从本 fork 的 [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases) 下载 `DSH-Teacher-<版本>-x64-Setup.exe`。安装版包含 Electron、Node.js、已构建的 Web UI 与本仓库的 DSH 插件依赖闭包。它会在启动时检查 Releases；发现更高的 SemVer 后，**设置**右侧会出现**更新**，点击后下载并校验安装器，准备完成后变成**重启更新**。
+
+每次推送分支都会通过[桌面构建 workflow](.github/workflows/windows-desktop.yml)生成 Windows 安装器 artifact。推送 `v<package 版本>` tag 后，workflow 才会把安装器与 `latest.yml` 发布为客户端更新 feed。构建、发布、签名与迁移的准确步骤见[桌面发行版指南](apps/desktop/README.zh.md)。
+
+EXE 不会打包 vLLM、MinerU、ASR 服务、模型权重或 GPU 驱动。这些服务需要单独运行——Docker 仍很适合承载这部分环境——再在 DSH 中配置其回环端点。用户数据也不会进入安装包，而是保存在 `%USERPROFILE%\.dsh`；迁移电脑时需要另行复制该目录。
 
 ### 从源码运行（推荐）
 
@@ -58,16 +66,9 @@ pnpm dsh web
 
 **不要**使用 `npx @deepseek-ai/dsh web`——它会安装官方 npm 包，不含本 fork 的定制功能（教师工作台、内置 better-sidebar、上传预览、overlay 收起规则）。
 
-### 2. 安装 IM 连接与 cron 插件
+### 2. 内置 IM、cron 与 Office 预览
 
-这两个第三方插件放在 [`third-party/`](third-party/README.zh.md) 目录，因为官方 npm 包不包含它们：
-
-```sh
-dsh plugin --profile web add third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
-dsh plugin --profile web add third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz
-```
-
-然后把 `third-party/dsh-im/cordis.patch.yml.example` 的内容合并进 `~/.dsh/profiles/web/cordis.patch.yml`，并按本机情况调整 `qq.outboundMediaRoots` 路径。完整安装与验证步骤见 [third-party/README.zh.md](third-party/README.zh.md)。
+Web 组合与 Windows EXE 已包含经过审阅的 `@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3 和 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`。机器人与 QQ 语音在**设置 → 插件 → 连接平台**中配置；cron 与 Office 预览侧边栏入口由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
 
 ### 3. 配置 MinerU（文档提取）
 
@@ -86,21 +87,15 @@ Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`
 }
 ```
 
-`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行了一个）。若服务需要 API key，请设置环境变量 `DSH_QQ_ASR_API_KEY`。修改配置后重启 `dsh web`；之后 QQ 语音消息会被转写并进入对话。
+`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行了一个）。若服务需要 API key，可通过 QQ 设置页保存，或设置 `DSH_QQ_ASR_API_KEY`。QQ 机器人、主输入框和工作台「日常管理」的麦克风控件共用这些设置；保存后下一次完整录音会直接读取新值，无需重启 Host。
 
-### 5. 安装 Office 预览插件（可选）
+### 5. Office 预览格式
 
-工作区中的 `.docx`、`.xlsx`、`.pptx` 文件通过外部 AGPL-3.0 查看器预览；输入框上传的文件无需该插件即可在右侧栏预览：
-
-```sh
-dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.0
-```
-
-安装后重启 `dsh web` 并强制刷新浏览器。旧版 `.doc`、`.xls`、`.ppt` 仍只能下载。
+内置的 AGPL-3.0 Office 查看器可预览工作区中的 `.docx`、`.xlsx` 与 `.pptx`；输入框上传仍沿用既有的右侧栏预览路径。旧版 `.doc`、`.xls`、`.ppt` 仍只能下载，需要先转换格式。
 
 ### Windows 系统差异
 
-以下内容在 Windows 上需要调整，其余步骤（仓库运行、插件安装、MinerU、语音、Office 预览）与 Linux 一致。
+以下内容在 Windows 上需要调整，其余步骤（仓库或 EXE 启动、MinerU、语音与内置插件）采用和 Linux 相同的配置方式。
 
 - **`~/.dsh` 目录**：Windows 上位于 `C:\Users\<用户名>\.dsh`。所有配置路径（`cordis.patch.yml`、`integrations/dsh-qq/config.json`、`integrations/dsh-qq/workspaces.json`、`.credentials.yaml`）都在这下面，新设备需把这些文件从旧机器复制过来。
 - **`cordis.patch.yml` 的 `qq.outboundMediaRoots`**：必须写 Windows 绝对路径，例如：

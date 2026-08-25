@@ -68,6 +68,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
 
   const commands: TeacherWorkbenchCommands = {
     listNotificationTargets: props.listNotificationTargets,
+    transcribeVoice: props.transcribeVoice,
     saveDailyTodo: props.saveDailyTodo,
     toggleDailyTodo: props.toggleDailyTodo,
     deleteDailyTodo: props.deleteDailyTodo,

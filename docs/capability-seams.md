@@ -71,6 +71,9 @@ flowchart LR
   svc_ocr["ctx.ocr<br/>Uploaded-document extraction"]
   pkg_ocr_mineru["ocr-mineru"]
   pkg_tool_fs["tool-fs"]
+  pkg_speech["speech"]
+  svc_speech["ctx.speech<br/>Recorded-audio transcription"]
+  pkg_speech_qq["speech-qq"]
   svc_workspaceRegistry["ctx.workspaceRegistry<br/>Workspace entity registry"]
   svc_sessionQuery["ctx.sessionQuery<br/>Session reads, traces, filters, and search"]
   pkg_session_reference["session-reference"]
@@ -283,6 +286,8 @@ flowchart LR
   pkg_skill --> svc_skills
   pkg_skill_badge --> svc_skills
   pkg_skill_filesystem --> svc_skills
+  pkg_speech --> svc_speech
+  pkg_speech_qq --> svc_speech
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
   pkg_storage --> svc_storage
@@ -389,6 +394,7 @@ flowchart LR
   svc_shellEnv --> pkg_tool_bash
   svc_shellEnv --> pkg_tool_pwsh
   svc_skills --> pkg_tool_skill
+  svc_speech --> pkg_api_remotes
   svc_spillStore --> pkg_spill_policy
   svc_storage --> pkg_storage_domain
   svc_storageDomain --> pkg_host_teacher_workbench
@@ -456,6 +462,7 @@ flowchart LR
 | `ctx.teacherWorkbench` | `core` | [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | [`api-remotes`](../packages/api/remotes) | - | Owns the revisioned lesson, roster, score, and teaching-record document; the GUI reaches it through generated unary Remote methods. |
 | `ctx.messageFeedback` | `core` | [`message-feedback`](../packages/feedback/message-feedback) | - | - | - | Owns local per-assistant-message feedback, lifecycle and target validation, per-item compare-and-set, and the Host unary Remote contract without entering Session history or telemetry. |
 | `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`api-remotes`](../packages/api/remotes), [`tool-fs`](../packages/fs/tool-fs) | - | Providers return bounded reading-order Markdown; browser consumers use the generated OCR Remote and filesystem agents use the conditional read_document tool. |
+| `ctx.speech` | `seam` | [`speech`](../packages/speech/speech) | [`speech-qq`](../packages/speech/speech-qq) | [`api-remotes`](../packages/api/remotes) | - | The selected provider validates and transcribes bounded browser recordings; generated Remotes return provider-neutral text to conversation and workbench clients. |
 | `ctx.workspaceRegistry` | `core` | [`workspace`](../packages/workspace/workspace) | - | `apiproxy` | - | Owns WorkspaceId-branded records over the domain facility; stable sessionIds accounts drive Host RPC and GUI projections. |
 | `ctx.sessionQuery` | `seam` | [`session-query`](../packages/session-query/session-query) | [`session-query-sqlite`](../packages/session-query/session-query-sqlite) | [`session-reference`](../packages/context/session-reference), [`tool-session-query`](../packages/session-query/tool-session-query) | - | The interface supplies exact reads, filters, and traces; its concrete backend adds full-text reconciliation, ranking, snippets, and cursor generations, while the model consumer owns workspace authority and cursor-free rendering. |
 | `ctx.fileReferences` | `seam` | [`file-reference`](../packages/context/file-reference) | [`file-reference-local`](../packages/context/file-reference-local) | - | - | The interface returns path-only completion candidates within the addressed Agent cwd through its unary Remote contract; providers own namespace access and ranking without reading file contents. |

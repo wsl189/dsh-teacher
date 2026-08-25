@@ -20,7 +20,7 @@ Status: implemented
 
 可选 Cordis 服务 `ctx.mobileNotifications` 提供两个操作：`listTargets()` 返回平台、机器人 id、名称与连接状态，`send()` 接受平台、机器人 id 和完整文本。dsh-im Host 组合在九种手机渠道上实现该服务。每个渠道控制器通过已有连接测试使用的最近私聊目标发送；凭据与该目标始终只留在渠道内部。机器人离线或没有记住的私聊会话时会拒绝发送，教师工作台随后可以重试。
 
-通用 `dsh-plugin-cron` 调度器继续作为独立 profile 组合包，用于模型或浏览器管理的 shell 命令。工作台提醒不会创建镜像 cron 记录：工作台文档是其唯一持久事实源，而 cron 只拥有无关命令的调度与执行历史。两个插件同时挂载时，cron 的浏览器端点会读取 `TeacherWorkbenchService.listScheduledReminders()`，并把不含凭据的行合并到定时任务页与侧边栏。这些行只读，展示下次提醒时刻与所选机器人名称，执行和管理仍只由工作台负责。
+通用 `dsh-plugin-cron` 调度器继续作为所有权独立的运行时插件，用于模型或浏览器管理的 shell 命令；[内置扩展决策](2026-08-25-bundled-extensions-and-qq-speech.zh.md)则把它纳入每个标准 Web 与 Windows 组合。工作台提醒不会创建镜像 cron 记录：工作台文档是其唯一持久事实源，而 cron 只拥有无关命令的调度与执行历史。两个插件同时挂载时，cron 的浏览器端点会读取 `TeacherWorkbenchService.listScheduledReminders()`，并把不含凭据的行合并到定时任务页与侧边栏。这些行只读，展示下次提醒时刻与所选机器人名称，执行和管理仍只由工作台负责。
 
 侧边栏通过 `sidebar.primary.section` 在 New Session 与工作区浏览器之间投影通用 cron 任务。其展开区列出已启用或进程内状态为正在执行的任务；空闲且已停用的任务只保留在管理页中。当前会话发生活动后会刷新，因此 Agent 创建工作台提醒时，其工具结果落地就会更新数量；定期刷新仍作为外部变更的兜底。点击收起轨道上的入口会同时展开侧边栏和任务区，点击任一任务行会打开管理页。
 

@@ -1,0 +1,10 @@
+- region "今日待办":
+  - heading "今日待办" [level=2]
+  - text: 0 项未完成
+  - textbox "新增今日待办":
+    - /placeholder: 添加今天要做的事
+    - text: 批改语音作业
+  - button "截止时间"
+  - button "开始语音输入"
+  - button "添加待办"
+  - text: 今天还没有待办 共 0 项 · 已完成 0 项

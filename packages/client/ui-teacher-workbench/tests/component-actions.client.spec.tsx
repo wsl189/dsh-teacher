@@ -38,6 +38,7 @@ function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
     listNotificationTargets: vi.fn(async () => []),
+    transcribeVoice: vi.fn(async () => 'voice transcript'),
     saveDailyTodo: action(),
     toggleDailyTodo: action(),
     deleteDailyTodo: action(),

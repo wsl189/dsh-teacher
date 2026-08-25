@@ -1,0 +1,144 @@
+name: Windows desktop
+
+# Every pushed commit produces an inspectable NSIS artifact. A version tag
+# publishes the same updater metadata to GitHub Releases, which is the feed
+# consumed by electron-updater in installed builds.
+on:
+  push:
+    branches:
+      - '**'
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+concurrency:
+  group: windows-desktop-${{ github.ref }}
+  cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
+
+permissions:
+  contents: read
+
+env:
+  PRIMARY_NODE_VERSION: '24'
+  DSH_TELEMETRY_DISABLED: '1'
+
+jobs:
+  installer:
+    name: NSIS x64 installer
+    runs-on: windows-2025
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v4
+        with:
+          dest: ${{ runner.temp }}\setup-pnpm
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.PRIMARY_NODE_VERSION }}
+          cache: pnpm
+
+      - name: Install (immutable)
+        shell: pwsh
+        run: pnpm install --frozen-lockfile
+
+      - name: Build application
+        shell: pwsh
+        env:
+          DSH_BUILD_CLIENT_PROFILE: official
+        run: pnpm run build:official
+
+      - name: Validate release tag
+        if: startsWith(github.ref, 'refs/tags/')
+        shell: pwsh
+        run: |
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $expected = "v$version"
+          if ($env:GITHUB_REF_NAME -ne $expected) {
+            throw "Desktop release tag must be $expected, received $env:GITHUB_REF_NAME"
+          }
+
+      - name: Build NSIS installer
+        shell: pwsh
+        env:
+          # electron-builder signs automatically when these optional repository
+          # secrets are present; unsigned fork builds remain installable but may
+          # trigger Windows SmartScreen until a certificate is configured.
+          CSC_LINK: ${{ secrets.WINDOWS_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
+        run: pnpm --filter @deepseek-ai/dsh-desktop run package:win
+
+      - name: Verify update assets and write checksums
+        shell: pwsh
+        run: |
+          $release = Join-Path $PWD 'apps/desktop/release'
+          $installer = Get-ChildItem $release -File -Filter '*.exe'
+          $metadata = Get-ChildItem $release -File -Filter '*.yml'
+          if ($installer.Count -ne 1) {
+            throw "Expected exactly one NSIS installer, found $($installer.Count)"
+          }
+          if (-not ($metadata.Name -contains 'latest.yml')) {
+            throw 'electron-builder did not emit latest.yml'
+          }
+          $lines = $installer | ForEach-Object {
+            $hash = (Get-FileHash $_.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          }
+          Set-Content (Join-Path $release 'SHA256SUMS.txt') $lines -Encoding utf8NoBOM
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: DSH-Teacher-Windows-x64-${{ github.sha }}
+          path: |
+            apps/desktop/release/*.exe
+            apps/desktop/release/*.blockmap
+            apps/desktop/release/*.yml
+            apps/desktop/release/SHA256SUMS.txt
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish GitHub Release update feed
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: installer
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: DSH-Teacher-Windows-x64-${{ github.sha }}
+          path: apps/desktop/release
+
+      - name: Publish updater assets
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $tag = $env:GITHUB_REF_NAME
+          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $assets = Get-ChildItem apps/desktop/release -File |
+            Where-Object { $_.Extension -in '.exe', '.blockmap', '.yml', '.txt' } |
+            ForEach-Object { $_.FullName }
+          & gh release view $tag *> $null
+          if ($LASTEXITCODE -eq 0) {
+            & gh release upload $tag @assets --clobber
+          } else {
+            $arguments = @('release', 'create', $tag) + $assets + @(
+              '--verify-tag',
+              '--title', "DSH Teacher $version",
+              '--generate-notes'
+            )
+            if ($version.Contains('-')) { $arguments += '--prerelease' }
+            & gh @arguments
+          }
+          if ($LASTEXITCODE -ne 0) { throw 'GitHub Release publication failed' }

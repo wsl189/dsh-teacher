@@ -76,7 +76,7 @@ const NS = 'teacherWorkbench'
 
 /** Services required by the browser plugin. */
 export const inject = [
-  'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
+  'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
 ]
 
 /**
@@ -156,6 +156,15 @@ export function apply(ctx: ClientContext): void {
     setWeatherLocation: location => settings.set('weatherLocation', location),
     loadWeather: (location, signal) => fetchTeacherWeather(location, ctx.remote.teacherWorkbench, signal),
     listNotificationTargets: () => controller.listNotificationTargets(),
+    transcribeVoice: async (audio) => {
+      const carried = await ctx.remote.speech.transcribe({
+        mediaType: audio.type,
+        contentBase64: bytesToBase64(new Uint8Array(await audio.arrayBuffer())),
+      })
+      if (!carried.ok) throw speechRemoteError('provider-failure', carried.error.message)
+      if (!carried.value.ok) throw speechRemoteError(carried.value.error.code, carried.value.error.message)
+      return carried.value.value.text
+    },
     saveDailyTodo: input => controller.saveDailyTodo(input),
     toggleDailyTodo: id => controller.toggleDailyTodo(id),
     deleteDailyTodo: id => controller.deleteDailyTodo(id),
@@ -273,4 +282,10 @@ export function apply(ctx: ClientContext): void {
     locale: NS,
     inject: settingsInjected,
   }, TeacherWorkbenchSettingsRow))
+}
+
+function speechRemoteError(code: string, message: string): Error {
+  const error = new Error(message)
+  error.name = code
+  return error
 }

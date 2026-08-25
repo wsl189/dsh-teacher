@@ -93,6 +93,7 @@ interface BenchOptions {
   addImages?: (files: readonly File[]) => string | null
   documents?: readonly DraftDocument[]
   addDocuments?: (files: readonly File[]) => void
+  transcribeVoice?: InputBarProps['transcribeVoice']
   commandMenuOpen?: boolean
   busyEnter?: 'queue' | 'steer'
   toggleCommandMenu?: (selection: { start: number; end: number }) => void
@@ -186,6 +187,7 @@ function bench(over?: BenchOptions) {
     draftDocumentFile: id => over?.documents?.find(document => document.id === id) === undefined
       ? undefined
       : new File([Uint8Array.of(1)], over?.documents?.find(document => document.id === id)?.name ?? 'document'),
+    transcribeVoice: over?.transcribeVoice,
     resolveSubmitMode: (running, gesture, steeringAvailable) => {
       if (!running || !steeringAvailable) return 'queue'
       const preferred = over?.busyEnter ?? 'queue'
@@ -453,47 +455,45 @@ describe('image draft rail', () => {
   })
 
   it('supports the microphone button and distinguishes tapped Space from held Space', async () => {
-    const speechDescriptor = Object.getOwnPropertyDescriptor(window, 'SpeechRecognition')
+    const recorderDescriptor = Object.getOwnPropertyDescriptor(window, 'MediaRecorder')
     const mediaDescriptor = Object.getOwnPropertyDescriptor(navigator, 'mediaDevices')
-    const instances: Array<{
-      onresult: ((event: unknown) => void) | null
-      onerror: ((event: unknown) => void) | null
-      onend: (() => void) | null
-      start: ReturnType<typeof vi.fn>
-      stop: ReturnType<typeof vi.fn>
-      abort: ReturnType<typeof vi.fn>
-    }> = []
-    class FakeRecognition {
-      lang = ''
-      continuous = false
-      interimResults = false
-      maxAlternatives = 1
-      onresult: ((event: unknown) => void) | null = null
-      onerror: ((event: unknown) => void) | null = null
-      onend: (() => void) | null = null
-      start = vi.fn()
-      stop = vi.fn()
-      abort = vi.fn()
-      constructor() { instances.push(this) }
+    const instances: FakeMediaRecorder[] = []
+    class FakeMediaRecorder {
+      static isTypeSupported = vi.fn(() => true)
+      readonly mimeType: string
+      state: RecordingState = 'inactive'
+      ondataavailable: ((event: BlobEvent) => void) | null = null
+      onerror: ((event: Event & { readonly error: DOMException }) => void) | null = null
+      onstop: (() => void) | null = null
+      constructor(_stream: MediaStream, options?: MediaRecorderOptions) {
+        this.mimeType = options?.mimeType ?? 'audio/webm'
+        instances.push(this)
+      }
+      start = vi.fn(() => { this.state = 'recording' })
+      stop = vi.fn(() => {
+        this.state = 'inactive'
+        this.ondataavailable?.({ data: new Blob(['voice'], { type: this.mimeType }) } as BlobEvent)
+        this.onstop?.()
+      })
     }
-    Object.defineProperty(window, 'SpeechRecognition', { configurable: true, value: FakeRecognition })
-    Object.defineProperty(navigator, 'mediaDevices', { configurable: true, value: undefined })
+    Object.defineProperty(window, 'MediaRecorder', { configurable: true, value: FakeMediaRecorder })
+    Object.defineProperty(navigator, 'mediaDevices', {
+      configurable: true,
+      value: { getUserMedia: vi.fn(async () => ({ getTracks: () => [{ stop: vi.fn() }] })) },
+    })
     try {
-      const pointer = bench({ draft: '请记录' })
+      const pointerTranscribe = vi.fn(async () => '明天交作业')
+      const pointer = bench({ draft: '请记录', transcribeVoice: pointerTranscribe })
       pointer.textarea.setSelectionRange(3, 3)
       fireEvent.click(pointer.view.getByRole('button', { name: '语音输入（也可长按空格）' }))
       await vi.waitFor(() => { expect(instances).toHaveLength(1) })
-      act(() => {
-        instances[0]?.onresult?.({
-          resultIndex: 0,
-          results: Object.assign([{ isFinal: true, 0: { transcript: '明天交作业' } }], { length: 1 }),
-        })
-      })
-      expect(pointer.textarea.value).toBe('请记录 明天交作业')
+      fireEvent.click(pointer.view.getByRole('button', { name: '停止语音输入' }))
+      await vi.waitFor(() => { expect(pointer.textarea.value).toBe('请记录 明天交作业') })
+      expect(pointerTranscribe).toHaveBeenCalledWith(expect.any(Blob))
       cleanup()
 
       vi.useFakeTimers()
-      const keyboard = bench({ draft: 'A' })
+      const keyboard = bench({ draft: 'A', transcribeVoice: vi.fn(async () => '口述') })
       keyboard.textarea.setSelectionRange(1, 1)
       fireEvent.keyDown(keyboard.textarea, { key: ' ' })
       act(() => { vi.advanceTimersByTime(200) })
@@ -503,17 +503,18 @@ describe('image draft rail', () => {
       keyboard.textarea.setSelectionRange(2, 2)
       fireEvent.keyDown(keyboard.textarea, { key: ' ' })
       expect(fireEvent.keyDown(keyboard.textarea, { key: ' ', repeat: true })).toBe(false)
-      act(() => { vi.advanceTimersByTime(500) })
+      await act(async () => { vi.advanceTimersByTime(500); await Promise.resolve() })
       expect(instances).toHaveLength(2)
       expect(instances[1]?.start).toHaveBeenCalledOnce()
       expect(fireEvent.keyDown(keyboard.textarea, { key: ' ', repeat: true })).toBe(false)
       fireEvent.keyUp(keyboard.textarea, { key: ' ' })
       expect(instances[1]?.stop).toHaveBeenCalledOnce()
-      expect(keyboard.textarea.value).toBe('A ')
+      await act(async () => { await Promise.resolve() })
+      expect(keyboard.textarea.value).toBe('A 口述')
     } finally {
       vi.useRealTimers()
-      if (speechDescriptor === undefined) Reflect.deleteProperty(window, 'SpeechRecognition')
-      else Object.defineProperty(window, 'SpeechRecognition', speechDescriptor)
+      if (recorderDescriptor === undefined) Reflect.deleteProperty(window, 'MediaRecorder')
+      else Object.defineProperty(window, 'MediaRecorder', recorderDescriptor)
       if (mediaDescriptor === undefined) Reflect.deleteProperty(navigator, 'mediaDevices')
       else Object.defineProperty(navigator, 'mediaDevices', mediaDescriptor)
     }

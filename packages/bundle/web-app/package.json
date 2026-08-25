@@ -60,6 +60,7 @@
     "@deepseek-ai/dsh-client-ui-conversation": "workspace:^",
     "@deepseek-ai/dsh-client-ui-cordis": "workspace:^",
     "@deepseek-ai/dsh-client-ui-deliverables": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-desktop-update": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-browse": "workspace:^",
     "@deepseek-ai/dsh-client-ui-directory-picker-native": "workspace:^",
     "@deepseek-ai/dsh-client-ui-message-feedback": "workspace:^",
@@ -106,6 +107,8 @@
     "@deepseek-ai/dsh-message-feedback": "workspace:^",
     "@deepseek-ai/dsh-ocr": "workspace:^",
     "@deepseek-ai/dsh-ocr-mineru": "workspace:^",
+    "@deepseek-ai/dsh-speech": "workspace:^",
+    "@deepseek-ai/dsh-speech-qq": "workspace:^",
     "@deepseek-ai/dsh-session-projection-cache": "workspace:^",
     "@deepseek-ai/dsh-session-reference": "workspace:^",
     "@deepseek-ai/dsh-session-log-export": "workspace:^",
@@ -117,7 +120,10 @@
     "@deepseek-ai/dsh-workspace": "workspace:^",
     "@deepseek-ai/schemastery": "workspace:^",
     "commander": "^15.0.0",
+    "@huanlin/dsh-plugin-better-sidebar-plugin-office": "0.1.2",
+    "@xmanrui/dsh-im": "file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz",
     "dsh-better-sidebar": "^0.15.0",
+    "dsh-plugin-cron": "file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz",
     "open": "^11.0.0"
   },
   "peerDependencies": {

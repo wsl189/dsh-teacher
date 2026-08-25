@@ -1,69 +1,28 @@
-# 第三方插件
+# 第三方来源产物
 
 [English](README.md) | 中文
 
-本目录保存 dsh-teacher 部署所需的第三方定制插件安装包。这些插件**不属于项目源码**，是独立安装到 `~/.dsh/profiles/web/`（每台机器的用户级目录）的，因此克隆项目后需要重新安装。
+本目录固定 dsh-teacher 发行版使用且已经审阅的第三方插件产物。它们是项目构建输入，不再是每台机器分别安装的文件：`@deepseek-ai/dsh-web-app` 已将其声明为依赖并挂载到发行 profile，因此从源码启动或使用 Windows EXE 都不需要另行执行 `dsh plugin add`。
 
-## 插件清单
+## 清单
 
-| 目录 | 安装包 | 版本 | 来源 | 说明 |
-|---|---|---|---|---|
-| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | 基于 [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) 的定制版（官方 npm 最新为 1.0.2） | 连接 QQ/微信/飞书/钉钉/企业微信等 9 种 IM 平台；定制新增：QQ 图片/文件发送、移动提醒推送、语音转文字 |
-| `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | 基于 npm 官方 `dsh-plugin-cron` 0.1.3 的定制版 | cron 定时任务调度；定制修改：侧边栏交互、折叠侧栏、工作台提醒投影 |
+| 目录 | 产物 | 版本 | 上游 | 发行版作用 |
+|---|---|---:|---|---|
+| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、QQ 文件发送、手机提醒与 QQ ASR 设置。 |
+| `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | [abiaoa1314/dsh-plugin-cron](https://github.com/abiaoa1314/dsh-plugin-cron) | 持久 cron 任务、模型工具与浏览器管理页。 |
 
-> 两个安装包均为定制版，与官方发布内容不一致，请使用本目录内的 tgz，不要从 npm/GitHub 直接安装官方版（会缺少定制功能）。
+Web 组合还从 npm 固定 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2。该 AGPL-3.0 包把 DOCX、XLSX 与 PPTX 查看器注册到内置 better-sidebar 文件注册表。
 
-## 安装步骤（新电脑部署）
+## 配置与迁移
 
-```bash
-# 1. 安装 dsh-im（IM 连接：QQ 等）
-dsh plugin --profile web add third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
+可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务及相关数据仍保存在 `DSH_HOME`（`~/.dsh` 或 `%USERPROFILE%\.dsh`）下。机器人通过**设置 → 插件 → 连接平台**配置。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
 
-# 2. 安装 cron 定时任务插件
-dsh plugin --profile web add third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz
+迁移电脑时，在新机器安装 EXE 或克隆并构建仓库，再单独复制所需的 `DSH_HOME` 数据。不要把这三个插件重复安装到生成的用户 profile；重复配置项可能重复注册工具和侧边栏入口。
 
-# 3. 恢复 profile 配置（QQ 可发送文件目录等）
-#    把 dsh-im/cordis.patch.yml.example 的内容合并进 ~/.dsh/profiles/web/cordis.patch.yml
-```
+## 验证
 
-### 验证
+真实发行组合的浏览器测试会断言三个客户端模块均进入模块图，并固定 Host 级 `cron_*` 与 `qq_send_local_file` 工具。语音输入测试还会把浏览器录音经同一份 QQ 配置发送到本地转写服务。
 
-安装后重启 web 服务，检查：
+## 产物说明
 
-- QQ 机器人可收发消息（dsh-im）
-- 定时任务侧边栏入口出现（dsh-plugin-cron）
-- 教师工作台的待办/备忘/账本提醒可选手机推送平台（dsh-im mobileNotifications）
-- 模型侧可用 `qq_send_local_file`、`cron_add` 等工具
-
-## 与官方版的差异摘要
-
-### dsh-im（官方 1.0.2 → 定制 1.0.3）
-
-新增文件：
-
-- `src/channels/qq/outbound-media.mjs`：`qq_send_local_file` 工具，向 QQ 会话发送图片/文件
-- `plugin-src/host/mobile-notifications.mjs`：`ctx.mobileNotifications` 服务，供教师工作台推送手机提醒
-- `src/channels/qq/speech-transcriber.mjs`：QQ 语音消息转文字（Whisper）
-
-另有 40+ 文件与官方版有差异（控制器、桥接、客户端等）。
-
-### dsh-plugin-cron（官方 0.1.3 → 定制 0.1.3）
-
-- 侧边栏入口位置与交互调整（显示启用/运行中任务数，点击直接右侧打开）
-- 折叠侧栏支持（保留时钟图标）
-- 管理页「操作手册」「新增定时任务」默认收起
-- 安装教师工作台时，定时任务列表只读投影其未完成手机提醒
-
-> 注意：cron 定制版安装包内仅有编译产物 `lib/`，不含源码目录；dsh-im 定制版 tgz 内含完整 `src/` 源码。
-
-## 配置参考
-
-`dsh-im/cordis.patch.yml.example` 内容（可发送文件根目录按需修改）：
-
-```yaml
-- id: xmanrui-dsh-im
-  config:
-    qq:
-      outboundMediaRoots:
-        - /home/wsl/Desktop
-```
+dsh-im 压缩包包含源码与 MIT 许可证。cron 压缩包包含编译后的 `lib/`、组合补丁、README 与 MIT 许可证。更新任一固定压缩包时，必须同时审阅其可执行依赖闭包、出处、许可证与发行组合行为。

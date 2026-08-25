@@ -64,6 +64,7 @@
     { "path": "./packages/test-support/client-runtime" },
     { "path": "./packages/client/ui-layout" },
     { "path": "./packages/client/ui-sidebar" },
+    { "path": "./packages/client/ui-desktop-update" },
     { "path": "./packages/client/ui-teacher-workbench" },
     { "path": "./packages/client/ui-brand-official" },
     { "path": "./packages/client/ui-conversation" },

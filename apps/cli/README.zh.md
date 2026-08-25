@@ -44,6 +44,10 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 层的确切优先级、flag、关闭行为、部署默认值和源码执行方式，以 [CLI（命令行界面）行为参考](reference/README.zh.md)为准。
 
+## 桌面端 Host
+
+`./desktop-backend` export 是 [`@deepseek-ai/dsh-desktop`](../desktop/README.zh.md) 使用的进程入口，并不是面向用户的命令。它以 `--no-open --port 0` 启动同一个 `web` profile，通过父进程 IPC 通道报告规范 loopback URL，并只接受一种带类型的 `shutdown` 请求。普通 profile 关闭控制器会先释放 Loader 配置树，再让子进程断开，因此桌面更新不会替换仍被运行中 Host 使用的文件。
+
 ## 开发
 
 生产运行需要已构建的包与前端产物。请在仓库根目录单独运行 `pnpm run build`，然后使用 `pnpm dsh <args...>` 运行 TypeScript 入口并转发所有参数；模块解析约定以[源码执行参考](reference/README.zh.md#source-execution)为准。

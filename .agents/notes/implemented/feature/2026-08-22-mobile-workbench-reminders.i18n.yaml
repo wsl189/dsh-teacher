@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-mobile-workbench-reminders.md
-2026-08-22-mobile-workbench-reminders.md: d4761a578ac64a1568a267c0794189ddf7e2a769
-2026-08-22-mobile-workbench-reminders.zh.md: 3b43bb9b452737cf22b304f0f7d23ffb1326fa7b
+2026-08-22-mobile-workbench-reminders.md: db749c7d8de071e5ff8b3c4c74183c903575e7b7
+2026-08-22-mobile-workbench-reminders.zh.md: 83c497c3f71a4cb45a47faf6a6da60da639ee3db

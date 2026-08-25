@@ -8,7 +8,6 @@ import type {
   TeacherLedgerEntry,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherReminderInput } from './controller.ts'
 import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
@@ -20,8 +19,6 @@ import css from './TeacherWorkbench.module.css'
 export interface LedgerPanelProps {
   /** Complete durable workbench state. */
   state: TeacherWorkbenchState
-  /** Voice-recognition settings. */
-  settings: TeacherWorkbenchSettings
   /** Durable workbench commands. */
   commands: TeacherWorkbenchCommands
   /** Whether the ledger occupies the full daily-management area. */
@@ -36,7 +33,7 @@ export interface LedgerPanelProps {
 
 /**
  * Render the compact ledger summary or category-based entry workspace.
- * @param props - durable ledger data, voice settings, commands, expansion state, and copy.
+ * @param props - durable ledger data, commands, expansion state, and copy.
  * @returns a compact summary or expanded category ledger.
  */
 export function LedgerPanel(props: LedgerPanelProps) {
@@ -90,7 +87,6 @@ export function LedgerPanel(props: LedgerPanelProps) {
                   key={category.id}
                   category={category}
                   entries={entries.filter(entry => entry.categoryId === category.id)}
-                  settings={props.settings}
                   commands={props.commands}
                   t={props.t}
                   onEdit={setEditingEntry}
@@ -122,7 +118,6 @@ export function LedgerPanel(props: LedgerPanelProps) {
         <EntryEditor
           entry={editingEntry}
           categories={props.state.ledgerCategories}
-          language={props.settings.speechLanguage}
           commands={props.commands}
           t={props.t}
           onClose={() => { setEditingEntry(null) }}
@@ -135,7 +130,6 @@ export function LedgerPanel(props: LedgerPanelProps) {
 function LedgerCategoryCard(props: {
   category: TeacherLedgerCategory
   entries: readonly TeacherLedgerEntry[]
-  settings: TeacherWorkbenchSettings
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
   onEdit: (entry: TeacherLedgerEntry) => void
@@ -189,7 +183,7 @@ function LedgerCategoryCard(props: {
               onChange={(event) => { setDescription(event.target.value) }}
             />
             <VoiceInputButton
-              language={props.settings.speechLanguage}
+              transcribe={props.commands.transcribeVoice}
               onTranscript={(transcript) => { setDescription(current => current.trim() === '' ? transcript : `${current.trimEnd()} ${transcript}`) }}
               t={props.t}
             />
@@ -313,7 +307,6 @@ function CategoryEditor(props: {
 function EntryEditor(props: {
   entry: TeacherLedgerEntry
   categories: readonly TeacherLedgerCategory[]
-  language: string
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
   onClose: () => void
@@ -350,7 +343,7 @@ function EntryEditor(props: {
         <span className={css.fieldLabel}>{props.t('daily.ledger.description')}</span>
         <div className={css.ledgerDescriptionField}>
           <input aria-label={props.t('daily.ledger.description')} maxLength={500} value={description} onChange={(event) => { setDescription(event.target.value) }} />
-          <VoiceInputButton language={props.language} onTranscript={(transcript) => { setDescription(current => current.trim() === '' ? transcript : `${current.trimEnd()} ${transcript}`) }} t={props.t} />
+          <VoiceInputButton transcribe={props.commands.transcribeVoice} onTranscript={(transcript) => { setDescription(current => current.trim() === '' ? transcript : `${current.trimEnd()} ${transcript}`) }} t={props.t} />
         </div>
       </div>
       <FormField label={props.t('daily.ledger.amount')}>

@@ -48,7 +48,7 @@ describe('teacher-workbench node wiring', () => {
       validateTeacherWorkbenchSettings({
         academicYear: '2026',
         teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '', speechLanguage: 'zh-CN',
+        weatherLocation: '',
         scoreFullMark: 100, excellentScore: 59, passScore: 60,
         questionRenderScale: 2, questionCropPadding: 12,
       })
@@ -57,7 +57,7 @@ describe('teacher-workbench node wiring', () => {
       validateTeacherWorkbenchSettings({
         academicYear: '2026',
         teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '', speechLanguage: 'zh-CN',
+        weatherLocation: '',
         scoreFullMark: 100, excellentScore: 101, passScore: 60,
         questionRenderScale: 2, questionCropPadding: 12,
       })
@@ -66,7 +66,7 @@ describe('teacher-workbench node wiring', () => {
       validateTeacherWorkbenchSettings({
         academicYear: '2026',
         teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '', speechLanguage: 'zh-CN',
+        weatherLocation: '',
         scoreFullMark: 100, excellentScore: 85, passScore: 60,
         questionRenderScale: 2, questionCropPadding: 12,
       })
@@ -103,7 +103,7 @@ describe('teacher-workbench view store', () => {
 describe('teacher-workbench browser wiring', () => {
   it('registers all seats and forwards their semantic commands', async () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
+      'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
     ])
     vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'generated-id') })
     let document: TeacherWorkbenchDocument = { revision: 0, state: emptyState() }
@@ -120,6 +120,10 @@ describe('teacher-workbench browser wiring', () => {
       ok: true,
       value: { ok: true, value: { items: [] } },
     }))
+    const transcribe = vi.fn(async () => ({
+      ok: true,
+      value: { ok: true, value: { text: '课堂记录', provider: 'qq-config' } },
+    }))
     const setSetting = vi.fn(async () => {})
     const scope = { set: setSetting }
     const registrations: { entry: Record<string, unknown>; component: unknown }[] = []
@@ -131,7 +135,7 @@ describe('teacher-workbench browser wiring', () => {
     const slotDispose = vi.fn()
     const ctx = {
       locale: { register: vi.fn(() => localeDispose) },
-      remote: { teacherWorkbench: { read, write, weather, normalizeTimetable } },
+      remote: { speech: { transcribe }, teacherWorkbench: { read, write, weather, normalizeTimetable } },
       sessions: {
         list: {
           getSnapshot: () => ({ current: currentSession }),
@@ -190,6 +194,10 @@ describe('teacher-workbench browser wiring', () => {
       await (surface[name] as (...values: unknown[]) => Promise<unknown>)(...args)
     }
     await command('saveDailyTodo', { title: '待办', dueAt: '2026-08-18T18:00' })
+    await expect((surface.transcribeVoice as (audio: Blob) => Promise<string>)(
+      new Blob([Uint8Array.of(1, 2)], { type: 'audio/webm' }),
+    )).resolves.toBe('课堂记录')
+    expect(transcribe).toHaveBeenCalledWith({ mediaType: 'audio/webm', contentBase64: 'AQI=' })
     await command('toggleDailyTodo', 'todo-a')
     await command('deleteDailyTodo', 'todo-a')
     await command('saveQuickNote', { content: '备忘录' })

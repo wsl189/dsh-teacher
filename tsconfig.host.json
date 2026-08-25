@@ -29,6 +29,8 @@
     "apps/web/tests/details-session-lifecycle.e2e.ts",
     "apps/web/tests/plugin-config.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
+    "apps/web/tests/desktop-update.e2e.ts",
+    "apps/web/tests/voice-input.e2e.ts",
     "apps/web/tests/teacher-workbench.e2e.ts",
     "apps/web/tests/better-sidebar.e2e.ts",
     "apps/web/tests/question-segmentation.snapshot.ts",
@@ -92,6 +94,7 @@
     "apps/web/tests/workflow-run.e2e.ts",
     "apps/web/stress-tests/reasoning-chunks.stress.ts",
     "apps/cli/tests/**/*.ts",
+    "apps/desktop/tests/**/*.ts",
     "examples/*/src/**/*.ts",
     "examples/*/start.ts",
     "examples/*/tests/**/*.ts",
@@ -137,6 +140,8 @@
     { "path": "./packages/attachment/attachment-local" },
     { "path": "./packages/ocr/ocr" },
     { "path": "./packages/ocr/ocr-mineru" },
+    { "path": "./packages/speech/speech" },
+    { "path": "./packages/speech/speech-qq" },
     { "path": "./packages/llm/llm" },
     { "path": "./packages/llm/token-meter" },
     { "path": "./packages/core/session" },
@@ -314,6 +319,7 @@
     { "path": "./packages/lsp/lsp" },
     { "path": "./packages/lsp/lsp-stdio" },
     { "path": "./packages/lsp/tool-lsp" },
-    { "path": "./apps/cli" }
+    { "path": "./apps/cli" },
+    { "path": "./apps/desktop" }
   ]
 }

@@ -42,7 +42,7 @@ export function TeacherWorkbenchSettingsRow({ useTeacherSettings, setSetting, t 
     })
   }, [snapshot.revision, snapshot.value])
   const disabled = snapshot.status !== 'ready' || !snapshot.writable
-  type TextField = 'academicYear' | 'teacherName' | 'schoolName' | 'defaultSubject' | 'weatherLocation' | 'speechLanguage'
+  type TextField = 'academicYear' | 'teacherName' | 'schoolName' | 'defaultSubject' | 'weatherLocation'
   const setText = (field: TextField, value: string): void => {
     staged.current.set(field, value)
     setDraft(current => ({ ...current, [field]: value }))
@@ -90,22 +90,6 @@ export function TeacherWorkbenchSettingsRow({ useTeacherSettings, setSetting, t 
             <label><span>{t('settings.schoolName')}</span><input disabled={disabled} value={draft.schoolName} onChange={(event) => { setText('schoolName', event.target.value) }} onBlur={(event) => { persistText('schoolName', event.currentTarget.value) }} /></label>
             <label><span>{t('settings.defaultSubject')}</span><input disabled={disabled} value={draft.defaultSubject} onChange={(event) => { setText('defaultSubject', event.target.value) }} onBlur={(event) => { persistText('defaultSubject', event.currentTarget.value) }} /></label>
             <label><span>{t('settings.weatherLocation')}</span><input disabled={disabled} maxLength={80} value={draft.weatherLocation} onChange={(event) => { setText('weatherLocation', event.target.value) }} onBlur={(event) => { persistText('weatherLocation', event.currentTarget.value) }} /></label>
-            <label>
-              <span>{t('settings.speechLanguage')}</span>
-              <select
-                disabled={disabled}
-                value={draft.speechLanguage}
-                onChange={(event) => {
-                  const value = event.target.value
-                  setText('speechLanguage', value)
-                  persist('speechLanguage', value)
-                }}
-              >
-                <option value="zh-CN">简体中文（中国大陆）</option>
-                <option value="zh-TW">繁體中文（台灣）</option>
-                <option value="en-US">English (United States)</option>
-              </select>
-            </label>
           </div>
         </section>
         <section className={css.settingsSection} aria-label={t('settings.scoreGroup')}>

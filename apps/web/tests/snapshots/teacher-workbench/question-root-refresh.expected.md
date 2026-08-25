@@ -56,7 +56,6 @@
   - button "删除目录“空目录”"
   - button "下一层": 下一层 0
   - button "删除目录“下一层”"
-  - button "展开目录“模拟题库”"
   - button "模拟题库": 模拟题库 0
   - button "删除目录“模拟题库”"
   - button "layout": layout 0

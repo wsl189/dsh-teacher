@@ -40,6 +40,8 @@
     "tests/details-session-lifecycle.e2e.ts",
     "tests/plugin-config.e2e.ts",
     "tests/settings-chrome.e2e.ts",
+    "tests/desktop-update.e2e.ts",
+    "tests/voice-input.e2e.ts",
     "tests/teacher-workbench.e2e.ts",
     "tests/better-sidebar.e2e.ts",
     "tests/question-segmentation.snapshot.ts",

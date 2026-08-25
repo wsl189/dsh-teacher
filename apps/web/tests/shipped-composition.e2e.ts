@@ -47,6 +47,7 @@ const EXPECTED_TOOLS = [
   'list_agents',
   'ralph',
   'read',
+  'read_document',
   'read_image',
   'send_message',
   'skill',
@@ -67,6 +68,22 @@ const EXPECTED_TOOLS = [
  */
 const RIPGREP_TOOLS = ['glob', 'grep']
 
+/** Host-level tools contributed by the bundled workbench, cron, and IM extensions. */
+const BUNDLED_EXTENSION_TOOLS = [
+  'cron_add',
+  'cron_list',
+  'cron_remove',
+  'cron_run',
+  'qq_send_local_file',
+  'teacher_daily_management',
+  'teacher_question_image_read',
+  'teacher_question_workbench',
+  'teacher_score_analysis',
+  'teacher_student_roster',
+  'teacher_timetable',
+  'teacher_workbench_read',
+]
+
 let scaffold: WebScaffold | undefined
 
 afterEach(async () => {
@@ -77,6 +94,17 @@ afterEach(async () => {
 it('assembles the shipped Web catalog, file-reference guidance, retry policy, and confined access default', async () => {
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
   const ctx = scaffold.ctx
+  const clientModules = (ctx as unknown as {
+    readonly clientModules: {
+      graph(): { readonly entries: readonly { readonly id: string }[] }
+    }
+  }).clientModules
+  const clientModuleIds = clientModules.graph().entries.map(entry => entry.id)
+  expect(clientModuleIds).toEqual(expect.arrayContaining([
+    '@huanlin/dsh-plugin-better-sidebar-plugin-office',
+    '@xmanrui/dsh-im',
+    'dsh-plugin-cron',
+  ]))
   expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchInlineSnapshot(`
     {
       "initialDelayMs": 500,
@@ -134,19 +162,20 @@ it('assembles the shipped Web catalog, file-reference guidance, retry policy, an
       "mode": "always",
     }
   `)
-  // The catalog belongs to an AGENT, not to the process: every model-facing row
-  // now lives in a preset mounted under one session's scope, so the global
-  // layer holds nothing and a caller must name the agent to see anything. This
-  // composes from the deployment default — what a session that names no preset
-  // gets — which is the shape this test has always been about.
-  expect(ctx.tools.schemas().map(schema => schema.name)).toEqual([])
+  // Core tools belong to one preset-mounted agent. The bundled workbench and
+  // third-party extensions intentionally use their public Host-level
+  // registration APIs, so their fixed roster is visible before an Agent scope
+  // is supplied and inherited by every assembled Agent.
+  expect(ctx.tools.schemas().map(schema => schema.name).sort()).toEqual(BUNDLED_EXTENSION_TOOLS)
   const handle = await ctx.agents.create({
     sessionId: SessionId('shipped-composition'),
     setup: agentCtx => ctx.agentPresets.mount(agentCtx).then(() => undefined),
   })
   try {
     const names = ctx.tools.schemas(handle.agent).map(schema => schema.name).sort()
-    expect(names.filter(name => !RIPGREP_TOOLS.includes(name))).toEqual(EXPECTED_TOOLS)
+    expect(names.filter(name => !RIPGREP_TOOLS.includes(name))).toEqual(
+      [...EXPECTED_TOOLS, ...BUNDLED_EXTENSION_TOOLS].sort(),
+    )
     // The packaged ripgrep binary ships with the dependency, so the pair is a
     // fixed roster member on every host.
     expect(names.filter(name => RIPGREP_TOOLS.includes(name))).toEqual(RIPGREP_TOOLS)

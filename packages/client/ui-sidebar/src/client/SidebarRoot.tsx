@@ -7,8 +7,9 @@
  * same top-down order) on one fade that ends with the slide. The bottom-pinned
  * settings control only fades. `sidebar.primary.section` entries sit directly
  * below the brand row, the workspace/session browser fills the remaining region,
- * and the foot holds `sidebar.settings` plus `sidebar.footer.action`; the shell
- * hands them the wide flag and expansion callbacks where applicable.
+ * and the foot holds `sidebar.footer.action` above a bottom row pairing
+ * `sidebar.settings` with the optional `sidebar.update`; the shell hands them
+ * the wide flag and expansion callbacks where applicable.
  *
  * The column also owns whether the scroll regions nested in it draw a
  * scrollbar at all: the shell tracks the pointer and rebinds ui-theme's
@@ -191,13 +192,18 @@ export function SidebarRoot({
         })}
       </div>
 
-      {/* Footer actions stack above Settings in both sidebar widths. */}
+      {/* Additive footer actions stack above the Settings/update bottom row. */}
       <div className={css.footArea}>
         <div className={css.footerActions}>
           {renderSlot('sidebar.footer.action', { wide })}
         </div>
-        <div className={css.settingsArea}>
-          {renderSlot('sidebar.settings', { wide })}
+        <div className={css.bottomActions}>
+          <div className={css.settingsArea}>
+            {renderSlot('sidebar.settings', { wide })}
+          </div>
+          <div className={css.updateArea}>
+            {renderSlot('sidebar.update', { wide })}
+          </div>
         </div>
       </div>
     </div>

@@ -244,8 +244,6 @@ describe('TeacherWorkbenchSettingsRow', () => {
       fireEvent.blur(input)
       expect(setSetting).toHaveBeenCalledWith(field, typeof DEFAULT_TEACHER_WORKBENCH_SETTINGS[field] === 'number' ? Number(value) : value)
     }
-    fireEvent.change(screen.getByLabelText('语音识别语言'), { target: { value: 'en-US' } })
-    expect(setSetting).toHaveBeenCalledWith('speechLanguage', 'en-US')
   })
 
   it('uses defaults while unavailable and ignores non-numeric threshold input', () => {

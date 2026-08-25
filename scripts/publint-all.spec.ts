@@ -17,10 +17,12 @@ function fixture(options: {
   exportPath?: string
   indexSource?: string
   files?: Record<string, string>
+  packagePath?: string
+  dependencies?: Record<string, string>
 } = {}): string {
   const root = mkdtempSync(join(tmpdir(), 'dsh-publint-all-'))
   roots.push(root)
-  const packageDir = join(root, 'packages/core/probe')
+  const packageDir = join(root, options.packagePath ?? 'packages/core/probe')
   mkdirSync(join(packageDir, 'lib'), { recursive: true })
   writeFileSync(join(packageDir, 'package.json'), `${JSON.stringify({
     name: '@deepseek-ai/dsh-probe',
@@ -31,6 +33,7 @@ function fixture(options: {
     sideEffects: false,
     files: ['lib'],
     exports: { '.': { default: options.exportPath ?? './lib/index.js' } },
+    ...(options.dependencies === undefined ? {} : { dependencies: options.dependencies }),
   }, null, 2)}\n`)
   writeFileSync(join(packageDir, 'README.md'), '# Probe\n')
   writeFileSync(join(packageDir, 'lib/index.js'), options.indexSource ?? 'export const probe = true\n')
@@ -91,5 +94,21 @@ describe('publint package runner', () => {
     expect(result.status).toBe(1)
     expect(result.stderr).toContain('imports "./missing.js"')
     expect(result.stderr).toContain('imports "./missing.css"')
+  })
+
+  it('accepts only the exact reviewed local artifacts in the Web distribution bundle', () => {
+    const dependencies = {
+      '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz',
+      'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
+    }
+    const accepted = run(fixture({ packagePath: 'packages/bundle/web-app', dependencies }))
+    expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0)
+
+    const changed = run(fixture({
+      packagePath: 'packages/bundle/web-app',
+      dependencies: { ...dependencies, 'dsh-plugin-cron': 'file:../../../third-party/other.tgz' },
+    }))
+    expect(changed.status).toBe(1)
+    expect(changed.stdout).toContain('dsh-plugin-cron')
   })
 })

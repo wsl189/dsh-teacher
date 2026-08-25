@@ -4,212 +4,124 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { VoiceInputButton } from '../src/client/SpeechInput.tsx'
 import { zh } from '../src/client/locales.ts'
+import { installMediaRecorder, MediaRecorderMock } from './media-recorder.ts'
 
 const t = ((key: keyof typeof zh) => zh[key])
 
-class RecognitionMock {
-  static instances: RecognitionMock[] = []
-  lang = ''
-  continuous = true
-  interimResults = true
-  maxAlternatives = 0
-  onresult: ((event: never) => void) | null = null
-  onerror: ((event: never) => void) | null = null
-  onend: (() => void) | null = null
-  start = vi.fn()
-  stop = vi.fn(() => { this.onend?.() })
-  abort = vi.fn()
-
-  constructor() {
-    RecognitionMock.instances.push(this)
-  }
-}
-
 afterEach(() => {
   cleanup()
-  RecognitionMock.instances = []
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
-  Reflect.deleteProperty(window, 'SpeechRecognition')
-  Reflect.deleteProperty(window, 'webkitSpeechRecognition')
   Reflect.deleteProperty(window.navigator, 'mediaDevices')
 })
 
 describe('VoiceInputButton', () => {
-  it('disables itself when neither browser recognition constructor exists', () => {
-    render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
+  it('disables itself when MediaRecorder or microphone capture is unavailable', () => {
+    render(<VoiceInputButton transcribe={vi.fn()} onTranscript={vi.fn()} t={t} />)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '当前浏览器不支持语音输入' }).disabled).toBe(true)
   })
 
-  it('emits only final non-empty transcripts and handles stop, end, and recognition errors', () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+  it('records, transcribes, releases the stream, and emits normalized text', async () => {
+    const { getUserMedia, stopTrack } = installMediaRecorder()
+    let resolveTranscript: ((value: string) => void) | undefined
+    const transcribe = vi.fn(() => new Promise<string>((resolve) => { resolveTranscript = resolve }))
     const onTranscript = vi.fn()
-    const rendered = render(<VoiceInputButton language="zh-CN" onTranscript={onTranscript} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    const first = RecognitionMock.instances[0]!
-    expect(first).toMatchObject({ lang: 'zh-CN', continuous: false, interimResults: false, maxAlternatives: 1 })
-    act(() => {
-      first.onresult?.({
-        resultIndex: 0,
-        results: {
-          0: { 0: { transcript: '  第一段  ' }, length: 1, isFinal: true },
-          1: { 0: { transcript: '临时结果' }, length: 1, isFinal: false },
-          2: { length: 0, isFinal: true },
-          length: 3,
-        },
-      } as never)
-    })
-    expect(onTranscript).toHaveBeenCalledWith('第一段')
-    fireEvent.click(screen.getByRole('button', { name: '停止语音输入' }))
-    expect(first.stop).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button', { name: '开始语音输入' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    const denied = RecognitionMock.instances[1]!
-    act(() => { denied.onerror?.({ error: 'not-allowed' } as never) })
-    expect(screen.getByRole('button', { name: '麦克风权限未开启' })).toBeTruthy()
-
-    fireEvent.click(screen.getByRole('button', { name: '麦克风权限未开启' }))
-    const generic = RecognitionMock.instances[2]!
-    act(() => { generic.onerror?.({ error: 'network' } as never) })
-    expect(screen.getByRole('button', { name: '语音识别服务连接失败' })).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toBe('语音识别服务连接失败')
-
-    fireEvent.click(screen.getByRole('button', { name: '语音识别服务连接失败' }))
-    const active = RecognitionMock.instances[3]!
-    rendered.unmount()
-    expect(active.abort).toHaveBeenCalledOnce()
-  })
-
-  it('uses the WebKit constructor and recovers when start throws', () => {
-    class ErrorRecognition extends RecognitionMock {
-      override start = vi.fn(() => { throw new Error('busy') })
-    }
-    vi.stubGlobal('webkitSpeechRecognition', ErrorRecognition)
-    render(<VoiceInputButton language="en-US" onTranscript={vi.fn()} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    expect(screen.getByRole('button', { name: '语音识别失败，请重试' })).toBeTruthy()
-    expect(screen.getByRole('alert').textContent).toBe('语音识别失败，请重试')
-
-    cleanup()
-    class UnknownErrorRecognition extends RecognitionMock {
-      override start = vi.fn(() => {
-        const failure: unknown = 'busy'
-        throw failure
-      })
-    }
-    vi.stubGlobal('webkitSpeechRecognition', UnknownErrorRecognition)
-    render(<VoiceInputButton language="en-US" onTranscript={vi.fn()} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    expect(screen.getByRole('button', { name: '语音识别失败，请重试' })).toBeTruthy()
-  })
-
-  it('requests microphone access before recognition and releases the probe stream', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
-    const stop = vi.fn()
-    const getUserMedia = vi.fn(async () => ({ getTracks: () => [{ stop }] }))
-    Object.defineProperty(window.navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    })
-    render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
+    render(<VoiceInputButton transcribe={transcribe} onTranscript={onTranscript} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在连接麦克风' }).disabled).toBe(true)
-    await waitFor(() => { expect(RecognitionMock.instances).toHaveLength(1) })
+    await screen.findByRole('button', { name: '停止语音输入' })
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
-    expect(stop).toHaveBeenCalledOnce()
-    expect(screen.getByRole('button', { name: '停止语音输入' })).toBeTruthy()
+    expect(MediaRecorderMock.instances[0]?.mimeType).toBe('audio/webm;codecs=opus')
+
+    fireEvent.click(screen.getByRole('button', { name: '停止语音输入' }))
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在识别语音' }).disabled).toBe(true)
+    expect(stopTrack).toHaveBeenCalledOnce()
+    expect(transcribe).toHaveBeenCalledWith(expect.any(Blob))
+    await act(async () => { resolveTranscript?.('  课堂记录  '); await Promise.resolve() })
+    expect(onTranscript).toHaveBeenCalledWith('课堂记录')
+    await screen.findByRole('button', { name: '开始语音输入' })
   })
 
-  it('reports microphone permission, device, and unknown preflight failures', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
-    const missingMicrophone = new Error('missing')
-    missingMicrophone.name = 'NotFoundError'
+  it('maps QQ configuration and service failures to localized notifications', async () => {
+    installMediaRecorder()
+    const disabled = new Error('disabled')
+    disabled.name = 'provider-disabled'
+    const failed = new Error('failed')
+    failed.name = 'provider-failure'
+    const transcribe = vi.fn().mockRejectedValueOnce(disabled).mockRejectedValueOnce(failed)
+    render(<VoiceInputButton transcribe={transcribe} onTranscript={vi.fn()} t={t} />)
+
+    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
+    fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
+    await screen.findByRole('button', { name: '请先在设置 → 连接平台 → QQ 中启用语音识别' })
+    expect(screen.getByRole('alert').textContent).toBe('请先在设置 → 连接平台 → QQ 中启用语音识别')
+
+    fireEvent.click(screen.getByRole('button', { name: '请先在设置 → 连接平台 → QQ 中启用语音识别' }))
+    fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
+    await screen.findByRole('button', { name: '语音识别服务连接失败' })
+    expect(screen.getByRole('alert').textContent).toBe('语音识别服务连接失败')
+  })
+
+  it('reports microphone permission and device failures', async () => {
+    vi.stubGlobal('MediaRecorder', MediaRecorderMock)
+    const missing = new Error('missing')
+    missing.name = 'NotFoundError'
     const getUserMedia = vi.fn()
       .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
-      .mockRejectedValueOnce(missingMicrophone)
-      .mockRejectedValueOnce('unexpected')
+      .mockRejectedValueOnce(missing)
     Object.defineProperty(window.navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia },
     })
-    render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
+    render(<VoiceInputButton transcribe={vi.fn()} onTranscript={vi.fn()} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
     await screen.findByRole('button', { name: '麦克风权限未开启' })
-    expect(screen.getByRole('alert').textContent).toBe('麦克风权限未开启')
-
     fireEvent.click(screen.getByRole('button', { name: '麦克风权限未开启' }))
     await screen.findByRole('button', { name: '未检测到可用麦克风' })
-    expect(screen.getByRole('alert').textContent).toBe('未检测到可用麦克风')
-
-    fireEvent.click(screen.getByRole('button', { name: '未检测到可用麦克风' }))
-    await screen.findByRole('button', { name: '语音识别失败，请重试' })
-    expect(screen.getByRole('alert').textContent).toBe('语音识别失败，请重试')
-    expect(RecognitionMock.instances).toHaveLength(0)
   })
 
-  it('does not start recognition after an in-flight permission probe is disposed', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
-    const stop = vi.fn()
-    let resolvePermission: ((stream: { getTracks(): { stop(): void }[] }) => void) | undefined
-    const permission = new Promise<{ getTracks(): { stop(): void }[] }>((resolve) => {
-      resolvePermission = resolve
-    })
+  it('releases an in-flight stream after unmount without transcribing', async () => {
+    vi.stubGlobal('MediaRecorder', MediaRecorderMock)
+    const stopTrack = vi.fn()
+    let resolvePermission: ((stream: MediaStream) => void) | undefined
+    const permission = new Promise<MediaStream>((resolve) => { resolvePermission = resolve })
     Object.defineProperty(window.navigator, 'mediaDevices', {
       configurable: true,
       value: { getUserMedia: vi.fn(() => permission) },
     })
-    const rendered = render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
+    const transcribe = vi.fn()
+    const rendered = render(<VoiceInputButton transcribe={transcribe} onTranscript={vi.fn()} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
     rendered.unmount()
-    resolvePermission?.({ getTracks: () => [{ stop }] })
+    resolvePermission?.({ getTracks: () => [{ stop: stopTrack }] } as unknown as MediaStream)
     await act(async () => { await permission })
-    expect(stop).toHaveBeenCalledOnce()
-    expect(RecognitionMock.instances).toHaveLength(0)
-
-    let rejectPermission: ((reason?: unknown) => void) | undefined
-    const rejectedPermission = new Promise<{ getTracks(): { stop(): void }[] }>((_resolve, reject) => {
-      rejectPermission = reject
-    })
-    Object.defineProperty(window.navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia: vi.fn(() => rejectedPermission) },
-    })
-    const rejected = render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    rejected.unmount()
-    await act(async () => {
-      rejectPermission?.(new DOMException('denied', 'NotAllowedError'))
-      await Promise.resolve()
-    })
-    expect(RecognitionMock.instances).toHaveLength(0)
+    expect(stopTrack).toHaveBeenCalledOnce()
+    expect(transcribe).not.toHaveBeenCalled()
   })
 
-  it('dismisses a recognition failure notification after its announcement', () => {
+  it('dismisses a provider failure notification after its announcement', async () => {
     vi.useFakeTimers()
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
-    render(<VoiceInputButton language="zh-CN" onTranscript={vi.fn()} t={t} />)
+    installMediaRecorder()
+    const failure = new Error('empty')
+    failure.name = 'empty-result'
+    render(<VoiceInputButton transcribe={vi.fn().mockRejectedValue(failure)} onTranscript={vi.fn()} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[0]!.onerror?.({ error: 'no-speech' } as never) })
+    await act(async () => { await Promise.resolve() })
+    fireEvent.click(screen.getByRole('button', { name: '停止语音输入' }))
+    await act(async () => { await Promise.resolve() })
     expect(screen.getByRole('alert').textContent).toBe('未听到语音，请重试')
     act(() => { vi.advanceTimersByTime(4_000) })
     expect(screen.queryByRole('alert')).toBeNull()
+    vi.useRealTimers()
   })
 
-  it('ignores empty final recognition output', () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
-    const onTranscript = vi.fn()
-    render(<VoiceInputButton language="zh-CN" onTranscript={onTranscript} t={t} />)
+  it('contains an empty successful transcript', async () => {
+    installMediaRecorder()
+    render(<VoiceInputButton transcribe={vi.fn(async () => '   ')} onTranscript={vi.fn()} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    act(() => {
-      RecognitionMock.instances[0]!.onresult?.({
-        resultIndex: 0,
-        results: { 0: { 0: { transcript: '  ' }, length: 1, isFinal: true }, length: 1 },
-      } as never)
-    })
-    expect(onTranscript).not.toHaveBeenCalled()
-    act(() => { RecognitionMock.instances[0]!.onend?.() })
+    fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
+    await waitFor(() => { expect(screen.getByRole('alert').textContent).toBe('未听到语音，请重试') })
   })
 })

@@ -1754,6 +1754,31 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
     ],
   },
   {
+    key: 'speech',
+    summary: 'Provider-selecting speech-transcription runtime exposed as `ctx.speech`.',
+    description: 'Provider-selecting speech-transcription runtime exposed as `ctx.speech`.',
+    methods: [
+      {
+        signature: 'registerProvider(provider: SpeechProvider): () => void',
+        description: 'Register one transcription provider for the calling plugin lifetime.',
+        parameters: [{ name: 'provider', description: 'uniquely identified implementation.' }],
+        returns: 'disposer that unregisters the provider.',
+      },
+      {
+        signature: '@Remote(\'transcribe\') async transcribe(request: SpeechTranscribeRequest): Promise<SpeechTranscribeResult>',
+        description: 'Transcribe one browser recording through the selected provider.',
+        parameters: [{ name: 'request', description: 'base64 audio bytes and browser media type.' }],
+        returns: 'normalized text or a stable failure.',
+      },
+      {
+        signature: 'async transcribeAbortable( request: SpeechTranscribeRequest, signal?: AbortSignal, ): Promise<SpeechTranscribeResult>',
+        description: 'Transcribe one recording for a same-process Consumer with cooperative cancellation. Browser Consumers use transcribe, whose JSON Remote cannot carry an AbortSignal.',
+        parameters: [{ name: 'request', description: 'base64 audio bytes and browser media type.' }, { name: 'signal', description: 'aborts provider work when the calling operation is cancelled.' }],
+        returns: 'normalized text or a stable failure.',
+      },
+    ],
+  },
+  {
     key: 'spillStore',
     summary: 'Abstract spill storage service.',
     description: 'Abstract spill storage service. Subclass, implement saveText, and load the subclass as a plugin — it registers as `ctx.spillStore` (one implementation per context; loading a second throws, cordis\' standard duplicate-service behavior).\n\nSemantics every implementation must honor:\n\n- saveText persists the FULL `content` verbatim and returns an opaque locator, exact byte length, and model-facing retrieval guidance.\n- Storage is scoped by the request\'s SaveTextSpill.owner session; the backend chooses a private (not world-readable) location and a collision-free name derived from — never equal to — the caller\'s `suggestedName`.\n- `saveText` REJECTS on a real storage failure (permissions, ENOSPC, backend unavailable); the caller decides how to degrade (the spill policy treats a rejection as best-effort and keeps the inline result).',
@@ -4712,6 +4737,38 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface SpawnTeammateResult {\n    readonly member: TeamMemberView;\n}',
   },
   {
+    name: 'SpeechErrorCode',
+    declaration: 'export type SpeechErrorCode = \'invalid-request\' | \'unsupported-format\' | \'file-too-large\' | \'provider-unavailable\' | \'provider-disabled\' | \'provider-failure\' | \'invalid-response\' | \'empty-result\';',
+  },
+  {
+    name: 'SpeechFailure',
+    declaration: 'export interface SpeechFailure {\n    readonly code: SpeechErrorCode;\n    readonly message: string;\n}',
+  },
+  {
+    name: 'SpeechProvider',
+    declaration: 'export interface SpeechProvider {\n    readonly id: string;\n    available(): boolean;\n    transcribe(request: SpeechTranscribeRequest, signal?: AbortSignal): Promise<SpeechTranscript>;\n}',
+  },
+  {
+    name: 'SpeechTranscribeRejected',
+    declaration: 'export interface SpeechTranscribeRejected {\n    readonly ok: false;\n    readonly error: SpeechFailure;\n}',
+  },
+  {
+    name: 'SpeechTranscribeRequest',
+    declaration: 'export interface SpeechTranscribeRequest {\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'SpeechTranscribeResult',
+    declaration: 'export type SpeechTranscribeResult = SpeechTranscribeSuccess | SpeechTranscribeRejected;',
+  },
+  {
+    name: 'SpeechTranscribeSuccess',
+    declaration: 'export interface SpeechTranscribeSuccess {\n    readonly ok: true;\n    readonly value: SpeechTranscript;\n}',
+  },
+  {
+    name: 'SpeechTranscript',
+    declaration: 'export interface SpeechTranscript {\n    readonly text: string;\n    readonly provider: string;\n}',
+  },
+  {
     name: 'SpillLocator',
     declaration: 'export type SpillLocator = Branded<\'SpillLocator\'>;',
   },
@@ -5221,7 +5278,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentRequest',
-    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly corePageIndexes?: readonly number[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionSegmentResult',

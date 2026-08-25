@@ -48,17 +48,23 @@ const FIRST_PARTY = new Set([
 
 /** Official SDK identity covered by the project's narrow owner authorization. */
 export const CLAUDE_AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
+/** Office viewer identity covered by the bundled-extension distribution decision. */
+export const OFFICE_VIEWER_PACKAGE = '@huanlin/dsh-plugin-better-sidebar-plugin-office'
 const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
+const OWNER_AUTHORIZED_RUNTIME_PACKAGES = new Set([
+  CLAUDE_AGENT_SDK_PACKAGE,
+  OFFICE_VIEWER_PACKAGE,
+])
 
 /**
  * Whether a non-permissive runtime declaration has an identity-scoped owner
  * authorization. This does not reclassify its terms as permissive.
  * @param name - exact npm package identity.
- * @returns true only for the official Claude Agent SDK package.
+ * @returns true only for an exact package identity with a recorded distribution decision.
  */
 export function isOwnerAuthorizedRuntime(name: string): boolean {
-  return name === CLAUDE_AGENT_SDK_PACKAGE
+  return OWNER_AUTHORIZED_RUNTIME_PACKAGES.has(name)
 }
 
 /**
@@ -75,6 +81,7 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   '@modelcontextprotocol/server-filesystem': { license: 'MIT / Apache-2.0', repo: 'https://github.com/modelcontextprotocol/servers' },
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
+  '@huanlin/dsh-plugin-better-sidebar-plugin-office': { repo: 'https://github.com/HuanLinOTO/dsh-plugin-better-sidebar-plugin-office' },
 }
 
 /**
@@ -656,6 +663,15 @@ ${rows.join('\n')}
 `
 }
 
+/** Render the explicit non-permissive Office distribution authorization. */
+function renderOfficeDistribution(deps: ExternalDep[]): string {
+  const office = deps.find(dep => dep.name === OFFICE_VIEWER_PACKAGE)
+  if (office === undefined) return ''
+  return `
+\`${OFFICE_VIEWER_PACKAGE}\` (${office.license}) is distributed by the explicit identity-scoped decision in [Bundled extensions and QQ speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
+`
+}
+
 /**
  * Render the complete notices document.
  * @returns the exact bytes `THIRD_PARTY_NOTICES.md` must hold.
@@ -709,6 +725,7 @@ ${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.u
 External packages that a workspace package resolves at runtime. The tier covers every plugin a user can mount from \`cordis.yml\` — not only what the \`dsh\` CLI, Web UI, and Python SDK runtime load by default.
 
 ${renderNpmTable(runtimeDeps)}
+${renderOfficeDistribution(runtimeDeps)}
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 

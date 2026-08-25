@@ -1,18 +1,30 @@
 import { defineConfig } from 'tsdown'
 
 /**
- * The dsh CLI ships one entry: the `bin` referenced by package.json `bin`.
- * The root tsdown builds only `lib/types/index.js`, so this override points at
- * `lib/types/bin.js` instead; its reachable mode modules bundle with it.
- * Declarations come from `tsc -b` (dts: false), matching every package.
+ * The dsh app ships the public CLI plus an IPC-controlled Web backend for the
+ * Electron distribution. Each entry is bundled separately so the backend
+ * carries no CLI dispatch side effects and neither artifact needs a shared
+ * chunk. Declarations come from `tsc -b` (dts: false), matching every package.
  */
-export default defineConfig({
-  entry: ['lib/types/bin.js'],
-  outDir: 'lib',
-  format: ['esm'],
-  platform: 'node',
-  target: 'es2024',
-  fixedExtension: false,
-  dts: false,
-  clean: false,
-})
+export default defineConfig([
+  {
+    entry: ['lib/types/bin.js'],
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+  },
+  {
+    entry: ['lib/types/desktop-backend.js'],
+    outDir: 'lib',
+    format: ['esm'],
+    platform: 'node',
+    target: 'es2024',
+    fixedExtension: false,
+    dts: false,
+    clean: false,
+  },
+])

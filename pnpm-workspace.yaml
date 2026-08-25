@@ -27,9 +27,16 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # app-builder-lib 26.15.x reads the cache-mode enum introduced in 3.1.0,
+  # but its ^3 range can preserve an older 3.0.0 lock without that export.
+  'app-builder-lib>@electron/get': '3.1.0'
 
 peerDependencyRules:
   allowedVersions:
+    # Office 0.1.2 declares the original better-sidebar range, but its only
+    # integration method, registerFileViewer(), is unchanged in 0.15 and is
+    # exercised by the shipped-composition browser lane.
+    dsh-better-sidebar: '>=0.6.0 <1'
     typescript: '>=5 <7'
 
 # pnpm 10+ blocks any dependency shipping an install/build script until it is
@@ -39,6 +46,11 @@ peerDependencyRules:
 # (git hooks) genuinely need theirs.
 allowBuilds:
   esbuild: true
+  # Electron downloads its reviewed platform runtime during installation.
+  electron: true
+  # electron-builder carries the Squirrel.Windows packager, but this app ships
+  # NSIS only, so its Mono bootstrap script is deliberately unnecessary.
+  electron-winstaller: false
   lefthook: true
   # Cross-platform boundary for the persistent PTY backend, including ConPTY on Windows.
   node-pty: true
@@ -53,7 +65,6 @@ allowBuilds:
   # The Python runtime deploy includes the reviewed workspace postinstall that
   # restores the executable bit on node-pty's macOS spawn helper.
   '@deepseek-ai/dsh-subprocess-local@file:packages/subprocess/subprocess-local': true
-
 minimumReleaseAgeExclude:
   # Fresh pi-ai releases carry the model catalog updates that are the whole
   # point of bumping it; waiting out the release age would defeat that.

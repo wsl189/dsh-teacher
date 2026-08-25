@@ -19,6 +19,7 @@ import {
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/teacher-workbench', import.meta.url))
+const OVERLAY = fileURLToPath(new URL('./teacher-workbench.overlay.yml', import.meta.url))
 const SIDEBAR_EXPECTED = join(SNAPSHOT_DIR, 'sidebar.expected.md')
 const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'ui.expected.md')
 const DAILY_EXPECTED = join(SNAPSHOT_DIR, 'daily.expected.md')
@@ -47,6 +48,7 @@ const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const DOCUMENT_CONTEXT_EXPECTED = join(SNAPSHOT_DIR, 'document-context.expected.md')
 const DOCUMENT_CONTEXT_FIXTURE = join(SNAPSHOT_DIR, 'document-context.session.jsonl')
+const FIXED_WORKBENCH_TIME = '2026-08-22T09:30:00+08:00'
 const MODE = webSnapshotMode()
 
 function onePagePdfFixture(): Buffer {
@@ -128,6 +130,7 @@ describe('web e2e: durable teacher workbench', () => {
     await new Promise<void>((resolve) => { minerUServer.listen(0, '127.0.0.1', resolve) })
     const address = minerUServer.address() as AddressInfo
     scaffold = await launchWebScaffold({
+      extraOverlayPath: OVERLAY,
       ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse`,
     })
     scaffold.ctx.provide('mobileNotifications', {
@@ -144,7 +147,7 @@ describe('web e2e: durable teacher workbench', () => {
       viewport: { width: 1440, height: 900 },
       locale: ZH_BROWSER_LOCALE,
     })
-    await page.clock.setFixedTime('2026-08-22T09:30:00+08:00')
+    await page.clock.setFixedTime(FIXED_WORKBENCH_TIME)
     tripwire = watchConsole(page)
     await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
@@ -210,8 +213,10 @@ describe('web e2e: durable teacher workbench', () => {
     )
     await deadlineEditor.getByRole('button', { name: '保存' }).click()
     await deadlineEditor.waitFor({ state: 'hidden', timeout: 10_000 })
+    await page.clock.setFixedTime(Date.now())
     await todayCard.getByRole('button', { name: '添加待办' }).click()
     await todayCard.getByText('批改一班作业', { exact: true }).waitFor({ timeout: 10_000 })
+    await page.clock.setFixedTime(FIXED_WORKBENCH_TIME)
 
     await importantCard.getByLabel('新增重要事项').fill('准备公开课')
     await importantCard.getByRole('button', { name: '添加待办' }).click()
@@ -331,11 +336,9 @@ describe('web e2e: durable teacher workbench', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-voice-error'))
     await openModule('日常管理')
     await page.evaluate(() => {
-      Object.defineProperty(window.navigator, 'mediaDevices', {
+      Object.defineProperty(window.navigator.mediaDevices, 'getUserMedia', {
         configurable: true,
-        value: {
-          getUserMedia: () => Promise.reject(new DOMException('denied', 'NotAllowedError')),
-        },
+        value: () => Promise.reject(new DOMException('denied', 'NotAllowedError')),
       })
     })
     const todoPanel = page.locator('section[aria-labelledby="daily-todo-title"]')
@@ -1378,17 +1381,14 @@ describe('web e2e: durable teacher workbench', () => {
       await input.fill(value)
       await input.blur()
     }
-    await settings.getByLabel('语音识别语言').selectOption('en-US')
-
     await expect.poll(async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'), {
       timeout: 10_000,
-    }).toContain('speechLanguage: en-US')
+    }).toContain('questionCropPadding: 18')
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('teacherName: 王老师')
     expect(document).toContain('schoolName: 海淀中学')
     expect(document).toContain('defaultSubject: 数学')
     expect(document).toContain('weatherLocation: 浦东新区, 上海市')
-    expect(document).toContain('speechLanguage: en-US')
     expect(document).toContain('scoreFullMark: 150')
     expect(document).toContain('excellentScore: 120')
     expect(document).toContain('passScore: 90')
@@ -1477,7 +1477,7 @@ describe('web e2e: hidden MinerU conversation context', () => {
     const address = minerUServer.address() as AddressInfo
     scaffold = await launchWebScaffold({
       ocrEndpoint: `http://127.0.0.1:${String(address.port)}/file_parse`,
-      ...(MODE === 'record' ? {} : { replayFixture: DOCUMENT_CONTEXT_FIXTURE }),
+      ...(MODE === 'record' ? {} : { replayFixture: DOCUMENT_CONTEXT_FIXTURE, paceMs: 10 }),
     })
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE })

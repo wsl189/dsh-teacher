@@ -20,6 +20,7 @@ import { QuickNotesPanel } from '../src/client/QuickNotesPanel.tsx'
 import { LedgerPanel } from '../src/client/LedgerPanel.tsx'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
 import { zh } from '../src/client/locales.ts'
+import { installMediaRecorder } from './media-recorder.ts'
 
 const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
   let value: string = zh[key]
@@ -40,6 +41,7 @@ function commands(): TeacherWorkbenchCommands {
   const action = () => vi.fn(async () => ({ ok: true } as const))
   return {
     listNotificationTargets: vi.fn(async () => []),
+    transcribeVoice: vi.fn(async () => 'voice transcript'),
     saveDailyTodo: action(), toggleDailyTodo: action(), deleteDailyTodo: action(),
     saveQuickNote: action(), deleteQuickNote: action(),
     saveLedgerCategory: action(), deleteLedgerCategory: action(),
@@ -75,37 +77,23 @@ function commands(): TeacherWorkbenchCommands {
 
 const failure = { ok: false, error: { code: 'test', message: 'rejected' } } as const
 
-class RecognitionMock {
-  static instances: RecognitionMock[] = []
-  lang = ''
-  continuous = true
-  interimResults = true
-  maxAlternatives = 0
-  onresult: ((event: never) => void) | null = null
-  onerror: ((event: never) => void) | null = null
-  onend: (() => void) | null = null
-  start = vi.fn()
-  stop = vi.fn(() => { this.onend?.() })
-  abort = vi.fn()
-
-  constructor() {
-    RecognitionMock.instances.push(this)
-  }
-
-  emitFinal(transcript: string): void {
-    this.onresult?.({
-      resultIndex: 0,
-      results: { 0: { 0: { transcript }, length: 1, isFinal: true }, length: 1 },
-    } as never)
-  }
+async function recordVoice(
+  scope: HTMLElement,
+  commandSet: TeacherWorkbenchCommands,
+  transcript: string,
+): Promise<void> {
+  vi.mocked(commandSet.transcribeVoice).mockResolvedValueOnce(transcript)
+  fireEvent.click(within(scope).getByRole('button', { name: '开始语音输入' }))
+  fireEvent.click(await within(scope).findByRole('button', { name: '停止语音输入' }))
+  await waitFor(() => { expect(commandSet.transcribeVoice).toHaveBeenCalled() })
 }
 
 afterEach(() => {
   cleanup()
-  RecognitionMock.instances = []
   vi.useRealTimers()
   vi.restoreAllMocks()
   vi.unstubAllGlobals()
+  Reflect.deleteProperty(window.navigator, 'mediaDevices')
 })
 
 describe('daily todo panel', () => {
@@ -126,7 +114,7 @@ describe('daily todo panel', () => {
       },
     ])
     render(
-      <DailyTodoPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+      <DailyTodoPanel state={emptyState()} commands={c} t={t} />,
     )
     const todayCard = screen.getByRole('region', { name: '今日待办' })
     fireEvent.change(within(todayCard).getByLabelText('新增今日待办'), { target: { value: '提交周报' } })
@@ -188,7 +176,6 @@ describe('daily todo panel', () => {
             updatedAt: 1,
           }],
         }}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         t={t}
       />,
@@ -226,19 +213,16 @@ describe('daily todo panel', () => {
   })
 
   it('adds by speech, edits, completes, and deletes deadline-aware tasks', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    installMediaRecorder()
     vi.stubGlobal('confirm', vi.fn(() => true))
     const c = commands()
     const rendered = render(
-      <DailyTodoPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+      <DailyTodoPanel state={emptyState()} commands={c} t={t} />,
     )
     const todayCard = screen.getByRole('region', { name: '今日待办' })
 
-    fireEvent.click(within(todayCard).getByRole('button', { name: '开始语音输入' }))
-    expect(RecognitionMock.instances[0]).toMatchObject({
-      lang: 'zh-CN', continuous: false, interimResults: false, maxAlternatives: 1,
-    })
-    act(() => { RecognitionMock.instances[0]!.emitFinal('批改作业') })
+    await recordVoice(todayCard, c, '批改作业')
+    expect(within(todayCard).getByLabelText<HTMLInputElement>('新增今日待办').value).toBe('批改作业')
     fireEvent.click(within(todayCard).getByRole('button', { name: '截止时间' }))
     const timingDialog = screen.getByRole('dialog', { name: '设置截止时间与提醒' })
     fireEvent.change(within(timingDialog).getByLabelText('截止时间'), { target: { value: '2026-08-18T18:30' } })
@@ -261,7 +245,7 @@ describe('daily todo panel', () => {
       }],
     }
     rendered.rerender(
-      <DailyTodoPanel state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+      <DailyTodoPanel state={state} commands={c} t={t} />,
     )
     fireEvent.click(within(todayCard).getByRole('checkbox', { name: '切换“批改作业”完成状态' }))
     expect(c.toggleDailyTodo).toHaveBeenCalledWith(todoId)
@@ -285,7 +269,7 @@ describe('daily todo panel', () => {
   })
 
   it('sorts task states and keeps failed additions and edits available to retry', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    installMediaRecorder()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const c = commands()
     const state: TeacherWorkbenchState = {
@@ -299,7 +283,7 @@ describe('daily todo panel', () => {
       ],
     }
     const rendered = render(
-      <DailyTodoPanel state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+      <DailyTodoPanel state={state} commands={c} t={t} />,
     )
     const todayCard = screen.getByRole('region', { name: '今日待办' })
     const importantCard = screen.getByRole('region', { name: '重要事项' })
@@ -356,8 +340,7 @@ describe('daily todo panel', () => {
     fireEvent.click(within(pastRow).getByRole('button', { name: '编辑' }))
     const editor = screen.getByRole('dialog', { name: '编辑待办' })
     expect(within(editor).queryByRole('radiogroup', { name: '事项分类' })).toBeNull()
-    fireEvent.click(within(editor).getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[0]!.emitFinal('补充') })
+    await recordVoice(editor, c, '补充')
     expect(within(editor).getByLabelText<HTMLInputElement>('事项').value).toBe('已逾期 补充')
     vi.mocked(c.saveDailyTodo).mockResolvedValueOnce(failure)
     fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
@@ -375,7 +358,6 @@ describe('daily todo panel', () => {
     rendered.rerender(
       <DailyTodoPanel
         state={{ ...state, dailyTodos: [...state.dailyTodos].reverse() }}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         t={t}
       />,
@@ -392,7 +374,7 @@ describe('memos panel', () => {
       label: '备忘机器人',
       connected: true,
     }])
-    render(<QuickNotesPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    render(<QuickNotesPanel state={emptyState()} commands={c} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '添加备忘录' }))
     const editor = screen.getByRole('dialog', { name: '添加备忘录' })
@@ -422,15 +404,14 @@ describe('memos panel', () => {
   })
 
   it('creates a speech draft and edits or deletes each note', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    installMediaRecorder()
     vi.stubGlobal('confirm', vi.fn(() => true))
     const c = commands()
     const rendered = render(
-      <QuickNotesPanel state={emptyState()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />,
+      <QuickNotesPanel state={emptyState()} commands={c} t={t} />,
     )
 
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[0]!.emitFinal('记录课堂观察') })
+    await recordVoice(document.body, c, '记录课堂观察')
     expect(screen.getByLabelText<HTMLTextAreaElement>('备忘录内容').value).toBe('记录课堂观察')
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
     await waitFor(() => { expect(c.saveQuickNote).toHaveBeenCalledWith({ content: '记录课堂观察' }) })
@@ -442,7 +423,6 @@ describe('memos panel', () => {
           ...emptyState(),
           quickNotes: [{ id: noteId, content: '记录课堂观察', createdAt: 1, updatedAt: 2 }],
         }}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         t={t}
       />,
@@ -458,7 +438,7 @@ describe('memos panel', () => {
   })
 
   it('supports manual drafts, speech append, note-body editing, sorting, and failed saves', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    installMediaRecorder()
     const confirm = vi.spyOn(window, 'confirm').mockReturnValueOnce(false).mockReturnValueOnce(true)
     const c = commands()
     const oldId = 'note-old' as TeacherQuickNoteId
@@ -472,7 +452,6 @@ describe('memos panel', () => {
             { id: newId, content: '较新备忘录', createdAt: 2, updatedAt: 2 },
           ],
         }}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         t={t}
       />,
@@ -483,8 +462,7 @@ describe('memos panel', () => {
     const editor = screen.getByRole('dialog', { name: '添加备忘录' })
     const content = within(editor).getByLabelText<HTMLTextAreaElement>('备忘录内容')
     fireEvent.change(content, { target: { value: '手动记录  ' } })
-    fireEvent.click(within(editor).getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[0]!.emitFinal('语音补充') })
+    await recordVoice(editor, c, '语音补充')
     expect(content.value).toBe('手动记录\n语音补充')
     vi.mocked(c.saveQuickNote).mockResolvedValueOnce(failure)
     fireEvent.click(within(editor).getByRole('button', { name: '保存' }))
@@ -495,8 +473,7 @@ describe('memos panel', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '添加备忘录' }))
     const emptyEditor = screen.getByRole('dialog', { name: '添加备忘录' })
-    fireEvent.click(within(emptyEditor).getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[1]!.emitFinal('纯语音记录') })
+    await recordVoice(emptyEditor, c, '纯语音记录')
     expect(within(emptyEditor).getByLabelText<HTMLTextAreaElement>('备忘录内容').value).toBe('纯语音记录')
     fireEvent.click(within(emptyEditor).getByRole('button', { name: '取消' }))
 
@@ -528,7 +505,6 @@ describe('ledger panel', () => {
           ...emptyState(),
           ledgerCategories: [{ id: categoryId, name: '保险保费', createdAt: 1 }],
         }}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         expanded
         onExpand={vi.fn()}
@@ -565,7 +541,7 @@ describe('ledger panel', () => {
   })
 
   it('opens from the compact card and manages category entries with voice and time', async () => {
-    vi.stubGlobal('SpeechRecognition', RecognitionMock)
+    installMediaRecorder()
     vi.stubGlobal('confirm', vi.fn(() => true))
     const categoryId = 'ledger-category-a' as TeacherLedgerCategoryId
     const entryId = 'ledger-entry-a' as TeacherLedgerEntryId
@@ -587,7 +563,6 @@ describe('ledger panel', () => {
     const rendered = render(
       <LedgerPanel
         state={state}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         expanded={false}
         onExpand={expand}
@@ -603,7 +578,6 @@ describe('ledger panel', () => {
     rendered.rerender(
       <LedgerPanel
         state={state}
-        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={c}
         expanded
         onExpand={expand}
@@ -615,8 +589,7 @@ describe('ledger panel', () => {
     expect(within(category).getByTitle('发生时间').getAttribute('data-has-value')).toBe('false')
     expect(within(category).getByLabelText<HTMLInputElement>('发生时间').value).toBe('')
     expect(within(category).getByRole<HTMLButtonElement>('button', { name: '添加明细' }).disabled).toBe(true)
-    fireEvent.click(within(category).getByRole('button', { name: '开始语音输入' }))
-    act(() => { RecognitionMock.instances[0]!.emitFinal('八月水费') })
+    await recordVoice(category, c, '八月水费')
     fireEvent.change(within(category).getByLabelText('金额（元）'), { target: { value: '36.50' } })
     fireEvent.change(within(category).getByLabelText('发生时间'), { target: { value: '2026-08-20T19:30' } })
     expect(within(category).getByTitle('发生时间: 2026-08-20 19:30').getAttribute('data-has-value')).toBe('true')

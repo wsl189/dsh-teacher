@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_AGENT_SDK_PACKAGE,
+  OFFICE_VIEWER_PACKAGE,
   claudeDistributionFromManifest,
   collectPythonDependencies,
   isOwnerAuthorizedRuntime,
@@ -271,13 +272,16 @@ describe('isPermissive', () => {
   })
 })
 
-describe('official Claude distribution authorization', () => {
-  it('authorizes only the direct SDK identity without relabeling its license', () => {
+describe('owner-authorized runtime distributions', () => {
+  it('authorizes only recorded package identities without relabeling their licenses', () => {
     expect(isOwnerAuthorizedRuntime(CLAUDE_AGENT_SDK_PACKAGE)).toBe(true)
+    expect(isOwnerAuthorizedRuntime(OFFICE_VIEWER_PACKAGE)).toBe(true)
     expect(isOwnerAuthorizedRuntime(`${CLAUDE_AGENT_SDK_PACKAGE}-linux-x64`))
       .toBe(false)
+    expect(isOwnerAuthorizedRuntime(`${OFFICE_VIEWER_PACKAGE}-fork`)).toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
+    expect(isPermissive('AGPL-3.0')).toBe(false)
   })
 
   it('derives version-independent platform payloads from the official SDK manifest', () => {

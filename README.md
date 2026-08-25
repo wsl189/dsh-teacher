@@ -12,7 +12,15 @@ DeepSeek Harness is currently in _developer preview_ and is iterating rapidly. *
 
 ## Run
 
-> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, teacher workbench (question cutting, student folders), composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
+> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, Office preview, teacher workbench (question cutting, student folders), QQ-backed voice input, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
+
+### Windows installer
+
+Download `DSH-Teacher-<version>-x64-Setup.exe` from this fork's [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases). The installed app includes Electron, Node.js, the built Web UI, and this repository's DSH plugin closure. It checks Releases at startup; when a higher SemVer exists, an **Update** action appears to the right of **Settings**, downloads the verified installer, and changes to **Restart to update** when ready.
+
+Every branch push builds a Windows installer artifact through [the desktop workflow](.github/workflows/windows-desktop.yml). Pushing a `v<package version>` tag publishes the installer and `latest.yml` as the client update feed. Exact build, release, signing, and migration instructions are in the [desktop distribution guide](apps/desktop/README.md).
+
+The EXE does not bundle vLLM, MinerU, ASR services, model weights, or GPU drivers. Run those separately—Docker remains a good fit for that service environment—and configure their loopback endpoints in DSH. User data also stays outside the installer under `%USERPROFILE%\.dsh`; copy that directory separately when migrating machines.
 
 ### Run from source (recommended)
 
@@ -56,16 +64,9 @@ pnpm dsh web
 
 Do NOT use `npx @deepseek-ai/dsh web` — it installs the official npm package without the fork's custom features (teacher workbench, built-in better-sidebar, upload preview, overlay collapse rules).
 
-### 2. Install the IM connector and cron plugins
+### 2. Built-in IM, cron, and Office preview
 
-These third-party bundles live in [`third-party/`](third-party/README.md) because they are not part of the npm package:
-
-```sh
-dsh plugin --profile web add third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
-dsh plugin --profile web add third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz
-```
-
-Then merge `third-party/dsh-im/cordis.patch.yml.example` into `~/.dsh/profiles/web/cordis.patch.yml` and adjust the `qq.outboundMediaRoots` paths for this machine. See [third-party/README.md](third-party/README.md) for the full install and verification steps.
+The Web composition and Windows EXE already contain the reviewed `@xmanrui/dsh-im` 1.0.3, `dsh-plugin-cron` 0.1.3, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine. Configure bots and QQ speech under **Settings → Plugins → Connected Platforms**; cron and Office-preview sidebar entries load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
 
 ### 3. Configure MinerU (document extraction)
 
@@ -84,21 +85,15 @@ Edit `~/.dsh/integrations/dsh-qq/config.json` and enable `speech` (the current m
 }
 ```
 
-`baseUrl` must be HTTPS or a loopback HTTP URL, and must point to an OpenAI-compatible transcription server (the current machine runs one at `127.0.0.1:8000`). If the server requires an API key, set the `DSH_QQ_ASR_API_KEY` environment variable. Restart `dsh web` after changing the config; QQ voice messages are then transcribed and fed to the conversation.
+`baseUrl` must be HTTPS or a loopback HTTP URL, and must point to an OpenAI-compatible transcription server (the current machine runs one at `127.0.0.1:8000`). If the server requires an API key, store it through the QQ settings page or set `DSH_QQ_ASR_API_KEY`. The QQ bot, main composer, and Workbench Daily Management microphone controls share these settings; the next completed recording reads the saved values without a Host restart.
 
-### 5. Install the Office preview plugin (optional)
+### 5. Office preview formats
 
-Workspace `.docx`, `.xlsx`, and `.pptx` files preview through the external AGPL-3.0 viewer. Composer uploads preview in the right sidebar without it:
-
-```sh
-dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.0
-```
-
-Restart `dsh web` and hard-refresh the browser afterwards. Legacy `.doc`, `.xls`, and `.ppt` remain download-only.
+The built-in AGPL-3.0 Office viewer previews workspace `.docx`, `.xlsx`, and `.pptx` files. Composer uploads retain the existing right-sidebar preview path. Legacy `.doc`, `.xls`, and `.ppt` remain download-only and require conversion.
 
 ### Windows differences
 
-The steps below need adjustment on Windows; everything else (run from source, plugin install, MinerU, voice, Office preview) is the same as Linux.
+The steps below need adjustment on Windows; everything else (repository or EXE launch, MinerU, voice, and the built-in plugins) follows the same configuration model as Linux.
 
 - **`~/.dsh` directory**: on Windows it is `C:\Users\<user>\.dsh`. All config paths (`cordis.patch.yml`, `integrations/dsh-qq/config.json`, `integrations/dsh-qq/workspaces.json`, `.credentials.yaml`) live under it — copy these files from the old machine when moving.
 - **`qq.outboundMediaRoots` in `cordis.patch.yml`**: use Windows absolute paths, for example:

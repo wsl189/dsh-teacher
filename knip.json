@@ -641,6 +641,7 @@
     },
     "apps/cli": {
       "entry": [
+        "src/desktop-backend.ts",
         "tests/**/*.spec.ts",
         "tests/**/*.e2e.ts",
         "tests/**/*.snapshot.ts"
@@ -651,6 +652,17 @@
       ],
       "ignoreDependencies": [
         "@deepseek-ai/.+"
+      ]
+    },
+    "apps/desktop": {
+      "entry": [
+        "src/main.ts",
+        "src/preload.ts",
+        "tests/**/*.spec.ts"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.ts"
       ]
     },
     "packages/subagent/subagent-dsh-sdk": {
@@ -675,7 +687,10 @@
     },
     "packages/bundle/web-app": {
       "ignoreDependencies": [
-        "@deepseek-ai/.+"
+        "@deepseek-ai/.+",
+        "@huanlin/dsh-plugin-better-sidebar-plugin-office",
+        "@xmanrui/dsh-im",
+        "dsh-plugin-cron"
       ]
     }
   }

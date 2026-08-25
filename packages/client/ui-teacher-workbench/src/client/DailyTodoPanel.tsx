@@ -9,7 +9,6 @@ import type {
   TeacherDailyTodoColor,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherReminderInput } from './controller.ts'
 import { editableReminder, ReminderFields, reminderValid } from './ReminderFields.tsx'
@@ -38,8 +37,6 @@ const TODO_COLORS = [
 export interface DailyTodoPanelProps {
   /** Complete durable workbench state. */
   state: TeacherWorkbenchState
-  /** Voice-recognition settings. */
-  settings: TeacherWorkbenchSettings
   /** Durable workbench commands. */
   commands: TeacherWorkbenchCommands
   /** Workbench translator. */
@@ -48,10 +45,10 @@ export interface DailyTodoPanelProps {
 
 /**
  * Render Today, Important, and Urgent as simultaneously visible cards.
- * @param props - durable tasks, voice settings, commands, and copy.
+ * @param props - durable tasks, commands, and copy.
  * @returns three deadline-aware task composers and editable task lists.
  */
-export function DailyTodoPanel({ state, settings, commands, t }: DailyTodoPanelProps) {
+export function DailyTodoPanel({ state, commands, t }: DailyTodoPanelProps) {
   const allTasks = useMemo(() => [...state.dailyTodos].sort(compareTodos), [state.dailyTodos])
   return (
     <>
@@ -60,7 +57,6 @@ export function DailyTodoPanel({ state, settings, commands, t }: DailyTodoPanelP
           key={view}
           view={view}
           tasks={allTasks.filter(task => task.category === view)}
-          settings={settings}
           commands={commands}
           t={t}
         />
@@ -72,7 +68,6 @@ export function DailyTodoPanel({ state, settings, commands, t }: DailyTodoPanelP
 function TodoCard(props: {
   view: TodoView
   tasks: TeacherDailyTodo[]
-  settings: TeacherWorkbenchSettings
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
 }) {
@@ -138,7 +133,7 @@ function TodoCard(props: {
           {reminder !== null && <Bell size={11} className={css.reminderBadge} aria-hidden="true" />}
         </button>
         <VoiceInputButton
-          language={props.settings.speechLanguage}
+          transcribe={props.commands.transcribeVoice}
           onTranscript={(transcript) => { setTitle(current => joinSpeech(current, transcript)) }}
           t={props.t}
         />
@@ -226,7 +221,6 @@ function TodoCard(props: {
       {editing !== null && (
         <TodoEditor
           task={editing}
-          language={props.settings.speechLanguage}
           commands={props.commands}
           t={props.t}
           onClose={() => { setEditing(null) }}
@@ -238,7 +232,6 @@ function TodoCard(props: {
 
 function TodoEditor(props: {
   task: TeacherDailyTodo
-  language: string
   commands: TeacherWorkbenchCommands
   t: TeacherWorkbenchTranslate
   onClose: () => void
@@ -274,7 +267,7 @@ function TodoEditor(props: {
         <div className={css.voiceField}>
           <input aria-label={props.t('daily.todo.item')} value={title} maxLength={120} onChange={(event) => { setTitle(event.target.value) }} />
           <VoiceInputButton
-            language={props.language}
+            transcribe={props.commands.transcribeVoice}
             onTranscript={(transcript) => { setTitle(current => joinSpeech(current, transcript)) }}
             t={props.t}
           />

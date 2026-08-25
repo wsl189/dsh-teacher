@@ -80,6 +80,8 @@ import type {
 export interface TeacherWorkbenchCommands {
   /** List configured dsh-im bots without credentials. */
   listNotificationTargets: () => Promise<readonly TeacherNotificationTarget[]>
+  /** Transcribe one browser microphone recording through the shared Host speech provider. */
+  transcribeVoice: (audio: Blob) => Promise<string>
   /** Save a daily task. */
   saveDailyTodo: (input: TeacherDailyTodoInput) => Promise<TeacherWorkbenchActionResult>
   /** Toggle a daily task's completion state. */

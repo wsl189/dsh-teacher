@@ -1,91 +1,42 @@
-/** Browser speech-recognition adapter and microphone command. */
+/** Host-backed speech-transcription microphone command. */
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useRef, useState } from 'react'
 import { CircleAlert, Mic, Square } from 'lucide-react'
-import { Toast } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Toast, useVoiceRecorder } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
-
-interface SpeechRecognitionAlternativeLike {
-  readonly transcript: string
-}
-
-interface SpeechRecognitionResultLike {
-  readonly length: number
-  readonly isFinal: boolean
-  readonly [index: number]: SpeechRecognitionAlternativeLike
-}
-
-interface SpeechRecognitionResultListLike {
-  readonly length: number
-  readonly [index: number]: SpeechRecognitionResultLike
-}
-
-interface SpeechRecognitionEventLike extends Event {
-  readonly resultIndex: number
-  readonly results: SpeechRecognitionResultListLike
-}
-
-interface SpeechRecognitionErrorEventLike extends Event {
-  readonly error: string
-}
-
-interface SpeechRecognitionLike {
-  lang: string
-  continuous: boolean
-  interimResults: boolean
-  maxAlternatives: number
-  onresult: ((event: SpeechRecognitionEventLike) => void) | null
-  onerror: ((event: SpeechRecognitionErrorEventLike) => void) | null
-  onend: (() => void) | null
-  start(): void
-  stop(): void
-  abort(): void
-}
-
-interface SpeechRecognitionConstructor {
-  new(): SpeechRecognitionLike
-}
-
-type SpeechWindow = Window & typeof globalThis & {
-  SpeechRecognition?: SpeechRecognitionConstructor
-  webkitSpeechRecognition?: SpeechRecognitionConstructor
-}
-
-interface MicrophoneNavigator {
-  readonly mediaDevices?: {
-    readonly getUserMedia?: (constraints: MediaStreamConstraints) => Promise<MediaStream>
-  }
-}
 
 type VoiceErrorTranslationKey =
   | 'voice.permissionDenied'
   | 'voice.noMicrophone'
   | 'voice.noSpeech'
   | 'voice.networkError'
-  | 'voice.languageUnsupported'
+  | 'voice.notConfigured'
+  | 'voice.fileTooLarge'
 
 const VOICE_ERROR_KEYS: Readonly<Record<string, VoiceErrorTranslationKey>> = Object.freeze({
   'not-allowed': 'voice.permissionDenied',
-  'service-not-allowed': 'voice.permissionDenied',
+  NotAllowedError: 'voice.permissionDenied',
+  SecurityError: 'voice.permissionDenied',
   'audio-capture': 'voice.noMicrophone',
+  NotFoundError: 'voice.noMicrophone',
+  DevicesNotFoundError: 'voice.noMicrophone',
+  NotReadableError: 'voice.noMicrophone',
+  TrackStartError: 'voice.noMicrophone',
+  OverconstrainedError: 'voice.noMicrophone',
   'no-speech': 'voice.noSpeech',
+  'empty-result': 'voice.noSpeech',
   network: 'voice.networkError',
-  'language-not-supported': 'voice.languageUnsupported',
+  'provider-unavailable': 'voice.networkError',
+  'provider-failure': 'voice.networkError',
+  'provider-disabled': 'voice.notConfigured',
+  'file-too-large': 'voice.fileTooLarge',
 })
-const MICROPHONE_PERMISSION_ERRORS = new Set(['NotAllowedError', 'SecurityError'])
-const MICROPHONE_CAPTURE_ERRORS = new Set([
-  'NotFoundError',
-  'DevicesNotFoundError',
-  'NotReadableError',
-  'TrackStartError',
-  'OverconstrainedError',
-])
 
 /** Microphone button props. */
 export interface VoiceInputButtonProps {
-  /** BCP 47 recognition language. */
-  language: string
+  /** Transcribe one completed recording through the shared Host provider. */
+  transcribe: (audio: Blob) => Promise<string>
   /** Receive one final normalized transcript. */
   onTranscript: (transcript: string) => void
   /** Workbench translator. */
@@ -93,125 +44,47 @@ export interface VoiceInputButtonProps {
 }
 
 /**
- * Render a browser-native speech-recognition toggle.
- * @param props - language, transcript callback, and localized copy.
- * @returns an icon command disabled when the browser exposes no recognition engine.
+ * Render a MediaRecorder toggle backed by the configured QQ ASR service.
+ * @param props - transcription callback, transcript callback, and localized copy.
+ * @returns an icon command disabled while recording startup or transcription is pending.
  */
-export function VoiceInputButton({ language, onTranscript, t }: VoiceInputButtonProps) {
-  const [listening, setListening] = useState(false)
-  const [starting, setStarting] = useState(false)
+export function VoiceInputButton({ transcribe, onTranscript, t }: VoiceInputButtonProps) {
   const [error, setError] = useState('')
   const [toast, setToast] = useState<{ readonly sequence: number; readonly text: string } | null>(null)
-  const recognition = useRef<SpeechRecognitionLike | null>(null)
-  const transcriptHandler = useRef(onTranscript)
-  const startAttempt = useRef(0)
   const toastSequence = useRef(0)
-  transcriptHandler.current = onTranscript
-  const Recognition = typeof window === 'undefined'
-    ? undefined
-    : (window as SpeechWindow).SpeechRecognition ?? (window as SpeechWindow).webkitSpeechRecognition
-  const supported = Recognition !== undefined
-
-  useEffect(() => {
-    return () => {
-      startAttempt.current += 1
-      const current = recognition.current
-      if (current !== null) {
-        current.onresult = null
-        current.onerror = null
-        current.onend = null
-        current.abort()
-      }
-    }
-  }, [])
-
   const announceError = useCallback((code: string): void => {
     setError(code)
     toastSequence.current += 1
     setToast({ sequence: toastSequence.current, text: voiceErrorLabel(code, t) })
   }, [t])
-
-  const toggle = useCallback(async (): Promise<void> => {
-    if (listening) {
-      recognition.current?.stop()
-      return
-    }
-    /* v8 ignore next -- the button is disabled when no recognition constructor exists. */
-    if (Recognition === undefined) return
-    const attempt = startAttempt.current + 1
-    startAttempt.current = attempt
-    setError('')
-    const mediaDevices = (window.navigator as unknown as MicrophoneNavigator).mediaDevices
-    if (mediaDevices?.getUserMedia !== undefined) {
-      setStarting(true)
-      try {
-        const stream = await mediaDevices.getUserMedia({ audio: true })
-        for (const track of stream.getTracks()) track.stop()
-      } catch (permissionError) {
-        if (startAttempt.current === attempt) {
-          setStarting(false)
-          announceError(normalizeMicrophoneError(permissionError))
-        }
-        return
-      }
-      if (startAttempt.current !== attempt) return
-      setStarting(false)
-    }
-    const next = new Recognition()
-    next.lang = language
-    next.continuous = false
-    next.interimResults = false
-    next.maxAlternatives = 1
-    next.onresult = (event) => {
-      const parts: string[] = []
-      for (let index = event.resultIndex; index < event.results.length; index += 1) {
-        const result = event.results[index]
-        const alternative = result?.[0]
-        if (result?.isFinal && alternative !== undefined) parts.push(alternative.transcript)
-      }
-      const transcript = parts.join(' ').trim()
-      if (transcript !== '') transcriptHandler.current(transcript)
-    }
-    next.onerror = (event) => {
-      announceError(event.error)
-      setListening(false)
-    }
-    next.onend = () => {
-      recognition.current = null
-      setListening(false)
-    }
-    recognition.current = next
-    setListening(true)
-    try {
-      next.start()
-    } catch (startError) {
-      recognition.current = null
-      setListening(false)
-      announceError(startError instanceof Error ? startError.message : 'start-failed')
-    }
-  }, [Recognition, announceError, language, listening])
-
+  const voice = useVoiceRecorder({
+    transcribe,
+    onTranscript,
+    onError: announceError,
+  })
   const errorLabel = error === '' ? t('voice.start') : voiceErrorLabel(error, t)
-  const label = !supported
+  const label = !voice.supported
     ? t('voice.unsupported')
-    : starting
+    : voice.starting
       ? t('voice.connecting')
-      : listening
-        ? t('voice.stop')
-        : errorLabel
+      : voice.transcribing
+        ? t('voice.transcribing')
+        : voice.listening
+          ? t('voice.stop')
+          : errorLabel
 
   return (
     <>
       <button
         type="button"
-        className={listening ? css.voiceButtonActive : css.voiceButton}
+        className={voice.listening ? css.voiceButtonActive : css.voiceButton}
         aria-label={label}
-        aria-pressed={listening}
+        aria-pressed={voice.listening}
         title={label}
-        disabled={!supported || starting}
-        onClick={() => { void toggle() }}
+        disabled={!voice.supported || voice.starting || voice.transcribing}
+        onClick={() => { setError(''); voice.toggle() }}
       >
-        {listening ? <Square size={15} /> : <Mic size={16} />}
+        {voice.listening ? <Square size={15} /> : <Mic size={16} />}
       </button>
       {toast !== null && (
         <Toast
@@ -227,15 +100,4 @@ export function VoiceInputButton({ language, onTranscript, t }: VoiceInputButton
 
 function voiceErrorLabel(error: string, t: TeacherWorkbenchTranslate): string {
   return t(VOICE_ERROR_KEYS[error] ?? 'voice.failed')
-}
-
-function normalizeMicrophoneError(error: unknown): string {
-  const name = error instanceof DOMException
-    ? error.name
-    : error instanceof Error
-      ? error.name
-      : ''
-  if (MICROPHONE_PERMISSION_ERRORS.has(name)) return 'not-allowed'
-  if (MICROPHONE_CAPTURE_ERRORS.has(name)) return 'audio-capture'
-  return 'start-failed'
 }

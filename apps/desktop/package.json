@@ -1,0 +1,35 @@
+{
+  "name": "@deepseek-ai/dsh-desktop",
+  "description": "Electron and NSIS desktop distribution for the DSH Web application",
+  "version": "0.1.1-rc.2",
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
+    "directory": "apps/desktop"
+  },
+  "type": "module",
+  "main": "lib/main.js",
+  "scripts": {
+    "bundle": "tsdown",
+    "package:win": "electron-builder --config electron-builder.yml --win nsis --x64 --publish never"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "@deepseek-ai/dsh": "workspace:^",
+    "electron-log": "5.4.4",
+    "electron-updater": "6.8.9"
+  },
+  "devDependencies": {
+    "@types/node": "^22.20.0",
+    "electron": "43.4.1",
+    "electron-builder": "26.15.7",
+    "typescript": "^6.0.3"
+  },
+  "files": [
+    "lib/*.js",
+    "lib/*.cjs"
+  ]
+}
