@@ -8,6 +8,7 @@ import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-clie
 import { CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
+import { MinerUCardController, type MinerUSettings } from '../src/client/mineru-card-controller.ts'
 import {
   SettingsDescribeMirror, type SettingsMirrorSnapshot,
 } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -380,6 +381,76 @@ describe('AgentLoopCardController', () => {
     host.publish({ status: 'ready', writable: false, value: { maxParallelToolCalls: 10 } })
 
     expect(controller.inject().hooks.agentLoopCard.getSnapshot().writable).toBe(false)
+  })
+})
+
+describe('MinerUCardController', () => {
+  it('displays the upload limit in M and persists the corresponding bytes', async () => {
+    const host = stubSettingsScope<MinerUSettings>()
+    acceptWrites(host)
+    const controller = new MinerUCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { maxFileBytes: 20 * 1024 * 1024 },
+      base: { maxFileBytes: 20 * 1024 * 1024 },
+      user: {},
+    })
+    const face = controller.inject()
+
+    expect(face.hooks.minerUCard.getSnapshot().maxFileBytes)
+      .toEqual({ text: '20', overridden: false, invalid: false })
+
+    face.edit('maxFileBytes', '64')
+    face.save()
+    await vi.waitFor(() => {
+      expect(host.set).toHaveBeenCalledWith('maxFileBytes', 64 * 1024 * 1024)
+    })
+
+    expect(face.hooks.minerUCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      maxFileBytes: { text: '64', overridden: true, invalid: false },
+    })
+  })
+
+  it('rejects an M draft that cannot map to a whole byte count', () => {
+    const host = stubSettingsScope<MinerUSettings>()
+    const controller = new MinerUCardController(host.scope)
+    host.publish({ status: 'ready', writable: true, value: { maxFileBytes: 20 * 1024 * 1024 }, user: {} })
+    const face = controller.inject()
+
+    face.edit('maxFileBytes', '0.0000001')
+
+    expect(face.hooks.minerUCard.getSnapshot()).toMatchObject({
+      dirty: true,
+      invalid: true,
+      maxFileBytes: { text: '0.0000001', invalid: true },
+    })
+  })
+
+  it('clears the byte override when the M field is left blank', async () => {
+    const host = stubSettingsScope<MinerUSettings>()
+    acceptWrites(host)
+    const controller = new MinerUCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { maxFileBytes: 64 * 1024 * 1024 },
+      base: { maxFileBytes: 20 * 1024 * 1024 },
+      user: { maxFileBytes: 64 * 1024 * 1024 },
+    })
+    const face = controller.inject()
+
+    face.edit('maxFileBytes', ' ')
+    face.save()
+
+    await vi.waitFor(() => {
+      expect(host.unset).toHaveBeenCalledWith('maxFileBytes')
+      expect(face.hooks.minerUCard.getSnapshot()).toMatchObject({
+        dirty: false,
+        maxFileBytes: { text: '20', overridden: false, invalid: false },
+      })
+    })
   })
 })
 

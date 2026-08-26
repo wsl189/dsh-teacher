@@ -60,8 +60,10 @@ describe('web e2e: plugin configuration section', () => {
     await expect
       .poll(() => dialog.getByRole('button', { name: '插件', exact: true }).getAttribute('aria-current'), { timeout: 5_000 })
       .toBe('true')
+    const configurable = dialog.getByRole('tab', { name: '插件配置', exact: true })
+    await configurable.click()
     await expect
-      .poll(() => dialog.getByRole('tab', { name: '插件配置', exact: true }).getAttribute('aria-selected'), { timeout: 5_000 })
+      .poll(() => configurable.getAttribute('aria-selected'), { timeout: 5_000 })
       .toBe('true')
     return dialog
   }
@@ -115,6 +117,24 @@ describe('web e2e: plugin configuration section', () => {
     expect(await dialog.getByRole('button', { name: '恢复默认' }).count()).toBe(1)
     // A settled form offers no save to repeat.
     await expect.poll(() => save.isDisabled(), { timeout: 5_000 }).toBe(true)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('edits the MinerU file limit in M while storing bytes', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-mineru-file-limit'))
+    const dialog = await openPlugins()
+    await dialog.getByText('文档提取', { exact: true }).click()
+
+    const maxFile = dialog.getByLabel('文件大小上限（M）')
+    await maxFile.waitFor({ timeout: 10_000 })
+    expect(await maxFile.inputValue()).toBe('20')
+    await maxFile.fill('64')
+
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+
+    await expect.poll(async () => (await settingsDocument()).includes('maxFileBytes: 67108864'), { timeout: 10_000 })
+      .toBe(true)
+    expect(await maxFile.inputValue()).toBe('64')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

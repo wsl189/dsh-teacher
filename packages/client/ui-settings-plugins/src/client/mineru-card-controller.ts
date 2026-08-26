@@ -3,11 +3,31 @@
 import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
 import {
   CardForm, numberField, textField,
-  type CardActions, type CardFieldState, type CardShell,
+  type CardActions, type CardFieldSpec, type CardFieldState, type CardShell,
 } from './card-form.ts'
 
 /** Namespace of the MinerU OCR provider. */
 export const MINERU_NS = 'ocr-mineru'
+
+const BYTES_PER_MEBIBYTE = 1024 * 1024
+
+/**
+ * Present one byte-valued setting as mebibytes without changing its persisted field.
+ * @param field - byte-valued field inside the MinerU settings section.
+ * @returns conversion between the displayed mebibytes and stored bytes.
+ */
+function mebibyteField(field: string): CardFieldSpec {
+  return {
+    field,
+    format: value => typeof value === 'number' ? String(value / BYTES_PER_MEBIBYTE) : '',
+    parse: (text) => {
+      const trimmed = text.trim()
+      if (trimmed === '') return { kind: 'clear' }
+      const bytes = Number(trimmed) * BYTES_PER_MEBIBYTE
+      return Number.isSafeInteger(bytes) ? { kind: 'set', value: bytes } : undefined
+    },
+  }
+}
 
 /** The MinerU provider fields this card edits. */
 export interface MinerUSettings {
@@ -41,7 +61,7 @@ export interface MinerUCardState extends CardShell {
   language: CardFieldState
   /** Per-document deadline. */
   timeoutMs: CardFieldState
-  /** Decoded upload limit. */
+  /** Decoded upload limit displayed in mebibytes. */
   maxFileBytes: CardFieldState
   /** Extracted Markdown limit. */
   maxOutputCharacters: CardFieldState
@@ -70,7 +90,7 @@ export class MinerUCardController {
       textField('effort'),
       textField('language'),
       numberField('timeoutMs'),
-      numberField('maxFileBytes'),
+      mebibyteField('maxFileBytes'),
       numberField('maxOutputCharacters'),
       numberField('maxResponseBytes'),
     ])
