@@ -14,7 +14,7 @@ Status: implemented
 
 `@deepseek-ai/dsh-ocr` 定义 `ctx.ocr`、提供方注册与执行时选择、稳定请求／结果／错误类型，以及 Typert `ocr.extract` Remote。它只在恰好存在一个本地可用提供方时自动选择；否则由显式 `provider` id 拥有选择。请求携带一份规范 base64 文档、名称与媒体类型，也可以要求提供方保留归类到主阅读顺序之外的文本。成功结果携带受限的阅读顺序 Markdown、提供方标识与截断标记。运行时把预期 `OcrError` 转为安全结果数据，并隐藏意外提供方诊断。
 
-`@deepseek-ai/dsh-ocr-mineru` 注册 `mineru` 提供方 id，适配自托管同步 `/file_parse` API。其普通 DSH 插件配置拥有端点、后端、混合解析质量、语言、截止时间、上传上限、响应字节上限与 Markdown 字符上限；**设置 → 插件 → 插件配置**中的卡片通过带修订号的 settings 文档开放全部字段。提供方接受 PDF、受支持的光栅图像、DOCX、PPTX 与 XLSX；校验名称、规范 base64、扩展名、大小、HTTP 状态、响应字节、JSON 字段与非空 Markdown；不持久化源字节或提供方输出。请求丢弃文本的提取会在同一次 MinerU 调用中获取 `middle_json`，并在 Markdown 之前加入其中尚未出现的唯一丢弃文本行。
+`@deepseek-ai/dsh-ocr-mineru` 注册 `mineru` 提供方 id，适配自托管同步 `/file_parse` API。其普通 DSH 插件配置拥有端点、后端、混合解析质量、语言、截止时间、上传上限、响应字节上限与 Markdown 字符上限；提供方与 Web／桌面组合默认把上传上限设为 50 MiB，最高可配置为 100 MiB。**设置 → 插件 → 插件配置**中的卡片通过带修订号的 settings 文档开放全部字段。提供方接受 PDF、受支持的光栅图像、DOCX、PPTX 与 XLSX；校验名称、规范 base64、扩展名、大小、HTTP 状态、响应字节、JSON 字段与非空 Markdown；不持久化源字节或提供方输出。请求丢弃文本的提取会在同一次 MinerU 调用中获取 `middle_json`，并在 Markdown 之前加入其中尚未出现的唯一丢弃文本行。
 
 对话消费方为可提取文档提供独立文件控件，同时保留既有图片附件流程。选择 PDF、受支持的光栅图像、DOCX、PPTX 或 XLSX 后会立即启动 `ocr.extract`，并创建仅存在于运行时、状态为识别中、已就绪或失败的文件行。textarea 永远不会接收 Markdown。所有文件就绪前发送保持不可用；失败文件必须先移除。提示准入会先把每份就绪结果作为持久 `user/message` 注入，其 source 为 `mineru-ocr` 插件，`notice` 摘要点名文件，然后再排队或插话发送普通人类消息。源字节不进入 Session 日志或模型，成功准入后会清除瞬时文件行。子智能体续聊目前只接受文本，因此拒绝文档上下文。
 

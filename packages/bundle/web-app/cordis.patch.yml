@@ -79,7 +79,7 @@
         effort: high
         language: ch
         timeoutMs: 3600000
-        maxFileBytes: 20971520
+        maxFileBytes: 52428800
         maxOutputCharacters: 500000
         maxResponseBytes: 8388608
         layoutBatchPages: 4

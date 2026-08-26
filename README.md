@@ -70,7 +70,7 @@ The Web composition and Windows EXE already contain the reviewed `@xmanrui/dsh-i
 
 ### 3. Configure MinerU (document extraction)
 
-The Web bundle defaults to a local MinerU endpoint at `http://127.0.0.1:8005/file_parse` (see `packages/bundle/web-app/cordis.patch.yml`). Run a MinerU server on this machine (for example the official `mineru` pipeline serving `/file_parse`), or override the endpoint on the **Plugins → Plugin configuration → Document extraction** settings page. Settings of interest: `endpoint`, `backend` (`pipeline` | `vlm-engine` | `hybrid-engine`), `effort`, `language` (`ch` for Chinese), `maxFileBytes` (default 20 MiB), and `layoutBatchPages` (4). If no MinerU server is reachable, document extraction and question cutting fail with a provider error.
+The Web bundle defaults to a local MinerU endpoint at `http://127.0.0.1:8005/file_parse` (see `packages/bundle/web-app/cordis.patch.yml`). Run a MinerU server on this machine (for example the official `mineru` pipeline serving `/file_parse`), or override the endpoint on the **Plugins → Plugin configuration → Document extraction** settings page. Settings of interest: `endpoint`, `backend` (`pipeline` | `vlm-engine` | `hybrid-engine`), `effort`, `language` (`ch` for Chinese), `maxFileBytes` (default 50 MiB), and `layoutBatchPages` (4). If no MinerU server is reachable, document extraction and question cutting fail with a provider error.
 
 ### 4. Configure QQ voice recognition (ASR)
 

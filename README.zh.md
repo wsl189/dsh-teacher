@@ -72,7 +72,7 @@ Web 组合与 Windows EXE 已包含经过审阅的 `@xmanrui/dsh-im` 1.0.3、`ds
 
 ### 3. 配置 MinerU（文档提取）
 
-Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`（见 `packages/bundle/web-app/cordis.patch.yml`）。请在本机运行 MinerU 服务（例如官方 `mineru` pipeline 提供 `/file_parse`），或在 **插件 → 插件配置 → 文档提取** 页面覆盖端点。常用设置项：`endpoint`、`backend`（`pipeline` | `vlm-engine` | `hybrid-engine`）、`effort`、`language`（中文用 `ch`）、`maxFileBytes`（默认 20 MiB）、`layoutBatchPages`（4）。若 MinerU 服务不可达，文档提取与试题切割会返回 provider 错误。
+Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`（见 `packages/bundle/web-app/cordis.patch.yml`）。请在本机运行 MinerU 服务（例如官方 `mineru` pipeline 提供 `/file_parse`），或在 **插件 → 插件配置 → 文档提取** 页面覆盖端点。常用设置项：`endpoint`、`backend`（`pipeline` | `vlm-engine` | `hybrid-engine`）、`effort`、`language`（中文用 `ch`）、`maxFileBytes`（默认 50 MiB）、`layoutBatchPages`（4）。若 MinerU 服务不可达，文档提取与试题切割会返回 provider 错误。
 
 ### 4. 配置 QQ 语音识别（ASR）
 

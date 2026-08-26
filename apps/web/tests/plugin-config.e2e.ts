@@ -127,7 +127,7 @@ describe('web e2e: plugin configuration section', () => {
 
     const maxFile = dialog.getByLabel('文件大小上限（M）')
     await maxFile.waitFor({ timeout: 10_000 })
-    expect(await maxFile.inputValue()).toBe('20')
+    expect(await maxFile.inputValue()).toBe('50')
     await maxFile.fill('64')
 
     await dialog.getByRole('button', { name: '保存', exact: true }).click()

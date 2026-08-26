@@ -13,7 +13,7 @@
 | `effort` | `high` | 作为 multipart `effort` 传给 hybrid 后端的解析质量：`medium` 或 `high`。 |
 | `language` | `ch` | 作为 `lang_list` 传入的 pipeline OCR 模型语言：`ch`、`ch_server`、`korean`、`ta`、`te`、`ka`、`th`、`el`、`arabic`、`east_slavic`、`cyrillic` 或 `devanagari`。 |
 | `timeoutMs` | `3600000` | 完整请求截止时间。 |
-| `maxFileBytes` | `20971520` | 最大解码上传字节，最高可配置为 100 MiB。 |
+| `maxFileBytes` | `52428800` | 最大解码上传字节（50 MiB），最高可配置为 100 MiB。 |
 | `maxOutputCharacters` | `500000` | 返回给消费方的最大 Markdown 字符数。 |
 | `maxResponseBytes` | `8388608` | 可接收的最大 MinerU JSON 响应字节数。 |
 | `layoutBatchPages` | `4` | 消费方指定页码范围时，每次结构化版面请求最多发送的页数。 |

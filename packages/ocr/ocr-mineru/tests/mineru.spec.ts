@@ -332,6 +332,7 @@ describe('MinerUProvider', () => {
   })
 
   it('accepts only MinerU public local backends and OCR model languages', () => {
+    expect(ConfigSchema({} as unknown as Config).maxFileBytes).toBe(50 * 1024 * 1024)
     expect(ConfigSchema(config({ backend: 'vlm-engine', effort: 'medium', language: 'korean' }))).toMatchObject({
       backend: 'vlm-engine',
       effort: 'medium',

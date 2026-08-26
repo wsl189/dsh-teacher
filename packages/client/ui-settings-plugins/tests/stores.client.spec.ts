@@ -392,14 +392,14 @@ describe('MinerUCardController', () => {
     host.publish({
       status: 'ready',
       writable: true,
-      value: { maxFileBytes: 20 * 1024 * 1024 },
-      base: { maxFileBytes: 20 * 1024 * 1024 },
+      value: { maxFileBytes: 50 * 1024 * 1024 },
+      base: { maxFileBytes: 50 * 1024 * 1024 },
       user: {},
     })
     const face = controller.inject()
 
     expect(face.hooks.minerUCard.getSnapshot().maxFileBytes)
-      .toEqual({ text: '20', overridden: false, invalid: false })
+      .toEqual({ text: '50', overridden: false, invalid: false })
 
     face.edit('maxFileBytes', '64')
     face.save()
@@ -416,7 +416,7 @@ describe('MinerUCardController', () => {
   it('rejects an M draft that cannot map to a whole byte count', () => {
     const host = stubSettingsScope<MinerUSettings>()
     const controller = new MinerUCardController(host.scope)
-    host.publish({ status: 'ready', writable: true, value: { maxFileBytes: 20 * 1024 * 1024 }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { maxFileBytes: 50 * 1024 * 1024 }, user: {} })
     const face = controller.inject()
 
     face.edit('maxFileBytes', '0.0000001')
@@ -436,7 +436,7 @@ describe('MinerUCardController', () => {
       status: 'ready',
       writable: true,
       value: { maxFileBytes: 64 * 1024 * 1024 },
-      base: { maxFileBytes: 20 * 1024 * 1024 },
+      base: { maxFileBytes: 50 * 1024 * 1024 },
       user: { maxFileBytes: 64 * 1024 * 1024 },
     })
     const face = controller.inject()
@@ -448,7 +448,7 @@ describe('MinerUCardController', () => {
       expect(host.unset).toHaveBeenCalledWith('maxFileBytes')
       expect(face.hooks.minerUCard.getSnapshot()).toMatchObject({
         dirty: false,
-        maxFileBytes: { text: '20', overridden: false, invalid: false },
+        maxFileBytes: { text: '50', overridden: false, invalid: false },
       })
     })
   })

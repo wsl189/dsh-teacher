@@ -13,7 +13,7 @@ This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files
 | `effort` | `high` | Hybrid parsing quality passed as multipart `effort`: `medium` or `high`. |
 | `language` | `ch` | Pipeline OCR model language passed as `lang_list`: `ch`, `ch_server`, `korean`, `ta`, `te`, `ka`, `th`, `el`, `arabic`, `east_slavic`, `cyrillic`, or `devanagari`. |
 | `timeoutMs` | `3600000` | Complete request deadline. |
-| `maxFileBytes` | `20971520` | Maximum decoded upload bytes; configurable up to 100 MiB. |
+| `maxFileBytes` | `52428800` | Maximum decoded upload bytes (50 MiB); configurable up to 100 MiB. |
 | `maxOutputCharacters` | `500000` | Maximum Markdown characters returned to a Consumer. |
 | `maxResponseBytes` | `8388608` | Maximum MinerU JSON response bytes. |
 | `layoutBatchPages` | `4` | Maximum pages sent in one structured-layout request when the Consumer supplies a page range. |
