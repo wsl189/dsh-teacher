@@ -44,4 +44,4 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。Windows workflow 构建真实 NSIS target，要求解包后的应用打开 `DeepSeek Harness` 窗口，并在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
+桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。Windows workflow 构建真实 NSIS target，解包后的应用未打开 `DeepSeek Harness` 窗口时报告告警，并在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。发布验收由目标 Windows 环境手动启动完成。
