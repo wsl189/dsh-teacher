@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import log from 'electron-log/main'
-import { autoUpdater } from 'electron-updater'
+import { autoUpdater } from './updater-runtime.ts'
 import {
   DesktopUpdateController, type AutoUpdaterLike,
 } from './update-controller.ts'

@@ -20,7 +20,7 @@ pnpm run build:official
 pnpm --filter @deepseek-ai/dsh-desktop run package:win
 ```
 
-The installer, blockmap, and updater metadata are written to `apps/desktop/release/`. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files.
+The installer, blockmap, updater metadata, and unpacked application are written to `apps/desktop/release/`. Before distributing the installer, start `apps/desktop/release/win-unpacked/DSH Teacher.exe` on Windows and wait for the `DeepSeek Harness` main window; successful artifact generation alone does not execute the Electron main process. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files.
 
 ## GitHub automation
 

@@ -72,6 +72,38 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
+      - name: Smoke packaged desktop startup
+        shell: pwsh
+        run: |
+          $executable = Resolve-Path 'apps/desktop/release/win-unpacked/DSH Teacher.exe'
+          $desktop = Start-Process -FilePath $executable -PassThru
+          $ready = $false
+          $lastTitle = ''
+          try {
+            $deadline = (Get-Date).AddSeconds(60)
+            while ((Get-Date) -lt $deadline) {
+              Start-Sleep -Milliseconds 500
+              $desktop.Refresh()
+              if ($desktop.HasExited) {
+                throw "Packaged desktop exited before opening its main window (exit $($desktop.ExitCode))"
+              }
+              $lastTitle = $desktop.MainWindowTitle
+              if ($lastTitle -eq 'DeepSeek Harness') {
+                $ready = $true
+                break
+              }
+            }
+            if (-not $ready) {
+              throw "Packaged desktop did not open the DeepSeek Harness window within 60 seconds (last title: '$lastTitle')"
+            }
+          } finally {
+            if (-not $desktop.HasExited) {
+              if (-not $desktop.CloseMainWindow() -or -not $desktop.WaitForExit(15000)) {
+                Stop-Process -Id $desktop.Id -Force -ErrorAction SilentlyContinue
+              }
+            }
+          }
+
       - name: Verify update assets and write checksums
         shell: pwsh
         run: |

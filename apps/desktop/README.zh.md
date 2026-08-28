@@ -20,7 +20,7 @@ pnpm run build:official
 pnpm --filter @deepseek-ai/dsh-desktop run package:win
 ```
 
-安装器、blockmap 与更新元数据会写入 `apps/desktop/release/`。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。
+安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，并等待 `DeepSeek Harness` 主窗口出现；仅成功生成 artifact 并不会执行 Electron 主进程。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。
 
 ## GitHub 自动化
 
