@@ -40,7 +40,7 @@ export const DEFAULT_TEACHER_WORKBENCH_SETTINGS: TeacherWorkbenchSettings = Obje
   excellentScore: 85,
   passScore: 60,
   questionRenderScale: 2,
-  questionCropPadding: 12,
+  questionCropPadding: 4,
 })
 
 /** Durable schema registered in dsh settings. */

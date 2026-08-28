@@ -5098,7 +5098,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionCropReviewRequest',
-    declaration: 'export interface TeacherQuestionCropReviewRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly recutAttempt: number;\n    readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[];\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews: readonly TeacherQuestionPagePreview[];\n    readonly questions: readonly TeacherSegmentedQuestion[];\n    readonly crops: readonly TeacherQuestionImageUpload[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionCropReviewRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly recutAttempt: number;\n    readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[];\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews: readonly TeacherQuestionPagePreview[];\n    readonly questions: readonly TeacherSegmentedQuestion[];\n    readonly crops: readonly TeacherQuestionImageUpload[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionCropReviewResult',
@@ -5278,7 +5278,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentRequest',
-    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly corePageIndexes?: readonly number[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly corePageIndexes?: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionSegmentResult',
@@ -5286,7 +5286,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentSuccess',
-    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly groups: readonly TeacherQuestionSegmentationGroup[];\n        readonly maxSaveBatchBytes: number;\n        readonly maxRecutAttempts: number;\n        readonly maxQuestionWidthRatio: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
+    declaration: 'export interface TeacherQuestionSegmentSuccess {\n    readonly ok: true;\n    readonly value: {\n        readonly groupCount: number;\n        readonly groups: readonly TeacherQuestionSegmentationGroup[];\n        readonly maxConcurrentGroups: number;\n        readonly maxSaveBatchBytes: number;\n        readonly maxRecutAttempts: number;\n        readonly maxQuestionWidthRatio: number;\n        readonly questions: readonly TeacherSegmentedQuestion[];\n    };\n}',
   },
   {
     name: 'TeacherQuestionStudentDocumentOptions',

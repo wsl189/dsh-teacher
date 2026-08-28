@@ -4,6 +4,8 @@ Status: implemented
 
 English | [中文](2026-08-19-question-segmentation-workbench.zh.md)
 
+> The browser marker-chain segmentation, absence of a model pass, and deterministic-failure behavior are superseded by [agent-loop question segmentation](2026-08-21-agent-loop-question-segmentation.md), [vision-reviewed question segmentation](2026-08-24-vision-reviewed-question-segmentation.md), and [bounded parallel question cutting](2026-08-26-bounded-parallel-question-cutting.md). Media persistence, library interaction, and document output remain authoritative here.
+
 > Extends [Durable Teacher Workbench](2026-08-17-durable-teacher-workbench.md) and [Reusable Document Extraction](2026-08-18-reusable-document-extraction.md). Their storage and OCR ownership remain current; this decision adds structured layout extraction and a seventh workbench module.
 
 ## Problem

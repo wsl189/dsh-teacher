@@ -8,6 +8,7 @@ These zero-dependency packages provide small primitives shared by multiple capab
 |---|---|
 | [`brand/`](brand/README.md) | Provides nominally branded types |
 | [`paths/`](home-paths/README.md) | Resolves the Harness data root and shared paths |
+| [`concurrency/`](concurrency/README.md) | Maps asynchronous work with bounded admission and ordered results |
 | [`timeout/`](timeout/README.md) | Provides deadline and timeout classification primitives |
 | [`retention/`](output-retention/README.md) | Bounds retained text and item collections |
 | [`atomic-write/`](atomic-write/README.md) | Replaces files atomically |

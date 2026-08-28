@@ -30,6 +30,7 @@ const segmented = (questionCount = 1): TeacherQuestionSegmentResult => ({
   ok: true,
   value: {
     groupCount: 1,
+    maxConcurrentGroups: 1,
     groups: [{ groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] }],
     maxSaveBatchBytes: 1_000,
     maxRecutAttempts: 1,
@@ -65,6 +66,7 @@ const upload = (fileName: string): TeacherQuestionImageUpload => ({
 
 const request = (fileName: string): QuestionCuttingEnqueueRequest => ({
   file: new File([Uint8Array.of(1)], fileName, { type: 'application/pdf' }),
+  pageCount: 1,
   pageIndexes: [0],
   pageRange: '1',
   renderScale: 2,
@@ -72,6 +74,211 @@ const request = (fileName: string): QuestionCuttingEnqueueRequest => ({
 })
 
 describe('QuestionCuttingController', () => {
+  it('completes a verified zero-question selection without creating an empty batch', async () => {
+    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'unused' as TeacherQuestionBatchId }))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async () => ({ ok: true, value: layout('知识讲义.pdf') }),
+        resolveSegmentation: () => async () => segmented(0),
+        resolveCropReview: () => async review => ({
+          ok: true,
+          value: { decision: 'accepted', affectedQuestionIds: [], questions: review.questions },
+        }),
+        saveBatch,
+      },
+      {
+        key: () => 'zero-question',
+        renderCrops: async () => [],
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('知识讲义.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      pageRange: '1',
+      progress: 100,
+      questionCount: 0,
+      savedCount: 0,
+    })
+    expect(saveBatch).not.toHaveBeenCalled()
+    await controller.dispose()
+  })
+
+  it('extracts adjacent source pages as context while assigning heads only to selected pages', async () => {
+    const sourceLayout: OcrLayoutDocument = {
+      name: '跨页题.pdf',
+      provider: 'mineru',
+      pages: [0, 1, 2].map(pageIndex => ({ pageIndex, width: 100, height: 100, elements: [] })),
+    }
+    const question = {
+      sourceHeadId: 'p1e0' as TeacherQuestionLayoutElementId,
+      questionNo: 1,
+      headPageIndex: 1,
+      groupIndex: 0,
+      regions: [{
+        pageIndex: 1,
+        left: 0,
+        top: 0,
+        right: 50,
+        rightLimit: 100,
+        bottom: 20,
+        excludedAreas: [],
+        pageWidth: 100,
+        pageHeight: 100,
+      }],
+    }
+    const extractLayout = vi.fn(async (
+      _file: File,
+      pageIndexes: readonly number[],
+    ) => {
+      expect(pageIndexes).toEqual([0, 1, 2])
+      return { ok: true as const, value: sourceLayout }
+    })
+    const segmentQuestions = vi.fn(async (
+      receivedLayout: OcrLayoutDocument,
+      _padding: number,
+      pagePreviews: readonly { readonly pageIndex: number }[],
+      corePageIndexes: readonly number[],
+    ): Promise<TeacherQuestionSegmentResult> => {
+      expect(receivedLayout.pages.map(page => page.pageIndex)).toEqual([0, 1, 2])
+      expect(pagePreviews.map(preview => preview.pageIndex)).toEqual([0, 1, 2])
+      expect(corePageIndexes).toEqual([1])
+      return {
+        ok: true,
+        value: {
+          groupCount: 1,
+          groups: [{ groupIndex: 0, corePageIndexes: [1], inspectionPageIndexes: [0, 1, 2] }],
+          maxConcurrentGroups: 1,
+          maxSaveBatchBytes: 1_000,
+          maxRecutAttempts: 1,
+          maxQuestionWidthRatio: 1,
+          questions: [question],
+        },
+      }
+    })
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout,
+        resolveSegmentation: () => segmentQuestions,
+        resolveCropReview: () => async review => ({
+          ok: true,
+          value: { decision: 'accepted', affectedQuestionIds: [], questions: review.questions },
+        }),
+        saveBatch: async () => ({ ok: true, batchId: 'context-pages' as TeacherQuestionBatchId }),
+      },
+      {
+        key: () => 'context-pages',
+        renderCrops: async (_file, _layout, questions) => questions.map(item => ({
+          ...upload(`${String(item.sourceHeadId)}.png`),
+          questionNo: item.questionNo,
+        })),
+        renderPagePreviews: async (_file, pageIndexes) => pageIndexes.map(pageIndex => ({
+          pageIndex,
+          mediaType: 'image/png' as const,
+          width: 1,
+          height: 1,
+          contentBase64: 'AQ==',
+        })),
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue({
+      ...request('跨页题.pdf'),
+      pageCount: 3,
+      pageIndexes: [1],
+      pageRange: '2',
+    })
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(extractLayout).toHaveBeenCalledOnce()
+    expect(segmentQuestions).toHaveBeenCalledOnce()
+    await controller.dispose()
+  })
+
+  it('reviews independent semantic groups concurrently and saves them in source order', async () => {
+    const sourceLayout: OcrLayoutDocument = {
+      name: '并行复核.pdf',
+      provider: 'mineru',
+      pages: [0, 1].map(pageIndex => ({ pageIndex, width: 100, height: 100, elements: [] })),
+    }
+    const questions = [0, 1].map(pageIndex => ({
+      sourceHeadId: `p${String(pageIndex)}e0` as TeacherQuestionLayoutElementId,
+      questionNo: pageIndex + 1,
+      headPageIndex: pageIndex,
+      groupIndex: pageIndex,
+      regions: [{
+        pageIndex, left: 0, top: 0, right: 50, rightLimit: 100, bottom: 20,
+        excludedAreas: [], pageWidth: 100, pageHeight: 100,
+      }],
+    }))
+    const release = Promise.withResolvers<undefined>()
+    let active = 0
+    let maximumActive = 0
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
+      active += 1
+      maximumActive = Math.max(maximumActive, active)
+      await release.promise
+      active -= 1
+      return {
+        ok: true as const,
+        value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+      }
+    })
+    const savedQuestionNos: number[] = []
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async () => ({ ok: true, value: sourceLayout }),
+        resolveSegmentation: () => async () => ({
+          ok: true,
+          value: {
+            groupCount: 2,
+            groups: [0, 1].map(groupIndex => ({
+              groupIndex,
+              corePageIndexes: [groupIndex],
+              inspectionPageIndexes: [groupIndex],
+            })),
+            maxConcurrentGroups: 2,
+            maxSaveBatchBytes: 1_000,
+            maxRecutAttempts: 1,
+            maxQuestionWidthRatio: 1,
+            questions,
+          },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch: async (save) => {
+          savedQuestionNos.push(...save.images.map(image => image.questionNo))
+          return { ok: true, batchId: 'parallel' as TeacherQuestionBatchId }
+        },
+      },
+      {
+        key: () => 'parallel-review',
+        renderCrops: async (_file, _layout, renderedQuestions) => renderedQuestions.map(question => ({
+          ...upload(`${String(question.sourceHeadId)}.png`),
+          questionNo: question.questionNo,
+        })),
+        renderPagePreviews: async () => [0, 1].map(pageIndex => ({
+          pageIndex, mediaType: 'image/png' as const, width: 1, height: 1, contentBase64: 'AQ==',
+        })),
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue({ ...request('并行复核.pdf'), pageIndexes: [0, 1], pageRange: '1-2' })
+    await waitFor(() => { expect(maximumActive).toBe(2) })
+    release.resolve(undefined)
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(savedQuestionNos).toEqual([1, 2])
+    await controller.dispose()
+  })
+
   it('previews every core page during the first complete-group review', async () => {
     const multiPageLayout: OcrLayoutDocument = {
       name: '整页漏题.pdf',
@@ -211,9 +418,21 @@ describe('QuestionCuttingController', () => {
   it('rerenders only the defective crop, confirms it, and preserves the fixed group width', async () => {
     const initial = segmented(3)
     if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const fixedWidthQuestions = initial.value.questions.map((question, index) => ({
+      ...question,
+      regions: question.regions.map(region => ({
+        ...region,
+        rightLimit: index === 2 ? 95 : 50,
+      })),
+    }))
     const segmentQuestions = vi.fn(async (): Promise<TeacherQuestionSegmentResult> => ({
       ...initial,
-      value: { ...initial.value, maxRecutAttempts: 2 },
+      value: {
+        ...initial.value,
+        maxRecutAttempts: 2,
+        maxQuestionWidthRatio: 0.7,
+        questions: fixedWidthQuestions,
+      },
     }))
     let reviewPass = 0
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
@@ -283,16 +502,16 @@ describe('QuestionCuttingController', () => {
 
     expect(reviewCrops).toHaveBeenCalledTimes(2)
     expect(renders).toEqual([
-      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 50, 50], widthRatio: 1 },
-      { ids: ['p0e1'], rights: [40], widthRatio: 1 },
-      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 40, 50], widthRatio: 1 },
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 50, 50], widthRatio: 0.7 },
+      { ids: ['p0e1'], rights: [40], widthRatio: 0.7 },
+      { ids: ['p0e0', 'p0e1', 'p0e2'], rights: [50, 40, 50], widthRatio: 0.7 },
     ])
     const savedImages = saveBatch.mock.calls[0]?.[0].images ?? []
-    expect(savedImages.some(image => image.fileName === 'p0e1-right-40.png' && image.width === 100)).toBe(true)
+    expect(savedImages.some(image => image.fileName === 'p0e1-right-40.png' && image.width === 70)).toBe(true)
     await controller.dispose()
   })
 
-  it('saves the second local recut when the crop remains defective instead of failing the PDF', async () => {
+  it('saves the latest safe regions and reports an unverified group when the final recut remains defective', async () => {
     const initial = segmented()
     if (!initial.ok) throw new Error('segmentation fixture is invalid')
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
@@ -349,6 +568,54 @@ describe('QuestionCuttingController', () => {
     expect(saveBatch).toHaveBeenCalledWith(expect.objectContaining({
       images: [expect.objectContaining({ fileName: 'right-35.png' })],
     }))
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      stage: 'completed',
+      unverifiedGroupCount: 1,
+    })
+    await controller.dispose()
+  })
+
+  it('retains an unresolved group without repeating the same visual review', async () => {
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => ({
+      ok: true as const,
+      value: {
+        decision: 'unresolved' as const,
+        affectedQuestionIds: review.reviewQuestionIds,
+        questions: review.questions,
+      },
+    }))
+    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'unresolved' as TeacherQuestionBatchId }))
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: { ...initial.value, maxRecutAttempts: 2 },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'unresolved-review',
+        renderCrops: async () => [{ ...upload('unresolved.png') }],
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('无法复核.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledOnce()
+    expect(saveBatch).toHaveBeenCalledOnce()
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      stage: 'completed',
+      unverifiedGroupCount: 1,
+    })
     await controller.dispose()
   })
 

@@ -794,6 +794,8 @@ export interface TeacherQuestionSegmentRequest {
   readonly pages: readonly TeacherQuestionLayoutPage[]
   /** Pages whose question heads belong to this semantic run; omitted when every selected page is owned. */
   readonly corePageIndexes?: readonly number[]
+  /** Owned pages already classified inside a document-level answer section. */
+  readonly answerSectionPageIndexes?: readonly number[]
   /** Visual previews for every selected page when the caller can render the source PDF. */
   readonly pagePreviews?: readonly TeacherQuestionPagePreview[]
   /** Extra vertical page units retained around accepted boundaries. */
@@ -810,7 +812,7 @@ export interface TeacherQuestionPageRegion {
   readonly top: number
   /** Exclusive crop right in OCR page units. */
   readonly right: number
-  /** Exclusive source-pixel limit imposed by overlapping content to the right. */
+  /** Exclusive source-pixel limit imposed by right-side content or an inferred next question lane. */
   readonly rightLimit: number
   /** Exclusive crop bottom in OCR page units. */
   readonly bottom: number
@@ -846,6 +848,8 @@ export interface TeacherQuestionCropReviewRequest {
   readonly groupIndex: number
   /** Pages whose question heads belong to this processing group. */
   readonly corePageIndexes: readonly number[]
+  /** Core pages already classified inside a document-level answer section. */
+  readonly answerSectionPageIndexes?: readonly number[]
   /** Zero-based recut count for the supplied crop images. */
   readonly recutAttempt: number
   /** Stable question identities whose current images require review; empty when verifying a zero-question group. */
@@ -901,11 +905,13 @@ export interface TeacherQuestionSegmentSuccess {
     readonly groupCount: number
     /** Stable page ownership used by local visual review and boundary revision. */
     readonly groups: readonly TeacherQuestionSegmentationGroup[]
+    /** Maximum independently owned processing groups reviewed at once. */
+    readonly maxConcurrentGroups: number
     /** Maximum decoded image bytes sent in one automatic save part. */
     readonly maxSaveBatchBytes: number
-    /** Maximum local recuts admitted for one defective image before its last render is saved. */
+    /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
     readonly maxRecutAttempts: number
-    /** Maximum accepted safe-lane extent from a question's fixed left edge, divided by its OCR page width. */
+    /** Maximum non-outlier safe-lane extent from a question's fixed left edge, divided by its OCR page width. */
     readonly maxQuestionWidthRatio: number
     readonly questions: readonly TeacherSegmentedQuestion[]
   }

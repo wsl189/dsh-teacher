@@ -96,10 +96,11 @@ export function apply(ctx: ClientContext): void {
     resolveSegmentation: () => {
       const parentSessionId = ctx.sessions.list.getSnapshot().current
       if (parentSessionId === undefined) return undefined
-      return (layout, padding, pagePreviews) => ctx.remote.teacherWorkbench.segmentQuestions({
+      return (layout, padding, pagePreviews, corePageIndexes) => ctx.remote.teacherWorkbench.segmentQuestions({
         parentSessionId,
         fileName: layout.name,
         pages: layout.pages,
+        corePageIndexes,
         pagePreviews,
         padding,
       }).then(carried => carried.ok

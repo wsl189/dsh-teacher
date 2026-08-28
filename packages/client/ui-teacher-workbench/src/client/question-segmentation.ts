@@ -174,7 +174,7 @@ export async function renderQuestionPagePreviews(
  * @param file - original browser-held PDF.
  * @param layout - normalized OCR page dimensions used for proportional mapping.
  * @param questions - reviewed detection regions in source order.
- * @param maxQuestionWidthRatio - widest normalized safe-lane extent from a fixed question left edge.
+ * @param maxQuestionWidthRatio - maximum non-outlier normalized safe-lane extent from a fixed question left edge.
  * @param renderScale - bounded PDF.js raster scale.
  * @param progress - optional callback after each complete question crop.
  * @returns browser-produced PNG payloads ready for Host persistence.
@@ -187,24 +187,31 @@ export async function renderQuestionCrops(
   renderScale: number,
   progress?: (completedQuestions: number, totalQuestions: number) => void,
 ): Promise<TeacherQuestionImageUpload[]> {
+  if (questions.length === 0) return []
   const pdfjs = await loadPdfJs()
   const loading = pdfjs.getDocument({ data: new Uint8Array(await file.arrayBuffer()) })
   const pdf = await loading.promise
   const pageLayouts = new Map<number, OcrLayoutPage>(layout.pages.map(page => [page.pageIndex, page] as const))
   const rendered = new Map<number, HTMLCanvasElement>()
   try {
-    for (const pageIndex of new Set(questions.flatMap(question => question.regions.map(region => region.pageIndex)))) {
-      const page = await pdf.getPage(pageIndex + 1)
-      const viewport = page.getViewport({ scale: Math.max(1, Math.min(4, renderScale)) })
+    const requiredPageIndexes = new Set(questions.flatMap(question => question.regions.map(region => region.pageIndex)))
+    const scale = Math.max(1, Math.min(4, renderScale))
+    let targetWidth = 1
+    for (const pageLayout of layout.pages) {
+      const page = await pdf.getPage(pageLayout.pageIndex + 1)
+      const viewport = page.getViewport({ scale })
+      const pageWidth = Math.max(1, Math.ceil(viewport.width))
+      targetWidth = Math.max(targetWidth, Math.ceil(maxQuestionWidthRatio * pageWidth))
+      if (!requiredPageIndexes.has(pageLayout.pageIndex)) continue
       const canvas = document.createElement('canvas')
-      canvas.width = Math.max(1, Math.ceil(viewport.width))
+      canvas.width = pageWidth
       canvas.height = Math.max(1, Math.ceil(viewport.height))
       const context = canvas.getContext('2d', { alpha: false })
       if (context === null) throw new Error('浏览器无法创建 PDF 画布')
       context.fillStyle = '#ffffff'
       context.fillRect(0, 0, canvas.width, canvas.height)
       await page.render({ canvas, canvasContext: context, viewport }).promise
-      rendered.set(pageIndex, canvas)
+      rendered.set(pageLayout.pageIndex, canvas)
     }
     const uploads: TeacherQuestionImageUpload[] = []
     for (const question of questions) {
@@ -216,7 +223,6 @@ export async function renderQuestionCrops(
         const top = Math.max(0, Math.floor(region.top * scaleY))
         const bottom = Math.min(source.height, Math.ceil(region.bottom * scaleY))
         const left = Math.max(0, Math.min(source.width - 1, Math.floor(region.left / region.pageWidth * source.width)))
-        const targetWidth = Math.max(1, Math.ceil(maxQuestionWidthRatio * source.width))
         const rightLimit = Math.max(
           left + 1,
           Math.min(source.width, Math.ceil(region.rightLimit / region.pageWidth * source.width)),
@@ -242,7 +248,7 @@ export async function renderQuestionCrops(
         }
       })
       const separator = slices.length > 1 ? 12 : 0
-      const width = Math.max(...slices.map(slice => slice.targetWidth))
+      const width = targetWidth
       const height = slices.reduce((sum, slice) => sum + slice.height, 0) + separator * Math.max(0, slices.length - 1)
       const output = document.createElement('canvas')
       output.width = width

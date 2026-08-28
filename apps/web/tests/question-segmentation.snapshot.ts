@@ -37,7 +37,7 @@ function toolCall(name: string, args: object, ordinal: number): StreamChunk[] {
 class QuestionSegmentationAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
   failCropReviews = false
-  private readonly boundaryPhases = new Map<string, number>()
+  private readonly boundaryTools: string[] = []
   private readonly reviewPhases = new Map<string, number>()
 
   override providerInfo(provider: string): LlmProviderInfo {
@@ -56,94 +56,62 @@ class QuestionSegmentationAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
-    const reviewPages = options.tools?.find(tool => tool.name.startsWith('question_review_page_'))?.name
-    const reviewCrops = options.tools?.find(tool => tool.name.startsWith('question_review_crop_'))?.name
+    const reviewSheet = options.tools?.find(tool => tool.name.startsWith('question_review_sheet_'))?.name
     const reviewFindings = options.tools?.find(tool => tool.name.startsWith('submit_question_crop_findings_'))?.name
-    if (reviewPages !== undefined && reviewCrops !== undefined && reviewFindings !== undefined) {
+    if (reviewSheet !== undefined && reviewFindings !== undefined) {
       if (this.failCropReviews) throw new Error('simulated crop-review provider failure')
       const phase = this.reviewPhases.get(reviewFindings) ?? 0
       this.reviewPhases.set(reviewFindings, phase + 1)
+      const promptText = options.messages.flatMap(message => message.content)
+        .find(block => block.type === 'text' && block.text.includes('"visualAttention"'))
+      if (promptText?.type !== 'text') throw new Error('crop-review metadata is missing')
+      const metadata = JSON.parse(promptText.text.slice(promptText.text.lastIndexOf('\n') + 1)) as {
+        readonly reviewSheetIds: readonly string[]
+        readonly visualAttention: readonly { readonly cropId: string }[]
+        readonly preliminaryQuestions: readonly { readonly cropId: string }[]
+      }
       if (phase === 0) {
-        yield * toolCall(reviewPages, { ids: ['page-1', 'page-2'] }, this.requests.length)
+        yield * toolCall(reviewSheet, { ids: metadata.reviewSheetIds }, this.requests.length)
         return
       }
-      if (phase === 1) {
-        yield * toolCall(reviewCrops, { ids: ['crop-p0e3', 'crop-p0e6'] }, this.requests.length)
-        return
-      }
-      if (phase === 2) {
-        yield * toolCall(reviewFindings, {
-          verifiedCrops: [
-            {
-              cropId: 'crop-p0e3',
-              answerDemand: 'solve both requested subparts',
-              evidence: 'question 1 stem, subparts, and figure are visible',
-              topmostVisibleContent: 'the printed question 1 head',
-              bottommostVisibleContent: 'the complete required figure',
-              leftmostVisibleContent: 'the printed question number',
-              rightmostVisibleContent: 'the final figure vertex before blank padding',
-              requiredVisuals: 'the source figure is visible in the crop',
-              attentionEvidence: 'the source figure reaches the crop edge but every line and vertex remains visible',
-            },
-            {
-              cropId: 'crop-p0e6',
-              answerDemand: 'complete the requested proof using the supplied figure',
-              evidence: 'question 2 stem, figure, and page continuation are visible',
-              topmostVisibleContent: 'the printed question 2 head',
-              bottommostVisibleContent: 'the final continuation equation',
-              leftmostVisibleContent: 'the printed question number',
-              rightmostVisibleContent: 'the final equation before blank padding',
-              requiredVisuals: 'the source figure is visible in the crop',
-              attentionEvidence: 'the source figure and page-edge continuation are complete without header or footer pixels',
-            },
-          ],
-          findings: [],
-        }, this.requests.length)
-        return
-      }
-      const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
-      if (token === undefined) throw new Error('accepted crop-review token is missing from the child history')
-      yield * toolCall('structured_output', { validationToken: token }, this.requests.length)
+      yield * toolCall(reviewFindings, {
+        verifiedCrops: metadata.preliminaryQuestions.map(question => ({
+          cropId: question.cropId,
+          answerDemand: 'Produce the response requested by the visible learner prompt.',
+          evidence: 'The rendered crop visibly contains a learner prompt and response requirement.',
+        })),
+        attentionChecks: metadata.visualAttention.map(attention => ({
+          cropId: attention.cropId,
+          evidence: 'The annotated source region and rendered cyan crop frame show complete owned content.',
+        })),
+        findings: [],
+      }, this.requests.length)
       return
     }
-    const source = options.tools?.find(tool => tool.name.startsWith('question_layout_'))?.name
-    const preview = options.tools?.find(tool => tool.name.startsWith('question_page_preview_'))?.name
     const submit = options.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))?.name
-    if (source === undefined || preview === undefined || submit === undefined) {
-      throw new Error('question boundary tools are incomplete')
-    }
-    const phase = this.boundaryPhases.get(submit) ?? 0
-    this.boundaryPhases.set(submit, phase + 1)
-    if (phase === 0 && source !== undefined) {
-      yield * toolCall(source, { chunk: 0 }, this.requests.length)
+    if (submit === undefined) throw new Error('question boundary submission tool is missing')
+    if (JSON.stringify(options.messages).includes('双栏等宽试卷.pdf')) {
+      yield * toolCall(submit, {
+        headConvention: 'Score-bearing Arabic labels start one independent question in each printed column.',
+        questionOverrides: [],
+      }, this.requests.length)
       return
     }
-    if (phase === 1) {
-      yield * toolCall(preview, { ids: ['page-1', 'page-2'] }, this.requests.length)
-      return
-    }
-    if (phase === 2) {
-      const groupIndex = [...this.boundaryPhases.keys()].indexOf(submit)
-      yield * toolCall(submit, groupIndex === 0
-        ? {
-          headConvention: 'Arabic punctuation begins independent top-level questions on the core page.',
-          questions: [{ headElementId: 'p0e3' }, { headElementId: 'p0e6' }],
-          excludedElementIds: ['p0e2'],
-          retainedImageElementIds: ['p0e5', 'p0e7'],
-          stopBeforeElementId: 'p1e2',
-        }
-        : {
-          headConvention: 'Bracketed 题 labels begin independent top-level questions on the core page.',
-          questions: [{ headElementId: 'p1e3' }],
-          excludedElementIds: ['p1e2'],
-          retainedImageElementIds: [],
-          stopBeforeElementId: 'p1e5',
-        }, this.requests.length)
-      return
-    }
-    const token = JSON.stringify(options.messages).match(/validationToken=([0-9a-f-]{36})/u)?.[1]
-    if (token === undefined) throw new Error('accepted boundary token is missing from the child history')
-    yield * toolCall('structured_output', { validationToken: token }, this.requests.length)
+    if (!this.boundaryTools.includes(submit)) this.boundaryTools.push(submit)
+    const groupIndex = this.boundaryTools.indexOf(submit)
+    yield * toolCall(submit, groupIndex === 0
+      ? {
+        headConvention: 'Arabic punctuation begins independent top-level questions on the core page.',
+        questionOverrides: [],
+        nonQuestionHeadElementIds: ['p0e2'],
+        stopBeforeElementId: 'p1e2',
+      }
+      : {
+        headConvention: 'Bracketed 题 labels begin independent top-level questions on the core page.',
+        questionOverrides: [],
+        nonQuestionHeadElementIds: ['p1e2'],
+        stopBeforeElementId: 'p1e5',
+      }, this.requests.length)
   }
 }
 
@@ -166,6 +134,9 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
     await scaffold.ctx.settings.replace(TEACHER_WORKBENCH_SETTINGS_NAMESPACE, {
       questionSegmentationBatchPages: 1,
       questionSegmentationBatchCandidates: 20,
+      questionSegmentationConcurrency: 1,
+      questionSegmentationInlineEvidence: true,
+      questionSegmentationAgentTimeoutMs: 20_000,
     })
   }, 120_000)
 
@@ -258,6 +229,40 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
       ok: true,
       value: { decision: 'unresolved', affectedQuestionIds: reviewRequest.reviewQuestionIds },
     })
+    const lanePages = [{
+      pageIndex: 0,
+      width: 841,
+      height: 595,
+      elements: [
+        { type: 'text' as const, text: '17.(15分)', bbox: [30, 20, 70, 35] as const },
+        { type: 'text' as const, text: '证明左栏结论', bbox: [45, 40, 400, 70] as const },
+        { type: 'text' as const, text: '18. 函数奇偶性常用结论', bbox: [440, 20, 650, 35] as const },
+        { type: 'text' as const, text: '奇函数图象关于原点对称', bbox: [455, 40, 800, 70] as const },
+      ],
+    }, {
+      pageIndex: 1,
+      width: 841,
+      height: 595,
+      elements: [
+        { type: 'text' as const, text: '19.(17分)', bbox: [27, 20, 72, 35] as const },
+        { type: 'text' as const, text: '证明左栏末题结论', bbox: [39, 40, 345, 90] as const },
+      ],
+    }]
+    const laneResult = await scaffold.ctx.teacherWorkbench.segmentQuestions({
+      parentSessionId: parent.agent.id,
+      fileName: '双栏等宽试卷.pdf',
+      padding: 10,
+      pages: lanePages,
+      pagePreviews: lanePages.map(page => ({
+        pageIndex: page.pageIndex,
+        mediaType: 'image/png' as const,
+        width: 1,
+        height: 1,
+        contentBase64: PIXEL,
+      })),
+    })
+    if (!laneResult.ok) throw new Error(laneResult.error.message)
+    const halfEmptyQuestion = laneResult.value.questions.find(question => question.headPageIndex === 1)
     const evidence = {
       modelCalls: adapter.requests.length,
       ordinaryConversationTools: scaffold.ctx.tools.schemas()
@@ -283,13 +288,33 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
         structuredOutput: adapter.requests.some(request => request.tools?.some(tool => tool.name === 'structured_output')),
       },
       cropReviewPromptMentionsWhitePadding: adapter.requests.some(request => (
-        JSON.stringify(request.messages).includes('blank white pixels on the right are intentional padding')
+        JSON.stringify(request.messages).includes('permitted white right padding')
       )),
       cropReviewPromptRequiresVisualEvidence: adapter.requests.some(request => (
-        JSON.stringify(request.messages).includes('topmostVisibleContent')
-          && JSON.stringify(request.messages).includes('requiredVisuals')
+        JSON.stringify(request.messages).includes('magenta rectangle')
+          && JSON.stringify(request.messages).includes('blue dashed line')
           && JSON.stringify(request.messages).includes('visualAttention')
       )),
+      cropReviewPromptRejectsMaskedLaneEvidence: adapter.requests.some(request => (
+        JSON.stringify(request.messages).includes('gray vertical band')
+          && JSON.stringify(request.messages).includes('Masked pixels are unavailable evidence')
+      )),
+      cropReviewUsesOneCompleteClassification: adapter.requests.some((request) => {
+        const findings = request.tools?.find(tool => tool.name.startsWith('submit_question_crop_findings_'))
+        const schema = JSON.stringify(findings)
+        return findings !== undefined
+          && schema.includes('verifiedCrops')
+          && schema.includes('answerDemand')
+          && schema.includes('attentionChecks')
+          && schema.includes('findings')
+          && !schema.includes('finalize')
+          && JSON.stringify(request.messages).includes('listing every complete crop in verifiedCrops')
+      }),
+      halfEmptySpread: {
+        maxQuestionWidthRatio: laneResult.value.maxQuestionWidthRatio,
+        questionSourceHeadIds: laneResult.value.questions.map(question => question.sourceHeadId),
+        questionRegion: halfEmptyQuestion?.regions[0],
+      },
       result,
       review,
       degradedReview,

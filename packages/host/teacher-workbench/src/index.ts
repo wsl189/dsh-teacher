@@ -121,17 +121,26 @@ const DEFAULT_TIMETABLE_ENTRIES = 1_000
 const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_QUESTION_LAYOUT_PAGES = 50
-const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 4
-const DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES = 12
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 20
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES = 300
+const DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY = 2
+const DEFAULT_MAX_QUESTION_WIDTH_OUTLIER_EXCESS_RATIO = 0.5
 const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
-const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 18_000
+const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 400_000
+const DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS = 24_000
+const DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE = true
+const DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS = 2_048
+const DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS = 4_096
 const DEFAULT_SEGMENTED_QUESTIONS = 300
 const DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS = 5
 const DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS = 2
+const DEFAULT_QUESTION_REJECTED_TOOL_CALLS = 3
 const DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO = 0.18
+const DEFAULT_MIN_QUESTION_REPEATED_IMAGE_PAGES = 3
+const DEFAULT_QUESTION_REPEATED_IMAGE_POSITION_TOLERANCE_RATIO = 0.015
 const DEFAULT_QUESTION_RECUT_ATTEMPTS = 2
-const DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL = 4
-const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
+const DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL = 20
+const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 50_000
 const DEFAULT_SOURCE_DOCUMENT_BYTES = 100 * 1024 * 1024
 const DEFAULT_REMINDER_RETRY_MS = 60_000
 
@@ -205,19 +214,37 @@ export interface Config {
   questionSegmentationBatchPages: number
   /** Maximum fallible question-head candidates owned by one automatic question-segmentation group. */
   questionSegmentationBatchCandidates: number
+  /** Maximum independently owned question groups processed at once. */
+  questionSegmentationConcurrency: number
+  /** Maximum proportional excess above the median question width before exclusion from shared-width selection. */
+  maxQuestionWidthOutlierExcessRatio: number
   /** Maximum OCR elements admitted to one question-segmentation agent run. */
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
   maxQuestionSourceChunkCharacters: number
+  /** Maximum focused OCR characters placed directly in one compact boundary request. */
+  maxQuestionCompactBoundaryCharacters: number
+  /** Whether eligible OCR source and visual-review sheets travel directly in their respective child requests. */
+  questionSegmentationInlineEvidence: boolean
+  /** Maximum model output tokens for one compact OCR boundary child. */
+  maxQuestionCompactBoundaryOutputTokens: number
+  /** Maximum model output tokens for one compact visual review or repair child. */
+  maxQuestionCompactReviewOutputTokens: number
   /** Maximum questions accepted from one question-segmentation agent run. */
   maxSegmentedQuestions: number
   /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
   maxQuestionBoundarySubmissions: number
   /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
   maxQuestionBoundaryAgentRuns: number
+  /** Maximum identical rejected tool results admitted before one child is stopped and safe output is retained. */
+  maxQuestionRejectedToolCalls: number
   /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
   maxQuestionAutoOwnedGapRatio: number
-  /** Maximum local recuts admitted for one defective question image. */
+  /** Minimum distinct pages that establish a repeated-position image as page furniture. */
+  minQuestionRepeatedImagePages: number
+  /** Maximum normalized coordinate drift when matching repeated-position image furniture. */
+  questionRepeatedImagePositionToleranceRatio: number
+  /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
@@ -246,13 +273,31 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     questionSegmentationBatchPages: z.natural().min(1).max(998).default(DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES),
     questionSegmentationBatchCandidates: z.natural().min(1).max(10_000)
       .default(DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES),
+    questionSegmentationConcurrency: z.natural().min(1).max(16)
+      .default(DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY),
+    maxQuestionWidthOutlierExcessRatio: z.number().min(0).max(10)
+      .default(DEFAULT_MAX_QUESTION_WIDTH_OUTLIER_EXCESS_RATIO),
     maxQuestionLayoutElements: z.natural().min(1).max(100_000).default(DEFAULT_QUESTION_LAYOUT_ELEMENTS),
-    maxQuestionSourceChunkCharacters: z.natural().min(4_000).max(100_000)
+    maxQuestionSourceChunkCharacters: z.natural().min(4_000).max(1_000_000)
       .default(DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS),
+    maxQuestionCompactBoundaryCharacters: z.natural().min(4_000).max(1_000_000)
+      .default(DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS),
+    questionSegmentationInlineEvidence: z.boolean()
+      .default(DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE),
+    maxQuestionCompactBoundaryOutputTokens: z.natural().min(256).max(16_384)
+      .default(DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS),
+    maxQuestionCompactReviewOutputTokens: z.natural().min(256).max(16_384)
+      .default(DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS),
     maxSegmentedQuestions: z.natural().min(1).max(10_000).default(DEFAULT_SEGMENTED_QUESTIONS),
     maxQuestionBoundarySubmissions: z.natural().min(1).max(20).default(DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS),
     maxQuestionBoundaryAgentRuns: z.natural().min(1).max(5).default(DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS),
+    maxQuestionRejectedToolCalls: z.natural().min(1).max(20)
+      .default(DEFAULT_QUESTION_REJECTED_TOOL_CALLS),
     maxQuestionAutoOwnedGapRatio: z.number().min(0.01).max(1).default(DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO),
+    minQuestionRepeatedImagePages: z.natural().min(2).max(1_000)
+      .default(DEFAULT_MIN_QUESTION_REPEATED_IMAGE_PAGES),
+    questionRepeatedImagePositionToleranceRatio: z.number().min(0).max(0.25)
+      .default(DEFAULT_QUESTION_REPEATED_IMAGE_POSITION_TOLERANCE_RATIO),
     maxQuestionRecutAttempts: z.natural().min(1).max(5).default(DEFAULT_QUESTION_RECUT_ATTEMPTS),
     maxQuestionVisionImagesPerToolCall: z.natural().min(1).max(20)
       .default(DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL),
@@ -291,12 +336,21 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxQuestionLayoutPages: DEFAULT_QUESTION_LAYOUT_PAGES,
     questionSegmentationBatchPages: DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES,
     questionSegmentationBatchCandidates: DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES,
+    questionSegmentationConcurrency: DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY,
+    maxQuestionWidthOutlierExcessRatio: DEFAULT_MAX_QUESTION_WIDTH_OUTLIER_EXCESS_RATIO,
     maxQuestionLayoutElements: DEFAULT_QUESTION_LAYOUT_ELEMENTS,
     maxQuestionSourceChunkCharacters: DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS,
+    maxQuestionCompactBoundaryCharacters: DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS,
+    questionSegmentationInlineEvidence: DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE,
+    maxQuestionCompactBoundaryOutputTokens: DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS,
+    maxQuestionCompactReviewOutputTokens: DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS,
     maxSegmentedQuestions: DEFAULT_SEGMENTED_QUESTIONS,
     maxQuestionBoundarySubmissions: DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS,
     maxQuestionBoundaryAgentRuns: DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS,
+    maxQuestionRejectedToolCalls: DEFAULT_QUESTION_REJECTED_TOOL_CALLS,
     maxQuestionAutoOwnedGapRatio: DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO,
+    minQuestionRepeatedImagePages: DEFAULT_MIN_QUESTION_REPEATED_IMAGE_PAGES,
+    questionRepeatedImagePositionToleranceRatio: DEFAULT_QUESTION_REPEATED_IMAGE_POSITION_TOLERANCE_RATIO,
     maxQuestionRecutAttempts: DEFAULT_QUESTION_RECUT_ATTEMPTS,
     maxQuestionVisionImagesPerToolCall: DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL,
     questionSegmentationAgentTimeoutMs: DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS,

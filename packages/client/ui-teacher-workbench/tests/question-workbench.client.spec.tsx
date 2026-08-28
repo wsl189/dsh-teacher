@@ -159,6 +159,7 @@ describe('QuestionWorkbench reference shell', () => {
           jobs: [{
             key: 'active',
             fileName: '正在处理.pdf',
+            pageRange: '1-5,8',
             stage: 'extracting',
             progress: 37,
             queuedAt: 10_000,
@@ -167,6 +168,7 @@ describe('QuestionWorkbench reference shell', () => {
           }, {
             key: 'queued',
             fileName: '下一份.pdf',
+            pageRange: '全部页码',
             stage: 'queued',
             progress: 0,
             queuedAt: 12_000,
@@ -184,12 +186,43 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(progress).getByText('0%')).toBeTruthy()
     const active = within(progress).getByRole('listitem', { name: '正在处理.pdf' })
     const queued = within(progress).getByRole('listitem', { name: '下一份.pdf' })
+    expect(within(active).getByText('页码范围：1-5,8')).toBeTruthy()
+    expect(within(queued).getByText('页码范围：全部页码')).toBeTruthy()
     expect(within(active).getByText('用时 00:04')).toBeTruthy()
     expect(within(queued).getByText('用时 00:00')).toBeTruthy()
 
     act(() => { vi.advanceTimersByTime(2_000) })
     expect(within(active).getByText('用时 00:06')).toBeTruthy()
     expect(within(queued).getByText('用时 00:00')).toBeTruthy()
+  })
+
+  it('shows completed groups that were saved without final crop verification', () => {
+    render(
+      <QuestionWorkbenchComponent
+        state={state}
+        settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+        commands={commands()}
+        cutting={{
+          jobs: [{
+            key: 'unverified',
+            fileName: '复杂双栏试卷.pdf',
+            pageRange: '2-16',
+            stage: 'completed',
+            progress: 100,
+            queuedAt: 10_000,
+            startedAt: 11_000,
+            finishedAt: 12_000,
+            savedCount: 18,
+            unverifiedGroupCount: 1,
+          }],
+        }}
+        t={t}
+      />,
+    )
+
+    const job = screen.getByRole('listitem', { name: '复杂双栏试卷.pdf' })
+    expect(within(job).getByText('有 1 个分组未通过最终复核，已按最后一次安全边界保存')).toBeTruthy()
+    expect(within(job).getByText('切割完成，共 18 道题')).toBeTruthy()
   })
 
   it('shows each filesystem question directory once while preserving direct images and nested folders', async () => {

@@ -13,6 +13,7 @@
     { "path": "../../api/remotes/tsconfig.client.json" },
     { "path": "../../runtime-diagnostics/invariants" },
     { "path": "../../settings/settings" },
+    { "path": "../../util/concurrency" },
     { "path": "../../typert/protocol" },
     { "path": "../connection/tsconfig.client.json" },
     { "path": "../locale" },

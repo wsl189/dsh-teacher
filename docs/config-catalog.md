@@ -898,19 +898,37 @@ export interface Config {
   questionSegmentationBatchPages: number
   /** Maximum fallible question-head candidates owned by one automatic question-segmentation group. */
   questionSegmentationBatchCandidates: number
+  /** Maximum independently owned question groups processed at once. */
+  questionSegmentationConcurrency: number
+  /** Maximum proportional excess above the median question width before exclusion from shared-width selection. */
+  maxQuestionWidthOutlierExcessRatio: number
   /** Maximum OCR elements admitted to one question-segmentation agent run. */
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
   maxQuestionSourceChunkCharacters: number
+  /** Maximum focused OCR characters placed directly in one compact boundary request. */
+  maxQuestionCompactBoundaryCharacters: number
+  /** Whether eligible OCR source and visual-review sheets travel directly in their respective child requests. */
+  questionSegmentationInlineEvidence: boolean
+  /** Maximum model output tokens for one compact OCR boundary child. */
+  maxQuestionCompactBoundaryOutputTokens: number
+  /** Maximum model output tokens for one compact visual review or repair child. */
+  maxQuestionCompactReviewOutputTokens: number
   /** Maximum questions accepted from one question-segmentation agent run. */
   maxSegmentedQuestions: number
   /** Maximum complete boundary drafts admitted to one question-segmentation agent run. */
   maxQuestionBoundarySubmissions: number
   /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
   maxQuestionBoundaryAgentRuns: number
+  /** Maximum identical rejected tool results admitted before one child is stopped and safe output is retained. */
+  maxQuestionRejectedToolCalls: number
   /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
   maxQuestionAutoOwnedGapRatio: number
-  /** Maximum local recuts admitted for one defective question image. */
+  /** Minimum distinct pages that establish a repeated-position image as page furniture. */
+  minQuestionRepeatedImagePages: number
+  /** Maximum normalized coordinate drift when matching repeated-position image furniture. */
+  questionRepeatedImagePositionToleranceRatio: number
+  /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
@@ -919,7 +937,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:173`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:182`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
@@ -3490,6 +3508,7 @@ Imported as libraries by other packages; a `cordis.yml` cannot load them.
 - `@deepseek-ai/dsh-client-web` ([`packages/client/web/src/index.ts`](../packages/client/web/src/index.ts))
 - `@deepseek-ai/dsh-cmdline` ([`packages/boot/cmdline/src/index.ts`](../packages/boot/cmdline/src/index.ts))
 - `@deepseek-ai/dsh-code-runtime-python` ([`packages/code-runtime/code-runtime-python/src/index.ts`](../packages/code-runtime/code-runtime-python/src/index.ts))
+- `@deepseek-ai/dsh-concurrency` ([`packages/util/concurrency/src/index.ts`](../packages/util/concurrency/src/index.ts))
 - `@deepseek-ai/dsh-home-paths` ([`packages/util/home-paths/src/index.ts`](../packages/util/home-paths/src/index.ts))
 - `@deepseek-ai/dsh-hook-protocol` ([`packages/hooks/hook-protocol/src/index.ts`](../packages/hooks/hook-protocol/src/index.ts))
 - `@deepseek-ai/dsh-launch-environment` ([`packages/util/launch-environment/src/index.ts`](../packages/util/launch-environment/src/index.ts))

@@ -4,6 +4,8 @@ Status: implemented
 
 [English](2026-08-19-question-segmentation-workbench.md) | 中文
 
+> 浏览器题号链分割、不采用模型步骤和确定性失败行为已由 [agent-loop 试题分割](2026-08-21-agent-loop-question-segmentation.zh.md)、[视觉复核试题分割](2026-08-24-vision-reviewed-question-segmentation.zh.md)与[有界并行切题](2026-08-26-bounded-parallel-question-cutting.zh.md)取代。媒体持久化、试题库交互与文档输出决策仍以本记录为准。
+
 > 本决策扩展[持久化教师工作台](2026-08-17-durable-teacher-workbench.zh.md)与[可复用文档提取](2026-08-18-reusable-document-extraction.zh.md)。两者对存储和 OCR 的所有权保持不变；本决策增加结构化版面提取与第七个工作台模块。
 
 ## 问题

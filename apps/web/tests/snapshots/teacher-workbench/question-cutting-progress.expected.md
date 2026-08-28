@@ -5,13 +5,13 @@
     - list:
       - listitem "后台切割甲.pdf":
         - strong: 后台切割甲.pdf
-        - text: 3%
+        - text: 页码范围：1 3%
         - progressbar "正在提取 PDF 版面"
         - text: 正在提取 PDF 版面
         - time: 用时 {{clock}}
       - listitem "后台切割乙.pdf":
         - strong: 后台切割乙.pdf
-        - text: 0%
+        - text: 页码范围：全部页码 0%
         - progressbar "等待切割"
         - text: 等待切割
         - time: 用时 {{clock}}

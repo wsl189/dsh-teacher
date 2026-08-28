@@ -1050,7 +1050,7 @@ describe('web e2e: durable teacher workbench', () => {
     const pdfInput = page.locator('[data-question-workbench] input[type="file"][accept="application/pdf,.pdf"]')
 
     try {
-      for (const name of ['后台切割甲.pdf', '后台切割乙.pdf']) {
+      for (const [index, name] of ['后台切割甲.pdf', '后台切割乙.pdf'].entries()) {
         await pdfInput.setInputFiles({
           name,
           mimeType: 'application/pdf',
@@ -1058,6 +1058,7 @@ describe('web e2e: durable teacher workbench', () => {
         })
         const pageRangeDialog = page.getByRole('dialog', { name: '选择页码范围' })
         await pageRangeDialog.waitFor({ timeout: 10_000 })
+        if (index === 0) await pageRangeDialog.getByRole('textbox').fill('1')
         await pageRangeDialog.getByRole('button', { name: '确认切割' }).click()
         await pageRangeDialog.waitFor({ state: 'hidden', timeout: 10_000 })
       }

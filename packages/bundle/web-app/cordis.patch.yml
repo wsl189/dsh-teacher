@@ -126,15 +126,22 @@
         timetableAgentTimeoutMs: 3600000
         timetableVisionAgentTimeoutMs: 3600000
         maxQuestionLayoutPages: 50
-        questionSegmentationBatchPages: 4
-        questionSegmentationBatchCandidates: 12
+        questionSegmentationBatchPages: 20
+        questionSegmentationBatchCandidates: 300
+        questionSegmentationConcurrency: 2
+        maxQuestionWidthOutlierExcessRatio: 0.5
         maxQuestionLayoutElements: 5000
-        maxQuestionSourceChunkCharacters: 18000
+        maxQuestionSourceChunkCharacters: 400000
+        maxQuestionCompactBoundaryCharacters: 24000
+        questionSegmentationInlineEvidence: true
+        maxQuestionCompactBoundaryOutputTokens: 2048
+        maxQuestionCompactReviewOutputTokens: 4096
         maxSegmentedQuestions: 300
         maxQuestionBoundarySubmissions: 5
         maxQuestionBoundaryAgentRuns: 2
+        maxQuestionRejectedToolCalls: 3
         maxQuestionAutoOwnedGapRatio: 0.18
-        questionSegmentationAgentTimeoutMs: 3600000
+        questionSegmentationAgentTimeoutMs: 50000
         reminderRetryMs: 60000
 
     - id: tool-teacher-workbench

@@ -511,6 +511,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
 
     commands.enqueueQuestionCutting({
       file: pendingPdf,
+      pageCount: pdfPageCount,
       pageIndexes: selection.pageIndexes,
       pageRange: selection.label || t('questions.allPages'),
       ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
@@ -1785,7 +1786,10 @@ function QuestionCuttingJobRow({
       aria-label={job.fileName}
     >
       <div className={css.legacyCuttingJobHeading}>
-        <strong>{job.fileName}</strong>
+        <div className={css.legacyCuttingJobIdentity}>
+          <strong>{job.fileName}</strong>
+          <span>{t('questions.progressPageRange', { range: job.pageRange })}</span>
+        </div>
         <b>{String(job.progress)}%</b>
       </div>
       <div
@@ -1801,6 +1805,11 @@ function QuestionCuttingJobRow({
         {job.savedCount > 0 && <span>{t('questions.progressSaved', { count: job.savedCount })}</span>}
         <time>{t('questions.progressElapsed', { time: formatElapsed(elapsed) })}</time>
       </div>
+      {job.unverifiedGroupCount !== undefined && job.unverifiedGroupCount > 0 && (
+        <p className={css.legacyCuttingWarning}>
+          {t('questions.progressUnverified', { count: job.unverifiedGroupCount })}
+        </p>
+      )}
       {finished && failure !== null && <p className={css.legacyCuttingError}>{failure}</p>}
     </article>
   )
@@ -1823,9 +1832,7 @@ function questionCuttingFailure(job: QuestionCuttingJob, t: TeacherWorkbenchTran
   if (job.stage !== 'failed') return null
   const message = job.failureCode === 'no-session'
     ? t('questions.progressNoSession')
-    : job.failureCode === 'no-questions'
-      ? t('questions.noMarkers')
-      : job.failureMessage ?? t('questions.cutFailed')
+    : job.failureMessage ?? t('questions.cutFailed')
   return job.savedCount > 0
     ? t('questions.cutPartiallySaved', { count: job.savedCount, message })
     : message

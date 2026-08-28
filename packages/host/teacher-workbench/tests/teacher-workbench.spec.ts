@@ -134,12 +134,21 @@ function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbench
     maxQuestionLayoutPages: 50,
     questionSegmentationBatchPages: 20,
     questionSegmentationBatchCandidates: 300,
+    questionSegmentationConcurrency: 4,
+    maxQuestionWidthOutlierExcessRatio: 0.5,
     maxQuestionLayoutElements: 5_000,
     maxQuestionSourceChunkCharacters: 18_000,
+    maxQuestionCompactBoundaryCharacters: 12_000,
+    questionSegmentationInlineEvidence: false,
+    maxQuestionCompactBoundaryOutputTokens: 2_048,
+    maxQuestionCompactReviewOutputTokens: 4_096,
     maxSegmentedQuestions: 300,
     maxQuestionBoundarySubmissions: 3,
     maxQuestionBoundaryAgentRuns: 2,
+    maxQuestionRejectedToolCalls: 3,
     maxQuestionAutoOwnedGapRatio: 0.18,
+    minQuestionRepeatedImagePages: 3,
+    questionRepeatedImagePositionToleranceRatio: 0.015,
     maxQuestionRecutAttempts: 2,
     maxQuestionVisionImagesPerToolCall: 4,
     questionSegmentationAgentTimeoutMs: 90_000,
@@ -544,12 +553,21 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
       questionSegmentationBatchCandidates: 300,
+      questionSegmentationConcurrency: 4,
+      maxQuestionWidthOutlierExcessRatio: 0.5,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
+      maxQuestionCompactBoundaryCharacters: 12_000,
+      questionSegmentationInlineEvidence: false,
+      maxQuestionCompactBoundaryOutputTokens: 2_048,
+      maxQuestionCompactReviewOutputTokens: 4_096,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionRejectedToolCalls: 3,
       maxQuestionAutoOwnedGapRatio: 0.18,
+      minQuestionRepeatedImagePages: 3,
+      questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 120_000,
@@ -587,12 +605,21 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
       questionSegmentationBatchCandidates: 300,
+      questionSegmentationConcurrency: 4,
+      maxQuestionWidthOutlierExcessRatio: 0.5,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
+      maxQuestionCompactBoundaryCharacters: 12_000,
+      questionSegmentationInlineEvidence: false,
+      maxQuestionCompactBoundaryOutputTokens: 2_048,
+      maxQuestionCompactReviewOutputTokens: 4_096,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionRejectedToolCalls: 3,
       maxQuestionAutoOwnedGapRatio: 0.18,
+      minQuestionRepeatedImagePages: 3,
+      questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 120_000,
@@ -600,54 +627,68 @@ describe('TeacherWorkbenchService', () => {
     const b = await harness(undefined, config)
     contexts.push(b.ctx)
     const pdf = await PDFDocument.create()
+    pdf.addPage([200, 300])
     const pdfPage = pdf.addPage([200, 300])
     pdfPage.drawText('1. question', { x: 20, y: 260, size: 16 })
     pdfPage.drawRectangle({ x: 130, y: 220, width: 30, height: 30, color: rgb(1, 0, 0) })
+    pdf.addPage([200, 300])
     const bytes = await pdf.save()
     const staged = await b.service.stageSource({
       name: 'paper.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(bytes).toString('base64'),
     })
     if (!staged.ok) throw new Error(staged.error.message)
+    const extractLayout = vi.fn(async (request: { readonly contentBase64: string }) => {
+      const batchPdf = await PDFDocument.load(Buffer.from(request.contentBase64, 'base64'))
+      return {
+        ok: true as const,
+        value: {
+          name: 'paper.pdf', provider: 'mineru' as const,
+          pages: Array.from({ length: batchPdf.getPageCount() }, (_, pageIndex) => ({
+            pageIndex,
+            width: 200,
+            height: 300,
+            elements: pageIndex === 1
+              ? [{ type: 'text' as const, text: '1. question', bbox: [20, 20, 180, 80] as const }]
+              : [],
+          })),
+        },
+      }
+    })
     b.ctx.provide('ocr', {
       layoutLimits: () => ({ ok: true, value: { maxFileBytes: 8 * 1024 * 1024, maxPagesPerRequest: 4 } }),
-      layout: () => Promise.resolve({
-        ok: true,
-        value: {
-          name: 'paper.pdf', provider: 'mineru',
-          pages: [{ pageIndex: 0, width: 200, height: 300, elements: [{ type: 'text', text: '1. question', bbox: [20, 20, 180, 80] }] }],
-        },
-      }),
+      layout: extractLayout,
     } as never)
-    vi.spyOn(b.service, 'segmentQuestions').mockResolvedValue({
+    const segmentQuestions = vi.spyOn(b.service, 'segmentQuestions').mockResolvedValue({
       ok: true,
       value: {
         groupCount: 1,
-        groups: [{ groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] }],
+        groups: [{ groupIndex: 0, corePageIndexes: [1], inspectionPageIndexes: [0, 1, 2] }],
+        maxConcurrentGroups: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
-        maxRecutAttempts: 1,
+        maxRecutAttempts: 2,
         maxQuestionWidthRatio: 0.7,
         questions: [{
-          sourceHeadId: 'p0e0' as never,
+          sourceHeadId: 'p1e0' as never,
           questionNo: 1,
-          headPageIndex: 0,
+          headPageIndex: 1,
           groupIndex: 0,
           regions: [{
-            pageIndex: 0, left: 20, top: 0, right: 80, rightLimit: 100, bottom: 120,
-            excludedAreas: [], pageWidth: 200, pageHeight: 300,
+            pageIndex: 1, left: 20, top: 0, right: 80, rightLimit: 200, bottom: 120,
+            excludedAreas: [[100, 0, 200, 120]], pageWidth: 200, pageHeight: 300,
           }],
         }, {
-          sourceHeadId: 'p0e1' as never,
+          sourceHeadId: 'p1e1' as never,
           questionNo: 2,
-          headPageIndex: 0,
+          headPageIndex: 1,
           groupIndex: 0,
           regions: [{
-            pageIndex: 0, left: 120, top: 0, right: 180, rightLimit: 200, bottom: 120,
+            pageIndex: 1, left: 120, top: 0, right: 180, rightLimit: 200, bottom: 120,
             excludedAreas: [[130, 50, 145, 80]], pageWidth: 200, pageHeight: 300,
           }],
         }],
       },
     })
-    vi.spyOn(b.service, 'reviewQuestionCrops').mockImplementation(request => Promise.resolve({
+    const reviewQuestionCrops = vi.spyOn(b.service, 'reviewQuestionCrops').mockImplementation(request => Promise.resolve({
       ok: true,
       value: { decision: 'accepted', affectedQuestionIds: [], questions: request.questions },
     }))
@@ -678,14 +719,33 @@ describe('TeacherWorkbenchService', () => {
         sourceId: staged.value.id,
         sourceName: 'paper.pdf',
         destinationKind: 'library-root',
-        pageRange: '1',
+        pageRange: '2',
         batchName: '自动切题',
         padding: 8,
       },
     }, promptAgent('请帮我切题并保存到试题图片库根目录'))
     expect(cut.isError).toBe(false)
-    const result = cut.value as { batchId: TeacherQuestionBatchId; questionCount: number; groupCount: number }
-    expect(result).toMatchObject({ questionCount: 2, groupCount: 1 })
+    expect(extractLayout).toHaveBeenCalledOnce()
+    expect(segmentQuestions).toHaveBeenCalledWith(expect.objectContaining({
+      corePageIndexes: [1],
+      pages: [
+        expect.objectContaining({ pageIndex: 0 }),
+        expect.objectContaining({ pageIndex: 1 }),
+        expect.objectContaining({ pageIndex: 2 }),
+      ],
+      pagePreviews: [
+        expect.objectContaining({ pageIndex: 0 }),
+        expect.objectContaining({ pageIndex: 1 }),
+        expect.objectContaining({ pageIndex: 2 }),
+      ],
+    }))
+    const result = cut.value as {
+      batchId: TeacherQuestionBatchId
+      questionCount: number
+      groupCount: number
+      unverifiedGroupCount: number
+    }
+    expect(result).toMatchObject({ questionCount: 2, groupCount: 1, unverifiedGroupCount: 0 })
     const document = (await b.service.read({})).value
     expect(document.state.questionBatches).toMatchObject([{
       id: result.batchId,
@@ -722,6 +782,34 @@ describe('TeacherWorkbenchService', () => {
       .toBuffer()
     const erasedCropStats = await sharp(erasedCrop).stats()
     expect(erasedCropStats.channels.slice(0, 3).every(channel => channel.min === 255)).toBe(true)
+    reviewQuestionCrops.mockImplementation(request => Promise.resolve({
+      ok: true,
+      value: {
+        decision: 'unresolved',
+        affectedQuestionIds: request.reviewQuestionIds,
+        questions: request.questions,
+      },
+    }))
+    extractLayout.mockImplementationOnce(() => Promise.resolve({
+      ok: false,
+      error: { code: 'provider-failure', message: 'MinerU returned HTTP 409' },
+    }) as never)
+    const unverified = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'segment_pdf',
+      data: {
+        sourceId: staged.value.id,
+        sourceName: 'paper.pdf',
+        destinationKind: 'library-root',
+        pageRange: '2',
+        batchName: '不得落盘的未复核结果',
+        padding: 8,
+      },
+    }, promptAgent('请重新切题并保存到试题图片库根目录'))
+    expect(unverified.isError).toBe(false)
+    expect(unverified.value).toMatchObject({ questionCount: 2, groupCount: 1, unverifiedGroupCount: 1 })
+    expect(extractLayout).toHaveBeenCalledTimes(4)
+    expect(reviewQuestionCrops).toHaveBeenCalledTimes(2)
+    expect((await b.service.read({})).value.state.questionBatches).toHaveLength(2)
   })
 
   it('ships the reference headteacher templates and rejects cross-class seating occupants', () => {
@@ -778,12 +866,21 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
       questionSegmentationBatchCandidates: 300,
+      questionSegmentationConcurrency: 4,
+      maxQuestionWidthOutlierExcessRatio: 0.5,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
+      maxQuestionCompactBoundaryCharacters: 12_000,
+      questionSegmentationInlineEvidence: false,
+      maxQuestionCompactBoundaryOutputTokens: 2_048,
+      maxQuestionCompactReviewOutputTokens: 4_096,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionRejectedToolCalls: 3,
       maxQuestionAutoOwnedGapRatio: 0.18,
+      minQuestionRepeatedImagePages: 3,
+      questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,
@@ -1262,12 +1359,21 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
       questionSegmentationBatchCandidates: 300,
+      questionSegmentationConcurrency: 4,
+      maxQuestionWidthOutlierExcessRatio: 0.5,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
+      maxQuestionCompactBoundaryCharacters: 12_000,
+      questionSegmentationInlineEvidence: false,
+      maxQuestionCompactBoundaryOutputTokens: 2_048,
+      maxQuestionCompactReviewOutputTokens: 4_096,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionRejectedToolCalls: 3,
       maxQuestionAutoOwnedGapRatio: 0.18,
+      minQuestionRepeatedImagePages: 3,
+      questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,
@@ -1664,12 +1770,21 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionLayoutPages: 50,
       questionSegmentationBatchPages: 20,
       questionSegmentationBatchCandidates: 300,
+      questionSegmentationConcurrency: 4,
+      maxQuestionWidthOutlierExcessRatio: 0.5,
       maxQuestionLayoutElements: 5_000,
       maxQuestionSourceChunkCharacters: 18_000,
+      maxQuestionCompactBoundaryCharacters: 12_000,
+      questionSegmentationInlineEvidence: false,
+      maxQuestionCompactBoundaryOutputTokens: 2_048,
+      maxQuestionCompactReviewOutputTokens: 4_096,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
+      maxQuestionRejectedToolCalls: 3,
       maxQuestionAutoOwnedGapRatio: 0.18,
+      minQuestionRepeatedImagePages: 3,
+      questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
       questionSegmentationAgentTimeoutMs: 90_000,

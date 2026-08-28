@@ -1,6 +1,7 @@
 /** Plugin-lifetime browser queue for PDF question cutting and progress projection. */
 
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import { mapConcurrently } from '@deepseek-ai/dsh-concurrency'
 import type {
   OcrLayoutDocument,
   OcrLayoutResult,
@@ -24,6 +25,13 @@ import {
 } from './question-segmentation.ts'
 
 type MaximumQuestionWidthRatio = TeacherQuestionSegmentSuccess['value']['maxQuestionWidthRatio']
+type QuestionSegmentationGroup = TeacherQuestionSegmentSuccess['value']['groups'][number]
+
+interface ReviewedQuestionGroup {
+  readonly group: QuestionSegmentationGroup
+  readonly questions: readonly TeacherSegmentedQuestion[]
+  readonly unverified: boolean
+}
 
 /** Visible lifecycle stage for one queued PDF. */
 export type QuestionCuttingStage =
@@ -37,7 +45,7 @@ export type QuestionCuttingStage =
   | 'failed'
 
 /** Stable failure family rendered by the Question Cutting center panel. */
-export type QuestionCuttingFailureCode = 'no-session' | 'no-questions' | 'operation-failed'
+export type QuestionCuttingFailureCode = 'no-session' | 'operation-failed'
 
 /** Immutable progress row for one browser-held PDF. */
 export interface QuestionCuttingJob {
@@ -45,6 +53,8 @@ export interface QuestionCuttingJob {
   readonly key: string
   /** Original PDF display name. */
   readonly fileName: string
+  /** Teacher-facing selected page range captured when the PDF entered the queue. */
+  readonly pageRange: string
   /** Current processing stage. */
   readonly stage: QuestionCuttingStage
   /** Monotonic integer completion percentage from zero through one hundred. */
@@ -59,6 +69,8 @@ export interface QuestionCuttingJob {
   readonly savedCount: number
   /** Number of semantic questions detected after segmentation. */
   readonly questionCount?: number
+  /** Number of processing groups saved without a final accepted crop review. */
+  readonly unverifiedGroupCount?: number
   /** Stable failure family for a terminal failed row. */
   readonly failureCode?: QuestionCuttingFailureCode
   /** Provider or persistence diagnostic for an operation failure. */
@@ -78,6 +90,8 @@ export const EMPTY_QUESTION_CUTTING_VIEW: QuestionCuttingView = Object.freeze({ 
 export interface QuestionCuttingEnqueueRequest {
   /** Browser-held source PDF retained until its task settles. */
   readonly file: File
+  /** Total source page count used to admit one continuation page beyond the selection. */
+  readonly pageCount: number
   /** Exact zero-based pages selected in the sheet. */
   readonly pageIndexes: readonly number[]
   /** Display label persisted with the resulting paper batch. */
@@ -94,6 +108,7 @@ type QuestionSegmentationRunner = (
   layout: OcrLayoutDocument,
   padding: number,
   pagePreviews: readonly TeacherQuestionPagePreview[],
+  corePageIndexes: readonly number[],
 ) => Promise<TeacherQuestionSegmentResult>
 
 type QuestionCropReviewRunner = (
@@ -136,13 +151,6 @@ interface PendingQuestionCuttingJob {
   readonly reviewCrops?: QuestionCropReviewRunner
 }
 
-function maximumQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): number {
-  const regions = questions.flatMap(question => question.regions)
-  return regions.length === 0
-    ? 1
-    : Math.max(...regions.map(region => (region.rightLimit - region.left) / region.pageWidth))
-}
-
 function adjacentInspectionPages(
   layout: OcrLayoutDocument,
   corePageIndexes: readonly number[],
@@ -181,6 +189,18 @@ function affectedQuestions(
 ): TeacherSegmentedQuestion[] {
   const ids = new Set<TeacherQuestionLayoutElementId>(affected)
   return after.filter(question => ids.has(question.sourceHeadId))
+}
+
+function inspectionPageIndexes(
+  corePageIndexes: readonly number[],
+  pageCount: number,
+): readonly number[] {
+  const indexes = new Set(corePageIndexes)
+  for (const pageIndex of corePageIndexes) {
+    if (pageIndex > 0) indexes.add(pageIndex - 1)
+    if (pageIndex + 1 < pageCount) indexes.add(pageIndex + 1)
+  }
+  return [...indexes].sort((left, right) => left - right)
 }
 
 class QuestionCuttingFailure extends Error {
@@ -258,6 +278,7 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
       jobs: Object.freeze([...this.view.jobs, Object.freeze({
         key,
         fileName: request.file.name,
+        pageRange: request.pageRange,
         stage: 'queued' as const,
         progress: 0,
         queuedAt,
@@ -311,7 +332,7 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
       }
       const extracted = await this.dependencies.extractLayout(
         task.request.file,
-        task.request.pageIndexes,
+        inspectionPageIndexes(task.request.pageIndexes, task.request.pageCount),
         task.request.renderScale,
         (completedPages, totalPages) => {
           const fraction = totalPages === 0 ? 0 : completedPages / totalPages
@@ -319,10 +340,9 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
         },
       )
       if (!extracted.ok) throw new Error(extracted.error.message)
-      const exactPages = new Set(task.request.pageIndexes)
       const layout: OcrLayoutDocument = {
         ...extracted.value,
-        pages: extracted.value.pages.filter(page => exactPages.has(page.pageIndex)),
+        pages: extracted.value.pages,
       }
       const pagePreviews = await this.renderPagePreviews(
         task.request.file,
@@ -330,82 +350,124 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
         task.request.renderScale,
       )
       this.updateProgress(task.key, 'segmenting', 42)
-      const segmented = await task.segmentQuestions(layout, task.request.padding, pagePreviews)
+      const segmented = await task.segmentQuestions(
+        layout,
+        task.request.padding,
+        pagePreviews,
+        task.request.pageIndexes,
+      )
       if (!segmented.ok) throw new Error(segmented.error.message)
       let questions = [...segmented.value.questions]
       this.replaceJob(task.key, job => ({ ...job, questionCount: questions.length }))
 
       const baseName = task.request.file.name.replace(/\.pdf$/iu, '')
       const groupCount = segmented.value.groupCount
-      if (task.reviewCrops === undefined) {
+      const reviewCrops = task.reviewCrops
+      if (reviewCrops === undefined) {
         throw new QuestionCuttingFailure('no-session', 'question crop review requires an active parent Session')
       }
-      let outputWidthRatio = segmented.value.maxQuestionWidthRatio
-      for (const group of segmented.value.groups) {
-        let groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
-        let reviewQuestions = groupQuestions
-        let recutAttempt = 0
-        for (;;) {
-          this.updateProgress(
-            task.key,
-            'reviewing',
-            Math.floor(50 + 22 * (
-              group.groupIndex * (segmented.value.maxRecutAttempts + 1) + recutAttempt
-            ) / (groupCount * (segmented.value.maxRecutAttempts + 1))),
-          )
-          const crops = await this.renderCrops(
-            task.request.file,
-            layout,
-            reviewQuestions,
-            outputWidthRatio,
-            task.request.renderScale,
-            () => {},
-          )
-          const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
-            ? group.corePageIndexes
-            : [...new Set(reviewQuestions.flatMap(question => (
-              question.regions.map(region => region.pageIndex)
-            )))]
-          const previewPages = new Set(adjacentInspectionPages(layout, localPageIndexes))
-          const inspectionPages = new Set(group.inspectionPageIndexes)
-          const reviewed = await task.reviewCrops({
-            fileName: layout.name,
-            groupIndex: group.groupIndex,
-            corePageIndexes: group.corePageIndexes,
-            recutAttempt,
-            reviewQuestionIds: reviewQuestions.map(question => question.sourceHeadId),
-            pages: layout.pages.filter(page => inspectionPages.has(page.pageIndex)),
-            pagePreviews: pagePreviews.filter(preview => (
-              previewPages.has(preview.pageIndex) && inspectionPages.has(preview.pageIndex)
-            )),
-            questions: groupQuestions,
-            crops,
-            padding: task.request.padding,
-          })
-          if (!reviewed.ok) throw new Error(reviewed.error.message)
-          if (reviewed.value.decision === 'accepted') break
-          if (reviewed.value.decision === 'revised') {
-            questions = replaceQuestionGroup(
-              questions,
-              group.groupIndex,
-              reviewed.value.questions,
-              groupCount,
+      // Crop-local review cannot replace the PDF-wide outlier-filtered width.
+      const outputWidthRatio = segmented.value.maxQuestionWidthRatio
+      let completedReviewSteps = 0
+      const totalReviewSteps = groupCount * segmented.value.maxRecutAttempts
+      const reviewedGroups = await mapConcurrently(
+        segmented.value.groups,
+        segmented.value.maxConcurrentGroups,
+        async (group): Promise<ReviewedQuestionGroup> => {
+          let groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
+          let reviewQuestions = groupQuestions
+          let recutAttempt = 0
+          let unverified = false
+          for (;;) {
+            this.updateProgress(
+              task.key,
+              'reviewing',
+              Math.floor(50 + 22 * completedReviewSteps / totalReviewSteps),
             )
-            groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
-            this.replaceJob(task.key, job => ({ ...job, questionCount: questions.length }))
-            outputWidthRatio = maximumQuestionWidthRatio(questions)
+            const crops = await this.renderCrops(
+              task.request.file,
+              layout,
+              reviewQuestions,
+              outputWidthRatio,
+              task.request.renderScale,
+              () => {},
+            )
+            const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
+              ? group.corePageIndexes
+              : [...new Set(reviewQuestions.flatMap(question => (
+                question.regions.map(region => region.pageIndex)
+              )))]
+            const previewPages = new Set(adjacentInspectionPages(layout, localPageIndexes))
+            const inspectionPages = new Set(group.inspectionPageIndexes)
+            const reviewed = await reviewCrops({
+              fileName: layout.name,
+              groupIndex: group.groupIndex,
+              corePageIndexes: group.corePageIndexes,
+              recutAttempt,
+              reviewQuestionIds: reviewQuestions.map(question => question.sourceHeadId),
+              pages: layout.pages.filter(page => inspectionPages.has(page.pageIndex)),
+              pagePreviews: pagePreviews.filter(preview => (
+                previewPages.has(preview.pageIndex) && inspectionPages.has(preview.pageIndex)
+              )),
+              questions: groupQuestions,
+              crops,
+              padding: task.request.padding,
+            })
+            if (!reviewed.ok) throw new Error(reviewed.error.message)
+            completedReviewSteps += 1
+            this.updateProgress(task.key, 'reviewing', Math.floor(50 + 22 * completedReviewSteps / totalReviewSteps))
+            if (reviewed.value.decision === 'accepted') {
+              break
+            }
+            if (reviewed.value.decision === 'unresolved') {
+              unverified = true
+              break
+            }
+            if (reviewed.value.questions.some(question => question.groupIndex !== group.groupIndex)) {
+              throw new Error('reviewed question group identity is inconsistent')
+            }
+            groupQuestions = [...reviewed.value.questions]
+            recutAttempt += 1
+            if (recutAttempt >= segmented.value.maxRecutAttempts) {
+              unverified = true
+              break
+            }
+            reviewQuestions = affectedQuestions(
+              groupQuestions,
+              reviewed.value.affectedQuestionIds,
+            )
+            if (reviewQuestions.length === 0) {
+              unverified = true
+              break
+            }
           }
-          recutAttempt += 1
-          if (recutAttempt >= segmented.value.maxRecutAttempts) break
-          reviewQuestions = affectedQuestions(
-            groupQuestions,
-            reviewed.value.affectedQuestionIds,
-          )
-          if (reviewQuestions.length === 0) break
-        }
+          return { group, questions: groupQuestions, unverified }
+        },
+      )
+      for (const reviewed of reviewedGroups) {
+        questions = replaceQuestionGroup(
+          questions,
+          reviewed.group.groupIndex,
+          reviewed.questions,
+          groupCount,
+        )
       }
-
-      if (questions.length === 0) throw new QuestionCuttingFailure('no-questions', 'no complete questions were detected')
+      const unverifiedGroupCount = reviewedGroups.filter(group => group.unverified).length
+      this.replaceJob(task.key, job => ({
+        ...job,
+        questionCount: questions.length,
+        ...(unverifiedGroupCount === 0 ? {} : { unverifiedGroupCount }),
+      }))
+      if (questions.length === 0) {
+        this.replaceJob(task.key, job => ({
+          ...job,
+          stage: 'completed',
+          progress: 100,
+          savedCount: 0,
+          finishedAt: this.now(),
+        }))
+        return
+      }
 
       let savedBatchId: TeacherQuestionBatchId | undefined
       for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {

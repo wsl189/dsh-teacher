@@ -198,6 +198,61 @@ describe('renderQuestionCrops', () => {
     )
     expect(pdfMocks.destroy).toHaveBeenCalledOnce()
   })
+
+  it('uses one exact pixel width across selected PDF pages with different viewport widths', async () => {
+    vi.stubGlobal('document', {
+      createElement: () => {
+        const context = { fillStyle: '', fillRect: vi.fn(), drawImage: vi.fn() }
+        return {
+          width: 0,
+          height: 0,
+          getContext: () => context,
+          toBlob: (callback: (blob: Blob | null) => void) => {
+            callback(new Blob([Uint8Array.of(1)], { type: 'image/png' }))
+          },
+        }
+      },
+    })
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        getPage: async (pageNumber: number) => ({
+          getViewport: () => ({ width: pageNumber === 1 ? 100 : 101, height: 100 }),
+          render: () => ({ promise: Promise.resolve() }),
+        }),
+      }),
+      destroy: pdfMocks.destroy,
+    })
+    const file = { arrayBuffer: async () => Uint8Array.of(1).buffer } as File
+    const pages = [0, 1].map(pageIndex => ({ pageIndex, width: 100, height: 100, elements: [] }))
+    const questions: readonly DetectedQuestion[] = pages.map((page, index) => ({
+      sourceHeadId: `p${String(page.pageIndex)}e0` as never,
+      questionNo: index + 1,
+      headPageIndex: page.pageIndex,
+      groupIndex: index,
+      regions: [{
+        pageIndex: page.pageIndex,
+        left: 5,
+        top: 10,
+        right: 40,
+        rightLimit: 45,
+        bottom: 30,
+        excludedAreas: [],
+        pageWidth: 100,
+        pageHeight: 100,
+      }],
+    }))
+
+    const uploads = await renderQuestionCrops(
+      file,
+      { name: 'mixed-width.pdf', provider: 'mineru', pages },
+      questions,
+      0.4,
+      1,
+    )
+
+    expect(uploads.map(upload => upload.width)).toEqual([41, 41])
+    expect(pdfMocks.destroy).toHaveBeenCalledOnce()
+  })
 })
 
 describe('parseQuestionPageRange', () => {

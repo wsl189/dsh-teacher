@@ -1,8 +1,10 @@
 /** Bounded semantic page-group orchestration for large question-layout requests. */
 
 import type { Context } from '@deepseek-ai/cordis'
+import { mapConcurrently } from '@deepseek-ai/dsh-concurrency'
 import {
   countQuestionHeadCandidates,
+  detectDocumentAnswerSectionPageIndexes,
   segmentQuestionsWithAgent,
   type TeacherQuestionSegmentationAgentConfig,
   type TeacherQuestionSegmentationAgentResult,
@@ -20,9 +22,13 @@ export interface TeacherQuestionSegmentationBatchConfig extends TeacherQuestionS
   readonly questionSegmentationBatchPages: number
   /** Maximum fallible question-head candidates owned by one semantic processing group. */
   readonly questionSegmentationBatchCandidates: number
+  /** Maximum independently owned semantic groups processed at once. */
+  readonly questionSegmentationConcurrency: number
+  /** Maximum proportional excess above the median question width before exclusion from shared-width selection. */
+  readonly maxQuestionWidthOutlierExcessRatio: number
   /** Maximum decoded image bytes accepted by one automatic save part. */
   readonly maxQuestionBatchBytes: number
-  /** Maximum local recuts admitted for one defective image before persistence. */
+  /** Maximum visual review attempts admitted before an unverified group fails. */
   readonly maxQuestionRecutAttempts: number
 }
 
@@ -32,7 +38,7 @@ export interface TeacherQuestionSegmentationPageGroup {
   readonly groupIndex: number
   /** Pages whose question heads belong to this group. */
   readonly corePageIndexes: readonly number[]
-  /** Core pages plus one adjacent selected page on each available side. */
+  /** Core pages plus one available source page on each side. */
   readonly inspectionPageIndexes: readonly number[]
 }
 
@@ -42,10 +48,38 @@ type SegmentationRunner = (
   config: TeacherQuestionSegmentationAgentConfig,
 ) => Promise<TeacherQuestionSegmentationAgentResult>
 
-function maxQuestionWidthRatio(questions: readonly TeacherSegmentedQuestion[]): number {
-  const regions = questions.flatMap(question => question.regions)
-  if (regions.length === 0) return 1
-  return Math.max(...regions.map(region => (region.rightLimit - region.left) / region.pageWidth))
+type SuccessfulGroupRun = {
+  readonly group: TeacherQuestionSegmentationPageGroup
+  readonly result: Extract<TeacherQuestionSegmentationAgentResult, { readonly ok: true }>
+}
+
+class QuestionSegmentationGroupFailure extends Error {
+  override name = 'QuestionSegmentationGroupFailure'
+
+  constructor(readonly result: Extract<TeacherQuestionSegmentationAgentResult, { readonly ok: false }>) {
+    super(result.error.message)
+  }
+}
+
+function maxQuestionWidthRatio(
+  questions: readonly TeacherSegmentedQuestion[],
+  outlierExcessRatio: number,
+): number {
+  const widths = questions.flatMap((question) => {
+    if (question.regions.length === 0) return []
+    return [Math.max(...question.regions.map(region => (
+      (region.rightLimit - region.left) / region.pageWidth
+    )))]
+  }).sort((left, right) => left - right)
+  if (widths.length === 0) return 1
+  const middle = Math.floor(widths.length / 2)
+  const upper = widths[middle]
+  if (upper === undefined) return 1
+  const median = widths.length % 2 === 0
+    ? ((widths[middle - 1] ?? upper) + upper) / 2
+    : upper
+  const largestInlier = widths.findLast(width => width <= median * (1 + outlierExcessRatio))
+  return largestInlier ?? median
 }
 
 /**
@@ -80,14 +114,23 @@ export function planQuestionSegmentationPageGroups(
     let end = offset
     let candidates = 0
     while (end < pageIndexes.length && end - offset < batchPages) {
+      if (end > offset && pageIndexes[end] !== (pageIndexes[end - 1] ?? -1) + 1) break
       const nextCandidates = candidateCounts[end] ?? 0
       if (end > offset && candidates + nextCandidates > batchCandidates) break
       candidates += nextCandidates
       end += 1
     }
     const corePageIndexes = pageIndexes.slice(offset, end)
-    const inspectionStart = Math.max(0, offset - 1)
-    const inspectionEnd = Math.min(pageIndexes.length, end + 1)
+    const precedingPage = pageIndexes[offset - 1]
+    const firstCorePage = pageIndexes[offset]
+    const finalCorePage = pageIndexes[end - 1]
+    const followingPage = pageIndexes[end]
+    const inspectionStart = precedingPage !== undefined && firstCorePage === precedingPage + 1
+      ? offset - 1
+      : offset
+    const inspectionEnd = followingPage !== undefined && finalCorePage !== undefined && followingPage === finalCorePage + 1
+      ? end + 1
+      : end
     groups.push({
       groupIndex: groups.length,
       corePageIndexes,
@@ -113,13 +156,45 @@ export async function segmentQuestionsInBatches(
   run: SegmentationRunner = segmentQuestionsWithAgent,
 ): Promise<TeacherQuestionSegmentResult> {
   let groups: readonly TeacherQuestionSegmentationPageGroup[]
+  let detectedAnswerSectionPageIndexes: readonly number[] = []
   try {
+    const availablePageIndexes = request.pages.map(page => page.pageIndex)
+    for (const [index, pageIndex] of availablePageIndexes.entries()) {
+      if (!Number.isSafeInteger(pageIndex) || pageIndex < 0
+        || (index > 0 && pageIndex <= (availablePageIndexes[index - 1] ?? -1))) {
+        throw new TypeError('pages must have unique non-negative indexes in source order')
+      }
+    }
+    const pageByIndex = new Map(request.pages.map(page => [page.pageIndex, page] as const))
+    const corePageIndexes = request.corePageIndexes ?? request.pages.map(page => page.pageIndex)
+    if (corePageIndexes.length === 0
+      || new Set(corePageIndexes).size !== corePageIndexes.length
+      || corePageIndexes.some(pageIndex => !pageByIndex.has(pageIndex))) {
+      throw new TypeError('corePageIndexes must contain unique pages from the supplied layout')
+    }
+    const ownedPageIndexes = new Set(corePageIndexes)
+    detectedAnswerSectionPageIndexes = detectDocumentAnswerSectionPageIndexes(request.pages)
+      .filter(pageIndex => ownedPageIndexes.has(pageIndex))
+    const corePages = corePageIndexes.map((pageIndex) => {
+      const page = pageByIndex.get(pageIndex)
+      if (page === undefined) throw new TypeError('corePageIndexes must contain pages from the supplied layout')
+      return page
+    })
     groups = planQuestionSegmentationPageGroups(
-      request.pages.map(page => page.pageIndex),
+      corePageIndexes,
       config.questionSegmentationBatchPages,
-      request.pages.map(countQuestionHeadCandidates),
+      corePages.map(page => countQuestionHeadCandidates(page)),
       config.questionSegmentationBatchCandidates,
     )
+    groups = groups.map((group) => {
+      const first = group.corePageIndexes[0]
+      const last = group.corePageIndexes.at(-1)
+      if (first === undefined || last === undefined) throw new TypeError('question group has no core pages')
+      return {
+        ...group,
+        inspectionPageIndexes: availablePageIndexes.filter(pageIndex => pageIndex >= first - 1 && pageIndex <= last + 1),
+      }
+    })
   } catch (error) {
     return {
       ok: false,
@@ -140,7 +215,7 @@ export async function segmentQuestionsInBatches(
   }
 
   const pageByIndex = new Map(request.pages.map(page => [page.pageIndex, page] as const))
-  const questions: TeacherSegmentedQuestion[] = []
+  const requests = new Map<number, TeacherQuestionSegmentRequest>()
   for (const group of groups) {
     const pages: TeacherQuestionLayoutPage[] = []
     for (const pageIndex of group.inspectionPageIndexes) {
@@ -151,15 +226,36 @@ export async function segmentQuestionsInBatches(
       pages.push(page)
     }
     const inspectionPages = new Set(group.inspectionPageIndexes)
-    const result = await run(ctx, {
+    requests.set(group.groupIndex, {
       ...request,
       pages,
       corePageIndexes: group.corePageIndexes,
+      answerSectionPageIndexes: detectedAnswerSectionPageIndexes.filter(pageIndex => (
+        group.corePageIndexes.includes(pageIndex)
+      )),
       ...(request.pagePreviews === undefined ? {} : {
         pagePreviews: request.pagePreviews.filter(preview => inspectionPages.has(preview.pageIndex)),
       }),
-    }, config)
-    if (!result.ok) return result
+    })
+  }
+  let successfulGroups: readonly SuccessfulGroupRun[]
+  try {
+    successfulGroups = await mapConcurrently(groups, config.questionSegmentationConcurrency, async (group) => {
+      const groupRequest = requests.get(group.groupIndex)
+      if (groupRequest === undefined) throw new Error('question group request is missing')
+      const result = await run(ctx, groupRequest, config)
+      if (!result.ok) throw new QuestionSegmentationGroupFailure(result)
+      return { group, result }
+    })
+  } catch (error) {
+    if (error instanceof QuestionSegmentationGroupFailure) return error.result
+    throw error
+  }
+
+  const questions: TeacherSegmentedQuestion[] = []
+  for (const item of successfulGroups) {
+    const result = item.result
+    const group = item.group
     const corePages = new Set(group.corePageIndexes)
     questions.push(...result.value.questions
       .filter(question => corePages.has(question.headPageIndex))
@@ -171,9 +267,13 @@ export async function segmentQuestionsInBatches(
     value: {
       groupCount: groups.length,
       groups,
+      maxConcurrentGroups: config.questionSegmentationConcurrency,
       maxSaveBatchBytes: config.maxQuestionBatchBytes,
       maxRecutAttempts: config.maxQuestionRecutAttempts,
-      maxQuestionWidthRatio: maxQuestionWidthRatio(numberedQuestions),
+      maxQuestionWidthRatio: maxQuestionWidthRatio(
+        numberedQuestions,
+        config.maxQuestionWidthOutlierExcessRatio,
+      ),
       questions: numberedQuestions,
     },
   }

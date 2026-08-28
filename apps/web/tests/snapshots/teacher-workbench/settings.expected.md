@@ -27,4 +27,4 @@
   - text: 切题清晰度倍率
   - spinbutton "切题清晰度倍率": "2"
   - text: 切题边距
-  - spinbutton "切题边距": "12"
+  - spinbutton "切题边距": "4"

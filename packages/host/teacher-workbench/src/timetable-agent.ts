@@ -3,14 +3,13 @@
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-agent'
-import type { ToolModelSelection } from '@deepseek-ai/dsh-agent-default-model'
 import type { ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
-import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import type { SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-subagent'
 import { defineTool, type ObjectJsonSchema } from '@deepseek-ai/dsh-tools'
 import sharp from 'sharp'
 import { z } from 'zod'
+import { lowLatencyToolSelection } from './tool-agent-model.ts'
 import type {
   TeacherTimetableNormalizeErrorCode,
   TeacherTimetableNormalizeRequest,
@@ -211,15 +210,6 @@ function sourceTool(name: string, regions: readonly OcrRegion[]) {
       }))))
     },
   })
-}
-
-function lowLatencyToolSelection(
-  selection: ToolModelSelection,
-  info: LlmResolvedModelInfo,
-): ToolModelSelection {
-  const effort = info.reasoning?.efforts.find(candidate => candidate.id === 'off')
-    ?? info.reasoning?.efforts.find(candidate => candidate.id === 'low')
-  return effort === undefined ? selection : { ...selection, reasoningEffort: effort.id }
 }
 
 const COMMON_PERSONA = `You are a timetable-reconstruction agent running inside an agent loop. Use only the supplied source, validation, and structured-output tools. Never emit analysis, a checklist, a transcription, progress text, or an explanation.

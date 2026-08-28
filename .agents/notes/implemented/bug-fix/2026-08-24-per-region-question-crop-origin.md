@@ -12,13 +12,15 @@ Validated question regions retain their own left, top, right, and bottom coordin
 
 ## Decision
 
-After all semantic page groups merge, the Host computes `maxQuestionWidthRatio` as the maximum `(right - left) / pageWidth` across accepted question regions. The segmentation result carries this one normalized width to both renderers.
+After all semantic page groups merge, the Host computes one question width as the maximum `(rightLimit - left) / pageWidth` across that question's regions. The median question width is the majority baseline. Widths more than `maxQuestionWidthOutlierExcessRatio` above the median do not participate in `maxQuestionWidthRatio`; the default excess is 0.5. The segmentation result carries the largest remaining normalized width to both renderers.
 
-For each page slice, the Host also records `rightLimit`: the nearest left edge of vertically overlapping content outside that question, or the source page edge when no such content exists. This value is a hard source-pixel limit independent of the region's content-derived `right` coordinate.
+Visual review and local recuts retain that initial PDF-wide width. They may revise per-region source geometry, but raw safe-lane limits from revised questions never replace the outlier-filtered width before another review pass or final persistence.
+
+For each page slice, the Host also records `rightLimit`: the nearest safe limit from either vertically overlapping content outside that question or the next repeated numbered layout lane. Accepted question heads and numbered theory headings can establish a lane start within an exact page-size family; owned content that crosses that start disables the inferred lane limit. The source page edge remains the fallback. This value is a hard source-pixel limit independent of the region's content-derived `right` coordinate.
 
 When accepted heads occupy both halves of one page, unclaimed single-column elements use the latest preceding head on the same side; unclaimed divider-crossing elements do not enlarge either column. A later head in the same horizontal span is also a hard vertical stop. Semantically excluded boxes that do not overlap an owned element are carried as `excludedAreas` rather than forcing one horizontal stop through adjacent content.
 
-The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer samples at most one maximum normalized width after that region's left edge, capped by `rightLimit`, then paints `excludedAreas` white. It places those unscaled source pixels on a white canvas whose width still equals the maximum normalized width. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
+The browser PDF.js renderer and the ordinary-conversation Host renderer preserve each region's own left, top, and bottom coordinates. Each renderer samples at most the maximum non-outlier normalized width after that region's left edge, capped by `rightLimit`, then paints `excludedAreas` white. It places those unscaled source pixels on a white canvas whose width still equals that shared width. A multi-page question applies the same rule independently to every page slice before the slices are joined vertically.
 
 ## Alternatives considered
 
@@ -28,10 +30,10 @@ The browser PDF.js renderer and the ordinary-conversation Host renderer preserve
 
 **Clamp only at the source page edge.** This preserves equal output widths but still samples a neighboring column whenever a wide question elsewhere in the PDF increases the shared width.
 
-**Classify arbitrary page-column topology before cropping.** A general column model is unnecessary for the observed two-page spreads. Accepted heads on each side provide the ownership evidence, and the nearest vertically overlapping non-owned element supplies a local pixel limit without assuming fixed column widths.
+**Classify arbitrary page-column topology before cropping.** A complete column model is unnecessary. Repeated numbered landmarks reveal stable lane starts, while vertically overlapping non-owned elements provide local limits on pages without enough repeated evidence. Neither rule assumes fixed column widths.
 
 ## Consequences
 
-Questions in different columns keep different horizontal origins and one consistent output width on equal-size pages. A region constrained by a page edge or neighboring column has white space to its right instead of unrelated source pixels. Excluded section copy can be removed without clipping an adjacent diagram whose vertical range overlaps it.
+Questions in different columns keep different horizontal origins and one consistent output width on equal-size pages. Numbered non-question material can establish the same safe lane limit before the first accepted question appears in that lane. A region constrained by a page edge or neighboring column has white space to its right instead of unrelated source pixels. Excluded section copy can be removed without clipping an adjacent diagram whose vertical range overlaps it.
 
-A genuinely wide accepted question increases the canvas width used by every crop but cannot override another region's source limit. Existing saved images are not rewritten; users recut a source PDF to apply this geometry. Client and Host regressions use horizontally separated regions and assert both the local crop origin and the absence of neighboring-column pixels beyond `rightLimit`.
+A question within the configured median-relative allowance can increase every canvas. A wider statistical outlier retains its validated geometry but does not widen the shared canvas; deployments can increase the configured allowance for document families that intentionally contain wider questions. Existing saved images are not rewritten; users recut a source PDF to apply this geometry. Client and Host regressions use horizontally separated regions and assert both the local crop origin and the absence of neighboring-column pixels beyond `rightLimit`. They also seed a wider raw safe lane after segmentation and assert that review and final rendering retain the initial non-outlier ratio. Host coverage weights a multi-region question once, retains a width exactly 50% above the median, excludes a wider value, and admits it when the configured allowance increases.

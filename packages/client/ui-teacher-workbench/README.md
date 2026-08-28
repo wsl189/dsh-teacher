@@ -24,11 +24,13 @@ Rectangular image erasure samples only an eight-pixel exterior ring around the s
 
 ## Background Question Cutting
 
-Confirming a PDF page range adds that browser-held file to a plugin-lifetime sequential queue and immediately frees the upload action for another PDF. The center workspace lists every accepted file in upload order with its current stage, integer percentage, saved-question count, elapsed time, and terminal error when applicable. One PDF executes at a time to avoid competing PDF.js, OCR, model, and durable-write work, while later uploads remain visible at zero percent with a zero elapsed timer until their turn begins; timing starts only when processing starts.
+Confirming a PDF page range adds that browser-held file to a plugin-lifetime sequential queue and immediately frees the upload action for another PDF. The center workspace lists every accepted file in upload order with its captured page-range label, current stage, integer percentage, saved-question count, elapsed time, and terminal error when applicable. A completed row also reports how many semantic groups were saved with their latest safe boundaries after exhausting visual-review attempts. One PDF executes at a time to avoid competing PDF.js, OCR, model, and durable-write work, while later uploads remain visible at zero percent with a zero elapsed timer until their turn begins; timing starts only when processing starts.
 
 Each accepted task captures its selected pages, destination, render settings, and current parent Session before asynchronous work starts. Unmounting Question Cutting, opening another workbench module, or navigating to another conversation removes only the current view subscriber; it does not cancel the worker or reroute an accepted task to the later Session. Returning to Question Cutting reconnects the center panel to the same queue projection.
 
 ## Question Crop Scale
+
+Equal-sized selected pages contribute repeated question-head lane starts. An empty later lane caps the preceding region at the next start, while recognized owned content crossing that start keeps its complete source extent; a half-empty two-column spread therefore does not force every output canvas to the full spread width.
 
 After every semantic group is merged, the Host returns the maximum MinerU-backed question-region width normalized to its source page. Each region also carries a right-side source limit derived from vertically overlapping content that belongs to another question. PDF.js keeps the region's own left, top, and bottom coordinates and samples at most one maximum width from that left edge without crossing the source limit. The output canvas still uses the maximum width and fills any unavailable right-hand area with white, so separate columns cannot leak into one another while equal-size pages retain one image width and raster scale.
 
