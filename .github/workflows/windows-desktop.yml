@@ -76,7 +76,15 @@ jobs:
         shell: pwsh
         run: |
           $executable = Resolve-Path 'apps/desktop/release/win-unpacked/DSH Teacher.exe'
-          $desktop = Start-Process -FilePath $executable -PassThru
+          $smokeData = Join-Path $env:RUNNER_TEMP 'dsh-desktop-smoke'
+          $stdout = Join-Path $smokeData 'stdout.log'
+          $stderr = Join-Path $smokeData 'stderr.log'
+          New-Item -ItemType Directory -Path $smokeData -Force | Out-Null
+          $desktop = Start-Process -FilePath $executable `
+            -ArgumentList "--user-data-dir=$smokeData" `
+            -RedirectStandardOutput $stdout `
+            -RedirectStandardError $stderr `
+            -PassThru
           $ready = $false
           $lastTitle = ''
           try {
@@ -96,6 +104,19 @@ jobs:
             if (-not $ready) {
               throw "Packaged desktop did not open the DeepSeek Harness window within 60 seconds (last title: '$lastTitle')"
             }
+          } catch {
+            $logs = @(
+              (Join-Path $smokeData 'logs/main.log'),
+              $stdout,
+              $stderr
+            )
+            foreach ($log in $logs) {
+              if (Test-Path $log) {
+                Write-Host "== $log =="
+                Get-Content $log
+              }
+            }
+            throw
           } finally {
             if (-not $desktop.HasExited) {
               if (-not $desktop.CloseMainWindow() -or -not $desktop.WaitForExit(15000)) {
