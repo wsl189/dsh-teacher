@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ocr",
   "description": "Provider-neutral document extraction runtime and browser Remote",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publishConfig": {
     "access": "public"
   },
