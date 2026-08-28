@@ -1,8 +1,30 @@
 import { composeError, Context } from '@deepseek-ai/cordis'
 import { isNonNullable, type Dict } from '@deepseek-ai/cosmokit'
-import { resolve as resolveImport } from 'import-meta-resolve'
 import { Entry, type EntryOptions } from './entry.ts'
 import { EntryGroup } from './group.ts'
+
+/** Runtime-only package name kept opaque to browser bundlers. */
+const IMPORT_META_RESOLVE: string = ['import-meta', 'resolve'].join('-')
+
+/** The resolver API used after its runtime-only import. */
+interface ImportMetaResolver {
+  resolve(specifier: string, parent: string | URL): string
+}
+
+/**
+ * Resolve and import one module with Node's ESM conditions from an arbitrary base URL.
+ *
+ * The resolver stays behind a computed dynamic import because Loader's entry APIs are
+ * present in client bundles even though configured plugin imports execute only in the
+ * host. Browser bundlers must not traverse the resolver's Node-only dependencies.
+ * @param name - Module specifier to resolve.
+ * @param baseUrl - Parent URL used for package and relative resolution.
+ * @returns The imported module namespace.
+ */
+export async function importResolvedModule(name: string, baseUrl: string): Promise<unknown> {
+  const resolver = await import(/* @vite-ignore */ IMPORT_META_RESOLVE) as ImportMetaResolver
+  return import(/* @vite-ignore */ resolver.resolve(name, baseUrl))
+}
 
 /** Mutable tree of loader entries. Persistence is supplied by subclasses. */
 export abstract class EntryTree {
@@ -155,7 +177,7 @@ export abstract class EntryTree {
       if (this.ctx.loader.internal) {
         return await this.ctx.loader.internal.import(name, this.ctx.baseUrl!, {})
       } else {
-        return await import(/* @vite-ignore */resolveImport(name, this.ctx.baseUrl!))
+        return await importResolvedModule(name, this.ctx.baseUrl!)
       }
     }, getOuterStack)
   }

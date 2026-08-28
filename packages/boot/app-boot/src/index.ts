@@ -11,9 +11,8 @@ import { readFileSync } from 'node:fs'
 import { parseEnv } from 'node:util'
 import { basename, dirname, isAbsolute, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
-import { resolve as resolveImport } from 'import-meta-resolve'
 import { Context, type FiberState } from '@deepseek-ai/cordis'
-import Loader, { type Entry, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
+import Loader, { importResolvedModule, type Entry, type EntryOptions } from '@deepseek-ai/cordis-plugin-loader'
 import Include, { applyEntryPatches, entryListSchema, type PatchOptions } from '@deepseek-ai/cordis-plugin-include'
 import Group from '@deepseek-ai/cordis-plugin-group'
 import { dshHomePath, resolveDshHome } from '@deepseek-ai/dsh-home-paths'
@@ -500,7 +499,7 @@ export async function mountRootInclude(
         if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(specifier, getOuterStack)
         const internal = this.ctx.loader.internal
         if (internal !== undefined) return internal.import(specifier, bareModuleBaseUrl, {})
-        return import(resolveImport(specifier, bareModuleBaseUrl))
+        return importResolvedModule(specifier, bareModuleBaseUrl)
       }
     }
   // `cordis:group` alongside it: a group row is how a composition gives one

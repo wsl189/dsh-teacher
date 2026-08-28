@@ -14,7 +14,7 @@ JavaScript 应用与本地 AI 服务依赖有不同的可移植性要求。Elect
 
 ## 决策
 
-`apps/desktop` 是一个 Electron 应用，并打包为当前用户安装的 Windows x64 NSIS 安装器。renderer 关闭 Node integration，并启用 context isolation 与 sandbox。它从私有 `127.0.0.1` 服务器加载现有 Web 表层。新增的 `@deepseek-ai/dsh/desktop-backend` 入口会以禁用浏览器打开和系统分配端口的方式启动普通 `web` profile，通过子进程 IPC 报告经过校验的 loopback URL，并只接受一种关闭请求。当 Electron 的嵌入式 Node 无法暴露内部模块 importer 时，Loader 改用公开 ESM 解析器，并保留每棵 entry 树的包解析基准与 import 条件；仅配置 HMR 仍然可用，模块 HMR 则继续要求 Node 内部机制。无论普通退出还是安装更新，Electron 进程都会等待 profile 完整释放后再继续。
+`apps/desktop` 是一个 Electron 应用，并打包为当前用户安装的 Windows x64 NSIS 安装器。renderer 关闭 Node integration，并启用 context isolation 与 sandbox。它从私有 `127.0.0.1` 服务器加载现有 Web 表层。新增的 `@deepseek-ai/dsh/desktop-backend` 入口会以禁用浏览器打开和系统分配端口的方式启动普通 `web` profile，通过子进程 IPC 报告经过校验的 loopback URL，并只接受一种关闭请求。当 Electron 的嵌入式 Node 无法暴露内部模块 importer 时，Loader 只在宿主 fallback 内加载公开 ESM 解析器，并保留每棵 entry 树的包解析基准与 import 条件；客户端 bundle 保留 Loader entry API，但不会遍历解析器的 Node 专用依赖。仅配置 HMR 仍然可用，模块 HMR 则继续要求 Node 内部机制。无论普通退出还是安装更新，Electron 进程都会等待 profile 完整释放后再继续。
 
 侧边栏在 `sidebar.settings` 旁声明独立的 `sidebar.update` single seat。只有 Electron preload 暴露窄 updater bridge 时，`ui-desktop-update` 才会占用它。检查中与已是最新版的快照不渲染；发现版本、下载进度、下载完成与可重试失败会分别显示对应操作。preload 只复制经过校验的可辨识联合更新状态，并暴露状态订阅、下载与安装动词。GitHub 访问、SemVer 选择、checksum、文件存储与安装器重启都通过 electron-updater 留在主进程中。
 

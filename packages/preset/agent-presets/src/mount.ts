@@ -16,10 +16,9 @@
 
 import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
-import { resolve as resolveImport } from 'import-meta-resolve'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { Include } from '@deepseek-ai/cordis-plugin-include'
-import type { EntryTree } from '@deepseek-ai/cordis-plugin-loader'
+import { importResolvedModule, type EntryTree } from '@deepseek-ai/cordis-plugin-loader'
 import { scopeOf, scopeParentOf, type ScopeKey } from '@deepseek-ai/dsh-scope'
 import { PresetMountError, type AgentPreset } from './preset.ts'
 
@@ -87,7 +86,7 @@ class PresetTree extends Include {
     if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(name, getOuterStack)
     const internal = this.ctx.loader.internal
     if (internal !== undefined) return internal.import(specifier, base, {})
-    return import(resolveImport(specifier, base))
+    return importResolvedModule(specifier, base)
   }
 
   /**

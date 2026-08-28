@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-25-windows-desktop-updates.md
-2026-08-25-windows-desktop-updates.md: a07f284d4f17f43f32268506d19ce9758ace2f1f
-2026-08-25-windows-desktop-updates.zh.md: 265d40d1c448100b05642e0a7d1ce2b27a11dffa
+2026-08-25-windows-desktop-updates.md: c67a81e726e382a34d83d27c4f345c03718fd510
+2026-08-25-windows-desktop-updates.zh.md: d371463ed79a132601a60f42665a90b7e78c7034
