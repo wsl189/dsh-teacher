@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest'
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
+  checkProductionPeerClosure,
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
@@ -72,5 +73,60 @@ describe('experimental workspace constraints', () => {
     expect(checkExperimentalDependencyIsolation(manifests)).toEqual([
       '@deepseek-ai/dsh-python-runtime: dependencies.@deepseek-ai/dsh-experimental-prototype must not reference an experimental package',
     ])
+  })
+})
+
+describe('application production peer closure', () => {
+  const application: WorkspaceManifest = {
+    dir: 'apps/application',
+    manifest: {
+      name: '@deepseek-ai/dsh-application',
+      dependencies: { '@deepseek-ai/dsh-consumer': 'workspace:^' },
+    },
+  }
+  const consumer: WorkspaceManifest = {
+    dir: 'packages/core/consumer',
+    manifest: {
+      name: '@deepseek-ai/dsh-consumer',
+      peerDependencies: { '@deepseek-ai/dsh-provider': 'workspace:^' },
+    },
+  }
+  const provider: WorkspaceManifest = {
+    dir: 'packages/core/provider',
+    manifest: { name: '@deepseek-ai/dsh-provider' },
+  }
+
+  it('rejects a required peer outside the production graph', () => {
+    expect(checkProductionPeerClosure(
+      [application, consumer, provider], '@deepseek-ai/dsh-application',
+    )).toEqual([
+      '@deepseek-ai/dsh-application: production dependencies must include @deepseek-ai/dsh-provider, a required peer of @deepseek-ai/dsh-consumer',
+    ])
+  })
+
+  it('accepts a required peer reached through another production dependency', () => {
+    const complete = {
+      ...application,
+      manifest: {
+        ...application.manifest,
+        optionalDependencies: { '@deepseek-ai/dsh-provider': 'workspace:^' },
+      },
+    }
+    expect(checkProductionPeerClosure(
+      [complete, consumer, provider], '@deepseek-ai/dsh-application',
+    )).toEqual([])
+  })
+
+  it('ignores optional peers', () => {
+    const optional = {
+      ...consumer,
+      manifest: {
+        ...consumer.manifest,
+        peerDependenciesMeta: { '@deepseek-ai/dsh-provider': { optional: true } },
+      },
+    }
+    expect(checkProductionPeerClosure(
+      [application, optional, provider], '@deepseek-ai/dsh-application',
+    )).toEqual([])
   })
 })

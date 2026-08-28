@@ -24,7 +24,7 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 `.github/workflows/windows-desktop.yml` 使用原生 Windows 与 Node 24，在每次分支推送和手动触发时构建 NSIS artifact。`v<版本>` tag 必须与仓库根共享 package 版本一致，workflow 才会把安装器、blockmap、channel 元数据与 SHA-256 checksum 列表发布到 GitHub Release。普通提交构建只保留为 workflow artifact，绝不会进入客户端更新 feed。
 
-安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。它不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
+安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。electron-builder 会沿生产依赖图打包而不会使用 workspace 开发依赖，因此 `@deepseek-ai/dsh` manifest 会直接满足静态启动路径使用的所有非可选 peer。安装器不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
 
 ## 考虑过的替代方案
 
@@ -44,4 +44,4 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Windows workflow 构建真实 NSIS target，要求解包后的应用打开 `DeepSeek Harness` 窗口，并在保留或发布 artifact 前拒绝启动失败、缺少安装器或缺少 `latest.yml` 的结果。
+桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。Windows workflow 构建真实 NSIS target，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口，并在拒绝启动失败前输出 Electron 日志；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。

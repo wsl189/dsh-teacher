@@ -46,7 +46,7 @@ profile 目录包含一个 `package.json`，其中记录树外插件依赖，以
 
 ## 桌面端 Host
 
-`./desktop-backend` export 是 [`@deepseek-ai/dsh-desktop`](../desktop/README.zh.md) 使用的进程入口，并不是面向用户的命令。它以 `--no-open --port 0` 启动同一个 `web` profile，通过父进程 IPC 通道报告规范 loopback URL，并只接受一种带类型的 `shutdown` 请求。普通 profile 关闭控制器会先释放 Loader 配置树，再让子进程断开，因此桌面更新不会替换仍被运行中 Host 使用的文件。
+`./desktop-backend` export 是 [`@deepseek-ai/dsh-desktop`](../desktop/README.zh.md) 使用的进程入口，并不是面向用户的命令。它以 `--no-open --port 0` 启动同一个 `web` profile，通过父进程 IPC 通道报告规范 loopback URL，并只接受一种带类型的 `shutdown` 请求。`@deepseek-ai/dsh` 的生产依赖会直接满足启动路径导入的所有非可选 peer，确保桌面打包不依赖 workspace 开发依赖。普通 profile 关闭控制器会先释放 Loader 配置树，再让子进程断开，因此桌面更新不会替换仍被运行中 Host 使用的文件。
 
 ## 开发
 

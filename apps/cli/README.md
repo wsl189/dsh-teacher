@@ -44,7 +44,7 @@ The [CLI behavior reference](reference/README.md) owns exact layer precedence, f
 
 ## Desktop backend
 
-The `./desktop-backend` export is the process entry used by [`@deepseek-ai/dsh-desktop`](../desktop/README.md), not a user-facing command. It boots the same `web` profile with `--no-open --port 0`, reports the canonical loopback URL over the parent IPC channel, and accepts one typed `shutdown` request. The normal profile shutdown controller disposes the Loader tree before the child disconnects, so desktop updates do not replace files beneath a live Host.
+The `./desktop-backend` export is the process entry used by [`@deepseek-ai/dsh-desktop`](../desktop/README.md), not a user-facing command. It boots the same `web` profile with `--no-open --port 0`, reports the canonical loopback URL over the parent IPC channel, and accepts one typed `shutdown` request. The `@deepseek-ai/dsh` production dependencies directly fulfill every non-optional peer imported by the boot path so desktop packaging never relies on workspace development dependencies. The normal profile shutdown controller disposes the Loader tree before the child disconnects, so desktop updates do not replace files beneath a live Host.
 
 ## Development
 

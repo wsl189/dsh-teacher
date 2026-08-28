@@ -87,6 +87,7 @@ export interface PackageManifest {
   publishConfig?: { access?: string }
   repository?: { type?: string; url?: string; directory?: string }
   peerDependencies?: Record<string, string>
+  peerDependenciesMeta?: Record<string, { optional?: boolean }>
   devDependencies?: Record<string, string>
   dependencies?: Record<string, string>
   optionalDependencies?: Record<string, string>
@@ -444,6 +445,44 @@ export function checkExperimentalDependencyIsolation(manifests: readonly Workspa
 }
 
 /**
+ * Require a packaged application to include every non-optional peer used by
+ * its complete production dependency graph. Package builders follow declared
+ * production edges and cannot recover peers supplied only by workspace
+ * development dependencies.
+ * @param manifests - every workspace manifest available to the application.
+ * @param applicationName - package whose production dependency graph is packaged.
+ * @returns One error for each required peer absent from that graph.
+ */
+export function checkProductionPeerClosure(
+  manifests: readonly WorkspaceManifest[], applicationName: string,
+): string[] {
+  const byName = new Map(manifests.flatMap(entry => entry.manifest.name === undefined
+    ? []
+    : [[entry.manifest.name, entry.manifest] as const]))
+  const closure = new Set<string>()
+  const visit = (name: string): void => {
+    if (closure.has(name)) return
+    closure.add(name)
+    const manifest = byName.get(name)
+    if (manifest === undefined) return
+    for (const dependency of Object.keys(manifest.dependencies ?? {})) visit(dependency)
+    for (const dependency of Object.keys(manifest.optionalDependencies ?? {})) visit(dependency)
+  }
+  visit(applicationName)
+
+  const errors: string[] = []
+  for (const owner of closure) {
+    const manifest = byName.get(owner)
+    if (manifest === undefined) continue
+    for (const peer of Object.keys(manifest.peerDependencies ?? {})) {
+      if (manifest.peerDependenciesMeta?.[peer]?.optional === true || closure.has(peer)) continue
+      errors.push(`${applicationName}: production dependencies must include ${peer}, a required peer of ${owner}`)
+    }
+  }
+  return errors.sort()
+}
+
+/**
  * Require the `workspace:` protocol for every reference to a workspace member.
  *
  * A hand-written range says nothing about the version the workspace actually
@@ -479,6 +518,7 @@ export function main(): void {
     ...manifests.flatMap(checkWorkspace),
     ...checkWorkspaceProtocol(manifests),
     ...checkExperimentalDependencyIsolation(dependencyManifests),
+    ...checkProductionPeerClosure(manifests, '@deepseek-ai/dsh'),
     ...checkHierarchyShape(),
     ...collectProjectReferenceFaceViolations(root),
   ]
