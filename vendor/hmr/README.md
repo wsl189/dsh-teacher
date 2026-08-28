@@ -17,8 +17,9 @@ spelling even when Windows supplied an 8.3 alias.
 
 - `@cordisjs/plugin-loader`
 - `@cordisjs/plugin-timer`
-- A runtime that exposes Node's internal module loader. The package throws if
-  the loader service has no internal module loader available.
+- A runtime that exposes Node's internal module loader when `root` contains
+  module-watch paths. An empty `root` supports exact config-file watches
+  without loader internals.
 
 ## Usage
 

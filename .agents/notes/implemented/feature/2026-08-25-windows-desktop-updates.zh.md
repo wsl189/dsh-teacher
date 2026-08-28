@@ -14,7 +14,7 @@ JavaScript 应用与本地 AI 服务依赖有不同的可移植性要求。Elect
 
 ## 决策
 
-`apps/desktop` 是一个 Electron 应用，并打包为当前用户安装的 Windows x64 NSIS 安装器。renderer 关闭 Node integration，并启用 context isolation 与 sandbox。它从私有 `127.0.0.1` 服务器加载现有 Web 表层。新增的 `@deepseek-ai/dsh/desktop-backend` 入口会以禁用浏览器打开和系统分配端口的方式启动普通 `web` profile，通过子进程 IPC 报告经过校验的 loopback URL，并只接受一种关闭请求。无论普通退出还是安装更新，Electron 进程都会等待 profile 完整释放后再继续。
+`apps/desktop` 是一个 Electron 应用，并打包为当前用户安装的 Windows x64 NSIS 安装器。renderer 关闭 Node integration，并启用 context isolation 与 sandbox。它从私有 `127.0.0.1` 服务器加载现有 Web 表层。新增的 `@deepseek-ai/dsh/desktop-backend` 入口会以禁用浏览器打开和系统分配端口的方式启动普通 `web` profile，通过子进程 IPC 报告经过校验的 loopback URL，并只接受一种关闭请求。当 Electron 的嵌入式 Node 无法暴露内部模块 importer 时，Loader 改用公开 ESM 解析器，并保留每棵 entry 树的包解析基准与 import 条件；仅配置 HMR 仍然可用，模块 HMR 则继续要求 Node 内部机制。无论普通退出还是安装更新，Electron 进程都会等待 profile 完整释放后再继续。
 
 侧边栏在 `sidebar.settings` 旁声明独立的 `sidebar.update` single seat。只有 Electron preload 暴露窄 updater bridge 时，`ui-desktop-update` 才会占用它。检查中与已是最新版的快照不渲染；发现版本、下载进度、下载完成与可重试失败会分别显示对应操作。preload 只复制经过校验的可辨识联合更新状态，并暴露状态订阅、下载与安装动词。GitHub 访问、SemVer 选择、checksum、文件存储与安装器重启都通过 electron-updater 留在主进程中。
 
@@ -44,4 +44,4 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。Windows workflow 构建真实 NSIS target，解包后的应用未打开 `DeepSeek Harness` 窗口时报告告警，并在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。发布验收由目标 Windows 环境手动启动完成。
+桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Windows workflow 构建真实 NSIS target，要求解包后的应用打开 `DeepSeek Harness` 窗口，并在保留或发布 artifact 前拒绝启动失败、缺少安装器或缺少 `latest.yml` 的结果。

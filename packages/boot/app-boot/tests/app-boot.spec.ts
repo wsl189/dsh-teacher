@@ -559,19 +559,22 @@ describe('boot', () => {
     }
   })
 
-  it('can resolve bare plugins from the harness when the config project shadows their package name', async () => {
+  it('resolves config- and host-owned bare plugins with and without Loader internals', async () => {
     const dir = tmp()
     const harness = tmp()
     const absolutePlugin = join(dir, 'absolute.mjs')
     const shadow = join(dir, 'node_modules', '@deepseek-ai', 'dsh-system-prompt')
     const harnessPlugin = join(harness, 'node_modules', '@deepseek-ai', 'dsh-system-prompt')
+    const dynamicPlugin = join(dir, 'node_modules', '@fixture', 'dynamic-plugin')
     mkdirSync(shadow, { recursive: true })
     mkdirSync(harnessPlugin, { recursive: true })
+    mkdirSync(dynamicPlugin, { recursive: true })
     writeFileSync(join(shadow, 'package.json'), JSON.stringify({
       name: '@deepseek-ai/dsh-system-prompt',
       type: 'module',
-      exports: './index.mjs',
+      exports: { import: './index.mjs', require: './index.cjs' },
     }))
+    writeFileSync(join(shadow, 'index.cjs'), 'throw new Error("require condition selected")\n')
     writeFileSync(join(shadow, 'index.mjs'), [
       'export function apply(ctx) {',
       '  ctx.provide("shadowPluginLoaded", true)',
@@ -581,14 +584,25 @@ describe('boot', () => {
     writeFileSync(join(harnessPlugin, 'package.json'), JSON.stringify({
       name: '@deepseek-ai/dsh-system-prompt',
       type: 'module',
-      exports: './index.mjs',
+      exports: { import: './index.mjs', require: './index.cjs' },
     }))
+    writeFileSync(join(harnessPlugin, 'index.cjs'), 'throw new Error("require condition selected")\n')
     writeFileSync(join(harnessPlugin, 'index.mjs'), [
       'export function apply(ctx) {',
       '  ctx.provide("harnessPluginLoaded", true)',
       '}',
       '',
     ].join('\n'))
+    writeFileSync(join(dynamicPlugin, 'package.json'), JSON.stringify({
+      name: '@fixture/dynamic-plugin',
+      type: 'module',
+      exports: { import: './index.mjs', require: './index.cjs' },
+    }))
+    writeFileSync(join(dynamicPlugin, 'index.cjs'), 'throw new Error("require condition selected")\n')
+    writeFileSync(
+      join(dynamicPlugin, 'index.mjs'),
+      'export function apply(ctx) { ctx.provide("dynamicPluginLoaded", true) }\n',
+    )
     writeFileSync(join(dir, 'relative.mjs'), 'export function apply(ctx) { ctx.provide("relativePluginLoaded", true) }\n')
     writeFileSync(absolutePlugin, 'export function apply(ctx) { ctx.provide("absolutePluginLoaded", true) }\n')
     const entries = [
@@ -623,6 +637,31 @@ describe('boot', () => {
       expect(ctx.get('absolutePluginLoaded')).toBe(true)
     } finally {
       await ctx.fiber.dispose()
+    }
+    const withoutLoaderInternals = (hostCtx: Context): void => {
+      hostCtx.loader.internal = undefined
+    }
+    const fallbackConfigOwned = await boot(NAME, configOwnedPath, undefined, withoutLoaderInternals)
+    try {
+      await fallbackConfigOwned.loader.create({ name: '@fixture/dynamic-plugin' })
+      await fallbackConfigOwned.loader.await()
+      expect(fallbackConfigOwned.get('shadowPluginLoaded')).toBe(true)
+      expect(fallbackConfigOwned.get('systemPrompt')).toBeUndefined()
+      expect(fallbackConfigOwned.get('relativePluginLoaded')).toBe(true)
+      expect(fallbackConfigOwned.get('dynamicPluginLoaded')).toBe(true)
+    } finally {
+      await fallbackConfigOwned.fiber.dispose()
+    }
+    const fallbackHostOwned = await boot(
+      NAME, hostOwnedPath, undefined, withoutLoaderInternals, harnessBaseUrl,
+    )
+    try {
+      expect(fallbackHostOwned.get('harnessPluginLoaded')).toBe(true)
+      expect(fallbackHostOwned.get('shadowPluginLoaded')).toBeUndefined()
+      expect(fallbackHostOwned.get('relativePluginLoaded')).toBe(true)
+      expect(fallbackHostOwned.get('absolutePluginLoaded')).toBe(true)
+    } finally {
+      await fallbackHostOwned.fiber.dispose()
     }
   })
 

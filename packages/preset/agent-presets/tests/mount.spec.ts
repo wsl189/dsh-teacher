@@ -38,9 +38,12 @@ const ROOTS = [
  * @param roster - roster config, defaulting to the fixture roots.
  * @returns the booted context.
  */
-async function harness(roster: Config = { default: 'standard', roots: ROOTS, includeUserRoot: false }): Promise<Context> {
+async function harness(
+  roster: Config = { default: 'standard', roots: ROOTS, includeUserRoot: false },
+  base = FIXTURES,
+): Promise<Context> {
   const ctx = new Context()
-  ctx.baseUrl = pathToFileURL(FIXTURES).href + '/'
+  ctx.baseUrl = pathToFileURL(base).href + '/'
   await ctx.plugin(Loader)
   ctx.loader.builtins.include = Include
   await ctx.plugin(LlmRuntime)
@@ -85,6 +88,39 @@ beforeEach(async () => {
 })
 
 describe('composing an agent from a preset', () => {
+  it('resolves host-owned packages without Loader internals', async () => {
+    const host = await mkdtemp(join(tmpdir(), 'dsh-preset-host-'))
+    const root = await mkdtemp(join(tmpdir(), 'dsh-preset-user-'))
+    const packageDir = join(host, 'node_modules', '@fixture', 'preset-plugin')
+    const presetDir = join(root, 'embedded')
+    await mkdir(packageDir, { recursive: true })
+    await mkdir(presetDir)
+    await writeFile(join(packageDir, 'package.json'), JSON.stringify({
+      name: '@fixture/preset-plugin',
+      type: 'module',
+      exports: { import: './index.mjs', require: './index.cjs' },
+    }))
+    await writeFile(join(packageDir, 'index.cjs'), 'throw new Error("require condition selected")\n')
+    await writeFile(join(packageDir, 'index.mjs'), await readFile(join(FIXTURES, 'plugins', 'contribute.js')))
+    await writeFile(
+      join(presetDir, COMPOSITION_FILE),
+      '- id: only\n  name: "@fixture/preset-plugin"\n  config:\n    tool: embedded\n',
+    )
+    const scoped = await harness(
+      { default: 'embedded', roots: [{ path: root, trust: 'user' }], includeUserRoot: false },
+      host,
+    )
+    scoped.loader.internal = undefined
+    try {
+      const agent = await agentOn(scoped, 'sess-embedded-node')
+      expect(toolNames(scoped, agent)).toEqual(['embedded'])
+    } finally {
+      await scoped.fiber.dispose()
+      await rm(host, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true })
+    }
+  })
+
   it('hands an absolute plugin path to Node as a file URL', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-preset-absolute-plugin-'))
     const presetDir = join(root, 'absolute')

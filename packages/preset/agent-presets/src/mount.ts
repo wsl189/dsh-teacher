@@ -16,6 +16,7 @@
 
 import { isAbsolute } from 'node:path'
 import { pathToFileURL } from 'node:url'
+import { resolve as resolveImport } from 'import-meta-resolve'
 import { Context, type Fiber } from '@deepseek-ai/cordis'
 import { Include } from '@deepseek-ai/cordis-plugin-include'
 import type { EntryTree } from '@deepseek-ai/cordis-plugin-loader'
@@ -85,10 +86,8 @@ class PresetTree extends Include {
     if (base === undefined) return super.import(specifier, getOuterStack)
     if (name.startsWith('.') || name.startsWith('cordis:')) return super.import(name, getOuterStack)
     const internal = this.ctx.loader.internal
-    /* v8 ignore next -- Node always supplies the internal module loader; the branch keeps a
-       hypothetical embedder from losing the row's name in a resolution error. */
-    if (internal === undefined) return super.import(specifier, getOuterStack)
-    return internal.import(specifier, base, {})
+    if (internal !== undefined) return internal.import(specifier, base, {})
+    return import(resolveImport(specifier, base))
   }
 
   /**

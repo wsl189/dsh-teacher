@@ -50,6 +50,7 @@
     "@deepseek-ai/cordis": "workspace:^"
   },
   "dependencies": {
+    "import-meta-resolve": "^4.2.0",
     "js-yaml": "^4.1.0",
     "@deepseek-ai/schemastery": "workspace:^"
   },

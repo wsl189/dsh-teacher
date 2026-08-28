@@ -72,8 +72,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
-      - name: Smoke packaged desktop startup (advisory)
-        continue-on-error: true
+      - name: Smoke packaged desktop startup
         shell: pwsh
         run: |
           $executable = Resolve-Path 'apps/desktop/release/win-unpacked/DSH Teacher.exe'

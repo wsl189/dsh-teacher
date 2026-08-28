@@ -9,18 +9,29 @@ import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Timer from '@deepseek-ai/cordis-plugin-timer'
 import { describe, expect, it, vi } from 'vitest'
 
-async function bootHmr(dir: string, root: string[] = [], usePolling?: boolean): Promise<Context> {
+async function bootHmr(
+  dir: string,
+  root: string[] = [],
+  usePolling?: boolean,
+  internal = true,
+): Promise<Context> {
   const ctx = new Context()
   ctx.baseUrl = pathToFileURL(dir).href + '/'
   await ctx.plugin(Loader)
+  if (!internal) ctx.loader.internal = undefined
   await ctx.plugin(Timer)
-  await ctx.plugin(Hmr, {
-    root,
-    ignored: [],
-    debounce: 0,
-    ...usePolling === undefined ? {} : { usePolling },
-  })
-  return ctx
+  try {
+    await ctx.plugin(Hmr, {
+      root,
+      ignored: [],
+      debounce: 0,
+      ...usePolling === undefined ? {} : { usePolling },
+    })
+    return ctx
+  } catch (error) {
+    await ctx.fiber.dispose()
+    throw error
+  }
 }
 
 async function eventually(test: () => boolean, message: string): Promise<void> {
@@ -32,6 +43,29 @@ async function eventually(test: () => boolean, message: string): Promise<void> {
 }
 
 describe('HMR exact config paths', () => {
+  it('supports config-only watching without Loader internals', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-config-only-'))
+    const filename = join(dir, 'plugins.yml')
+    const ctx = await bootHmr(dir, [], undefined, false)
+    const observed: string[] = []
+    try {
+      await ctx.hmr.registerConfig(filename, () => {
+        observed.push(readFileSync(filename, 'utf8'))
+      })
+      writeFileSync(filename, 'embedded-node')
+      await eventually(() => observed.includes('embedded-node'), 'HMR did not observe config creation')
+    } finally {
+      await ctx.fiber.dispose()
+    }
+  })
+
+  it('rejects module roots without Loader internals', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'dsh-hmr-module-root-'))
+    await expect(bootHmr(dir, ['.'], undefined, false)).rejects.toThrow(
+      '--expose-internals is required when HMR watches module roots',
+    )
+  })
+
   it('observes module changes when its watch base is a filesystem alias', { timeout: 30_000 }, async () => {
     const target = mkdtempSync(join(tmpdir(), 'dsh-hmr-module-canonical-'))
     const alias = `${target}-alias`

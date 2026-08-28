@@ -39,6 +39,7 @@
     }
   },
   "dependencies": {
-    "@deepseek-ai/cosmokit": "workspace:^"
+    "@deepseek-ai/cosmokit": "workspace:^",
+    "import-meta-resolve": "^4.2.0"
   }
 }
