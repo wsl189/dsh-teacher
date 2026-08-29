@@ -92,9 +92,26 @@ describe('web e2e: QQ-configured voice input', () => {
           this.onstop?.()
         }
       }
+      class DeterministicAudioContext {
+        async decodeAudioData(_audioData: ArrayBuffer): Promise<AudioBuffer> {
+          const samples = Float32Array.from([0.25, 0.25, 0.25, -0.25, -0.25, -0.25])
+          return {
+            length: samples.length,
+            numberOfChannels: 1,
+            sampleRate: 48_000,
+            getChannelData: () => samples,
+          } as unknown as AudioBuffer
+        }
+
+        close(): Promise<void> { return Promise.resolve() }
+      }
       Object.defineProperty(window, 'MediaRecorder', {
         configurable: true,
         value: DeterministicMediaRecorder,
+      })
+      Object.defineProperty(window, 'AudioContext', {
+        configurable: true,
+        value: DeterministicAudioContext,
       })
       Object.defineProperty(window.navigator, 'mediaDevices', {
         configurable: true,
@@ -124,7 +141,8 @@ describe('web e2e: QQ-configured voice input', () => {
     expect(uploads[0]).toContain('name="model"')
     expect(uploads[0]).toContain('whisper-large-v3')
     expect(uploads[0]).toContain('name="language"')
-    expect(uploads[0]).toContain('name="file"; filename="voice-input.webm"')
+    expect(uploads[0]).toContain('name="file"; filename="voice-input.wav"')
+    expect(uploads[0]).toContain('Content-Type: audio/wav')
     await compareOrRefreshGolden(
       COMPOSER_EXPECTED,
       await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd),

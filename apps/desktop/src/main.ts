@@ -12,6 +12,7 @@ import {
 import {
   UPDATE_CHANNELS, type DesktopUpdateState,
 } from './update-protocol.ts'
+import { installRendererPermissions } from './renderer-permissions.ts'
 
 const require = createRequire(import.meta.url)
 const BACKEND_ENTRY = require.resolve('@deepseek-ai/dsh/desktop-backend')
@@ -155,6 +156,8 @@ async function createWindow(url: string): Promise<void> {
     },
   })
   mainWindow = window
+  const disposePermissions = installRendererPermissions(window, url)
+  window.once('closed', disposePermissions)
   window.once('ready-to-show', () => { window.show() })
   window.webContents.setWindowOpenHandler(({ url: target }) => {
     let protocol: string | undefined

@@ -37,7 +37,7 @@ describe('VoiceInputButton', () => {
     fireEvent.click(screen.getByRole('button', { name: '停止语音输入' }))
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在识别语音' }).disabled).toBe(true)
     expect(stopTrack).toHaveBeenCalledOnce()
-    expect(transcribe).toHaveBeenCalledWith(expect.any(Blob))
+    await waitFor(() => { expect(transcribe).toHaveBeenCalledWith(expect.any(Blob)) })
     await act(async () => { resolveTranscript?.('  课堂记录  '); await Promise.resolve() })
     expect(onTranscript).toHaveBeenCalledWith('课堂记录')
     await screen.findByRole('button', { name: '开始语音输入' })

@@ -1,8 +1,13 @@
 /** Browser microphone recording lifecycle shared by product voice-input surfaces. */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
+import {
+  normalizeSpeechRecording,
+  type AudioDecoderConstructor,
+} from './speech-recording.ts'
 
 const PREFERRED_MEDIA_TYPES = [
+  'audio/wav',
   'audio/webm;codecs=opus',
   'audio/ogg;codecs=opus',
   'audio/mp4',
@@ -16,7 +21,7 @@ export interface VoiceRecorderController {
   readonly listening: boolean
   /** Whether microphone permission and recorder startup are pending. */
   readonly starting: boolean
-  /** Whether the completed recording is awaiting its transcript. */
+  /** Whether the completed recording is being prepared or awaiting its transcript. */
   readonly transcribing: boolean
   /** Begin a new microphone recording. */
   start(): Promise<void>
@@ -28,7 +33,7 @@ export interface VoiceRecorderController {
 
 /** Voice-recorder callbacks. */
 export interface VoiceRecorderOptions {
-  /** Send one completed browser recording to the product transcription service. */
+  /** Send one prepared browser recording to the product transcription service. */
   readonly transcribe: ((audio: Blob) => Promise<string>) | undefined
   /** Receive one final normalized transcript. */
   readonly onTranscript: (text: string) => void
@@ -59,9 +64,12 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
   const browser = globalThis as unknown as {
     readonly navigator?: { readonly mediaDevices?: MediaDevices }
     readonly MediaRecorder?: typeof MediaRecorder
+    readonly AudioContext?: AudioDecoderConstructor
+    readonly webkitAudioContext?: AudioDecoderConstructor
   }
   const mediaDevices = browser.navigator?.mediaDevices
   const Recorder = browser.MediaRecorder
+  const Decoder = browser.AudioContext ?? browser.webkitAudioContext
   const supported = Recorder !== undefined
     && typeof mediaDevices?.getUserMedia === 'function'
     && options.transcribe !== undefined
@@ -124,7 +132,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
         const transcribe = transcribeHandler.current
         if (transcribe === undefined) return
         setTranscribing(true)
-        void transcribe(audio).then((text) => {
+        void normalizeSpeechRecording(audio, Decoder).then(transcribe).then((text) => {
           if (generation.current !== currentGeneration) return
           const normalized = text.trim()
           if (normalized === '') errorHandler.current('empty-result')
@@ -149,7 +157,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
     } finally {
       if (generation.current === currentGeneration) setStarting(false)
     }
-  }, [Recorder, mediaDevices, releaseStream, starting, supported, transcribing])
+  }, [Decoder, Recorder, mediaDevices, releaseStream, starting, supported, transcribing])
 
   const toggle = useCallback((): void => {
     if (listening || starting) stop()

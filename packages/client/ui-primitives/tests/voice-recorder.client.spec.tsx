@@ -180,6 +180,11 @@ describe('useVoiceRecorder', () => {
     })
     expect(props.onError).toHaveBeenCalledTimes(1)
 
+    const withoutDetails = await start(hook.result)
+    act(() => { withoutDetails.onerror?.(new Event('error') as never) })
+    expect(props.onError).toHaveBeenNthCalledWith(2, 'recording-failed')
+    expect(stopTrack).toHaveBeenCalledTimes(2)
+
     hook.unmount()
     const denied = Object.assign(new Error('denied'), { name: 'NotAllowedError' })
     const named = installRecorder(() => Promise.reject(denied))

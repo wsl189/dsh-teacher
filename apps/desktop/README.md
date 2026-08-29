@@ -2,13 +2,17 @@
 
 English | [中文](README.zh.md)
 
-Windows desktop distribution for this repository. Electron opens the existing Web surface in a hardened renderer while `@deepseek-ai/dsh/desktop-backend` runs the complete `web` profile as an IPC-controlled child process on `127.0.0.1` with an operating-system-assigned port. Closing the app or installing an update disposes the plugin tree before the child exits.
+Windows desktop distribution for this repository. Electron opens the existing Web surface in a hardened renderer while `@deepseek-ai/dsh/desktop-backend` runs the complete `web` profile as an IPC-controlled child process on `127.0.0.1` with an operating-system-assigned port. Closing the app or installing an update disposes the plugin tree before the child exits. Directory selection stays inside the running application: workspace actions and plugin fields such as a QQ bot's current workspace open the in-app directory browser instead of a second packaged process for a Windows folder dialog.
 
 ## Install and update
 
 Download `DSH-Teacher-<version>-x64-Setup.exe` from this repository's [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases). The NSIS installer supports a per-user installation directory, Start menu entry, and desktop shortcut. At startup an installed build checks the same Release feed. A newer version makes the “Update” action appear to the right of Settings; the action downloads the installer, verifies electron-builder's `latest.yml` SHA-512 metadata, then offers “Restart to update”.
 
 The application stores sessions, settings, credentials, and teacher-workbench data under the ordinary DSH home (`%USERPROFILE%\.dsh` unless `DSH_HOME` is set). Reinstalling the app does not replace that directory. Copy it separately when migrating user data to another computer.
+
+Composer and Daily Management voice input share the same microphone path. Electron grants audio capture only to this app's main private-loopback page, keeps camera and foreign content denied, and preserves clipboard writes used by copy controls. The completed browser recording is decoded locally into 16 kHz mono PCM WAV before the QQ-configured ASR request, matching the WAV input used by QQ voice messages instead of relying on each local service to decode Chromium WebM. On Windows, **Settings → Privacy & security → Microphone → Let desktop apps access your microphone** must also be enabled; an operating-system denial appears as the existing microphone-permission notice.
+
+The in-app directory browser lists real folders from the Windows Host and can select the current folder; the QQ workspace dialog is titled “Select bot workspace folder” or “选择机器人工作区目录”, depending on the UI language. The absence of a Windows system folder window is expected in the installed desktop build.
 
 ## Build locally
 
@@ -20,11 +24,11 @@ pnpm run build:official
 pnpm --filter @deepseek-ai/dsh-desktop run package:win
 ```
 
-The installer, blockmap, updater metadata, and unpacked application are written to `apps/desktop/release/`. Before distributing the installer, start `apps/desktop/release/win-unpacked/DSH Teacher.exe` on Windows and wait for the `DeepSeek Harness` main window; successful artifact generation alone does not execute the Electron main process. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files.
+The installer, blockmap, updater metadata, and unpacked application are written to `apps/desktop/release/`. Before distributing the installer, start `apps/desktop/release/win-unpacked/DSH Teacher.exe` on Windows, wait for the `DeepSeek Harness` main window, and confirm that a workspace directory action opens an in-app listing; successful artifact generation alone does not execute the Electron main process. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files.
 
 ## GitHub automation
 
-`.github/workflows/windows-desktop.yml` runs on every pushed branch and manual dispatch. It builds the repository on `windows-2025`, creates the NSIS installer, writes `SHA256SUMS.txt`, and retains the installer as a workflow artifact. A tag push publishes those files as the update feed only when the tag exactly matches `v<root package version>`.
+`.github/workflows/windows-desktop.yml` runs on every pushed branch and manual dispatch. It builds the repository on `windows-2025`, creates the NSIS installer, starts the unpacked application, and calls its real `host.listDirectory` API before writing `SHA256SUMS.txt` and retaining the installer as a workflow artifact. A tag push publishes those files as the update feed only when the tag exactly matches `v<root package version>`.
 
 For a new updater-visible release, advance the shared repository version, push that version commit, then create the matching desktop tag:
 
