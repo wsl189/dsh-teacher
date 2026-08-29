@@ -15,13 +15,13 @@ Web 组合还从 npm 固定 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0
 
 ## 配置与迁移
 
-可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务及相关数据仍保存在 `DSH_HOME`（`~/.dsh` 或 `%USERPROFILE%\.dsh`）下。机器人通过**设置 → 插件 → 连接平台**配置。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
+可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务及相关数据仍保存在 `DSH_HOME`（`~/.dsh` 或 `%USERPROFILE%\.dsh`）下。机器人通过**设置 → 插件 → 连接平台**配置。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
 
 迁移电脑时，在新机器安装 EXE 或克隆并构建仓库，再单独复制所需的 `DSH_HOME` 数据。不要把这三个插件重复安装到生成的用户 profile；重复配置项可能重复注册工具和侧边栏入口。
 
 ## 验证
 
-真实发行组合的浏览器测试会断言三个客户端模块均进入模块图，并固定 Host 级 `cron_*` 与 `qq_send_local_file` 工具。语音输入测试还会把浏览器录音经同一份 QQ 配置发送到本地转写服务。
+真实发行组合的浏览器测试会断言三个客户端模块均进入模块图，并固定 Host 级 `cron_*` 与 `qq_send_local_file` 工具。语音输入测试还会把浏览器录音经同一份 QQ 配置发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作，并固定真实 Host 后端返回的应用内目录列表快照。
 
 ## 产物说明
 

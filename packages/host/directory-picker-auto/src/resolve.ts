@@ -22,6 +22,8 @@ export interface DirectoryPickerHostFacts {
   bindHost: HttpServerConfig['host']
   /** Host process platform. */
   platform: NodeJS.Platform
+  /** Whether the Host runs inside Electron instead of a standalone Node.js executable. */
+  embeddedElectron: boolean
   /** Environment sample; SSH marks a remote operator, DISPLAY/WAYLAND_DISPLAY a Linux display. */
   env: DirectoryPickerEnv
   /** Whether a Linux chooser binary the native backend can drive (zenity/kdialog) is on PATH; consulted only when `platform` is linux. */
@@ -37,17 +39,21 @@ const present = (value: string | undefined): boolean => value !== undefined && v
  * a loopback-only bind (an all-interfaces bind admits remote browsers no OS
  * chooser can reach), no SSH launch (under SSH port-forwarding the chooser
  * would open on the unattended server), and a servable display session —
- * assumed on darwin/win32, requiring `DISPLAY`/`WAYLAND_DISPLAY` plus a
- * chooser binary on linux, and never true elsewhere (the native backend
- * drives exactly darwin/win32/linux). Anything ambiguous resolves to
- * `browse`, which works everywhere.
+ * assumed on darwin and standalone win32 Node.js hosts, requiring
+ * `DISPLAY`/`WAYLAND_DISPLAY` plus a chooser binary on linux, and never true
+ * elsewhere (the native backend drives exactly darwin/win32/linux). An
+ * Electron-hosted win32 process resolves to `browse`: that interaction stays
+ * inside the running desktop application instead of relaunching its packaged
+ * executable as the native dialog worker. Anything ambiguous also resolves
+ * to `browse`, which works everywhere.
  * @param facts - the sampled host facts.
  * @returns the backend kind to mount.
  */
 export function resolveDirectoryPickerBackend(facts: DirectoryPickerHostFacts): DirectoryPickerBackendKind {
   if (facts.bindHost !== '127.0.0.1') return 'browse'
   if (present(facts.env.SSH_CONNECTION) || present(facts.env.SSH_TTY)) return 'browse'
-  if (facts.platform === 'darwin' || facts.platform === 'win32') return 'native'
+  if (facts.platform === 'darwin') return 'native'
+  if (facts.platform === 'win32') return facts.embeddedElectron ? 'browse' : 'native'
   if (facts.platform !== 'linux' || !facts.linuxChooser) return 'browse'
   return present(facts.env.DISPLAY) || present(facts.env.WAYLAND_DISPLAY) ? 'native' : 'browse'
 }

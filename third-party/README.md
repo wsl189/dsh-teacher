@@ -15,13 +15,13 @@ The Web bundle also pins `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.
 
 ## Configuration and migration
 
-Executable code ships with the repository and EXE; machine-specific state does not. Bot credentials, QQ settings, cron jobs, and related data remain under `DSH_HOME` (`~/.dsh` or `%USERPROFILE%\.dsh`). Configure bots through **Settings → Plugins → Connected Platforms**. The `dsh-im/cordis.patch.yml.example` file remains only as a reference for deployments that need an explicit `qq.outboundMediaRoots` override.
+Executable code ships with the repository and EXE; machine-specific state does not. Bot credentials, QQ settings, cron jobs, and related data remain under `DSH_HOME` (`~/.dsh` or `%USERPROFILE%\.dsh`). Configure bots through **Settings → Plugins → Connected Platforms**. In the installed Windows desktop, a bot's **Choose directory** action uses the in-app Host directory browser; it does not require a Windows system folder dialog. The `dsh-im/cordis.patch.yml.example` file remains only as a reference for deployments that need an explicit `qq.outboundMediaRoots` override.
 
 To migrate a machine, install the new EXE or clone and build the repository, then copy the required `DSH_HOME` data separately. Do not reinstall these three plugins into the generated user profile; duplicate rows can register duplicate tools and sidebar entries.
 
 ## Verification
 
-The real shipped-composition browser lane asserts that all three client modules are in the module graph. It also pins the Host-level `cron_*` and `qq_send_local_file` tools, while the voice-input lane sends browser recordings through the shared QQ configuration.
+The real shipped-composition browser lane asserts that all three client modules are in the module graph. It also pins the Host-level `cron_*` and `qq_send_local_file` tools, while the voice-input lane sends browser recordings through the shared QQ configuration. The QQ workspace-picker lane opens a seeded bot's directory action and snapshots the in-app listing returned by the real Host backend.
 
 ## Artifact notes
 

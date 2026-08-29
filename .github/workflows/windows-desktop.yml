@@ -72,7 +72,7 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
-      - name: Smoke packaged desktop startup
+      - name: Smoke packaged desktop startup and directory browser
         shell: pwsh
         run: |
           $executable = Resolve-Path 'apps/desktop/release/win-unpacked/DSH Teacher.exe'
@@ -103,6 +103,44 @@ jobs:
             }
             if (-not $ready) {
               throw "Packaged desktop did not open the DeepSeek Harness window within 60 seconds (last title: '$lastTitle')"
+            }
+
+            $mainLog = Join-Path $smokeData 'logs/main.log'
+            $backendUrl = $null
+            $deadline = (Get-Date).AddSeconds(15)
+            while ((Get-Date) -lt $deadline) {
+              if (Test-Path $mainLog) {
+                $match = [regex]::Match((Get-Content $mainLog -Raw), 'dsh web: (http://127\.0\.0\.1:\d+)')
+                if ($match.Success) {
+                  $backendUrl = $match.Groups[1].Value
+                  break
+                }
+              }
+              Start-Sleep -Milliseconds 250
+            }
+            if ($null -eq $backendUrl) {
+              throw 'Packaged desktop did not report its backend URL'
+            }
+
+            $request = @{
+              type = 'client-request'
+              rpcId = '00000000-0000-4000-8000-000000000005'
+              method = 'host.listDirectory'
+              payload = @{}
+            } | ConvertTo-Json -Compress
+            $listing = Invoke-RestMethod `
+              -Method Post `
+              -Uri "$backendUrl/api/host.listDirectory" `
+              -Headers @{ Origin = $backendUrl } `
+              -ContentType 'application/json' `
+              -Body $request `
+              -NoProxy
+            if (-not $listing.result.ok) {
+              throw "Packaged desktop directory browser failed: $($listing.result.error | ConvertTo-Json -Compress)"
+            }
+            if ([string]::IsNullOrWhiteSpace($listing.result.value.path) -or
+                [string]::IsNullOrWhiteSpace($listing.result.value.home)) {
+              throw 'Packaged desktop directory browser returned an invalid listing'
             }
           } catch {
             $logs = @(

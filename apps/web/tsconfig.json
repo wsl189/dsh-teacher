@@ -39,6 +39,7 @@
     "tests/lifecycle-chrome.e2e.ts",
     "tests/details-session-lifecycle.e2e.ts",
     "tests/plugin-config.e2e.ts",
+    "tests/qq-workspace-picker.e2e.ts",
     "tests/settings-chrome.e2e.ts",
     "tests/desktop-update.e2e.ts",
     "tests/voice-input.e2e.ts",

@@ -10,6 +10,7 @@ import type { DirectoryPickerHostFacts } from '../src/resolve.ts'
 const attended: DirectoryPickerHostFacts = {
   bindHost: '127.0.0.1',
   platform: 'darwin',
+  embeddedElectron: false,
   env: {},
   linuxChooser: false,
 }
@@ -18,6 +19,11 @@ describe('resolveDirectoryPickerBackend', () => {
   it('resolves native for a loopback bind on a display platform', () => {
     expect(resolveDirectoryPickerBackend(attended)).toBe('native')
     expect(resolveDirectoryPickerBackend({ ...attended, platform: 'win32' })).toBe('native')
+  })
+
+  it('resolves browse only for win32 hosts embedded in Electron', () => {
+    expect(resolveDirectoryPickerBackend({ ...attended, platform: 'win32', embeddedElectron: true })).toBe('browse')
+    expect(resolveDirectoryPickerBackend({ ...attended, platform: 'darwin', embeddedElectron: true })).toBe('native')
   })
 
   it('resolves browse for an all-interfaces bind regardless of other signals', () => {

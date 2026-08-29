@@ -1,13 +1,14 @@
 /**
  * Adaptive chooser of the directory-picker seam: resolves the host's
- * situation once at boot (bind host, SSH launch, display session, Linux
- * chooser binary) and mounts the matching interaction — `native` or `browse`
- * — as real Loader entries in the in-memory root tree. Each interaction is a
- * pair: the Host backend serving the seam capability and the client surface
- * occupying ui-workspace's directory-flow holes. Both arrive as ordinary
- * entries, so the surface is discovered exactly as a config-row's would be
- * and one resolved choice still swaps both faces; pinning an interaction
- * remains composing that pair directly instead of this row.
+ * situation once at boot (bind host, host executable, SSH launch, display
+ * session, Linux chooser binary) and mounts the matching interaction —
+ * `native` or `browse` — as real Loader entries in the in-memory root tree.
+ * Each interaction is a pair: the Host backend serving the seam capability
+ * and the client surface occupying ui-workspace's directory-flow holes. Both
+ * arrive as ordinary entries, so the surface is discovered exactly as a
+ * config-row's would be and one resolved choice still swaps both faces;
+ * pinning an interaction remains composing that pair directly instead of
+ * this row.
  * @module @deepseek-ai/dsh-host-directory-picker-auto
  */
 
@@ -63,6 +64,7 @@ export async function apply(ctx: Context): Promise<void> {
   const backend = resolveDirectoryPickerBackend({
     bindHost: ctx.webServer.host,
     platform: process.platform,
+    embeddedElectron: process.versions.electron !== undefined,
     env: process.env,
     linuxChooser: hasLinuxChooserBinary(process.env.PATH, canExecute),
   })

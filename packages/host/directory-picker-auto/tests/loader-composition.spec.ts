@@ -50,6 +50,8 @@ const NATIVE = '@deepseek-ai/dsh-host-directory-picker-native'
 const BROWSE = '@deepseek-ai/dsh-host-directory-picker-browse'
 const NATIVE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-native'
 const BROWSE_SURFACE = '@deepseek-ai/dsh-client-ui-directory-picker-browse'
+const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform')!
+const originalElectronDescriptor = Object.getOwnPropertyDescriptor(process.versions, 'electron')
 
 /**
  * Loader-visible stand-in for a client surface package: the surfaces belong to
@@ -72,6 +74,12 @@ let context: Context | undefined
 
 afterEach(async () => {
   vi.unstubAllEnvs()
+  Object.defineProperty(process, 'platform', originalPlatformDescriptor)
+  if (originalElectronDescriptor === undefined) {
+    delete (process.versions as Record<string, string | undefined>).electron
+  } else {
+    Object.defineProperty(process.versions, 'electron', originalElectronDescriptor)
+  }
   await context?.fiber.dispose()
   context = undefined
   for (const dir of [root, fakeBin]) {
@@ -154,6 +162,16 @@ function stubAttendedHost(): void {
   vi.stubEnv('DISPLAY', ':0')
 }
 
+/** Make the actual boot-time sample match the installed Windows desktop backend. */
+function stubWindowsElectronHost(): void {
+  Object.defineProperty(process, 'platform', { ...originalPlatformDescriptor, value: 'win32' })
+  Object.defineProperty(process.versions, 'electron', {
+    configurable: true,
+    enumerable: true,
+    value: '43.4.1',
+  })
+}
+
 describe('real Loader composition', () => {
   // The 60s budget covers this file's static imports (webserver plus both
   // backend node halves through tsx), which dominate on cold caches; the
@@ -198,6 +216,19 @@ describe('real Loader composition', () => {
   it('mounts the browse backend under an SSH launch', { timeout: 60_000 }, async () => {
     stubAttendedHost()
     vi.stubEnv('SSH_CONNECTION', '10.0.0.2 55 10.0.0.9 22')
+    const { ctx } = await loadComposition('127.0.0.1')
+
+    expect(entryNames(ctx)).toContain(BROWSE)
+    expect(entryNames(ctx)).toContain(BROWSE_SURFACE)
+    expect(entryNames(ctx)).not.toContain(NATIVE)
+    expect(entryNames(ctx)).not.toContain(NATIVE_SURFACE)
+    const picker = ctx.get('directoryPicker') as DirectoryPicker
+    expect(picker.capability().kind).toBe('browse')
+  })
+
+  it('mounts the browse backend inside the installed Windows Electron host', { timeout: 60_000 }, async () => {
+    stubAttendedHost()
+    stubWindowsElectronHost()
     const { ctx } = await loadComposition('127.0.0.1')
 
     expect(entryNames(ctx)).toContain(BROWSE)
