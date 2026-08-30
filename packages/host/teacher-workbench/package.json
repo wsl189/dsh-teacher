@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-teacher-workbench",
   "description": "Durable teacher-workbench document and Remote service",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publishConfig": {
     "access": "public"
   },

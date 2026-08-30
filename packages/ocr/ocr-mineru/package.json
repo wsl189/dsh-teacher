@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-ocr-mineru",
   "description": "Self-hosted MinerU provider for DSH document extraction",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "publishConfig": {
     "access": "public"
   },
