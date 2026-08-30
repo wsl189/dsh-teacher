@@ -1,6 +1,7 @@
 /** Staged form for Host question-media storage settings. */
 
-import type { SettingsScope, SnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
   CardForm, numberField, textField,
   type CardActions, type CardFieldState, type CardShell,

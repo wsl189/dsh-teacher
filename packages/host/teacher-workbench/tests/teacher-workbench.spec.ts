@@ -6,7 +6,7 @@ import { unzipSync } from 'fflate'
 import sharp from 'sharp'
 import { PDFDocument, rgb } from 'pdf-lib'
 import { Context } from '@deepseek-ai/cordis'
-import { CallId, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { ToolCallId, createUserMessage } from '@deepseek-ai/dsh-llm'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import type { ImageAttachmentRef, SaveImageAttachment } from '@deepseek-ai/dsh-attachment'
 import { Session, SessionId } from '@deepseek-ai/dsh-session'
@@ -162,7 +162,7 @@ async function callTool(
   agent?: { readonly id: string; readonly session?: Agent['session'] },
 ) {
   return ctx.tools.execute({
-    callId: CallId(`teacher-${randomCallId++}`),
+    callId: ToolCallId(`teacher-${randomCallId++}`),
     name,
     arguments: arguments_,
     signal: new AbortController().signal,

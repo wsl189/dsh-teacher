@@ -5,7 +5,7 @@ import { cleanup, fireEvent, render } from '@testing-library/react'
 import type {
   ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps, DraftDocument,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import {
   ComposerAttachments, type ComposerAttachmentsInjected,
 } from '../src/client/ComposerAttachments.tsx'

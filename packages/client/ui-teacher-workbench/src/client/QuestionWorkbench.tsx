@@ -1271,7 +1271,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
             <FormField label={t('questions.gradeRequired')}>
               <select value={addGrade} onChange={(event) => { setAddGrade(event.target.value) }}>
                 <option value="">{t('questions.choose')}</option>
-                <option value="高一">高一</option><option value="高二">高二</option><option value="高三">高三</option>
+                <option value="高一">{t('questions.grade.high1')}</option><option value="高二">{t('questions.grade.high2')}</option><option value="高三">{t('questions.grade.high3')}</option>
               </select>
             </FormField>
             <FormField label={t('questions.classRequired')}><input maxLength={40} value={addClassName} onChange={(event) => { setAddClassName(event.target.value) }} placeholder={t('questions.classPlaceholder')} /></FormField>
@@ -1293,13 +1293,13 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
               disabled={classStudentsWithTemporaryImages.length === 0 || busy !== null}
               title={classStudentsWithTemporaryImages.length === 0 ? t('questions.noTemporary') : undefined}
               onClick={openBatchWord}
-            ><FileText size={14} />Word</button>
+            ><FileText size={14} />{t('questions.formatWord')}</button>
             <button
               type="button"
               disabled={classStudentsWithTemporaryImages.length === 0 || busy !== null}
               title={classStudentsWithTemporaryImages.length === 0 ? t('questions.noTemporary') : undefined}
               onClick={() => { void generateClassPpt() }}
-            ><Presentation size={14} />PPT</button>
+            ><Presentation size={14} />{t('questions.formatPpt')}</button>
           </DrawerHeader>
           <p className={css.legacyHierarchyHint}>{t('questions.hierarchyClickHint')}</p>
           <div className={css.legacyStudentRows}>

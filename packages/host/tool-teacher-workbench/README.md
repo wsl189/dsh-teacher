@@ -1,15 +1,57 @@
+---
+description: "Model-facing tools for reading and mutating the authoritative teacher workbench, stored question images, assignments, segmentation, and Office generation."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-tool-teacher-workbench
 
 English | [中文](README.zh.md)
 
+## Summary
+
 Model-facing Consumer for the durable teacher workbench. The plugin registers one authoritative section reader, one stored-question image reader, and five semantic mutation tools over `ctx.teacherWorkbench`. Daily Management covers tasks, memos, ledger data, and calendar items; Timetable covers the independent Week and Grade class catalogs and their entries; Student Roster covers roster classes and students; Score Analysis covers roster-linked exams; Question Cutting covers staged-PDF segmentation, question media and folders, assignment, and Office generation from stored images or an ordinary local image directory. Every state mutation uses the Host service's schema-validated compare-and-set document rather than a parallel agent store.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
 
 The standard Web composition mounts the plugin after `@deepseek-ai/dsh-host-teacher-workbench` and the MinerU-backed OCR service. Conversation PDF uploads supply a private Host source id, while roster, timetable, and score imports use the logged OCR Markdown injected with the user prompt. Opening the browser workbench or changing its active module refreshes the same Host document and displays accepted tool changes.
 
-## Extension Points
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+### Extension Points
 
 The package consumes `ctx.tools`, `ctx.fs`, and `ctx.teacherWorkbench`. When `ctx.attachments` is mounted, it also registers the stored-question image reader and resolves `ctx.llm` at execution time to require an image-capable model route. Local-directory generation resolves and reads nested images through `ctx.fs`; PDF segmentation also resolves the optional `ctx.ocr` service at execution time and fails clearly when layout extraction is unavailable. The package provides no service or event vocabulary of its own.
 
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Teacher workbench Host](../teacher-workbench/README.md) — authoritative operations and durable state.
+- [Teacher workbench UI](../../client/ui-teacher-workbench/README.md) — browser Consumer over the same operations.
+- [Generated tool catalog](../../../docs/tool-catalog.md#deepseek-aidsh-tool-teacher-workbench) — exact model-visible schemas.
+- [Teacher workbench subsystem](../../../docs/subsystems/teacher-workbench.md) — generated Cordis service reference.
+
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Ordinary-conversation workbench operations
@@ -32,3 +74,8 @@ Stable names, descriptions, and schemas form a reusable request prefix until the
 - **Retained PDF sources need expiry** — content-addressed source objects are deduplicated and integrity-checked, but automatic garbage collection is not implemented.
 - **Generated Office files are Host paths** — Word and PowerPoint output is saved privately and reported by absolute path; direct browser download handoff is not implemented.
 - **OCR and model interpretation can be wrong** — imported tables and semantic question boundaries should be reviewed in the workbench before consequential use.
+
+<a id="dev-note"></a>
+### Dev Note
+
+Keep semantic validation and persistence in the Host service; tool handlers translate model intent into those authoritative operations and report committed results.

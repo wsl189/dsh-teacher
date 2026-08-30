@@ -1,8 +1,29 @@
+---
+description: "Browser teacher workbench for daily records, timetables, rosters, scores, reviewed document imports, voice input, and current-root question cutting."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-client-ui-teacher-workbench
 
 English | [中文](README.zh.md)
 
+## Summary
+
 Teacher-workbench feature for the dsh Web GUI. It contributes the first sidebar action through `sidebar.primary.section`, an in-app teaching surface through `shell.overlay`, and a feature-owned row in General settings. The expanded sidebar disclosure shows eight module rows before the remaining entries scroll. The overlay follows the rendered sidebar and details widths, so selecting a disclosed module replaces only the visible center content while keeping the application sidebar available. The surface begins directly with the active module instead of repeating a Workbench header; every explicit Session or New Session navigation dismisses it and reveals the still-mounted conversation, including reselecting the current Session. Opening the surface always reloads the authoritative Host document so changes made through ordinary-conversation tools replace any cached browser snapshot.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
 
 The surface begins with Daily Management. A right-aligned summary beside the module heading shows the current time, date, configured location, and current weather; selecting it opens the full time and next-twelve-hours forecast. Today, Important, and Urgent each occupy an equal-width independent task card. Memos, Ledger, and Calendar form a second three-card row. The Ledger card opens a full-board view whose categories can be added or deleted; each category accepts manual or voice descriptions, a CNY amount, and a required local date and time, while existing entries remain editable. Creating inside a task card assigns that exclusive category, and editing preserves it without exposing a classification control. Important and Urgent rows expose a ten-color marker picker, while Today rows omit the marker. The expanded calendar combines Gregorian dates, lunar dates, statutory holidays, and date-specific items; it also accepts images, PDF, DOCX, PPTX, and XLSX school calendars through the shared OCR Remote, projects recognized dates and activities into an editable review list, and persists only selected rows in one revisioned write. HTML table projection respects row and column spans so responsibility metadata remains separate from dated activities. The task time icon opens one deadline-and-reminder editor: after a future deadline is set, a user may select a one-time lead or repeated frequency plus one platform and one bot from the optional dsh-im roster. Both reminder modes accept a manually editable number followed by a minutes, hours, or days selector; an empty or out-of-range draft blocks saving without replacing the text while it is being edited. Memos expose the same controls in their editor; each ledger composer has a reminder button, and existing ledger entries retain the controls in their edit dialog. Their reminder deadlines are independent of memo edit times and ledger occurrence times. An elapsed deadline disables reminder activation with inline guidance but does not block saving ordinary edits. For a deadline less than thirty minutes away, activation chooses the greatest whole-minute lead whose occurrence remains in the future. Calendar agenda rows expose a dedicated reminder action and reuse the same controls. Leaving reminder fields disabled preserves ordinary records without notification.
 
@@ -24,22 +45,44 @@ While Question Cutting is mounted, the browser rescans the configured student an
 
 Rectangular image erasure samples only an eight-pixel exterior ring around the selection and fills with its median color, so selected dark text cannot turn a light paper background gray.
 
-## Background Question Cutting
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+### Background Question Cutting
 
 Confirming a PDF page range adds that browser-held file to a plugin-lifetime sequential queue and immediately frees the upload action for another PDF. The center workspace lists every accepted file in upload order with its captured page-range label, current stage, integer percentage, saved-question count, elapsed time, and terminal error when applicable. A completed row also reports how many semantic groups were saved with their latest safe boundaries after exhausting visual-review attempts. One PDF executes at a time to avoid competing PDF.js, OCR, model, and durable-write work, while later uploads remain visible at zero percent with a zero elapsed timer until their turn begins; timing starts only when processing starts.
 
 Each accepted task captures its selected pages, destination, render settings, and current parent Session before asynchronous work starts. Unmounting Question Cutting, opening another workbench module, or navigating to another conversation removes only the current view subscriber; it does not cancel the worker or reroute an accepted task to the later Session. Returning to Question Cutting reconnects the center panel to the same queue projection.
 
-## Question Crop Scale
+### Question Crop Scale
 
 Equal-sized selected pages contribute repeated question-head lane starts. An empty later lane caps the preceding region at the next start, while recognized owned content crossing that start keeps its complete source extent; a half-empty two-column spread therefore does not force every output canvas to the full spread width.
 
 After every semantic group is merged, the Host returns the maximum MinerU-backed question-region width normalized to its source page. Each region also carries a right-side source limit derived from vertically overlapping content that belongs to another question. PDF.js keeps the region's own left, top, and bottom coordinates and samples at most one maximum width from that left edge without crossing the source limit. The output canvas still uses the maximum width and fills any unavailable right-hand area with white, so separate columns cannot leak into one another while equal-size pages retain one image width and raster scale.
 
-## Extension Points
+### Extension Points
 
 The package adds one `sidebar.primary.section`, one `shell.overlay` entry, and one `settings.general.item` row. It does not declare new child slots.
 
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Teacher workbench Host](../../host/teacher-workbench/README.md) — durable state, authoritative media roots, and Remotes.
+- [Teacher workbench tools](../../host/tool-teacher-workbench/README.md) — ordinary-conversation model Consumer.
+- [Teacher workbench subsystem](../../../docs/subsystems/teacher-workbench.md) — generated service reference and ownership summary.
+- [OCR subsystem](../../../docs/subsystems/ocr.md) — document extraction and structured layout.
+- [Speech subsystem](../../../docs/subsystems/speech.md) — transient browser transcription.
+
+<a id="model-experience"></a>
 ## Model Experience
 
 Indirectly, through `@deepseek-ai/dsh-tool-teacher-workbench` ordinary-conversation operations and the Host-owned timetable and question-boundary children that consume extracted Markdown, captured view defaults, and provider-neutral MinerU geometry.
@@ -57,3 +100,8 @@ The ordinary-conversation schemas contribute to the parent request prefix; Host-
 - **Weather requires Host network access** — the configured geocoder resolves the location and Open-Meteo supplies current conditions plus the next twelve hours; an unavailable provider or Host outbound network does not affect saved workbench data.
 - **Voice capture and ASR are separate dependencies** — the command is disabled without `MediaRecorder` or microphone capture, and transcription needs an enabled reachable QQ ASR endpoint; permission, device, empty-audio, configuration, size, and provider failures appear as localized notifications, while manual entry remains available.
 - **Holiday schedules are published per year** — the calendar shows Chinese statutory holidays and adjusted workdays for included years and reports when a year's schedule is unavailable; Gregorian dates, lunar dates, and personal items remain usable.
+
+<a id="dev-note"></a>
+### Dev Note
+
+Keep browser-only selection and progress state local, and route every durable mutation through the Host Remote with its latest revision or current-root opaque identity.

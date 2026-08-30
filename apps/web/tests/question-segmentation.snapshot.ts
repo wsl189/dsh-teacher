@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import {
-  CallId, LlmAdapter, type GenerateOptions, type LlmModelInfo,
+  ToolCallId, LlmAdapter, type GenerateOptions, type LlmModelInfo,
   type LlmProviderInfo, type LlmResolvedModelInfo, type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -23,7 +23,7 @@ const RESULT_EXPECTED = join(SNAPSHOT_DIR, 'result.expected.json')
 const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
 function toolCall(name: string, args: object, ordinal: number): StreamChunk[] {
-  const id = CallId(`question-segmentation-${String(ordinal)}`)
+  const id = ToolCallId(`question-segmentation-${String(ordinal)}`)
   const argumentsJson = JSON.stringify(args)
   return [
     { type: 'block-start', index: 0, blockType: 'tool-call' },

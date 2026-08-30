@@ -1,38 +1,104 @@
+---
+description: "对话 UI 的附件呈现：草稿图片栏、文档拖放目标、历史图片画廊与原图灯箱；供 Web 附件体验的用户与维护者阅读。"
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-client-ui-attachment
 
 [English](README.md) | 中文
 
-对话 UI 的动态附件呈现插件。它通过 `ctx.slots.inject` 等待 conversation 包声明 `conversation.input.attachments` 与 `conversation.message.images`，随后注册输入框草稿图片栏与文件栏、文件夹／图片拖放目标、聊天历史图片画廊和原图灯箱。当组合中存在 `dsh-better-sidebar` 时，它还会注册隐藏的上传文件标签页类型，并把每张文件卡片变成右侧栏预览操作。conversation slot 持有方提供附件数据、浏览器文件解析、图片加载、回调及其命名空间翻译器；呈现组件保持纯 props，且不从包入口导出。
+## 概述
 
-## 附件栏
+本包渲染对话 UI 中与附件相关的一切：composer 下的待发送草稿图片、全视口拖放邀请层、Chat 与 Trajectory 中的持久图片，以及查看原图的灯箱。它是纯呈现层——附件数据、图片加载与回调都经声明槽位来自 conversation 包。需要 DeepSeek Chat 风格的图片体验时选择它；非图片文件在此没有任何表面。
 
-`AttachmentRail` 将待发送草稿图片渲染为固定 64px（16px 圆角）的缩略图横排，滚动条始终隐藏，溢出改由两端的圆形箭头提示：每次翻页滚动一个视口宽度（减去一张卡片作为上下文，下限 200px）并平滑滚动（`prefers-reduced-motion: reduce` 下瞬时完成），箭头的显隐在滚动、条目数量变化和栏自身尺寸变化时依据滚动几何重算（rail 元素上的 ResizeObserver，因此侧栏、面板的宽度变化也计入，不只是窗口尺寸变化）。附件栏只允许横向滚动：非 passive 监听器消费所有带纵向分量的滚轮事件——不会滚动输入框背后的会话记录——纯纵向滚轮转为横向步进（LINE/PAGE 单位先归一化为像素，单次行程钳制在 60px 内），对角平移保留其横向分量，纯横向平移保持原生滚动。新增条目会滚动到栏尾展示，删除则保持原位，带着已有草稿重新挂载的栏保持起始位置。每张缩略图单击经 `onOpen` 打开原图，删除按钮位于卡片内部右上角，悬停卡片或键盘聚焦时才显示；粗指针（触屏）设备没有悬停，因此常显。是否挂载由持有方决定，仅在有条目时渲染。
+## 目录
 
-## 消息图片与灯箱
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [进一步探索](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与延期工作](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
 
-`MessageImage` 渲染一张持久化历史图片，经持有方的 `ImageLoader` 加载会话授权 URL；加载失败渲染显式重试按钮，加载完成后单击打开 `ImageLightbox`（加载中的点击被忽略）。尺寸规则对齐 DeepSeek Chat：一条消息仅有的一张图（`variant="single"`）长边 240px、展示宽高比钳制在 [0.25, 4] 之间——超出部分由 `object-fit: cover` 裁切，特别高的图锚定顶部、特别宽的图锚定左侧——且从不放大超过原始尺寸；多图中的一张（`variant="tile"`）为固定 64px 方块。`ImageGallery` 将一条消息的图片包为一个对齐的可换行弹性分组（用户消息 `end`，助手消息 `start`），按图片数量选择 variant，空列表不渲染。`ImageLightbox` 是文档级模态预览，铺在共享的对话框遮罩上（`--dsw-alias-bg-mask-1` 加 `--dsw-mask-blur`，画在独立图层上，模糊不会波及预览图本身），按 Escape、按下遮罩或点关闭按钮均可关闭，卸载时将焦点还给打开者。
+-----
 
-## 拖放遮罩
+<a id="use-this-package"></a>
+## 使用本包
 
-`DropOverlay` 是文件系统条目拖拽悬停页面时的全视口邀请层：插画、标题，接受拖放时再加一行上限说明（`disabled` 换为禁用插画并隐藏上限行）。该层不接收指针事件——持有方的 document 级拖拽监听器负责 enter/leave 计数和接受与否的判定；遮罩只呈现状态。drop 发生时，`ComposerAttachments` 不打开目录 reader，直接把目录条目与普通文件分开：目录经 `onAddDirectories` 贡献路径元数据，普通文件继续走已有图片输入回调。原生客户端提供的 `File.path` 优先，否则使用浏览器条目相对于拖放根的 `fullPath`。与灯箱一样经 body portal 渲染。
+与 [`ui-conversation`](../ui-conversation/README.zh.md) 一起挂载本插件；它等待 conversation 包的槽位声明，并把自身表面注册进这些槽位。用户随即看到：带逐图删除与点击打开的草稿图片栏、带上限说明的拖放遮罩、按数量定尺寸的消息图片，以及支持 Escape／遮罩／关闭按钮的灯箱。
 
-## 上传文件预览
+### 草稿图片
 
-文件栏会在 OCR 提取等待中、成功或失败时显示每条仅运行时存在的记录。如果 `dsh-better-sidebar` 可用，选择卡片会打开或聚焦会话定向的 `dsh:uploaded-document` 标签页，并展开侧边栏。该标签页读取 `ui-conversation` 已保留的不可变浏览器 `File`；它不会向工作区写入副本、调用 Host 文件读取路由，也不会在侧边栏状态中持久化文件字节。移除记录、成功接收提示词或停用插件时，系统会先关闭标签页，再释放浏览器文件引用。
+草稿图片以固定 64px 缩略图呈现在一行横向滚动条中；溢出隐藏时由边缘箭头翻页，滚动条保持隐藏。新增条目滚动到栏尾展示，删除保持原位，单击经持有方的 `onOpen` 打开原图。
 
-PDF 使用浏览器原生查看器，常见图片使用 Blob URL，DOCX 使用 `docx-preview`，PPTX 使用 Office Kit 生成并经过清理的 SVG，XLSX 则使用最多 200 行、50 列的语义表格。所有格式都保留下载链接。外部 Office 预览插件仍负责从工作区资源管理器打开的 `.docx`、`.xlsx` 与 `.pptx` 文件；输入框上传文件不依赖该 profile 扩展。
+### 消息图片与灯箱
 
+一条消息仅有的一张图按长边 240px 渲染（宽高比钳制在 [0.25, 4]，从不放大）；多图中的一张渲染为固定 64px 方块。加载完成的图片单击打开文档级灯箱；加载失败则显示重试控件。灯箱按 Escape、按下遮罩或点关闭按钮关闭，并把焦点还给打开者。
+
+### 拖放遮罩
+
+文件拖拽悬停页面时，全视口遮罩宣布可拖放：插画、标题，接受拖放时再加一行上限说明。遮罩只呈现状态——接受或拒绝由持有方的 document 级监听器决定。
+
+-----
+
+<a id="understand-the-implementation"></a>
+## 理解实现
+
+<details>
+<summary>实现细节——点击展开</summary>
+
+插件通过 `ctx.slots.inject` 等待 `conversation.input.attachments`、`conversation.message.images` 与 `conversation.trajectory.images`。随后它注册 composer rail、文档拖放目标、供 Chat 和 Trajectory 共用的历史图片 gallery，以及原图灯箱。呈现组件保持纯 props：conversation 槽位持有方提供附件数据、图片加载、回调与语言包翻译器；包入口不导出任何组件。
+
+| 文件 | 职责 |
+|---|---|
+| [`src/client/ComposerAttachments.tsx`](src/client/ComposerAttachments.tsx) | 草稿图片栏＋拖放遮罩的组装 |
+| [`src/AttachmentRail.tsx`](src/AttachmentRail.tsx) | 滚动缩略图栏、滚轮转换、边缘箭头 |
+| [`src/client/MessageImages.tsx`](src/client/MessageImages.tsx) | 每消息画廊＋灯箱的组装 |
+| [`src/MessageImage.tsx`](src/MessageImage.tsx) | 单图尺寸、加载／重试、点击打开；本地提交回显预览直接显示其 object URL |
+| [`src/ImageLightbox.tsx`](src/ImageLightbox.tsx) | 铺在共享遮罩上的文档级模态预览 |
+| [`src/DropOverlay.tsx`](src/DropOverlay.tsx) | 不接收指针事件的拖拽邀请 portal |
+
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 进一步探索
+
+当附件面不够用时阅读以下页面。它们从本包填充的槽位进入拥有输入流程的会话外壳。
+
+- [ui-conversation](../ui-conversation/README.zh.md)——声明附件槽位并拥有 composer 与图片摄入。
+- [Web 客户端架构](../../../.agents/notes/implemented/architecture/2026-07-19-gui-web-client-architecture.zh.md)——浏览器插件行如何加载并注册槽位。
+- [客户端包映射](../README.zh.md)——相邻的浏览器 UI 包。
+
+-----
+
+<a id="model-experience"></a>
 ## 模型体验
 
-无，因为目录拖放只把路径元数据交给 conversation 持有方的草稿回调，文件预览也只为呈现读取浏览器保留的文件；该插件既不读取目录内容，也不组装模型请求。
+无，因为该插件只渲染由对话 UI 提供的附件状态，不贡献模型可见输入。
 
 #### KV Cache 影响
 
-一个拖入目录只以其 `@path/` 文本改变下一条用户消息的后缀。该包本身不组装或发送提供方请求。
+无；该包既不组装也不发送提供方请求。
 
-## 已知限制与暂缓事项
+## 已知限制与延期工作
 
-- **文件预览只用于辅助阅读** — 复杂 Word、PowerPoint 与电子表格的布局可能与 Microsoft Office 不同，PDF 渲染则取决于浏览器。上传控件不接受旧版 `.doc`、`.xls` 与 `.ppt` 文件。
-- **标准浏览器只暴露相对目录元数据** — 普通 Web 页面取得的是相对于拖放数据存储根的目录，而不是操作系统绝对路径。原生客户端可以暴露绝对 `File.path`；否则生成的引用相对于会话工作区，且不会授予对工作区外目录的访问权。
-- **灯箱无缩放与下载** — 预览仅以适配视口的尺寸渲染原图。
-- **灯箱不锁定焦点** — 它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。
+<a id="known-limitations-and-deferred-work"></a>
+
+
+这些限制界定了当前附件表面。它们是包约束，不是通用图片查看器对比或任务积压。
+
+- **仅支持图片**——非图片文件尚无附件栏卡片与历史渲染；DeepSeek Chat 风格的文件卡片和上传进度等输入框接受非图片附件后再做。
+- **灯箱无缩放与下载**——预览仅以适配视口的尺寸渲染原图。
+- **灯箱不锁定焦点**——它设置 `aria-modal` 并在关闭时归还焦点，但 Tab 仍可移动到背后的页面。
+
+<a id="dev-note"></a>
+### 开发备注
+
+<details>
+<summary>维护者的工作上下文——点击展开</summary>
+
+无。
+
+</details>

@@ -1,0 +1,47 @@
+- button "New session"
+- button "Collapse sidebar":
+  - img
+- button "Open workbench":
+  - img
+  - text: Workbench
+  - img
+- text: Workspaces
+- button "Search sessions":
+  - img
+- textbox "Search sessions..."
+- button "View options":
+  - img
+- button "Add workspace":
+  - img
+- tree "Sessions":
+  - treeitem "workspace" [expanded]:
+    - img
+    - text: workspace
+  - treeitem "New Session" [selected]
+- button "Settings":
+  - img
+  - text: Settings
+- text: Into the Unknown
+- button "Choose workspace":
+  - img
+  - text: workspace
+  - img
+- button "Standard mode":
+  - img
+  - text: Standard mode
+  - img
+- textbox "Describe what you want to build... / commands, @ files or sessions"
+- button "Commands":
+  - img
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
+- 'button "Access mode, current: Workspace Write"': Workspace Write
+- button "Plan mode on, press to turn off": Plan
+- button "Select model, current DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "Send message" [disabled]
+- text: Details
+- button "Close details"
+- text: Click a tool row in the message flow to view its details

@@ -59,7 +59,7 @@ describe('web e2e: desktop update action', () => {
       window.__publishDesktopUpdate = publish
     })
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[data-sidebar-root]', { timeout: 30_000 })
   }, 120_000)
 

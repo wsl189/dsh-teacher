@@ -1,0 +1,61 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -72,9 +72,9 @@
+     "client": {
+       "inject": [
+         "@deepseek-ai/dsh-client-connection",
+-        "@deepseek-ai/dsh-client-runtime",
++        "@deepseek-ai/dsh-client-ui-workspace",
+         "@deepseek-ai/dsh-client-ui-settings",
+-        "@deepseek-ai/dsh-client-ui-slots",
++        "@deepseek-ai/dsh-client-ui-renderer",
+         "@deepseek-ai/dsh-client-locale"
+       ],
+       "platform": "web"
+diff --git a/plugin-src/client/index.js b/plugin-src/client/index.js
+--- a/plugin-src/client/index.js
++++ b/plugin-src/client/index.js
+@@ -46,7 +46,7 @@
+ import { WorkspaceDirectoryPickerContext } from './workspace-editor.js';
+
+ export const name = 'im-settings';
+-export const inject = ['slots', 'connection', 'locale', 'workspaces'];
++export const inject = ['slots', 'connection', 'locale', 'uiWorkspace'];
+
+ const CHANNELS = Object.freeze([
+   { id: 'weixin', label: '微信' },
+@@ -254,8 +254,8 @@
+   const officeRpcCall = (endpoint, payload, signal) =>
+     ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
+   const workspaceDirectoryPicker = Object.freeze({
+-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
+-    pickDirectory: () => ctx.workspaces.pickDirectory(),
++    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
++    pickDirectory: () => ctx.uiWorkspace.pickDirectory(),
+   });
+
+   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -10367,7 +10367,7 @@
+
+ // plugin-src/client/index.js
+ var name = "im-settings";
+-var inject = ["slots", "connection", "locale", "workspaces"];
++var inject = ["slots", "connection", "locale", "uiWorkspace"];
+ var CHANNELS = Object.freeze([
+   { id: "weixin", label: "\u5FAE\u4FE1" },
+   { id: "feishu", label: "\u98DE\u4E66" },
+@@ -10581,8 +10581,8 @@
+   const slackRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
+   const officeRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
+   const workspaceDirectoryPicker = Object.freeze({
+-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
+-    pickDirectory: () => ctx.workspaces.pickDirectory()
++    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
++    pickDirectory: () => ctx.uiWorkspace.pickDirectory()
+   });
+   ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
+     name: "settings.plugins.tab",

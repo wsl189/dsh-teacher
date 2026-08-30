@@ -10,7 +10,8 @@ import type {
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
-import { EditorModal, FormField } from './shared.tsx'
+import type { TeacherWorkbenchKey } from './locales.ts'
+import { EditorModal, FormField, type TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
 
 /** Structured headteacher-record module props. */
@@ -21,6 +22,8 @@ export interface StructuredRecordsProps {
   state: TeacherWorkbenchState
   /** Durable mutation commands. */
   commands: TeacherWorkbenchCommands
+  /** Namespace translator. */
+  t: TeacherWorkbenchTranslate
 }
 
 type TemplateDraft = { id?: TeacherRecordTemplateId; name: string; scene: string; fields: string }
@@ -35,28 +38,32 @@ type RecordDraft = {
 
 const DETAILS = {
   class: {
-    title: '班级记录',
-    description: '记录班级事项，不伪装成学校学生管理系统。',
+    title: 'module.classRecords',
+    description: 'structured.classDescription',
     Icon: ClipboardList,
   },
   talk: {
-    title: '谈话记录',
-    description: '快速记下事实、沟通要点与下次跟进时间。',
+    title: 'module.talkRecords',
+    description: 'structured.talkDescription',
     Icon: MessageCircle,
   },
   summary: {
-    title: '班级总结',
-    description: '从已有事实形成周报和阶段总结，不编造活动。',
+    title: 'module.classSummary',
+    description: 'structured.summaryDescription',
     Icon: FileText,
   },
-} as const
+} as const satisfies Record<StructuredRecordsProps['kind'], {
+  title: TeacherWorkbenchKey
+  description: TeacherWorkbenchKey
+  Icon: typeof FileText
+}>
 
 /**
  * Render one of the three shared headteacher record workspaces.
  * @param props - selected family, durable state, and commands.
  * @returns the record table and reusable template library.
  */
-export function StructuredRecords({ kind, state, commands }: StructuredRecordsProps) {
+export function StructuredRecords({ kind, state, commands, t }: StructuredRecordsProps) {
   const detail = DETAILS[kind]
   const DetailIcon = detail.Icon
   const templates = useMemo(() => state.templates.filter(template => template.kind === kind), [kind, state.templates])
@@ -101,29 +108,29 @@ export function StructuredRecords({ kind, state, commands }: StructuredRecordsPr
     <div className={css.structuredRecords}>
       <header className={css.recordHero}>
         <span><DetailIcon size={22} /></span>
-        <div><h2>{detail.title}</h2><p>{detail.description}</p></div>
+        <div><h2>{t(detail.title)}</h2><p>{t(detail.description)}</p></div>
         <div>
-          <button type="button" className={css.buttonPrimary} onClick={() => { editRecord() }}><Plus size={16} />新建记录</button>
-          <button type="button" className={css.buttonSecondary} onClick={() => { setTab('templates') }}>使用模板</button>
+          <button type="button" className={css.buttonPrimary} onClick={() => { editRecord() }}><Plus size={16} />{t('structured.newRecord')}</button>
+          <button type="button" className={css.buttonSecondary} onClick={() => { setTab('templates') }}>{t('structured.useTemplate')}</button>
         </div>
       </header>
       <div className={css.recordTabs}>
-        <button type="button" className={tab === 'records' ? css.recordTabActive : undefined} onClick={() => { setTab('records') }}>我的记录 <span>{records.length}</span></button>
-        <button type="button" className={tab === 'templates' ? css.recordTabActive : undefined} onClick={() => { setTab('templates') }}>模板库 <span>{templates.length}</span></button>
+        <button type="button" className={tab === 'records' ? css.recordTabActive : undefined} onClick={() => { setTab('records') }}>{t('structured.myRecords')} <span>{records.length}</span></button>
+        <button type="button" className={tab === 'templates' ? css.recordTabActive : undefined} onClick={() => { setTab('templates') }}>{t('structured.templateLibrary')} <span>{templates.length}</span></button>
       </div>
 
       {tab === 'records' && (
         records.length === 0
-          ? <div className={css.workspaceEmpty}><FileText size={28} /><h3>还没有工作记录</h3><p>从一个模板开始，填写后会成为可继续编辑的个人资料。</p><button type="button" className={css.buttonPrimary} onClick={() => { editRecord() }}><Plus size={16} />新建第一条记录</button></div>
+          ? <div className={css.workspaceEmpty}><FileText size={28} /><h3>{t('structured.emptyTitle')}</h3><p>{t('structured.emptyDescription')}</p><button type="button" className={css.buttonPrimary} onClick={() => { editRecord() }}><Plus size={16} />{t('structured.createFirst')}</button></div>
           : <div className={css.recordTable}>
-            <div className={css.recordTableHead}><span>标题</span><span>模板</span><span>跟进日期</span><span>状态</span><span>操作</span></div>
+            <div className={css.recordTableHead}><span>{t('record.title')}</span><span>{t('record.template')}</span><span>{t('structured.followupDate')}</span><span>{t('status')}</span><span>{t('structured.actions')}</span></div>
             {records.map(record => (
               <div key={record.id} className={css.recordTableRow}>
                 <button type="button" onClick={() => { editRecord(record) }}>{record.title}</button>
-                <span>{templateById.get(record.templateId)?.name ?? '自定义记录'}</span>
-                <span>{record.dueDate || '未设置'}</span>
-                <button type="button" className={record.status === 'done' ? css.statusDone : css.statusActive} onClick={() => { void commands.toggleRecord(record.id) }}>{record.status === 'done' ? '已完成' : '进行中'}</button>
-                <span><button type="button" aria-label={`编辑 ${record.title}`} onClick={() => { editRecord(record) }}><Pencil size={15} /></button><button type="button" aria-label={`删除 ${record.title}`} onClick={() => { void commands.deleteRecord(record.id) }}><Trash2 size={15} /></button></span>
+                <span>{templateById.get(record.templateId)?.name ?? t('structured.customRecord')}</span>
+                <span>{record.dueDate || t('structured.unset')}</span>
+                <button type="button" className={record.status === 'done' ? css.statusDone : css.statusActive} onClick={() => { void commands.toggleRecord(record.id) }}>{t(record.status === 'done' ? 'done' : 'active')}</button>
+                <span><button type="button" aria-label={t('structured.editNamed', { name: record.title })} onClick={() => { editRecord(record) }}><Pencil size={15} /></button><button type="button" aria-label={t('structured.deleteNamed', { name: record.title })} onClick={() => { void commands.deleteRecord(record.id) }}><Trash2 size={15} /></button></span>
               </div>
             ))}
           </div>
@@ -132,13 +139,13 @@ export function StructuredRecords({ kind, state, commands }: StructuredRecordsPr
       {tab === 'templates' && (
         <section className={css.templateLibrary}>
           <div className={css.sectionCommand}>
-            <div><h3>学校实务模板</h3><p>先看适用场景和记录结构，再一键使用；所有模板仍可编辑、复制或删除。</p></div>
-            <button type="button" className={css.buttonPrimary} onClick={() => { setTemplateDraft({ name: '', scene: '', fields: '' }) }}><Plus size={16} />新建模板</button>
+            <div><h3>{t('structured.libraryTitle')}</h3><p>{t('structured.libraryDescription')}</p></div>
+            <button type="button" className={css.buttonPrimary} onClick={() => { setTemplateDraft({ name: '', scene: '', fields: '' }) }}><Plus size={16} />{t('structured.newTemplate')}</button>
           </div>
           <div className={css.richTemplateGrid}>
             {templates.map(template => (
               <article key={template.id}>
-                <div><span><FileText size={18} /></span><small>{template.fields.length} 项结构</small></div>
+                <div><span><FileText size={18} /></span><small>{t('structured.fieldCount', { count: template.fields.length })}</small></div>
                 <h3>{template.name}</h3>
                 <p>{template.scene}</p>
                 <div className={css.templateFieldPreview}>
@@ -146,12 +153,12 @@ export function StructuredRecords({ kind, state, commands }: StructuredRecordsPr
                   {template.fields.length > 3 && <em>+{template.fields.length - 3}</em>}
                 </div>
                 <footer>
-                  <button type="button" className={css.buttonPrimary} onClick={() => { editRecord(undefined, template.id) }}><Plus size={15} />使用模板</button>
-                  <button type="button" onClick={() => { setTemplateDraft({ ...template, fields: template.fields.join('\n') }) }}><Pencil size={15} />编辑</button>
-                  <button type="button" aria-label={`复制 ${template.name}`} onClick={() => {
-                    void commands.saveTemplate({ kind, name: `${template.name}（副本）`, scene: template.scene, fields: [...template.fields] })
+                  <button type="button" className={css.buttonPrimary} onClick={() => { editRecord(undefined, template.id) }}><Plus size={15} />{t('structured.useTemplate')}</button>
+                  <button type="button" onClick={() => { setTemplateDraft({ ...template, fields: template.fields.join('\n') }) }}><Pencil size={15} />{t('edit')}</button>
+                  <button type="button" aria-label={t('structured.copyNamed', { name: template.name })} onClick={() => {
+                    void commands.saveTemplate({ kind, name: `${template.name}${t('structured.copySuffix')}`, scene: template.scene, fields: [...template.fields] })
                   }}><Copy size={15} /></button>
-                  <button type="button" aria-label={`删除 ${template.name}`} onClick={() => { void commands.deleteTemplate(template.id) }}><Trash2 size={15} /></button>
+                  <button type="button" aria-label={t('structured.deleteNamed', { name: template.name })} onClick={() => { void commands.deleteTemplate(template.id) }}><Trash2 size={15} /></button>
                 </footer>
               </article>
             ))}
@@ -160,25 +167,25 @@ export function StructuredRecords({ kind, state, commands }: StructuredRecordsPr
       )}
 
       {recordDraft !== null && (
-        <EditorModal open title={recordDraft.id === undefined ? '新建记录' : '编辑记录'} closeLabel="关闭" cancelLabel="取消" saveLabel="保存记录" onClose={() => { setRecordDraft(null) }} onSave={() => {
+        <EditorModal open title={recordDraft.id === undefined ? t('structured.newRecord') : t('record.edit')} closeLabel={t('close')} cancelLabel={t('cancel')} saveLabel={t('structured.saveRecord')} onClose={() => { setRecordDraft(null) }} onSave={() => {
           void commands.saveRecord(recordDraft).then((result) => { if (result.ok) setRecordDraft(null) })
         }} valid={recordDraft.title.trim() !== '' && selectedTemplate !== undefined}>
           <>
-            <FormField label="使用模板" wide><select value={recordDraft.templateId} onChange={(event) => { setRecordDraft({ ...recordDraft, templateId: event.target.value as TeacherRecordTemplateId, values: {} }) }}>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></FormField>
-            <FormField label="标题" wide><input value={recordDraft.title} onChange={(event) => { setRecordDraft({ ...recordDraft, title: event.target.value }) }} /></FormField>
-            <FormField label="跟进日期"><input type="date" value={recordDraft.dueDate} onChange={(event) => { setRecordDraft({ ...recordDraft, dueDate: event.target.value }) }} /></FormField>
-            <FormField label="状态"><select value={recordDraft.status} onChange={(event) => { setRecordDraft({ ...recordDraft, status: event.target.value as TeacherRecordStatus }) }}><option value="active">进行中</option><option value="done">已完成</option></select></FormField>
+            <FormField label={t('structured.useTemplate')} wide><select value={recordDraft.templateId} onChange={(event) => { setRecordDraft({ ...recordDraft, templateId: event.target.value as TeacherRecordTemplateId, values: {} }) }}>{templates.map(template => <option key={template.id} value={template.id}>{template.name}</option>)}</select></FormField>
+            <FormField label={t('record.title')} wide><input value={recordDraft.title} onChange={(event) => { setRecordDraft({ ...recordDraft, title: event.target.value }) }} /></FormField>
+            <FormField label={t('structured.followupDate')}><input type="date" value={recordDraft.dueDate} onChange={(event) => { setRecordDraft({ ...recordDraft, dueDate: event.target.value }) }} /></FormField>
+            <FormField label={t('status')}><select value={recordDraft.status} onChange={(event) => { setRecordDraft({ ...recordDraft, status: event.target.value as TeacherRecordStatus }) }}><option value="active">{t('active')}</option><option value="done">{t('done')}</option></select></FormField>
             {selectedTemplate?.fields.map(field => <FormField key={field} label={field} wide><textarea rows={3} value={recordDraft.values[field] ?? ''} onChange={(event) => { setRecordDraft({ ...recordDraft, values: { ...recordDraft.values, [field]: event.target.value } }) }} /></FormField>)}
           </>
         </EditorModal>
       )}
 
       {templateDraft !== null && (
-        <EditorModal open title={templateDraft.id === undefined ? '新建模板' : '编辑模板'} closeLabel="关闭" cancelLabel="取消" saveLabel="保存模板" onClose={() => { setTemplateDraft(null) }} onSave={saveTemplate} valid={templateDraft.name.trim() !== '' && templateDraft.fields.trim() !== ''}>
+        <EditorModal open title={templateDraft.id === undefined ? t('structured.newTemplate') : t('record.editTemplate')} closeLabel={t('close')} cancelLabel={t('cancel')} saveLabel={t('structured.saveTemplate')} onClose={() => { setTemplateDraft(null) }} onSave={saveTemplate} valid={templateDraft.name.trim() !== '' && templateDraft.fields.trim() !== ''}>
           <>
-            <FormField label="模板名称" wide><input value={templateDraft.name} onChange={(event) => { setTemplateDraft({ ...templateDraft, name: event.target.value }) }} /></FormField>
-            <FormField label="适用场景" wide><textarea rows={2} value={templateDraft.scene} onChange={(event) => { setTemplateDraft({ ...templateDraft, scene: event.target.value }) }} /></FormField>
-            <FormField label="记录结构（每行一项）" wide><textarea rows={8} value={templateDraft.fields} onChange={(event) => { setTemplateDraft({ ...templateDraft, fields: event.target.value }) }} /></FormField>
+            <FormField label={t('structured.templateName')} wide><input value={templateDraft.name} onChange={(event) => { setTemplateDraft({ ...templateDraft, name: event.target.value }) }} /></FormField>
+            <FormField label={t('structured.templateScene')} wide><textarea rows={2} value={templateDraft.scene} onChange={(event) => { setTemplateDraft({ ...templateDraft, scene: event.target.value }) }} /></FormField>
+            <FormField label={t('structured.templateFields')} wide><textarea rows={8} value={templateDraft.fields} onChange={(event) => { setTemplateDraft({ ...templateDraft, fields: event.target.value }) }} /></FormField>
           </>
         </EditorModal>
       )}

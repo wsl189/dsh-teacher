@@ -37,9 +37,16 @@ const emptyState = (): TeacherWorkbenchState => ({
   noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
-const globalProps: Pick<SidebarWorkbenchProps, 'useSessions' | 'useWorkspaces' | 'expandSidebar'> = {
+type AttentionSnapshot = Parameters<Parameters<SidebarWorkbenchProps['useSessionPendingInteraction']>[0]>[0]
+const noAttention: AttentionSnapshot = new Map()
+
+const globalProps: Pick<
+  SidebarWorkbenchProps,
+  'useSessions' | 'useSessionPendingInteraction' | 'useWorkspaces' | 'expandSidebar'
+> = {
   expandSidebar: vi.fn(),
   useSessions: (() => undefined) as SidebarWorkbenchProps['useSessions'],
+  useSessionPendingInteraction: selector => selector(noAttention),
   useWorkspaces: (() => undefined) as SidebarWorkbenchProps['useWorkspaces'],
 }
 

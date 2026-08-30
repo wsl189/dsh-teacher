@@ -1,8 +1,29 @@
+---
+description: "Host-owned revisioned teacher data, current-root question media, uploaded sources, reminders, weather, timetable normalization, and document generation."
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-host-teacher-workbench
 
 English | [中文](README.zh.md)
 
+## Summary
+
 Host-owned persistence, ordinary-conversation tool operations, question media, document generation, weather access, and timetable normalization for the Web teacher workbench. The plugin stores one schema-validated, revisioned document through `ctx.storageDomain` and exposes `teacherWorkbench/read` plus compare-and-set `teacherWorkbench/write` Remote methods. The companion `@deepseek-ai/dsh-tool-teacher-workbench` Consumer registers seven model-facing tools that let an ordinary agent read and change Daily Management, Timetable, Student Roster, Score Analysis, and Question Cutting through the same authoritative operations used by the browser. Dedicated question Remotes atomically save, read, replace, delete, assign, and render stored images without sending server paths to the browser. `teacherWorkbench/weather` resolves a configured district, county, or city through a Nominatim-compatible endpoint, fetches the forecast from Open-Meteo, validates both responses, and returns stable lookup, availability, or response errors without requiring the browser to contact either provider directly. When browser-side MinerU reconciliation finds no entries, `teacherWorkbench/normalizeTimetable` starts a short-lived child agent loop under the current session, selects `ctx.agentDefaultModel.currentToolSelection()`, exposes run-scoped source, matrix-submission, and line-splice patch tools, and accepts only a token for a matrix validated in that run before the browser may review rows. The optional `ctx.mobileNotifications` provider supplies a credential-free bot roster to `teacherWorkbench/listNotificationTargets`; the Remote returns only platform, opaque bot id, display label, and current connection state.
+
+## Table of Contents
+
+- [Use this package](#use-this-package)
+- [Understand the implementation](#understand-the-implementation)
+- [Further Exploration](#further-exploration)
+- [Model Experience](#model-experience)
+- [Known Limitations and Deferred Work](#known-limitations-and-deferred-work)
+- [Dev Note](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## Use this package
 
 The version-10 document contains daily tasks, memos, ledger categories and entries, dated calendar items, normalized weekly timetable entries, lesson resources, classes and students, exams, family-notice templates and saved drafts, reusable record templates, authored teaching and headteacher records, class seating layouts, question-library folders, paper-batch metadata, nested student question folders, and student question assignments. Each seating layout belongs to one roster class, contains exactly one slot for every configured row and column, and may reference only that class's students without duplicate occupants; deleting a class removes its layout, while deleting a student clears that student's seat. Ledger entries reference one durable category, store a required local date and time, and represent CNY amounts as non-negative integer cents; deleting a category removes its entries in the same revisioned write. Every class belongs to exactly one catalog: roster classes own students and exams and supply Question Cutting and seating, normal timetable classes are selectable by Today, Week, and Morning/Evening Study, and grade-timetable classes are selectable only by Grade. The schema rejects ledger, student, exam, seating, or timetable references whose owner is absent or crosses those catalogs, while identical class display names may retain independent identities in each catalog. Each timetable entry occupies one unique class/type/weekday/period slot; deleting a class also removes its schedule. Question folders and assignments reference durable students and source images; deleting a folder, student, class, image, or batch removes its dependent metadata and best-effort cleans its owned files. Daily-management, teaching, and headteacher edits share one revision, so concurrent browser windows use the same compare-and-set conflict handling. Browser code never writes Local Storage; every accepted mutation lands in the storage backend selected for the `teacher_workbench` domain. Daily tasks, memos, ledger entries, and timed calendar items may carry one mobile reminder containing the selected platform and bot, a deadline-derived UTC instant, and either a one-time lead or fixed repeat interval. Memos and ledger entries retain an independent optional reminder deadline instead of reusing their edit or expense time. The Host recomputes timers from the durable document after startup and every write, retries unavailable delivery until the deadline, advances each occurrence only after provider acceptance, and stops projecting reminders for completed or deleted items; documents without reminder fields do not schedule or send anything.
 
@@ -68,12 +89,34 @@ Every existing-crop defect declares whether correction must expand or trim its t
 
 The question-storage fields are available in **Settings → Plugins → Plugin configuration → Question workspace storage** under the `teacher-workbench` settings namespace. The Web bundle defaults media, source, and generated roots below `~/.dsh/teacher-workbench/`. A state write that adds a roster class, student, nested student folder, or durable library folder creates its complete physical hierarchy before the revision commits; a failed document commit removes only still-empty directories created by that operation. Retained metadata from another root is never materialized by an unrelated state write. The question workspace recursively projects every non-hidden directory below the current `segmentsRoot`, including empty directories and image-only leaves; direct images appear as a paper row inside their owning folder. It reads both `year/class/student` and `year/grade/class/student` hierarchies below `studentsRoot`, reuses durable identities only for matching physical paths, projects every non-hidden descendant directory below each visible student, and recursively reads its images. Durable classes, students, and folders absent from the current roots remain stored but do not enter the browse result. A student row aggregates images from the complete subtree, while a descendant row selects that exact directory. Changing either root switches the displayed collection without copying files from the previous root. Every class, student, descendant directory, paper, and image found below the current roots participates in the same create, rename, delete, edit, assignment, temporary-selection, and generation actions exposed for that item. The browser submits opaque identities from the latest scan, and the Host revalidates their regular-file or directory paths below the current roots before changing the filesystem. Metadata-backed mutations additionally update the revisioned document; physical items without matching metadata remain current-root content and are rediscovered after the operation. Renaming a durable student hierarchy also commits its display name and adjusted assignment paths with rollback of the physical move when the document write fails.
 
-## Extension Points
+-----
+
+<a id="understand-the-implementation"></a>
+## Understand the implementation
+
+<details>
+<summary>Implementation internals — click to expand</summary>
+
+### Extension Points
 
 The plugin provides `ctx.teacherWorkbench` and optionally consumes `ctx.mobileNotifications`, whose `listTargets()` and `send()` methods are implemented by dsh-im without exposing credentials or private conversation identifiers. Browser consumers use the generated Remote contribution through `@deepseek-ai/dsh-api-remotes` rather than importing Host runtime code. Optional same-process scheduled-task UIs may call `listScheduledReminders()` to obtain read-only, credential-free rows derived from active workbench reminders; that projection does not transfer execution or persistence ownership.
 
 `geocodingEndpoint` selects the Nominatim-compatible search endpoint, and `geocodingCacheEntries` bounds the in-memory location cache. Cache misses are serialized at no more than one geocoding request per second; repeat weather refreshes reuse the resolved coordinates while fetching current forecast data again.
 
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## Further Exploration
+
+- [Teacher workbench subsystem](../../../docs/subsystems/teacher-workbench.md) — generated Remote surface and ownership summary.
+- [Browser workbench](../../client/ui-teacher-workbench/README.md) — interactive UI Consumer.
+- [Model-facing workbench tools](../tool-teacher-workbench/README.md) — ordinary-conversation Consumer.
+- [OCR subsystem](../../../docs/subsystems/ocr.md) — source extraction and page geometry.
+- [Storage subsystem](../../../docs/subsystems/storage.md) — durable domain backend.
+
+<a id="model-experience"></a>
 ## Model Experience
 
 ### Ordinary-conversation workbench tools
@@ -138,3 +181,8 @@ Independent of the parent conversation cache. The fixed skill and schemas form a
 - **Agent-generated Office files are Host paths** — ordinary-conversation generation writes below `generatedRoot` and reports an absolute path; a browser download handoff for those paths is not implemented.
 - **Weather requires Host network access** — location queries go to the configured geocoder and Open-Meteo supplies current conditions plus the next twelve hours; either provider or the Host outbound network can be unavailable without affecting saved workbench data.
 - **Question cutting requires vision and recoverable OCR evidence** — the configured tool route must accept images. Numbered gaps on landscape pages can recover missing groups through targeted half-page parsing, and visual review can correct boundaries around recognized content, but a wholly absent unnumbered question still has no trusted element id or geometry to recover.
+
+<a id="dev-note"></a>
+### Dev Note
+
+Treat `segmentsRoot` and `studentsRoot` as live authorities: resolve every opaque scan identity again beneath the current setting immediately before a filesystem mutation.

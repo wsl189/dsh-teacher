@@ -9,6 +9,12 @@
   ],
   "references": [
     {
+      "path": "../store"
+    },
+    {
+      "path": "../../util/concurrency"
+    },
+    {
       "path": "../../../vendor/cordis"
     },
     {

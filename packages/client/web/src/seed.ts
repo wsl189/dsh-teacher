@@ -11,6 +11,8 @@ import * as ReactJsxRuntime from 'react/jsx-runtime'
 import * as ReactDom from 'react-dom'
 import * as ReactDomClient from 'react-dom/client'
 import * as Cordis from '@deepseek-ai/cordis'
+import * as ClientStore from '@deepseek-ai/dsh-client-store'
+import * as Concurrency from '@deepseek-ai/dsh-concurrency'
 import * as UiSlots from '@deepseek-ai/dsh-client-ui-slots'
 import * as UiPrimitives from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PlatformModule } from './platform.ts'
@@ -29,6 +31,8 @@ export function getStaticModules(): Record<string, unknown> {
     'react-dom': ReactDom,
     'react-dom/client': ReactDomClient,
     '@deepseek-ai/cordis': Cordis,
+    '@deepseek-ai/dsh-client-store': ClientStore,
+    '@deepseek-ai/dsh-concurrency': Concurrency,
     '@deepseek-ai/dsh-client-ui-slots': UiSlots,
     '@deepseek-ai/dsh-client-ui-primitives': UiPrimitives,
   } satisfies Record<PlatformModule, unknown>

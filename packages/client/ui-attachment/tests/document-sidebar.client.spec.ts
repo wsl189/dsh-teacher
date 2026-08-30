@@ -3,7 +3,7 @@
 import { createElement } from 'react'
 import { cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerAttachmentsProps, DraftDocument } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   BetterSidebarService, SidebarTab, TabComponentProps, TabDescriptor,
@@ -65,7 +65,7 @@ function tabProps(tab: SidebarTab, sessionId: SessionId): TabComponentProps {
 describe('uploaded document sidebar controller', () => {
   it('opens the hidden tab, renders its source, and self-closes after source release', async () => {
     const bench = createSidebarBench()
-    const controller = createDocumentSidebarController(bench.sidebar)
+    const controller = createDocumentSidebarController(bench.sidebar, 'Uploaded document')
     const descriptor = bench.descriptor()
     const sessionId = 'session/one' as SessionId
     const source = document('document:one', 'lesson.pptx')
@@ -99,7 +99,7 @@ describe('uploaded document sidebar controller', () => {
 
   it('reconciles moved and stale documents, closes direct targets, and disposes remaining sources', () => {
     const bench = createSidebarBench()
-    const controller = createDocumentSidebarController(bench.sidebar)
+    const controller = createDocumentSidebarController(bench.sidebar, 'Uploaded document')
     const firstSession = 'session-one' as SessionId
     const secondSession = 'session-two' as SessionId
     const kept = document('kept')

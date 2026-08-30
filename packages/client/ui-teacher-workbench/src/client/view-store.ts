@@ -1,6 +1,6 @@
 /** Browser-local disclosure and active-module state for the workbench surface. */
 
-import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-runtime/client'
+import { defineStore, type EngineStoreHandle } from '@deepseek-ai/dsh-client-store'
 
 /** Daily management, timetable, and the four migrated teaching modules. */
 export type TeacherWorkbenchModule =

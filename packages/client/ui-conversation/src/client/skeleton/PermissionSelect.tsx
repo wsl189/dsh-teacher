@@ -45,28 +45,23 @@ function permissionGlyph(value: string): ReactNode | undefined {
   return permissionGlyphs[value]
 }
 
-/** Fallback display transform for host-configured values outside the localized design set. */
+/**
+ * Display transform: kebab-case machine names render as title-case labels
+ * (`workspace-write` → `Workspace Write`); non-kebab host-configured names
+ * pass through. Full access intentionally overrides the machine-name
+ * transform so both permission surfaces use the product label `Full access`;
+ * the warning body remains locale-aware.
+ */
 function displayName(name: string): string {
   if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(name)) return name
   return name.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
-interface OptionCopy {
-  label: string
-  description: string | undefined
-}
-
-function optionCopy(option: PermissionSelectValue['options'][number], t: ComposerBarProps['t']): OptionCopy {
-  switch (option.value) {
-    case 'read-only':
-      return { label: t('access.option.readOnly'), description: t('access.option.readOnlyDescription') }
-    case 'workspace-write':
-      return { label: t('access.option.workspaceWrite'), description: t('access.option.workspaceWriteDescription') }
-    case FULL_ACCESS:
-      return { label: t('access.option.fullAccess'), description: t('access.option.fullAccessDescription') }
-    default:
-      return { label: displayName(option.name), description: option.description }
-  }
+function optionLabel(
+  option: PermissionSelectValue['options'][number],
+  t: ComposerBarProps['t'],
+): string {
+  return option.value === FULL_ACCESS ? t('access.fullLabel') : displayName(option.name)
 }
 
 export interface PermissionSelectProps {
@@ -94,21 +89,13 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
 
   const currentValue = pick ?? value.currentValue
   const current = value.options.find(option => option.value === currentValue)
-  const currentCopy = current === undefined ? undefined : optionCopy(current, t)
   const busy = pick !== null || confirmation !== null
 
   const items: MenuEntry[] = value.options
     .filter(o => o.value !== 'custom')
     .map((option) => {
       const icon = permissionGlyph(option.value)
-      const copy = optionCopy(option, t)
-      const label = (
-        <span className={css.optionCopy}>
-          <span className={css.optionLabel}>{copy.label}</span>
-          {copy.description !== undefined && <span className={css.optionDescription}>{copy.description}</span>}
-        </span>
-      )
-      return { id: option.value, label, ...icon === undefined ? {} : { icon } }
+      return { id: option.value, label: optionLabel(option, t), ...icon === undefined ? {} : { icon } }
     })
 
   const submit = (id: string): void => {
@@ -154,16 +141,15 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
           <button
             type="button"
             className={css.trigger}
-            aria-label={t('input.accessMode', { name: currentCopy?.label ?? displayName(currentValue) })}
-            title={currentCopy?.description}
+            aria-label={t('input.accessMode', { name: current === undefined ? displayName(currentValue) : optionLabel(current, t) })}
+            title={current?.description}
             disabled={locked || busy}
             onClick={() => { setOpen(!open) }}
           >
             {permissionGlyph(currentValue) !== undefined && (
               <span className={css.triggerIcon} aria-hidden>{permissionGlyph(currentValue)}</span>
             )}
-            <span className={css.triggerLabel}>{currentCopy?.label ?? displayName(currentValue)}</span>
-            {/* Same glyph + open rotation as the sibling ModelSelect trigger. */}
+            <span className={css.triggerLabel}>{current === undefined ? displayName(currentValue) : optionLabel(current, t)}</span>
             <span className={clsx(css.chevron, open && css.chevronOpen)} aria-hidden>
               <IconChevronDownOutline14 />
             </span>
@@ -176,6 +162,7 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
         description={t('access.confirm.description')}
         acknowledgeLabel={t('access.confirm.acknowledge')}
         cancelLabel={t('access.confirm.cancel')}
+        closeLabel={t('close')}
         confirmLabel={t('access.confirm.enable')}
         acknowledged={acknowledged}
         disabled={locked}

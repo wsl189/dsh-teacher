@@ -16,9 +16,7 @@ Tool is a first-class Client UI presentation concept. `@deepseek-ai/dsh-client-u
 
 Conversation data assembly follows the later [Conversation business-node decision](2026-08-09-client-conversation-node-assembly.md). The `ui-conversation` Tool Definition pairs root call/result Session Events, folds Code Dispatch edges into recursive `ToolCallBlock.subCalls`, and emits one stable `tool-call` Chat Node. This data responsibility handles only official Tool identity and topology; it does not interpret presentation for concrete Tool names.
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) places ordinary [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx) entries in Chat snapshot `order` and partitions adjacent `tool-call` Nodes into maximal runs without interpreting Tool names. It dispatches each run through `'conversation.chat.toolGroup'`; [`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) occupies that seat, summarizes multi-call work, and recursively traverses every root block. Every root or child level dispatches through the same keyed/session `'tool.call.toolview'` child slot with `entryKey: toolName`, falling back to `GenericToolCard` when no registration exists.
-
-A single root without Code Dispatch children stays an atomic row. A run containing at least two root or child calls starts as one action summary and expands to the original call trees without changing Session data. The first Tool Node key owns the stable outer flow anchor while each expanded atomic call retains `call:<id>` for selection. Tool-name tokens influence summary categories only; registered atomic renderers remain authoritative for expanded content.
+[`ChatView`](../../../../packages/client/ui-chat/src/client/chat/ChatView.tsx) only places generic [`ChatNodeSeat`](../../../../packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx) entries in Chat snapshot `order`. A Seat dispatches `'conversation.chat.node'` by `node.kind`; [`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) registers the `tool-call` entry, and [`ToolCallTree`](../../../../packages/client/ui-tool/src/client/tool/ToolCallTree.tsx) recursively traverses the root block. Every root or child level dispatches through the same keyed/session `'tool.call.toolview'` child slot with `entryKey: toolName`, falling back to `GenericToolCard` when no registration exists.
 
 A business Tool plugin receives one standard `ToolCallBlock`, identity, workspace cwd, and host actions; it does not read Session, Context, or the Conversation assembler. Skill remains an ordinary Tool and uses the same keyed-slot registration path as other business Tools.
 
@@ -29,9 +27,9 @@ The details panel is a second Tool presentation point, not the call-tree owner. 
 ```text
 Session Event window
   -> Tool Definition -> tool-call Chat Node (recursive ToolCallBlock)
-  -> ChatView -> consecutive Tool run
-  -> conversation.chat.toolGroup
-       -> collapsed action summary or root/subCalls[] recursion
+  -> ChatView -> ChatNodeSeat(entryKey = tool-call)
+  -> ToolCallTree
+       -> root/subCalls[] recursion
        -> tool.call.toolview(entryKey = toolName)
             |- registered atomic view
             `- GenericToolCard fallback
@@ -43,13 +41,13 @@ Session Event window
 |---|---|---|
 | Client Runtime Conversation engine | Context identity, Location, history replay, view Node publication | Tool event meaning, call tree, Tool renderer |
 | `ui-conversation` Tool Definition | call/result pairing, Code Dispatch topology, running/settled/interrupted `ToolCallBlock`, Chat ordering anchor | Tool-name dispatch, card models, recursive React structure |
-| `ui-conversation` Chat view | keyed Node order, consecutive Tool-run membership, outer scroll anchors, selection, and host actions | Tool names, summary wording, lifecycle, subcall composition, atomic Tool renderers |
-| `ui-tool` | action summaries, disclosure state, root/subcall recursive rendering, atomic keyed dispatch, fallback, card models, and details output | Session Event fold, Chat ordering |
+| `ui-conversation` Chat view | keyed Node order, scroll anchors, selection, and host actions | Tool lifecycle, subcall composition, atomic Tool renderers |
+| `ui-tool` | root/subcall recursive rendering, atomic keyed dispatch, fallback, card models, and details output | Session Event fold, Chat ordering |
 | Business Tool plugin | atomic renderers for one or more wire Tool names | root/subcall placement, lifecycle pairing, Session projectors |
 
 ## Verification
 
-`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, running-to-settled keyed identity, and consecutive-run placement without importing production `ui-tool` renderers. `ui-tool` tests mount the real conversation host and pin default-collapsed summaries, expansion, root/subcall recursion, keyed dispatch, Generic fallback, selection, details, and concrete Tool cards. Assembled Web tests cover the path with both plugins loaded.
+`ui-conversation` tests pin the Tool Definition's call/result pairing, Code Dispatch, interruption, and running-to-settled keyed identity without importing production `ui-tool` renderers. `ui-tool` tests mount the real conversation host and pin root/subcall recursion, keyed dispatch, Generic fallback, selection, details, and concrete Tool cards. Assembled Web tests cover the path with both plugins loaded.
 
 ## Alternatives considered
 
@@ -65,6 +63,6 @@ Session Event window
 
 ## Consequences
 
-`ui-conversation` no longer depends on presentation for concrete Tool names, and root and subcalls cannot drift onto different dispatch paths. Long Tool-only stretches occupy one scannable row while the event-derived calls remain available on demand. Business packages can independently own atomic Tool renderers; if `ui-tool` is absent, Conversation data assembly remains valid, the group seat falls back to ordinary Chat Node dispatch, and details retain raw results.
+`ui-conversation` no longer depends on presentation for concrete Tool names, and root and subcalls cannot drift onto different dispatch paths. Business packages can independently own atomic Tool renderers; if `ui-tool` is absent, Conversation data assembly remains valid, Chat Nodes use the generic fallback, and details retain raw results.
 
 The cost is an explicit dependency from `ui-tool` on the business Node slot and locale namespace declared by conversation, plus one Tool-specific child slot. Tool Definition remains in `ui-conversation` because this change does not split packages; it can later move through the Conversation registry seam without changing the presentation ownership recorded here.

@@ -1,5 +1,5 @@
 import { useEffect } from 'react'
-import type { SessionId } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { ComposerAttachmentsProps, DraftDocument } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   BetterSidebarService, SessionScope, TabComponentProps,
@@ -32,9 +32,13 @@ export interface DocumentSidebarController {
 /**
  * Register the hidden uploaded-document tab type against one sidebar service.
  * @param sidebar - better-sidebar registry and targeted-open service.
+ * @param title - localized fallback title for restored tab descriptors.
  * @returns the controller owned by the calling Cordis fiber.
  */
-export function createDocumentSidebarController(sidebar: BetterSidebarService): DocumentSidebarController {
+export function createDocumentSidebarController(
+  sidebar: BetterSidebarService,
+  title: string,
+): DocumentSidebarController {
   const sources = new Map<string, DocumentPreviewSource & { readonly sessionId: SessionId }>()
 
   function PreviewTab({ scope, tab }: TabComponentProps) {
@@ -47,7 +51,7 @@ export function createDocumentSidebarController(sidebar: BetterSidebarService): 
 
   const unregister = sidebar.registerTab({
     id: DOCUMENT_TAB_TYPE,
-    title: 'Uploaded document',
+    title,
     hidden: true,
     dedupeKey: tab => tab.id,
     onClose: (tab) => { sources.delete(tab.id) },

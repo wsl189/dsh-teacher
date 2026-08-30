@@ -11,6 +11,15 @@ import { FamilyCommunication, generateFamilyNotice } from '../src/client/FamilyC
 import { StructuredRecords } from '../src/client/StructuredRecords.tsx'
 import { SeatingPlan } from '../src/client/SeatingPlan.tsx'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
+import { zh } from '../src/client/locales.ts'
+
+const t = ((key: keyof typeof zh, params?: Record<string, unknown>) => {
+  let value: string = zh[key]
+  for (const [name, replacement] of Object.entries(params ?? {})) {
+    value = value.replaceAll(`{${name}}`, String(replacement))
+  }
+  return value
+})
 
 const classId = 'class-a' as TeacherClassId
 const studentId = 'student-a' as TeacherStudentId
@@ -73,14 +82,14 @@ describe('headteacher workbench modules', () => {
   it('generates a complete editable family notice and saves the reviewed draft', async () => {
     const generated = generateFamilyNotice({
       type: '放假通知', audience: '各位家长', date: '9月30日 16:30', facts: '📅 放假时间：10月1日', signature: '王老师',
-    }, noticeTemplate)
+    }, noticeTemplate, t)
     expect(generated).toContain('📣 【放假通知】')
     expect(generated).toContain('⏰ 重点时间：9月30日 16:30')
     expect(generated).toContain('涉及学生隐私的信息请勿直接发在班级群内')
 
     const saveNotice = vi.fn(async (_input: Parameters<TeacherWorkbenchCommands['saveNotice']>[0]) => ({ ok: true } as const))
     const c = { ...commands(), saveNotice }
-    render(<FamilyCommunication state={state()} commands={c} />)
+    render(<FamilyCommunication state={state()} commands={c} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '生成可编辑初稿' }))
     expect(screen.getByDisplayValue(/📣 【放假通知】/u)).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: '保存' }))
@@ -91,7 +100,7 @@ describe('headteacher workbench modules', () => {
   })
 
   it('uses the class-record template library to open a complete record editor', () => {
-    render(<StructuredRecords kind="class" state={state()} commands={commands()} />)
+    render(<StructuredRecords kind="class" state={state()} commands={commands()} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: /模板库/u }))
     expect(screen.getByText('班级事项记录')).toBeTruthy()
     fireEvent.click(screen.getAllByRole('button', { name: '使用模板' }).at(-1)!)
@@ -101,7 +110,7 @@ describe('headteacher workbench modules', () => {
 
   it('renders the roster in a teacher-oriented seat grid and persists its layout', async () => {
     const c = commands()
-    render(<SeatingPlan state={state()} commands={c} />)
+    render(<SeatingPlan state={state()} commands={c} t={t} />)
     expect(screen.getByText('张同学')).toBeTruthy()
     expect(screen.getByText('讲台 · 教师视角')).toBeTruthy()
     expect(screen.getByText(/黑 板/u)).toBeTruthy()

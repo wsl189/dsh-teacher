@@ -18,7 +18,10 @@
       "path": "../ui-primitives"
     },
     {
-      "path": "../runtime"
+      "path": "../store"
+    },
+    {
+      "path": "../ui-renderer"
     },
     {
       "path": "../ui-sidebar"

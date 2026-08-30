@@ -1,6 +1,6 @@
 /** Component-facing workbench contracts. */
 
-import type { SettingsScope } from '@deepseek-ai/dsh-client-runtime/client'
+import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type {
   OcrExtractResult,

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-fs",
   "description": "Model-facing text, document, image, and mutation tools over the DeepSeek Harness filesystem seam (ctx.fs)",
-  "version": "1.0.6",
+  "version": "1.0.7-rc1",
   "publishConfig": {
     "access": "public"
   },
@@ -49,11 +49,6 @@
     "@deepseek-ai/dsh-user-approval": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
   },
-  "peerDependenciesMeta": {
-    "@deepseek-ai/dsh-ocr": {
-      "optional": true
-    }
-  },
   "devDependencies": {
     "@deepseek-ai/dsh-agent": "workspace:^",
     "@deepseek-ai/dsh-agent-loop": "workspace:^",
@@ -73,5 +68,10 @@
     "@deepseek-ai/dsh-tools": "workspace:^",
     "@deepseek-ai/dsh-user-approval": "workspace:^",
     "@deepseek-ai/cordis": "workspace:^"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-ocr": {
+      "optional": true
+    }
   }
 }

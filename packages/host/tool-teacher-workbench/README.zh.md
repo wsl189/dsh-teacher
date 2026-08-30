@@ -1,15 +1,57 @@
+---
+description: "面向模型的教师工作台工具：读取和修改权威工作台、已存试题图片、分发、分割与 Office 生成。"
+kind: "package-reference"
+---
+
 # @deepseek-ai/dsh-tool-teacher-workbench
 
 [English](README.md) | 中文
 
+## 概述
+
 持久化教师工作台的面向模型 Consumer。插件在 `ctx.teacherWorkbench` 上注册一个权威板块读取工具、一个已存试题图片读取工具和五个语义修改工具。日常管理覆盖待办、备忘录、账本数据与日期事项；课程表覆盖相互独立的本周与年级班级目录及其课程行；学生名册覆盖名册班级与学生；成绩分析覆盖与名册关联的考试；试题切割覆盖已暂存 PDF 分割、试题媒体与目录、分发，以及从已存图片或普通本地图片目录生成 Office 文件。每次状态修改都使用 Host 服务中经 schema 校验且采用比较后写入的文档，不建立并行的 agent 存储。
+
+## 目录
+
+- [使用本包](#use-this-package)
+- [理解实现](#understand-the-implementation)
+- [延伸阅读](#further-exploration)
+- [模型体验](#model-experience)
+- [已知限制与暂缓事项](#known-limitations-and-deferred-work)
+- [开发备注](#dev-note)
+
+-----
+
+<a id="use-this-package"></a>
+## 使用本包
 
 标准 Web 组合会在 `@deepseek-ai/dsh-host-teacher-workbench` 和 MinerU 支持的 OCR 服务之后挂载本插件。对话 PDF 上传提供私有 Host 来源 id，名册、课程表与成绩导入则使用随用户提示词注入的已记录 OCR Markdown。打开浏览器工作台或切换当前模块都会刷新同一 Host 文档并显示已接受的工具修改。
 
-## 扩展点
+-----
+
+<a id="understand-the-implementation"></a>
+## 理解实现
+
+<details>
+<summary>实现细节——点击展开</summary>
+
+### 扩展点
 
 本包消费 `ctx.tools`、`ctx.fs` 与 `ctx.teacherWorkbench`。挂载 `ctx.attachments` 时，本包还会注册已存试题图片读取工具，并在执行时解析 `ctx.llm`，要求当前模型路由支持图片输入。本地目录生成通过 `ctx.fs` 解析并读取嵌套图片；PDF 分割还会在执行时解析可选 `ctx.ocr` 服务，并在版面提取不可用时明确失败。本包不提供自身的服务或事件词汇。
 
+</details>
+
+-----
+
+<a id="further-exploration"></a>
+## 延伸阅读
+
+- [教师工作台 Host](../teacher-workbench/README.zh.md)——权威操作与持久状态。
+- [教师工作台 UI](../../client/ui-teacher-workbench/README.zh.md)——使用同一组操作的浏览器 Consumer。
+- [生成的工具目录](../../../docs/tool-catalog.zh.md#deepseek-aidsh-tool-teacher-workbench)——准确的模型可见 schema。
+- [教师工作台子系统](../../../docs/subsystems/teacher-workbench.zh.md)——生成的 Cordis 服务参考。
+
+<a id="model-experience"></a>
 ## 模型体验
 
 ### 普通对话工作台操作
@@ -28,7 +70,14 @@
 
 ## 已知限制与延后工作
 
+<a id="known-limitations-and-deferred-work"></a>
+
 - **一个部署全局工作台**：工具共享 Host 服务当前的单文档作用域；逐用户授权需要未来的存储所有权模型。
 - **保留的 PDF 来源需要过期策略**：内容寻址来源对象会去重并校验完整性，但尚未实现自动垃圾回收。
 - **生成的 Office 文件是 Host 路径**：Word 与 PowerPoint 输出会私有保存并报告绝对路径；尚未实现浏览器直接下载交接。
 - **OCR 与模型解释可能出错**：导入表格与语义题目边界在用于重要场景前应在工作台中复核。
+
+<a id="dev-note"></a>
+### 开发备注
+
+语义校验与持久化保留在 Host 服务中；工具处理器把模型意图转换为这些权威操作，并报告已提交结果。

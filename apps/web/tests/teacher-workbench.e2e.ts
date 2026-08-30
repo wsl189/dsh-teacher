@@ -44,7 +44,7 @@ const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh
 const QUESTION_CUTTING_PROGRESS_EXPECTED = join(SNAPSHOT_DIR, 'question-cutting-progress.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
-const RASTER_FIXTURE = fileURLToPath(new URL('../../../examples/acp-agent/tests/snapshots/read-image/workspace/red.png', import.meta.url))
+const RASTER_FIXTURE = fileURLToPath(new URL('../../../snapshots/session/read-image/workspace/red.png', import.meta.url))
 const DOCUMENT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'document-draft.expected.md')
 const DOCUMENT_CONTEXT_EXPECTED = join(SNAPSHOT_DIR, 'document-context.expected.md')
 const DOCUMENT_CONTEXT_FIXTURE = join(SNAPSHOT_DIR, 'document-context.session.jsonl')
@@ -149,7 +149,7 @@ describe('web e2e: durable teacher workbench', () => {
     })
     await page.clock.setFixedTime(FIXED_WORKBENCH_TIME)
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'document-upload')
   }, 120_000)
@@ -1474,9 +1474,9 @@ describe('web e2e: durable teacher workbench', () => {
       mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       buffer: Buffer.from('keyless document fixture'),
     })
-    const input = composer.locator('textarea')
+    const input = composer.locator('[data-composer-input]')
     await composer.getByText('已识别', { exact: true }).waitFor({ timeout: 10_000 })
-    expect(await input.inputValue()).toBe('')
+    expect(await input.textContent()).toBe('')
     await input.fill('请总结这份教学计划')
     await compareOrRefreshGolden(
       DOCUMENT_DRAFT_EXPECTED,
@@ -1519,7 +1519,7 @@ describe('web e2e: hidden MinerU conversation context', () => {
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE })
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'document-context')
   }, 120_000)
@@ -1539,14 +1539,17 @@ describe('web e2e: hidden MinerU conversation context', () => {
       buffer: Buffer.from('keyless document fixture'),
     })
     await composer.getByText('已识别', { exact: true }).waitFor({ timeout: 10_000 })
-    const input = composer.locator('textarea')
-    expect(await input.inputValue()).toBe('')
+    const input = composer.locator('[data-composer-input]')
+    expect(await input.textContent()).toBe('')
     await input.fill('请总结这份教学计划')
     const settled = scaffold.whenTurnSettled()
     await composer.getByRole('button', { name: '发送消息' }).click()
     await settled
     const conversationScroll = page.locator('[data-conversation-scroll]')
-    await conversationScroll.getByText('mineru-ocr', { exact: true }).waitFor({ timeout: 10_000 })
+    await conversationScroll.getByText('mineru-ocr', { exact: true }).first().waitFor({
+      state: 'attached',
+      timeout: 10_000,
+    })
     await conversationScroll.getByText('请总结这份教学计划', { exact: true }).waitFor({ timeout: 10_000 })
     await conversationScroll.getByText('已收到教学计划。', { exact: true }).waitFor({ timeout: 10_000 })
     await compareOrRefreshGolden(

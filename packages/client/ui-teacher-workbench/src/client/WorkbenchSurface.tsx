@@ -199,13 +199,14 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                           : active === 'records'
                             ? <TeachingRecords state={snapshot.document.state} commands={commands} t={props.t} />
                             : active === 'family'
-                              ? <FamilyCommunication state={snapshot.document.state} commands={commands} />
+                              ? <FamilyCommunication state={snapshot.document.state} commands={commands} t={props.t} />
                               : active === 'seating'
-                                ? <SeatingPlan state={snapshot.document.state} commands={commands} />
+                                ? <SeatingPlan state={snapshot.document.state} commands={commands} t={props.t} />
                                 : <StructuredRecords
                                   kind={active === 'classRecords' ? 'class' : active === 'talkRecords' ? 'talk' : 'summary'}
                                   state={snapshot.document.state}
                                   commands={commands}
+                                  t={props.t}
                                 />
             )}
           </main>

@@ -8,9 +8,9 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import { launchWebScaffold, seedSession, watchConsole, type WebScaffold } from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
-const FIXTURE = fileURLToPath(new URL('./snapshots/fresh-round-trip/session.jsonl', import.meta.url))
+const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.jsonl', import.meta.url))
 const PDF_FIXTURE = fileURLToPath(new URL(
-  '../../../examples/acp-agent/tests/snapshots/read-document/workspace/roster.pdf',
+  '../../cli/tests/profiles/acp/tests/snapshots/read-document/workspace/roster.pdf',
   import.meta.url,
 ))
 const SEED_ID = 'better-sidebar-web-e2e'
@@ -27,7 +27,7 @@ describe('web e2e: built-in better-sidebar workbench', () => {
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
 
     const groupRow = page.locator('[role="treeitem"]').first()

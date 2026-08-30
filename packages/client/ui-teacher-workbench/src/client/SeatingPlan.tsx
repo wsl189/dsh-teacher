@@ -6,6 +6,7 @@ import type { TeacherClassId, TeacherStudent, TeacherStudentId, TeacherWorkbench
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import { DOCUMENT_IMPORT_ACCEPT, shouldEnhanceDocumentImage } from './document-import.ts'
 import { parseStudentImport } from './import-data.ts'
+import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
 
 /** Seating-plan module props. */
@@ -14,6 +15,8 @@ export interface SeatingPlanProps {
   state: TeacherWorkbenchState
   /** Durable mutation and document-extraction commands. */
   commands: TeacherWorkbenchCommands
+  /** Namespace translator. */
+  t: TeacherWorkbenchTranslate
 }
 
 type DraggedStudent = { kind: 'pool'; studentId: TeacherStudentId } | { kind: 'seat'; index: number }
@@ -25,7 +28,7 @@ const DEFAULT_ROWS = 5
  * @param props - durable workbench state and commands.
  * @returns the class seating workspace.
  */
-export function SeatingPlan({ state, commands }: SeatingPlanProps) {
+export function SeatingPlan({ state, commands, t }: SeatingPlanProps) {
   const classes = useMemo(() => state.classes.filter(item => item.usage === 'roster'), [state.classes])
   const [classId, setClassId] = useState<TeacherClassId | ''>(() => classes[0]?.id ?? '')
   const selectedClass = classes.find(item => item.id === classId)
@@ -78,7 +81,7 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
   }, [students])
 
   if (selectedClass === undefined) {
-    return <div className={css.workspaceEmpty}><h3>请先在“学生名册”中新建班级</h3><p>排座位使用同一份班级名册，不需要重复维护学生信息。</p></div>
+    return <div className={css.workspaceEmpty}><h3>{t('seating.createClassTitle')}</h3><p>{t('seating.createClassDescription')}</p></div>
   }
 
   const studentById = new Map(students.map(student => [student.id, student]))
@@ -94,7 +97,7 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
     setRows(DEFAULT_ROWS)
     setColumns(nextColumns)
     setSlots(fillSeats(students, DEFAULT_ROWS, nextColumns))
-    setNotice(`已恢复适合当前班级人数的 ${DEFAULT_ROWS} 排 × ${nextColumns} 列布局`)
+    setNotice(t('seating.layoutReset', { rows: DEFAULT_ROWS, columns: nextColumns }))
   }
   const randomize = (): void => {
     const shuffled = shuffle(students)
@@ -102,7 +105,7 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
     const next = Array<TeacherStudentId | null>(rows * columns).fill(null)
     shuffled.slice(0, next.length).forEach((student, index) => { next[indexes[index] as number] = student.id })
     setSlots(next)
-    setNotice('已随机分配；空位保留，可继续任意拖拽调整')
+    setNotice(t('seating.randomized'))
   }
   const dropAt = (index: number): void => {
     if (dragged === null) return
@@ -123,10 +126,10 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
     setDragged(null)
   }
   const importRoster = async (file: File): Promise<void> => {
-    setNotice('正在识别名单…')
+    setNotice(t('seating.recognizing'))
     const result = await commands.extractDocument(file, { enhanceImageDetail: shouldEnhanceDocumentImage(file) })
     if (!result.ok) {
-      setNotice(`名单识别失败：${result.error.message}`)
+      setNotice(t('seating.recognizeFailed', { message: result.error.message }))
       return
     }
     const parsed = parseStudentImport(result.value.markdown)
@@ -135,36 +138,38 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
       return
     }
     const saved = await commands.importStudents(selectedClass.id, parsed.rows)
-    setNotice(saved.ok ? `已导入 ${parsed.rows.length} 名学生，可继续拖拽调整` : `名单保存失败：${saved.error.message}`)
+    setNotice(saved.ok
+      ? t('seating.imported', { count: parsed.rows.length })
+      : t('seating.saveFailed', { message: saved.error.message }))
   }
 
   return (
     <div className={css.seatingView}>
       <header className={css.seatingToolbar}>
-        <div><h2>可视化排座位</h2></div>
-        <select aria-label="选择班级" value={classId} onChange={(event) => { setClassId(event.target.value as TeacherClassId) }}>{classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
+        <div><h2>{t('seating.title')}</h2></div>
+        <select aria-label={t('seating.selectClass')} value={classId} onChange={(event) => { setClassId(event.target.value as TeacherClassId) }}>{classes.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select>
         <div>
           <input ref={inputRef} className={css.calendarImportInput} type="file" accept={DOCUMENT_IMPORT_ACCEPT} onChange={(event) => {
             const file = event.target.files?.[0]
             event.target.value = ''
             if (file !== undefined) void importRoster(file)
           }} />
-          <button type="button" className={css.buttonSecondary} onClick={() => { inputRef.current?.click() }}><FileUp size={16} />导入名单</button>
-          <button type="button" className={css.buttonSecondary} onClick={randomize}><Shuffle size={16} />随机分配</button>
-          <button type="button" className={css.buttonPrimary} onClick={() => { exportSeatingImage(selectedClass.name, rows, columns, slots, studentById) }}><Download size={16} />导出图片</button>
+          <button type="button" className={css.buttonSecondary} onClick={() => { inputRef.current?.click() }}><FileUp size={16} />{t('seating.importRoster')}</button>
+          <button type="button" className={css.buttonSecondary} onClick={randomize}><Shuffle size={16} />{t('seating.randomize')}</button>
+          <button type="button" className={css.buttonPrimary} onClick={() => { exportSeatingImage(selectedClass.name, rows, columns, slots, studentById, t) }}><Download size={16} />{t('seating.exportImage')}</button>
         </div>
       </header>
       {notice !== '' && <div className={css.seatNotice}>{notice}</div>}
 
       <div className={css.seatingLayout}>
         <aside className={css.studentPool}>
-          <h3>待安排 <span>{students.length - seated.size}人</span></h3>
-          <label><Search size={15} /><input value={search} placeholder="搜索学生" onChange={(event) => { setSearch(event.target.value) }} /></label>
-          <div>{pool.length === 0 ? <p>全部学生已安排</p> : pool.map(student => <div key={student.id} draggable onDragStart={() => { setDragged({ kind: 'pool', studentId: student.id }) }}><GripVertical size={14} />{student.name}</div>)}</div>
+          <h3>{t('seating.pool')} <span>{t('seating.people', { count: students.length - seated.size })}</span></h3>
+          <label><Search size={15} /><input value={search} placeholder={t('seating.search')} onChange={(event) => { setSearch(event.target.value) }} /></label>
+          <div>{pool.length === 0 ? <p>{t('seating.allAssigned')}</p> : pool.map(student => <div key={student.id} draggable onDragStart={() => { setDragged({ kind: 'pool', studentId: student.id }) }}><GripVertical size={14} />{student.name}</div>)}</div>
         </aside>
 
         <section className={css.seatCanvas}>
-          <div className={css.seatCanvasHead}><span>教室后方</span><strong>{rows} 排 × {columns} 列 · {rows * columns} 个座位</strong></div>
+          <div className={css.seatCanvasHead}><span>{t('seating.classroomBack')}</span><strong>{t('seating.gridSummary', { rows, columns, count: rows * columns })}</strong></div>
           <div className={css.seatCanvasScroll}>
             <div className={css.seatRoom} style={{ minWidth: Math.max(500, columns * 82) }}>
               <div className={css.seatGrid} style={{ gridTemplateColumns: `repeat(${columns}, minmax(72px, 1fr))` }}>
@@ -176,33 +181,33 @@ export function SeatingPlan({ state, commands }: SeatingPlanProps) {
                     return <button key={index} type="button" className={student === undefined ? css.emptySeat : undefined} draggable={student !== undefined} onDragStart={() => { if (student !== undefined) setDragged({ kind: 'seat', index }) }} onDragOver={(event) => { event.preventDefault() }} onDrop={() => { dropAt(index) }} onClick={() => {
                       if (student === undefined) return
                       setSlots(current => current.map((value, currentIndex) => currentIndex === index ? null : value))
-                    }}><span>{row + 1}排 · {column + 1}列</span><strong>{student?.name ?? '空位'}</strong>{student === undefined ? <Plus size={13} /> : <GripVertical size={13} />}</button>
+                    }}><span>{t('seating.position', { row: row + 1, column: column + 1 })}</span><strong>{student?.name ?? t('seating.emptySeat')}</strong>{student === undefined ? <Plus size={13} /> : <GripVertical size={13} />}</button>
                   })
                 })}
               </div>
-              <div className={css.teacherDesk}>讲台 · 教师视角</div>
-              <div className={css.blackboard}>黑 板 <small>在教师身后</small></div>
+              <div className={css.teacherDesk}>{t('seating.teacherDesk')}</div>
+              <div className={css.blackboard}>{t('seating.blackboard')} <small>{t('seating.behindTeacher')}</small></div>
             </div>
           </div>
         </section>
 
         <aside className={css.seatRules}>
-          <div><h3>排座规则</h3><button type="button" onClick={reset}><RotateCcw size={15} />重置</button></div>
+          <div><h3>{t('seating.rules')}</h3><button type="button" onClick={reset}><RotateCcw size={15} />{t('seating.reset')}</button></div>
           <div className={css.seatSizeFields}>
-            <label><span>排数</span><select value={rows} onChange={(event) => {
+            <label><span>{t('seating.rowCount')}</span><select value={rows} onChange={(event) => {
               resize(Number(event.target.value), columns)
             }}>{[3, 4, 5, 6, 7, 8].map(value => (
-                <option key={value} value={value}>{value} 排</option>
+                <option key={value} value={value}>{t('seating.rows', { count: value })}</option>
               ))}</select></label>
-            <label><span>列数</span><select value={columns} onChange={(event) => {
+            <label><span>{t('seating.columnCount')}</span><select value={columns} onChange={(event) => {
               resize(rows, Number(event.target.value))
             }}>{[4, 5, 6, 7, 8, 9, 10].map(value => (
-                <option key={value} value={value}>{value} 列</option>
+                <option key={value} value={value}>{t('seating.columns', { count: value })}</option>
               ))}</select></label>
           </div>
-          <div className={css.seatRuleNote}><strong>50人班级可完整呈现</strong><p>默认会根据人数扩展到最多 10 列。先随机分配，再把任意学生拖到空位或座位；第 1 排离讲台最近。</p></div>
-          <button type="button" className={css.buttonPrimary} onClick={randomize}><Shuffle size={17} />随机分配后手动调整</button>
-          <p>不根据成绩、性格等信息自动评价学生，最终选择权留给老师。</p>
+          <div className={css.seatRuleNote}><strong>{t('seating.capacityTitle')}</strong><p>{t('seating.capacityDescription')}</p></div>
+          <button type="button" className={css.buttonPrimary} onClick={randomize}><Shuffle size={17} />{t('seating.adjust')}</button>
+          <p>{t('seating.fairness')}</p>
         </aside>
       </div>
     </div>
@@ -248,6 +253,7 @@ function exportSeatingImage(
   columns: number,
   slots: readonly (TeacherStudentId | null)[],
   students: ReadonlyMap<TeacherStudentId, TeacherStudent>,
+  t: TeacherWorkbenchTranslate,
 ): void {
   const canvas = document.createElement('canvas')
   canvas.width = 1_600
@@ -259,7 +265,7 @@ function exportSeatingImage(
   context.fillStyle = '#17211d'
   context.font = 'bold 42px sans-serif'
   context.textAlign = 'center'
-  context.fillText(`${className} 座次表`, 800, 64)
+  context.fillText(t('seating.imageTitle', { className }), 800, 64)
   const width = (1_320 - 22 * (columns - 1)) / columns
   for (let displayRow = 0; displayRow < rows; displayRow += 1) {
     const row = rows - 1 - displayRow
@@ -276,7 +282,7 @@ function exportSeatingImage(
       context.stroke()
       context.fillStyle = '#25342d'
       context.font = '24px sans-serif'
-      context.fillText(student?.name ?? '空位', x + width / 2, y + 48)
+      context.fillText(student?.name ?? t('seating.emptySeat'), x + width / 2, y + 48)
     }
   }
   const deskY = 130 + rows * 132
@@ -284,14 +290,14 @@ function exportSeatingImage(
   context.fillRect(560, deskY, 480, 58)
   context.fillStyle = '#315d49'
   context.font = '22px sans-serif'
-  context.fillText('讲台 · 教师视角', 800, deskY + 37)
+  context.fillText(t('seating.teacherDesk'), 800, deskY + 37)
   context.fillStyle = '#26332d'
   context.fillRect(240, deskY + 82, 1_120, 70)
   context.fillStyle = '#ffffff'
   context.font = '27px sans-serif'
-  context.fillText('黑  板（在教师身后）', 800, deskY + 126)
+  context.fillText(t('seating.imageBlackboard'), 800, deskY + 126)
   const link = document.createElement('a')
-  link.download = `${className}-座次表.png`
+  link.download = t('seating.imageFilename', { className })
   link.href = canvas.toDataURL('image/png')
   link.click()
 }

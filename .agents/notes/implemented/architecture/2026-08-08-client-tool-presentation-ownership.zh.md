@@ -16,9 +16,7 @@ Client 运行时已经按 `callId` 配对工具调用/结果事件，并能从 C
 
 Conversation 数据组装遵循后续的 [Conversation 业务节点决策](2026-08-09-client-conversation-node-assembly.zh.md)。`ui-conversation` 的工具 Definition 从会话事件配对 root call/result，把 Code Dispatch edge fold 成递归 `ToolCallBlock.subCalls`，并生成一个稳定的 `tool-call` Chat Node；这里的数据职责只处理官方工具 identity 和拓扑，不解释具体工具名称的展示。
 
-[`ChatView`](../../../../packages/client/ui-conversation/src/client/chat/ChatView.tsx) 按 Chat 快照的 `order` 放置普通 [`ChatNodeSeat`](../../../../packages/client/ui-conversation/src/client/chat/ChatNodeSeat.tsx)，并在不解释工具名称的前提下把相邻 `tool-call` Node 划分为最大的连续分组。它通过 `'conversation.chat.toolGroup'` 分发每组；[`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) 占据该 seat、归纳多次调用，并递归遍历每个 root block。每一层 root 或 child 都通过同一个 keyed/session `'tool.call.toolview'` 子 slot 以 `entryKey: toolName` 分发，缺少注册时渲染 `GenericToolCard`。
-
-没有 Code Dispatch child 的单个 root 保持为原子工具行。包含至少两个 root 或 child 调用的分组默认显示一行动作摘要，展开后恢复原有调用树，不改变会话数据。第一个工具 Node key 拥有稳定的外层 flow anchor，展开后的每个原子调用继续保留用于 selection 的 `call:<id>`。工具名称 token 只影响摘要分类；已注册的原子 renderer 仍对展开内容拥有最终决定权。
+[`ChatView`](../../../../packages/client/ui-chat/src/client/chat/ChatView.tsx) 只按 Chat 快照的 `order` 放置通用 [`ChatNodeSeat`](../../../../packages/client/ui-chat/src/client/chat/ChatNodeSeat.tsx)。Seat 以 `node.kind` 分发 `'conversation.chat.node'`；[`ui-tool`](../../../../packages/client/ui-tool/src/client/apply.ts) 注册 `tool-call` entry，并由 [`ToolCallTree`](../../../../packages/client/ui-tool/src/client/tool/ToolCallTree.tsx) 递归遍历 root block。每一层 root 或 child 都通过同一个 keyed/session `'tool.call.toolview'` 子 slot 以 `entryKey: toolName` 分发，缺少注册时渲染 `GenericToolCard`。
 
 业务工具插件接收一个标准 `ToolCallBlock`、identity、workspace cwd 和宿主动作，不读取会话、上下文或 Conversation assembler。skill（技能）仍是普通工具；它和其他业务工具使用同一 keyed slot 注册路径。
 
@@ -29,9 +27,9 @@ details panel 是第二个工具展示点，但不是调用树所有者。`ui-co
 ```text
 Session Event window
   -> Tool Definition -> tool-call Chat Node (recursive ToolCallBlock)
-  -> ChatView -> consecutive Tool run
-  -> conversation.chat.toolGroup
-       -> collapsed action summary or root/subCalls[] recursion
+  -> ChatView -> ChatNodeSeat(entryKey = tool-call)
+  -> ToolCallTree
+       -> root/subCalls[] recursion
        -> tool.call.toolview(entryKey = toolName)
             |- registered atomic view
             `- GenericToolCard fallback
@@ -43,13 +41,13 @@ Session Event window
 |---|---|---|
 | Client 运行时 Conversation engine | 上下文 identity、Location、历史回放、view Node 发布 | 工具事件含义、调用树、工具 renderer |
 | `ui-conversation` 工具 Definition | call/result 配对、Code Dispatch 拓扑、running/settled/interrupted `ToolCallBlock`、Chat 排序 anchor | 工具名称分发、card model、递归 React 结构 |
-| `ui-conversation` Chat view | keyed Node 顺序、连续工具分组成员关系、外层 scroll anchor、selection 与宿主动作 | 工具名称、摘要文案、lifecycle、subcall 组合、原子工具 renderer |
-| `ui-tool` | 动作摘要、disclosure 状态、root/subcall 递归渲染、原子 keyed dispatch、fallback、card model 与 details output | 会话事件 fold、Chat 排序 |
+| `ui-conversation` Chat view | keyed Node 顺序、scroll anchor、selection 与宿主动作 | 工具 lifecycle、subcall 组合、原子工具 renderer |
+| `ui-tool` | root/subcall 递归渲染、原子 keyed dispatch、fallback、card model 与 details output | 会话事件 fold、Chat 排序 |
 | 业务工具插件 | 一个或多个 wire 工具名称的原子 renderer | root/subcall 位置、生命周期配对、会话 projector |
 
 ## 验证
 
-`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption、running-to-settled keyed identity 和连续分组位置，不导入 `ui-tool` 的生产 renderer。`ui-tool` 测试挂载真实 conversation 宿主，固定默认收起的摘要、展开、root/subcall 递归、keyed dispatch、Generic fallback、selection、details 和具体工具 card。组装后的 Web 测试覆盖两个插件共同装载的路径。
+`ui-conversation` 测试固定工具 Definition 的 call/result 配对、Code Dispatch、interruption 和 running-to-settled keyed identity，不导入 `ui-tool` 的生产 renderer。`ui-tool` 测试挂载真实 conversation 宿主，固定 root/subcall 递归、keyed dispatch、Generic fallback、selection、details 和具体工具 card。组装后的 Web 测试覆盖两个插件共同装载的路径。
 
 ## 考虑过的替代方案
 
@@ -65,6 +63,6 @@ Session Event window
 
 ## 后果
 
-`ui-conversation` 不再依赖工具名称对应的业务展示，root 与 subcall 也不会漂移到不同分发路径。连续的纯工具过程只占一行，事件派生的调用仍可按需查看。业务包可以独立拥有原子工具 renderer；`ui-tool` 缺席时，Conversation 数据组装仍然成立，分组 seat 回退为普通 Chat Node 分发，details 保留 raw result。
+`ui-conversation` 不再依赖工具名称对应的业务展示，root 与 subcall 也不会漂移到不同分发路径。业务包可以独立拥有原子工具 renderer；`ui-tool` 缺席时，Conversation 数据组装仍然成立，Chat Node 使用通用 fallback，details 保留 raw result。
 
 代价是 `ui-tool` 明确依赖 conversation 声明的业务 Node slot 和 locale namespace，并拥有一个工具专属子 slot。工具 Definition 暂时位于 `ui-conversation`，因为本次没有拆包；它以后可以沿 Conversation 注册表 seam 移动，而不会改变本记录规定的展示所有权。

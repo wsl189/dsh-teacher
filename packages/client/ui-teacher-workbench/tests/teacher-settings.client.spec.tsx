@@ -13,6 +13,11 @@ const t: TeacherWorkbenchSettingsRowProps['t'] = (key, params) => {
   return value
 }
 
+type AttentionSnapshot = Parameters<Parameters<TeacherWorkbenchSettingsRowProps['useSessionPendingInteraction']>[0]>[0]
+const noAttention: AttentionSnapshot = new Map()
+const useSessionPendingInteraction: TeacherWorkbenchSettingsRowProps['useSessionPendingInteraction'] =
+  selector => selector(noAttention)
+
 afterEach(cleanup)
 
 describe('TeacherWorkbenchSettingsRow layout', () => {
@@ -31,6 +36,7 @@ describe('TeacherWorkbenchSettingsRow layout', () => {
       <TeacherWorkbenchSettingsRow
         useTeacherSettings={selector => selector(snapshot)}
         useSessions={() => { throw new Error('unused') }}
+        useSessionPendingInteraction={useSessionPendingInteraction}
         useWorkspaces={() => { throw new Error('unused') }}
         setSetting={setSetting}
         t={t}

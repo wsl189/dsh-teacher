@@ -121,7 +121,7 @@ describe('web e2e: QQ-configured voice input', () => {
       })
     })
     tripwire = watchConsole(page)
-    await page.goto(scaffold.baseUrl, { waitUntil: 'load' })
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[data-composer-card]', { timeout: 30_000 })
     await connectFreshWorkspaceZh(page, scaffold.workspaceCwd, 'qq-voice')
   }, 120_000)
@@ -137,7 +137,10 @@ describe('web e2e: QQ-configured voice input', () => {
     const composer = page.locator('[data-composer-card]')
     await composer.getByRole('button', { name: '语音输入（也可长按空格）' }).click()
     await composer.getByRole('button', { name: '停止语音输入' }).click()
-    await expect.poll(() => composer.locator('textarea').inputValue(), { timeout: 10_000 }).toBe('课堂口述')
+    await expect.poll(
+      () => composer.locator('[data-composer-input]').textContent(),
+      { timeout: 10_000 },
+    ).toBe('课堂口述')
     expect(uploads[0]).toContain('name="model"')
     expect(uploads[0]).toContain('whisper-large-v3')
     expect(uploads[0]).toContain('name="language"')

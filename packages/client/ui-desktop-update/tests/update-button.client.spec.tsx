@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { createSnapshotStore } from '@deepseek-ai/dsh-client-runtime/client'
+import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { bindSnapshotSelector, makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
 import { zh as commonZh } from '@deepseek-ai/dsh-client-locale/src/locales/zh.ts'
 import type { DesktopUpdateState } from '../src/client/bridge.ts'
@@ -20,6 +20,7 @@ function setup(state: DesktopUpdateState, wide = true) {
   const props: UpdateButtonProps = {
     wide,
     useSessions: neverHook,
+    useSessionPendingInteraction: neverHook,
     useWorkspaces: neverHook,
     useUpdate: bindSnapshotSelector(store),
     download,
