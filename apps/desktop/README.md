@@ -2,7 +2,7 @@
 
 English | [中文](README.zh.md)
 
-Windows desktop distribution for this repository. Electron opens the existing Web surface in a hardened renderer while `@deepseek-ai/dsh/desktop-backend` runs the complete `web` profile as an IPC-controlled child process on `127.0.0.1` with an operating-system-assigned port. Closing the app or installing an update disposes the plugin tree before the child exits. Directory selection stays inside the running application: workspace actions and plugin fields such as a QQ bot's current workspace open the in-app directory browser instead of a second packaged process for a Windows folder dialog.
+Windows desktop distribution for this repository. Electron opens the existing Web surface in a hardened renderer while `@deepseek-ai/dsh/desktop-backend` runs the complete `web` profile as an IPC-controlled child process on `127.0.0.1` with an operating-system-assigned port. The child gives Electron a one-use launch-token URL, which creates the same authenticated browser session as `dsh web`. Closing the app or installing an update disposes the plugin tree before the child exits. Directory selection stays inside the running application: workspace actions and plugin fields such as a QQ bot's current workspace open the in-app directory browser instead of a second packaged process for a Windows folder dialog.
 
 ## Install and update
 
@@ -24,11 +24,11 @@ pnpm run build:official
 pnpm --filter @deepseek-ai/dsh-desktop run package:win
 ```
 
-The installer, blockmap, updater metadata, and unpacked application are written to `apps/desktop/release/`. Before distributing the installer, start `apps/desktop/release/win-unpacked/DSH Teacher.exe` on Windows, wait for the `DeepSeek Harness` main window, and confirm that a workspace directory action opens an in-app listing; successful artifact generation alone does not execute the Electron main process. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files. Dependency-wide exclusions remove source maps and TypeScript incremental compiler state, and the Windows workflow rejects an unpacked payload containing either artifact.
+The installer, blockmap, updater metadata, and unpacked application are written to `apps/desktop/release/`. Before distributing the installer, start `apps/desktop/release/win-unpacked/DSH Teacher.exe` on Windows, wait for the `DeepSeek Harness` main window, and confirm that a workspace directory action opens an in-app listing; successful artifact generation alone does not execute the Electron main process. The checked-in builder configuration targets Windows x64 and deliberately leaves `asar` disabled because the Host loads plugin packages, subprocess entries, workers, and native addons from real files. Dependency-wide exclusions remove source maps and TypeScript incremental compiler state. The payload gate also reads packaged manifests and rejects a missing required workspace dependency or peer.
 
 ## GitHub automation
 
-`.github/workflows/windows-desktop.yml` runs on every pushed branch and manual dispatch. It builds the repository on `windows-2025`, creates the NSIS installer, starts the unpacked application, and calls its real `host.listDirectory` API before writing `SHA256SUMS.txt` and retaining the installer as a workflow artifact. A tag push publishes those files as the update feed only when the tag exactly matches `v<root package version>`.
+`.github/workflows/windows-desktop.yml` runs on every pushed branch and manual dispatch. It builds the repository on `windows-2025`, creates the NSIS installer, starts the unpacked application, exchanges its launch token for a browser cookie, and calls the real `directoryPicker/list` Remote before writing `SHA256SUMS.txt` and retaining the installer as a workflow artifact. A tag push publishes those files as the update feed only when the tag exactly matches `v<root package version>`.
 
 For a new updater-visible release, advance the shared repository version, push that version commit, then create the matching desktop tag:
 
@@ -45,7 +45,7 @@ Repository secrets `WINDOWS_CSC_LINK` and `WINDOWS_CSC_KEY_PASSWORD` enable Auth
 
 ## Security and scope
 
-The renderer has `contextIsolation`, sandboxing, and Node integration disabled. Its preload exposes only update snapshot/subscription/download/install methods. External navigation is denied and handed to the operating-system browser. GitHub metadata and downloads remain in the main process, and the installer is selected by SemVer through electron-updater.
+The renderer has `contextIsolation`, sandboxing, and Node integration disabled. Its preload exposes only update snapshot/subscription/download/install methods. The initial loopback URL exchanges a process-scoped token for an HttpOnly, authority-bound browser cookie and then redirects to a clean root URL. External navigation is denied and handed to the operating-system browser. GitHub metadata and downloads remain in the main process, and the installer is selected by SemVer through electron-updater.
 
 The installer contains Electron, the JavaScript/Node runtime, this repository's built Web UI, and the complete shipped DSH plugin closure—including IM, cron, Office preview, and the QQ-configured speech adapter. These plugins need no separate installation. The EXE does not embed vLLM, MinerU, the speech-recognition server, model weights, GPU drivers, Docker, or machine-specific plugin configuration. Keep those services separate (Docker is appropriate for them), point the installed app at their loopback endpoints, and migrate `DSH_HOME` separately.
 

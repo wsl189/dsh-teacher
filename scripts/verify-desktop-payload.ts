@@ -1,7 +1,13 @@
-/** Verify that a packaged desktop application omits development-only build artifacts. */
+/** Verify the runtime closure and file policy of a packaged desktop application. */
 
-import { readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
+
+interface PackageManifest {
+  dependencies?: Record<string, unknown>
+  peerDependencies?: Record<string, unknown>
+  peerDependenciesMeta?: Record<string, { optional?: unknown }>
+}
 
 /** Result of inspecting one unpacked Electron application payload. */
 export interface DesktopPayloadReport {
@@ -9,6 +15,55 @@ export interface DesktopPayloadReport {
   fileCount: number
   /** Repository-independent relative diagnostics for forbidden artifacts. */
   failures: string[]
+}
+
+/** Whether a parsed JSON value is a string-keyed object. */
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value)
+}
+
+/** Return workspace dependency names from a manifest field. */
+function workspaceDependencies(value: unknown): string[] {
+  if (!isRecord(value)) return []
+  return Object.entries(value)
+    .filter((entry): entry is [string, string] =>
+      typeof entry[1] === 'string' && entry[1].startsWith('workspace:'))
+    .map(([name]) => name)
+    .sort()
+}
+
+/** Whether the root-level packaged module contains a package manifest. */
+function hasPackagedPackage(root: string, packageName: string): boolean {
+  return existsSync(join(root, 'node_modules', ...packageName.split('/'), 'package.json'))
+}
+
+/** Inspect one packaged manifest for missing required workspace packages. */
+function inspectManifest(root: string, path: string, manifestPath: string): string[] {
+  let manifest: PackageManifest
+  try {
+    const value: unknown = JSON.parse(readFileSync(manifestPath, 'utf8'))
+    if (!isRecord(value)) return [`${path}: package manifest must contain a JSON object`]
+    manifest = value
+  } catch {
+    return [`${path}: package manifest must contain valid JSON`]
+  }
+
+  const failures: string[] = []
+  for (const dependency of workspaceDependencies(manifest.dependencies)) {
+    if (!hasPackagedPackage(root, dependency)) {
+      failures.push(`${path}: required workspace dependency ${dependency} is absent from payload`)
+    }
+  }
+
+  const peerMeta = isRecord(manifest.peerDependenciesMeta) ? manifest.peerDependenciesMeta : {}
+  for (const peer of workspaceDependencies(manifest.peerDependencies)) {
+    const metadata = peerMeta[peer]
+    if (isRecord(metadata) && metadata.optional === true) continue
+    if (!hasPackagedPackage(root, peer)) {
+      failures.push(`${path}: required workspace peer ${peer} is absent from payload`)
+    }
+  }
+  return failures
 }
 
 /** Normalize an unpacked-payload path for stable cross-platform diagnostics. */
@@ -33,6 +88,8 @@ export function inspectDesktopPayload(root: string): DesktopPayloadReport {
       failures.push(`${path}: source map must not be packaged`)
     } else if (entry.name.endsWith('.tsbuildinfo')) {
       failures.push(`${path}: TypeScript incremental compiler state must not be packaged`)
+    } else if (entry.name === 'package.json' && path.startsWith('node_modules/')) {
+      failures.push(...inspectManifest(root, path, join(entry.parentPath, entry.name)))
     }
   }
 
@@ -48,7 +105,7 @@ if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
   const root = resolve(input)
   const report = inspectDesktopPayload(root)
   if (report.failures.length > 0) {
-    process.stderr.write('verify-desktop-payload: development-only build artifacts found:\n')
+    process.stderr.write('verify-desktop-payload: packaged payload violations found:\n')
     for (const failure of report.failures.slice(0, 20)) process.stderr.write(`  ${failure}\n`)
     if (report.failures.length > 20) {
       process.stderr.write(`  ... ${String(report.failures.length - 20)} more\n`)
@@ -56,7 +113,7 @@ if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
     process.exitCode = 1
   } else {
     process.stdout.write(
-      `verify-desktop-payload: ${String(report.fileCount)} packaged file(s) contain no source maps or compiler state.\n`,
+      `verify-desktop-payload: ${String(report.fileCount)} packaged file(s) contain a complete workspace runtime closure and no source maps or compiler state.\n`,
     )
   }
 }

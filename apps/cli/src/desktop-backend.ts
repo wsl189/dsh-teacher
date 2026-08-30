@@ -6,6 +6,7 @@
  */
 
 import { loadLayeredEnv } from '@deepseek-ai/dsh-app-boot'
+import type {} from '@deepseek-ai/dsh-client-connection'
 import type {} from '@deepseek-ai/dsh-host-webserver'
 import { runProfile } from './profile-boot.ts'
 
@@ -51,6 +52,11 @@ export async function runDesktopBackend(): Promise<void> {
     await shutdown.shutdown(1)
     throw new Error('desktop backend started without the webServer service')
   }
+  const connection = ctx.get('connection')
+  if (connection === undefined) {
+    await shutdown.shutdown(1)
+    throw new Error('desktop backend started without the connection service')
+  }
 
   let stopping: Promise<void> | undefined
   const stop = (): Promise<void> => {
@@ -63,7 +69,8 @@ export async function runDesktopBackend(): Promise<void> {
     if (isShutdownRequest(message)) void stop()
   })
   process.once('disconnect', () => { void stop() })
-  send({ type: 'ready', url: `http://127.0.0.1:${String(server.port)}` })
+  const baseUrl = `http://127.0.0.1:${String(server.port)}`
+  send({ type: 'ready', url: connection.authenticatedUrl(baseUrl) })
 }
 
 if (import.meta.main) {

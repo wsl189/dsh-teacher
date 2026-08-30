@@ -110,32 +110,52 @@ jobs:
             }
 
             $mainLog = Join-Path $smokeData 'logs/main.log'
-            $backendUrl = $null
+            $launchUrl = $null
             $deadline = (Get-Date).AddSeconds(15)
             while ((Get-Date) -lt $deadline) {
               if (Test-Path $mainLog) {
-                $match = [regex]::Match((Get-Content $mainLog -Raw), 'dsh web: (http://127\.0\.0\.1:\d+)')
+                $match = [regex]::Match(
+                  (Get-Content $mainLog -Raw),
+                  'dsh web: (http://127\.0\.0\.1:\d+/\?token=[A-Za-z0-9_-]+)'
+                )
                 if ($match.Success) {
-                  $backendUrl = $match.Groups[1].Value
+                  $launchUrl = $match.Groups[1].Value
                   break
                 }
               }
               Start-Sleep -Milliseconds 250
             }
-            if ($null -eq $backendUrl) {
-              throw 'Packaged desktop did not report its backend URL'
+            if ($null -eq $launchUrl) {
+              throw 'Packaged desktop did not report its authenticated backend URL'
+            }
+
+            $backendUrl = ([uri]$launchUrl).GetLeftPart([System.UriPartial]::Authority)
+            $handler = [System.Net.Http.HttpClientHandler]::new()
+            $handler.AllowAutoRedirect = $false
+            $handler.UseProxy = $false
+            $client = [System.Net.Http.HttpClient]::new($handler)
+            try {
+              $exchange = $client.GetAsync($launchUrl).GetAwaiter().GetResult()
+              if ([int]$exchange.StatusCode -ne 303) {
+                throw "Packaged desktop token exchange returned HTTP $([int]$exchange.StatusCode)"
+              }
+              $setCookie = @($exchange.Headers.GetValues('Set-Cookie'))[0]
+              $cookie = $setCookie.Split(';')[0]
+            } finally {
+              $client.Dispose()
+              $handler.Dispose()
             }
 
             $request = @{
               type = 'client-request'
               rpcId = '00000000-0000-4000-8000-000000000005'
-              method = 'host.listDirectory'
-              payload = @{}
+              method = 'directoryPicker/list'
+              payload = @{ args = @{} }
             } | ConvertTo-Json -Compress
             $listing = Invoke-RestMethod `
               -Method Post `
-              -Uri "$backendUrl/api/host.listDirectory" `
-              -Headers @{ Origin = $backendUrl } `
+              -Uri "$backendUrl/api/directoryPicker/list" `
+              -Headers @{ Origin = $backendUrl; Cookie = $cookie } `
               -ContentType 'application/json' `
               -Body $request `
               -NoProxy
@@ -155,7 +175,9 @@ jobs:
             foreach ($log in $logs) {
               if (Test-Path $log) {
                 Write-Host "== $log =="
-                Get-Content $log
+                Get-Content $log | ForEach-Object {
+                  $_ -replace '([?&]token=)[A-Za-z0-9_-]+', '$1<redacted>'
+                }
               }
             }
             throw

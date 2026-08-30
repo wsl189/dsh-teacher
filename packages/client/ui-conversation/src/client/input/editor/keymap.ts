@@ -108,7 +108,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
     }, COMMAND_PRIORITY_CRITICAL),
     editor.registerCommand(KEY_SPACE_COMMAND, (event) => {
       if (isComposingEvent(event, recentlyComposing)) return false
-      if (event?.repeat === true && handlers.beginSpaceHold()) {
+      if (event.repeat && handlers.beginSpaceHold()) {
         event.preventDefault()
         return true
       }
@@ -117,7 +117,7 @@ export function registerComposerKeymap(editor: LexicalEditor, handlers: Composer
         event.preventDefault() // claim token already carries the trailing separator
         return true
       }
-      if (event !== null && !event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
+      if (!event.metaKey && !event.ctrlKey && !event.altKey && !event.shiftKey
         && handlers.beginSpaceHold()) {
         event.preventDefault()
         return true

@@ -24,11 +24,11 @@ export interface VoiceRecorderController {
   /** Whether the completed recording is being prepared or awaiting its transcript. */
   readonly transcribing: boolean
   /** Begin a new microphone recording. */
-  start(): Promise<void>
+  start(this: void): Promise<void>
   /** Finish the active recording and start transcription. */
-  stop(): void
+  stop(this: void): void
   /** Start or stop according to current state. */
-  toggle(): void
+  toggle(this: void): void
 }
 
 /** Voice-recorder callbacks. */

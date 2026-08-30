@@ -42,7 +42,10 @@ function backendMessage(value: unknown): BackendMessage | undefined {
   } catch {
     return undefined
   }
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.pathname !== '/') return undefined
+  const tokens = url.searchParams.getAll('token')
+  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === ''
+    || url.pathname !== '/' || url.hash !== '' || tokens.length !== 1
+    || !/^[A-Za-z0-9_-]{43}$/u.test(tokens[0] ?? '')) return undefined
   return { type: 'ready', url: url.href }
 }
 

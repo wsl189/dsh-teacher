@@ -717,6 +717,19 @@
         "src/preload.ts",
         "tests/**/*.spec.ts"
       ],
+      "ignoreDependencies": [
+        "@deepseek-ai/dsh-attachment",
+        "@deepseek-ai/dsh-brand",
+        "@deepseek-ai/dsh-credentials",
+        "@deepseek-ai/dsh-hook-protocol",
+        "@deepseek-ai/dsh-jobs",
+        "@deepseek-ai/dsh-sdk-protocol",
+        "@deepseek-ai/dsh-session-persistence",
+        "@deepseek-ai/dsh-session-query",
+        "@deepseek-ai/dsh-settings",
+        "@deepseek-ai/dsh-util-crypto",
+        "@deepseek-ai/dsh-util-workspace-path"
+      ],
       "project": [
         "src/**/*.ts",
         "tests/**/*.ts"
