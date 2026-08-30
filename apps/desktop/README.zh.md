@@ -24,7 +24,7 @@ pnpm run build:official
 pnpm --filter @deepseek-ai/dsh-desktop run package:win
 ```
 
-安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，并确认工作区目录操作会打开应用内目录列表；仅成功生成 artifact 并不会执行 Electron 主进程。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。
+安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，并确认工作区目录操作会打开应用内目录列表；仅成功生成 artifact 并不会执行 Electron 主进程。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。作用于整个依赖树的排除规则会移除 Source Map 与 TypeScript 增量编译状态，Windows workflow 会拒绝包含其中任一构建产物的解包载荷。
 
 ## GitHub 自动化
 

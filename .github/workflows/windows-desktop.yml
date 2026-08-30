@@ -72,6 +72,10 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.WINDOWS_CSC_KEY_PASSWORD }}
         run: pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
+      - name: Verify packaged payload
+        shell: pwsh
+        run: pnpm run verify-desktop-payload
+
       - name: Smoke packaged desktop startup and directory browser
         shell: pwsh
         run: |

@@ -6,7 +6,8 @@ directories:
 files:
   - lib/**/*
   - package.json
-  - '!lib/**/*.map'
+  - '!**/*.map'
+  - '!**/*.tsbuildinfo'
 npmRebuild: true
 generateUpdatesFilesForAllChannels: true
 win:

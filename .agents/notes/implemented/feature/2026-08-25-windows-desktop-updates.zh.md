@@ -26,7 +26,7 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 `.github/workflows/windows-desktop.yml` 使用原生 Windows 与 Node 24，在每次分支推送和手动触发时构建 NSIS artifact。它会启动解包后的应用、等待主窗口、从桌面日志中取得私有后端 URL，并要求 `host.listDirectory` 返回有效目录列表，之后才保留 artifact。`v<版本>` tag 必须与仓库根共享 package 版本一致，workflow 才会把安装器、blockmap、channel 元数据与 SHA-256 checksum 列表发布到 GitHub Release。普通提交构建只保留为 workflow artifact，绝不会进入客户端更新 feed。
 
-安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。electron-builder 会沿生产依赖图打包而不会使用 workspace 开发依赖，因此 `@deepseek-ai/dsh` manifest 会直接满足静态启动路径使用的所有非可选 peer。安装器不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
+安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。作用于整个依赖树的文件过滤器会在 NSIS 压缩前，从 workspace 链接包与 registry 包中移除 Source Map 和 TypeScript 增量编译状态；两者都不参与安装版运行。electron-builder 会沿生产依赖图打包而不会使用 workspace 开发依赖，因此 `@deepseek-ai/dsh` manifest 会直接满足静态启动路径使用的所有非可选 peer。安装器不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
 
 ## 考虑过的替代方案
 
@@ -36,6 +36,10 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 **从 Web Host 暴露更新控件。** 这会让用于服务浏览器的同一个网络表层具备替换宿主安装的能力。由 preload gating 的 seat 把安装权限留在已打包桌面进程本地，并让普通浏览器部署保持不变。
 
+**使用 `asar`，而不是逐项过滤构建产物。** 单一 archive 可以进一步减少文件系统条目，但当前 runtime 中的 Loader 包、子进程入口、worker 与原生 addon 需要真实路径。保持解包状态可以保留这些行为，而按后缀过滤仍能移除不参与安装版运行的文件。
+
+**使用宽泛 glob 排除源码目录与第三方库的其他构建版本。** 包资源和 Loader 解析的入口没有统一目录布局，因此目录级规则可能移除可执行内容。因此载荷只移除在所有依赖中都只用于开发的后缀；若要进一步缩小文件集合，需要用显式的 staged-runtime manifest 证明每一条保留路径。
+
 ## 结果
 
 - Windows 用户无需安装 Node 或 pnpm 即可安装和更新本仓库构建。其 DSH home 保持独立；若要完整迁移电脑，仍需另行复制。
@@ -43,9 +47,10 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 - 未签名构建仍能运行，但可能触发 SmartScreen。生产发行需要两个代码签名仓库 secret，并保证更新之间的证书发布者身份稳定。
 - 发行版仅支持 Windows x64。外部 AI 服务与 GPU 软件继续采用各自的安装、健康检查、更新与存储流程。
 - 桌面 Web server 仍只绑定 loopback，并使用临时端口，因此安装器不会新增暴露到 LAN 的代码执行表层，也不会占用固定本地端口。
+- 安装版不包含 Source Map，因此其中的 stack trace 指向生成后的 JavaScript；开发构建仍保留源码导航。移除 Source Map 与编译器状态可以减少 NSIS 解压工作，以及 Windows 安全软件需要检查的文件数量。
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。Windows workflow 构建真实 NSIS target，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口且 `host.listDirectory` 方法成功，并在拒绝启动失败前输出 Electron 日志；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
+桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。桌面载荷校验器 fixture 会接受运行时 JavaScript、资源与原生 addon，同时拒绝嵌套的 Source Map 和编译器状态。Windows workflow 构建真实 NSIS target，拒绝 `resources/app` 中的任一禁用构建产物，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口且 `host.listDirectory` 方法成功，并在拒绝启动失败前输出 Electron 日志；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
 
 renderer 权限测试会执行两种 Electron handler，并要求仅为当前回环主 frame 放行音频麦克风、保留剪贴板写入，拒绝视频、子 frame、外来 renderer、外来或畸形 origin 与无关权限，同时验证 handler 清理可重复调用。
