@@ -1,5 +1,6 @@
 /** Safe physical-directory mutations below the configured question-media roots. */
 
+import { randomUUID } from 'node:crypto'
 import { lstat, mkdir, realpath, rename, rm } from 'node:fs/promises'
 import { basename, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
@@ -20,6 +21,14 @@ export interface DiscoveredQuestionDirectory {
   readonly root: string
   /** Absolute directory path found below that root. */
   readonly path: string
+}
+
+/** Current-root directory deletion prepared as a reversible physical detach. */
+export interface PreparedDiscoveredQuestionDirectoryDelete {
+  /** Permanently remove the detached directory after related durable state commits. */
+  commit(): Promise<void>
+  /** Restore the directory when related durable state cannot commit. */
+  rollback(): Promise<void>
 }
 
 /**
@@ -90,11 +99,37 @@ export async function deleteDiscoveredQuestionDirectory(
   directories: ReadonlyMap<string, DiscoveredQuestionDirectory>,
   request: TeacherQuestionMediaDirectoryDeleteRequest,
 ): Promise<void> {
+  const prepared = await prepareDiscoveredQuestionDirectoryDelete(config, directories, request)
+  await prepared.commit()
+}
+
+/**
+ * Detach one current-root directory so a related durable mutation can commit atomically.
+ * @param config - current question-media roots.
+ * @param directories - directories retained by the latest successful scan.
+ * @param request - opaque configured-root directory target.
+ * @returns commit and rollback operations for the detached directory.
+ */
+export async function prepareDiscoveredQuestionDirectoryDelete(
+  config: TeacherQuestionMediaConfig,
+  directories: ReadonlyMap<string, DiscoveredQuestionDirectory>,
+  request: TeacherQuestionMediaDirectoryDeleteRequest,
+): Promise<PreparedDiscoveredQuestionDirectoryDelete> {
   const target = await resolveDiscoveredQuestionDirectory(config, directories, request.target)
+  const root = configuredRoot(
+    request.target.kind === 'library-folder' ? config.segmentsRoot : config.studentsRoot,
+    request.target.kind === 'library-folder' ? '试题切割目录' : '学生目录',
+  )
+  const backup = join(root, `.deleted-${request.target.kind}-${String(request.target.id)}-${randomUUID()}`)
   try {
-    await rm(target, { recursive: true })
+    await assertMissing(backup)
+    await rename(target, backup)
   } catch (error) {
     throw directoryMutationError(error, '删除目录失败')
+  }
+  return {
+    commit: async () => { await rm(backup, { recursive: true, force: true }) },
+    rollback: async () => { await rename(backup, target) },
   }
 }
 

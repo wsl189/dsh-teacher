@@ -293,12 +293,6 @@ describe('QuestionWorkbench reference shell', () => {
         }],
         questionFolders: state.questionFolders,
         questionAssignments: state.questionAssignments,
-        readOnlyBatchIds: [paperBatchId, monthBatchId],
-        readOnlyLibraryFolderIds: [paperFolderId, monthFolderId, nestedFolderId],
-        readOnlyAssignmentIds: [],
-        readOnlyClassIds: [],
-        readOnlyStudentIds: [],
-        readOnlyFolderIds: [],
       },
     } as const))
     render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
@@ -408,12 +402,6 @@ describe('QuestionWorkbench reference shell', () => {
           createdAt: 2,
           updatedAt: 2,
         }],
-        readOnlyBatchIds: [externalBatchId],
-        readOnlyLibraryFolderIds: [externalLibraryFolderId, externalNestedLibraryFolderId],
-        readOnlyAssignmentIds: [directoryAssignmentId],
-        readOnlyClassIds: [],
-        readOnlyStudentIds: [directoryStudentId],
-        readOnlyFolderIds: [directoryFolderId, nestedDirectoryFolderId],
       },
     } as const))
     render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
@@ -487,7 +475,18 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(nestedDirectoryFolder)
     const studentImages = await screen.findByRole('complementary', { name: '学生图片' })
     expect(await within(studentImages).findByRole('button', { name: '四级目录题.png' })).toBeTruthy()
-    expect(within(classDrawer).getAllByRole('button', { name: '删除' })).toHaveLength(4)
+    const externalSelection = within(studentImages).getByRole('checkbox', { name: '选择' }) as HTMLInputElement
+    expect(externalSelection.disabled).toBe(false)
+    fireEvent.click(externalSelection)
+    fireEvent.click(within(studentImages).getByRole('button', { name: '临时保存' }))
+    await waitFor(() => {
+      expect(c.saveTemporaryQuestionSelection).toHaveBeenCalledWith({
+        studentId: directoryStudentId,
+        assignmentIds: [directoryAssignmentId],
+      })
+    })
+    expect(within(classDrawer).getByRole('button', { name: 'Word' })).toHaveProperty('disabled', false)
+    expect(within(studentImages).getByRole('button', { name: '删除' })).toBeTruthy()
 
     fireEvent.click(within(studentImages).getByRole('button', { name: '试题图片库' }))
     const library = await screen.findByRole('complementary', { name: '试题图片库' })
@@ -523,6 +522,17 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(externalNestedLibraryFolder)
     const bankImages = await screen.findByRole('complementary', { name: '试题库图片' })
     expect(await within(bankImages).findByRole('button', { name: '第 1 题' })).toBeTruthy()
+    const externalQuestionSelection = within(bankImages).getByRole('checkbox', { name: '选择' }) as HTMLInputElement
+    expect(externalQuestionSelection.disabled).toBe(false)
+    fireEvent.click(externalQuestionSelection)
+    fireEvent.click(within(bankImages).getByRole('button', { name: '保存' }))
+    await waitFor(() => {
+      expect(c.assignQuestions).toHaveBeenCalledWith({
+        studentId: directoryStudentId,
+        folderId: nestedDirectoryFolderId,
+        imageIds: [externalImageId],
+      })
+    })
 
     const confirm = vi.fn(() => true)
     vi.stubGlobal('confirm', confirm)
@@ -555,12 +565,6 @@ describe('QuestionWorkbench reference shell', () => {
       questionLibraryFolders: state.questionLibraryFolders,
       questionFolders: state.questionFolders,
       questionAssignments: state.questionAssignments,
-      readOnlyBatchIds: [],
-      readOnlyLibraryFolderIds: [],
-      readOnlyAssignmentIds: [],
-      readOnlyClassIds: [],
-      readOnlyStudentIds: [],
-      readOnlyFolderIds: [],
     }
     let currentValue = baseValue
     c.browseQuestionMedia = vi.fn(async () => ({ ok: true as const, value: currentValue }))
@@ -605,9 +609,6 @@ describe('QuestionWorkbench reference shell', () => {
         createdAt: 2,
         updatedAt: 2,
       }],
-      readOnlyLibraryFolderIds: [libraryRootId, libraryChildId],
-      readOnlyStudentIds: [directoryStudentId],
-      readOnlyFolderIds: [directoryFolderId],
     }
     await act(async () => { await vi.advanceTimersByTimeAsync(1_000) })
 
@@ -677,7 +678,11 @@ describe('QuestionWorkbench reference shell', () => {
 
     vi.stubGlobal('confirm', vi.fn(() => true))
     fireEvent.click(within(library).getByRole('button', { name: '删除目录“高考模拟”' }))
-    await waitFor(() => { expect(c.deleteQuestionLibraryFolder).toHaveBeenCalledWith(libraryFolderId) })
+    await waitFor(() => {
+      expect(c.deleteQuestionMediaDirectory).toHaveBeenCalledWith({
+        target: { kind: 'library-folder', id: libraryFolderId },
+      })
+    })
   })
 
   it('limits question-library folder labels and omits batch names from the directory tree', async () => {
@@ -765,8 +770,33 @@ describe('QuestionWorkbench reference shell', () => {
         id: siblingLibraryFolderId, name: '周考', createdAt: 3, updatedAt: 3,
       }],
     }
+    const scannedRootId = 'filesystem-library-root' as TeacherQuestionLibraryFolderId
+    const scannedLeafId = 'filesystem-library-leaf' as TeacherQuestionLibraryFolderId
     const c = commands()
+    c.browseQuestionMedia = vi.fn(async () => ({
+      ok: true,
+      value: {
+        classes: libraryState.classes.filter(item => item.usage === 'roster'),
+        students: libraryState.students,
+        questionBatches: libraryState.questionBatches,
+        questionLibraryFolders: [...libraryState.questionLibraryFolders, {
+          id: scannedRootId,
+          name: '当前根目录',
+          createdAt: 4,
+          updatedAt: 4,
+        }, {
+          id: scannedLeafId,
+          parentId: scannedRootId,
+          name: '扫描叶目录',
+          createdAt: 5,
+          updatedAt: 5,
+        }],
+        questionFolders: libraryState.questionFolders,
+        questionAssignments: libraryState.questionAssignments,
+      } satisfies TeacherQuestionMediaBrowseValue,
+    } as const))
     const view = render(<QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    await waitFor(() => { expect(c.browseQuestionMedia).toHaveBeenCalled() })
     const input = view.container.querySelector<HTMLInputElement>('input[type="file"][accept="application/pdf,.pdf"]')
     expect(input).not.toBeNull()
     fireEvent.change(input!, { target: { files: [pdf] } })
@@ -779,14 +809,15 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(directory).queryByRole('option', { name: '月考' })).toBeNull()
     expect(within(directory).getByRole('option', { name: '月考 / 高一' })).toBeTruthy()
     expect(within(directory).getByRole('option', { name: '周考' })).toBeTruthy()
-    fireEvent.change(directory, { target: { value: nestedLibraryFolderId } })
-    expect((directory as HTMLSelectElement).value).toBe(nestedLibraryFolderId)
+    expect(within(directory).getByRole('option', { name: '当前根目录 / 扫描叶目录' })).toBeTruthy()
+    fireEvent.change(directory, { target: { value: scannedLeafId } })
+    expect((directory as HTMLSelectElement).value).toBe(scannedLeafId)
     fireEvent.click(within(dialog).getByRole('button', { name: '确认切割' }))
     expect(c.enqueueQuestionCutting).toHaveBeenCalledWith(expect.objectContaining({
       file: pdf,
       pageIndexes: [0],
       pageRange: '全部页码',
-      folderId: nestedLibraryFolderId,
+      folderId: scannedLeafId,
     }))
     expect(screen.queryByRole('dialog', { name: '选择页码范围' })).toBeNull()
     expect(screen.getByRole('button', { name: '上传 PDF' }).hasAttribute('disabled')).toBe(false)

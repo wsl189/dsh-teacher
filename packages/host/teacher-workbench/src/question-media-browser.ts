@@ -1,8 +1,9 @@
 /** Filesystem discovery for question media stored outside the durable workbench document. */
 
 import { createHash } from 'node:crypto'
-import { readFile, readdir, stat } from 'node:fs/promises'
-import { basename, extname, join, relative, resolve, sep } from 'node:path'
+import { constants } from 'node:fs'
+import { copyFile, lstat, readFile, readdir, realpath, stat, unlink } from 'node:fs/promises'
+import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import {
   questionLibraryDirectory,
@@ -13,6 +14,7 @@ import {
 } from './question-media.ts'
 import {
   discoveredQuestionDirectoryTargetKey,
+  resolveDiscoveredQuestionDirectory,
   type DiscoveredQuestionDirectory,
 } from './question-media-directories.ts'
 import type {
@@ -31,6 +33,7 @@ import type {
   TeacherQuestionFolderId,
   TeacherQuestionLibraryFolderId,
   TeacherQuestionMediaBrowseValue,
+  TeacherQuestionMediaDirectoryTarget,
   TeacherStudent,
   TeacherStudentId,
   TeacherWorkbenchState,
@@ -41,6 +44,8 @@ const IMAGE_COLLATOR = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 
 
 /** One discovered file retained for a later image-byte read. */
 export interface DiscoveredQuestionFile {
+  /** Configured root sampled during discovery. */
+  readonly root: string
   /** Absolute path contained by the configured root. */
   readonly path: string
   /** Browser-safe file metadata. */
@@ -55,6 +60,12 @@ export interface DiscoveredQuestionMedia {
   readonly files: ReadonlyMap<string, DiscoveredQuestionFile>
   /** Opaque directory identity to a validated configured-root descendant. */
   readonly directories: ReadonlyMap<string, DiscoveredQuestionDirectory>
+}
+
+/** Files copied into one current-root student directory before the next scan. */
+export interface PersistedDiscoveredQuestionCopies {
+  /** Remove copies created by this operation. */
+  rollback(): Promise<void>
 }
 
 interface ImageFile {
@@ -87,9 +98,6 @@ interface StudentHierarchy {
   readonly students: TeacherStudent[]
   readonly questionFolders: TeacherQuestionFolder[]
   readonly directories: StudentDirectory[]
-  readonly readOnlyClassIds: TeacherClassId[]
-  readonly readOnlyStudentIds: TeacherStudentId[]
-  readonly readOnlyFolderIds: TeacherQuestionFolderId[]
 }
 
 interface StudentFolderDirectory {
@@ -120,13 +128,7 @@ export async function discoverQuestionMedia(
       questionBatches: Object.freeze(batchResult.batches),
       questionLibraryFolders: Object.freeze(batchResult.libraryFolders),
       questionFolders: Object.freeze(hierarchy.questionFolders),
-      questionAssignments: Object.freeze(assignmentResult.assignments),
-      readOnlyBatchIds: Object.freeze(batchResult.readOnlyBatchIds),
-      readOnlyLibraryFolderIds: Object.freeze(batchResult.readOnlyLibraryFolderIds),
-      readOnlyAssignmentIds: Object.freeze(assignmentResult.readOnlyAssignmentIds),
-      readOnlyClassIds: Object.freeze(hierarchy.readOnlyClassIds),
-      readOnlyStudentIds: Object.freeze(hierarchy.readOnlyStudentIds),
-      readOnlyFolderIds: Object.freeze(hierarchy.readOnlyFolderIds),
+      questionAssignments: Object.freeze(assignmentResult),
     }),
     files,
     directories,
@@ -135,23 +137,102 @@ export async function discoverQuestionMedia(
 
 /**
  * Read one file returned by {@link discoverQuestionMedia}.
+ * @param config - current question-media roots and decoded-byte limit.
  * @param file - discovered path and trusted metadata.
- * @param maxImageBytes - maximum bytes accepted from one configured-root image.
+ * @param target - target kind selecting the expected configured root.
  * @returns browser-safe image metadata and base64 bytes.
  */
 export async function readDiscoveredQuestionFile(
+  config: TeacherQuestionMediaConfig,
   file: DiscoveredQuestionFile,
-  maxImageBytes: number,
+  target: TeacherQuestionImageTarget,
 ): Promise<TeacherQuestionImagePayload> {
   try {
-    const bytes = await readFile(file.path)
-    if (bytes.byteLength > maxImageBytes) {
+    const resolved = await resolveDiscoveredQuestionFile(config, file, target)
+    const bytes = await readFile(resolved.path)
+    if (bytes.byteLength > config.maxImageBytes) {
       throw new TeacherQuestionMediaError('file-too-large', '试题图片超过设置上限')
     }
-    return { ...file.payload, contentBase64: bytes.toString('base64') }
+    return { ...resolved, contentBase64: bytes.toString('base64') }
   } catch (error) {
     if (error instanceof TeacherQuestionMediaError) throw error
     throw new TeacherQuestionMediaError('storage-failure', '读取试题图片失败', { cause: error })
+  }
+}
+
+/**
+ * Revalidate one scanned raster against the current configured root.
+ * @param config - current question-media roots.
+ * @param file - path retained by the latest successful scan.
+ * @param target - target kind selecting the expected configured root.
+ * @returns validated real path and browser-safe image metadata.
+ */
+export async function resolveDiscoveredQuestionFile(
+  config: TeacherQuestionMediaConfig,
+  file: DiscoveredQuestionFile,
+  target: TeacherQuestionImageTarget,
+): Promise<{ readonly path: string } & DiscoveredQuestionFile['payload']> {
+  const expectedRoot = configuredRoot(
+    target.kind === 'batch' ? config.segmentsRoot : config.studentsRoot,
+    target.kind === 'batch' ? '试题切割目录' : '学生目录',
+  )
+  if (file.root !== expectedRoot) throw new TeacherQuestionMediaError('not-found', '目录设置已变化，请刷新后重试')
+  try {
+    const [root, path, entry] = await Promise.all([
+      realpath(expectedRoot),
+      realpath(file.path),
+      lstat(file.path),
+    ])
+    const pathFromRoot = relative(root, path)
+    if (entry.isSymbolicLink() || !entry.isFile() || !isStrictDescendant(pathFromRoot)) {
+      throw new TeacherQuestionMediaError('invalid-request', '目标图片不在当前配置根目录下')
+    }
+    return { path, ...file.payload }
+  } catch (error) {
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('not-found', '图片已变化，请刷新后重试', { cause: error })
+  }
+}
+
+/**
+ * Copy selected current-root library images into one current-root student directory.
+ * @param config - current question-media roots.
+ * @param files - image paths retained by the latest successful scan.
+ * @param directories - directory paths retained by the same scan.
+ * @param studentId - destination student identity.
+ * @param folderId - optional nested destination identity.
+ * @param imageIds - ordered library image identities.
+ * @returns rollback for every copy created by this operation.
+ */
+export async function persistDiscoveredQuestionCopies(
+  config: TeacherQuestionMediaConfig,
+  files: ReadonlyMap<string, DiscoveredQuestionFile>,
+  directories: ReadonlyMap<string, DiscoveredQuestionDirectory>,
+  studentId: TeacherStudentId,
+  folderId: TeacherQuestionFolderId | undefined,
+  imageIds: readonly TeacherQuestionImageId[],
+): Promise<PersistedDiscoveredQuestionCopies> {
+  const destinationTarget: TeacherQuestionMediaDirectoryTarget = folderId === undefined
+    ? { kind: 'student', id: studentId }
+    : { kind: 'student-folder', id: folderId }
+  const destination = await resolveDiscoveredQuestionDirectory(config, directories, destinationTarget)
+  const created: string[] = []
+  try {
+    for (const id of imageIds) {
+      const target = { kind: 'batch' as const, id }
+      const discovered = files.get(discoveredQuestionTargetKey(target))
+      if (discovered === undefined) throw new TeacherQuestionMediaError('not-found', '部分切题图片已变化，请刷新后重试')
+      const source = await resolveDiscoveredQuestionFile(config, discovered, target)
+      created.push(await copyUniqueQuestionFile(source.path, destination, source.fileName))
+    }
+  } catch (error) {
+    await removeCopiedQuestionFiles(created)
+    throw error instanceof TeacherQuestionMediaError
+      ? error
+      : new TeacherQuestionMediaError('storage-failure', '保存学生试题图片失败', { cause: error })
+  }
+  return {
+    rollback: async () => { await removeCopiedQuestionFiles(created) },
   }
 }
 
@@ -172,15 +253,11 @@ async function discoverBatches(
 ): Promise<{
   batches: TeacherQuestionBatch[]
   libraryFolders: TeacherWorkbenchState['questionLibraryFolders'][number][]
-  readOnlyBatchIds: TeacherQuestionBatchId[]
-  readOnlyLibraryFolderIds: TeacherQuestionLibraryFolderId[]
 }> {
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
   const tree = await collectLibraryDirectories(root, config.maxImageBytes)
   const batches: TeacherQuestionBatch[] = []
-  const readOnlyBatchIds: TeacherQuestionBatchId[] = []
-  const externalFolders: TeacherWorkbenchState['questionLibraryFolders'][number][] = []
-  const readOnlyLibraryFolderIds: TeacherQuestionLibraryFolderId[] = []
+  const visibleFolders: TeacherWorkbenchState['questionLibraryFolders'][number][] = []
   const folderIdsByPath = new Map<string, TeacherQuestionLibraryFolderId>()
   const durableFoldersByPath = new Map<string, TeacherWorkbenchState['questionLibraryFolders'][number]>()
   for (const folder of state.questionLibraryFolders) {
@@ -195,6 +272,7 @@ async function discoverBatches(
   for (const directory of tree.directories) {
     const durable = durableFoldersByPath.get(directory.relativePath)
     if (durable !== undefined) {
+      visibleFolders.push(durable)
       discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'library-folder', id: durable.id }), {
         root,
         path: directory.absolutePath,
@@ -206,7 +284,7 @@ async function discoverBatches(
       `${root}\0${directory.relativePath}`,
     ) as TeacherQuestionLibraryFolderId
     const parentId = folderIdsByPath.get(parentRelativePath(directory.relativePath))
-    externalFolders.push({
+    visibleFolders.push({
       id,
       ...(parentId === undefined ? {} : { parentId }),
       name: directory.name.slice(0, 200),
@@ -214,7 +292,6 @@ async function discoverBatches(
       updatedAt: directory.updatedAt,
     })
     folderIdsByPath.set(directory.relativePath, id)
-    readOnlyLibraryFolderIds.push(id)
     discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'library-folder', id }), {
       root,
       path: directory.absolutePath,
@@ -235,12 +312,12 @@ async function discoverBatches(
       if (file === undefined) continue
       images.push(image)
       claimedPaths.add(file.absolutePath)
-      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id: image.id }), discoveredFile(file))
+      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id: image.id }), discoveredFile(root, file))
     }
     if (images.length > 0) batches.push({ ...durable, images })
   }
 
-  const appendExternalBatch = (
+  const appendScannedBatch = (
     identityPath: string,
     name: string,
     sourceName: string,
@@ -251,7 +328,7 @@ async function discoverBatches(
     const images = imageFiles.filter(file => !claimedPaths.has(file.absolutePath)).map((file, index): TeacherQuestionImage => {
       const imagePath = normalizeRelative(relative(root, file.absolutePath))
       const id = stableId('batch-image', `${root}\0${imagePath}`) as TeacherQuestionImageId
-      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id }), discoveredFile(file))
+      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'batch', id }), discoveredFile(root, file))
       return {
         id,
         questionNo: questionNumber(file.fileName, index + 1),
@@ -273,13 +350,12 @@ async function discoverBatches(
       createdAt: Math.min(...images.map(image => image.createdAt)),
       images,
     })
-    readOnlyBatchIds.push(batchId)
   }
 
-  appendExternalBatch('.', basename(root) || '根目录图片', `${basename(root) || '根目录图片'}.pdf`, tree.rootImages)
+  appendScannedBatch('.', basename(root) || '根目录图片', `${basename(root) || '根目录图片'}.pdf`, tree.rootImages)
 
   for (const directory of tree.directories) {
-    appendExternalBatch(
+    appendScannedBatch(
       directory.relativePath,
       directory.name,
       `${directory.name}.pdf`,
@@ -289,9 +365,7 @@ async function discoverBatches(
   }
   return {
     batches,
-    libraryFolders: [...state.questionLibraryFolders, ...externalFolders],
-    readOnlyBatchIds,
-    readOnlyLibraryFolderIds,
+    libraryFolders: visibleFolders,
   }
 }
 
@@ -300,14 +374,13 @@ async function discoverAssignments(
   state: TeacherWorkbenchState,
   directories: readonly StudentDirectory[],
   discoveredFiles: Map<string, DiscoveredQuestionFile>,
-): Promise<{ assignments: TeacherQuestionAssignment[]; readOnlyAssignmentIds: TeacherQuestionAssignmentId[] }> {
+): Promise<TeacherQuestionAssignment[]> {
   const root = configuredRoot(config.studentsRoot, '学生目录')
   const durableByPath = new Map(state.questionAssignments.map(assignment => [
     normalizeRelative(assignment.relativePath),
     assignment,
   ] as const))
   const assignments: TeacherQuestionAssignment[] = []
-  const readOnlyAssignmentIds: TeacherQuestionAssignmentId[] = []
   const claimed = new Set<string>()
   let remaining = MAX_DISCOVERED_IMAGES_PER_ROOT
 
@@ -322,7 +395,7 @@ async function discoverAssignments(
       const durable = durableByPath.get(rootRelativePath)
       if (durable !== undefined && durable.studentId === directory.student.id) {
         assignments.push(durable)
-        discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'assignment', id: durable.id }), discoveredFile(file))
+        discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'assignment', id: durable.id }), discoveredFile(root, file))
         continue
       }
       const id = stableId(
@@ -347,11 +420,10 @@ async function discoverAssignments(
         createdAt: file.updatedAt,
         updatedAt: file.updatedAt,
       })
-      readOnlyAssignmentIds.push(id)
-      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'assignment', id }), discoveredFile(file))
+      discoveredFiles.set(discoveredQuestionTargetKey({ kind: 'assignment', id }), discoveredFile(root, file))
     }
   }
-  return { assignments, readOnlyAssignmentIds }
+  return assignments
 }
 
 async function discoverStudentHierarchy(
@@ -361,11 +433,9 @@ async function discoverStudentHierarchy(
 ): Promise<StudentHierarchy> {
   const root = configuredRoot(config.studentsRoot, '学生目录')
   const durableClasses = state.classes.filter(item => item.usage === 'roster')
-  const classes = [...durableClasses]
-  const students = [...state.students]
+  const classes: TeacherClass[] = []
+  const students: TeacherStudent[] = []
   const unresolvedDirectories: Omit<StudentDirectory, 'folderIdsByRelativeDirectory'>[] = []
-  const readOnlyClassIds: TeacherClassId[] = []
-  const readOnlyStudentIds: TeacherStudentId[] = []
   const claimedClassIds = new Set<TeacherClassId>()
   const claimedStudentIds = new Set<TeacherStudentId>()
 
@@ -378,8 +448,7 @@ async function discoverStudentHierarchy(
       for (const levelTwo of levelTwoNames) {
         levelTwoChildren.set(levelTwo, await childDirectories(join(levelOnePath, levelTwo)))
       }
-      const legacy = !levelOne.includes('班') && levelTwoNames.some(name =>
-        name.includes('班') && (levelTwoChildren.get(name)?.length ?? 0) > 0)
+      const legacy = !levelOne.includes('班') && levelTwoNames.some(name => name.includes('班'))
       if (legacy) {
         for (const className of levelTwoNames) {
           appendDiscoveredGroup({
@@ -394,8 +463,6 @@ async function discoverStudentHierarchy(
             classes,
             students,
             directories: unresolvedDirectories,
-            readOnlyClassIds,
-            readOnlyStudentIds,
             claimedClassIds,
             claimedStudentIds,
             discoveredDirectories,
@@ -415,21 +482,17 @@ async function discoverStudentHierarchy(
         classes,
         students,
         directories: unresolvedDirectories,
-        readOnlyClassIds,
-        readOnlyStudentIds,
         claimedClassIds,
         claimedStudentIds,
         discoveredDirectories,
       })
     }
   }
-  const questionFolders = [...state.questionFolders]
-  const readOnlyFolderIds: TeacherQuestionFolderId[] = []
+  const questionFolders: TeacherQuestionFolder[] = []
   const directories: StudentDirectory[] = []
   for (const directory of unresolvedDirectories) {
     const discovered = await discoverStudentFolders(root, state, directory, discoveredDirectories)
     questionFolders.push(...discovered.folders)
-    readOnlyFolderIds.push(...discovered.readOnlyFolderIds)
     directories.push({ ...directory, folderIdsByRelativeDirectory: discovered.idsByRelativeDirectory })
   }
   return {
@@ -437,9 +500,6 @@ async function discoverStudentHierarchy(
     students,
     questionFolders,
     directories,
-    readOnlyClassIds,
-    readOnlyStudentIds,
-    readOnlyFolderIds,
   }
 }
 
@@ -455,8 +515,6 @@ interface DiscoveredGroupInput {
   readonly classes: TeacherClass[]
   readonly students: TeacherStudent[]
   readonly directories: Omit<StudentDirectory, 'folderIdsByRelativeDirectory'>[]
-  readonly readOnlyClassIds: TeacherClassId[]
-  readonly readOnlyStudentIds: TeacherStudentId[]
   readonly claimedClassIds: Set<TeacherClassId>
   readonly claimedStudentIds: Set<TeacherStudentId>
   readonly discoveredDirectories: Map<string, DiscoveredQuestionDirectory>
@@ -485,11 +543,14 @@ function appendDiscoveredGroup(input: DiscoveredGroupInput): void {
       grade: input.grade,
       subject: '',
     }
-    input.classes.push(owningClass)
-    input.readOnlyClassIds.push(id)
   } else {
     input.claimedClassIds.add(owningClass.id)
   }
+  input.classes.push(owningClass)
+  input.discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'class', id: owningClass.id }), {
+    root: input.root,
+    path: input.groupPath,
+  })
 
   for (const studentName of input.studentNames) {
     const pathStudentName = questionMediaPathSegment(studentName)
@@ -512,11 +573,10 @@ function appendDiscoveredGroup(input: DiscoveredGroupInput): void {
         address: '',
         extras: {},
       }
-      input.students.push(student)
-      input.readOnlyStudentIds.push(id)
     } else {
       input.claimedStudentIds.add(student.id)
     }
+    input.students.push(student)
     input.discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'student', id: student.id }), {
       root: input.root,
       path: join(input.groupPath, studentName),
@@ -532,16 +592,15 @@ async function discoverStudentFolders(
   discoveredDirectories: Map<string, DiscoveredQuestionDirectory>,
 ): Promise<{
   folders: TeacherQuestionFolder[]
-  readOnlyFolderIds: TeacherQuestionFolderId[]
   idsByRelativeDirectory: ReadonlyMap<string, TeacherQuestionFolderId>
 }> {
   const durableByPath = durableStudentFoldersByPath(state, directory.student)
   const folders: TeacherQuestionFolder[] = []
-  const readOnlyFolderIds: TeacherQuestionFolderId[] = []
   const idsByRelativeDirectory = new Map<string, TeacherQuestionFolderId>()
   for (const entry of await collectStudentDirectories(directory.absolutePath)) {
     const durable = durableByPath.get(entry.relativePath)
     if (durable !== undefined) {
+      folders.push(durable)
       idsByRelativeDirectory.set(entry.relativePath, durable.id)
       discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'student-folder', id: durable.id }), {
         root,
@@ -562,14 +621,13 @@ async function discoverStudentFolders(
       createdAt: entry.updatedAt,
       updatedAt: entry.updatedAt,
     })
-    readOnlyFolderIds.push(id)
     idsByRelativeDirectory.set(entry.relativePath, id)
     discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'student-folder', id }), {
       root,
       path: entry.absolutePath,
     })
   }
-  return { folders, readOnlyFolderIds, idsByRelativeDirectory }
+  return { folders, idsByRelativeDirectory }
 }
 
 function durableStudentFoldersByPath(
@@ -722,8 +780,9 @@ async function childDirectories(root: string): Promise<string[]> {
   }
 }
 
-function discoveredFile(file: ImageFile): DiscoveredQuestionFile {
+function discoveredFile(root: string, file: ImageFile): DiscoveredQuestionFile {
   return {
+    root,
     path: file.absolutePath,
     payload: {
       fileName: file.fileName,
@@ -738,6 +797,38 @@ function configuredRoot(raw: string, label: string): string {
   const value = raw.trim()
   if (value === '') throw new TeacherQuestionMediaError('invalid-request', `请先在 DSH 设置中配置${label}`)
   return resolve(value)
+}
+
+async function copyUniqueQuestionFile(source: string, directory: string, fileName: string): Promise<string> {
+  const safeName = basename(fileName)
+  const extension = extname(safeName)
+  const stem = extension === '' ? safeName : safeName.slice(0, -extension.length)
+  for (let suffix = 1; suffix <= 10_000; suffix += 1) {
+    const candidate = join(directory, suffix === 1 ? safeName : `${stem}-${String(suffix)}${extension}`)
+    try {
+      await copyFile(source, candidate, constants.COPYFILE_EXCL)
+      return candidate
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'EEXIST') continue
+      throw error
+    }
+  }
+  throw new TeacherQuestionMediaError('storage-failure', '学生试题目录没有可用文件名')
+}
+
+async function removeCopiedQuestionFiles(paths: readonly string[]): Promise<void> {
+  await Promise.all(paths.map(async (path) => {
+    await unlink(path).catch((error: unknown) => {
+      if (!isNodeError(error) || error.code !== 'ENOENT') throw error
+    })
+  }))
+}
+
+function isStrictDescendant(pathFromRoot: string): boolean {
+  return pathFromRoot !== ''
+    && pathFromRoot !== '..'
+    && !pathFromRoot.startsWith(`..${sep}`)
+    && !isAbsolute(pathFromRoot)
 }
 
 function normalizeRelative(value: string): string {

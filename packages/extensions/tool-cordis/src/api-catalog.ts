@@ -2085,13 +2085,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'deleteQuestionMediaDirectory\') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>',
-        description: 'Delete one external directory or one durable question-library hierarchy.',
+        description: 'Delete one current-root directory and update matching durable relationships.',
         parameters: [{ name: 'request', description: 'opaque directory target from the latest scan or durable state.' }],
         returns: 'the committed or unchanged durable document, or a stable failure.',
       },
       {
         signature: '@Remote(\'renameQuestionMediaDirectory\') renameQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryRenameRequest, ): Promise<TeacherQuestionMutationResult>',
-        description: 'Rename one external, durable student, or durable question-library directory.',
+        description: 'Rename one current-root directory and update matching durable metadata.',
         parameters: [{ name: 'request', description: 'opaque directory target and safe replacement name.' }],
         returns: 'the committed or unchanged durable document, or a stable failure.',
       },
@@ -5222,7 +5222,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionMediaBrowseValue',
-    declaration: 'export interface TeacherQuestionMediaBrowseValue {\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n    readonly readOnlyBatchIds: readonly TeacherQuestionBatchId[];\n    readonly readOnlyLibraryFolderIds: readonly TeacherQuestionLibraryFolderId[];\n    readonly readOnlyAssignmentIds: readonly TeacherQuestionAssignmentId[];\n    readonly readOnlyClassIds: readonly TeacherClassId[];\n    readonly readOnlyStudentIds: readonly TeacherStudentId[];\n    readonly readOnlyFolderIds: readonly TeacherQuestionFolderId[];\n}',
+    declaration: 'export interface TeacherQuestionMediaBrowseValue {\n    readonly classes: readonly TeacherClass[];\n    readonly students: readonly TeacherStudent[];\n    readonly questionBatches: readonly TeacherQuestionBatch[];\n    readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[];\n    readonly questionFolders: readonly TeacherQuestionFolder[];\n    readonly questionAssignments: readonly TeacherQuestionAssignment[];\n}',
   },
   {
     name: 'TeacherQuestionMediaDirectoryCreateRequest',
@@ -5242,7 +5242,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionMediaDirectoryTarget',
-    declaration: 'export type TeacherQuestionMediaDirectoryTarget = {\n    readonly kind: \'student\';\n    readonly id: TeacherStudentId;\n} | {\n    readonly kind: \'student-folder\';\n    readonly id: TeacherQuestionFolderId;\n} | {\n    readonly kind: \'library-folder\';\n    readonly id: TeacherQuestionLibraryFolderId;\n};',
+    declaration: 'export type TeacherQuestionMediaDirectoryTarget = {\n    readonly kind: \'class\';\n    readonly id: TeacherClassId;\n} | {\n    readonly kind: \'student\';\n    readonly id: TeacherStudentId;\n} | {\n    readonly kind: \'student-folder\';\n    readonly id: TeacherQuestionFolderId;\n} | {\n    readonly kind: \'library-folder\';\n    readonly id: TeacherQuestionLibraryFolderId;\n};',
   },
   {
     name: 'TeacherQuestionMutationResult',

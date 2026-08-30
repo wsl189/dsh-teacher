@@ -937,7 +937,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:182`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:188`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

@@ -68,7 +68,6 @@ interface EditorRequest {
   readonly target: TeacherQuestionImageTarget
   readonly questionNo: number
   readonly fileName: string
-  readonly readOnly: boolean
 }
 
 interface PendingStudent {
@@ -234,30 +233,13 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
   const questionLibraryFolders = questionMedia?.questionLibraryFolders ?? state.questionLibraryFolders
   const questionFolders = questionMedia?.questionFolders ?? state.questionFolders
   const questionAssignments = questionMedia?.questionAssignments ?? state.questionAssignments
-  const readOnlyBatchIds = useMemo(
-    () => new Set(questionMedia?.readOnlyBatchIds ?? []),
-    [questionMedia?.readOnlyBatchIds],
+  const durableClassIds = useMemo(() => new Set(durableClasses.map(item => item.id)), [durableClasses])
+  const durableStudentIds = useMemo(() => new Set(state.students.map(item => item.id)), [state.students])
+  const durableLibraryFolderIds = useMemo(
+    () => new Set(state.questionLibraryFolders.map(item => item.id)),
+    [state.questionLibraryFolders],
   )
-  const readOnlyLibraryFolderIds = useMemo(
-    () => new Set(questionMedia?.readOnlyLibraryFolderIds ?? []),
-    [questionMedia?.readOnlyLibraryFolderIds],
-  )
-  const readOnlyAssignmentIds = useMemo(
-    () => new Set(questionMedia?.readOnlyAssignmentIds ?? []),
-    [questionMedia?.readOnlyAssignmentIds],
-  )
-  const readOnlyClassIds = useMemo(
-    () => new Set(questionMedia?.readOnlyClassIds ?? []),
-    [questionMedia?.readOnlyClassIds],
-  )
-  const readOnlyStudentIds = useMemo(
-    () => new Set(questionMedia?.readOnlyStudentIds ?? []),
-    [questionMedia?.readOnlyStudentIds],
-  )
-  const readOnlyFolderIds = useMemo(
-    () => new Set(questionMedia?.readOnlyFolderIds ?? []),
-    [questionMedia?.readOnlyFolderIds],
-  )
+  const durableFolderIds = useMemo(() => new Set(state.questionFolders.map(item => item.id)), [state.questionFolders])
   const activeClass = classes.find(item => item.id === activeClassId)
   const activeStudent = students.find(item => item.id === activeStudentId)
   const activeLibraryBatches = useMemo(() => {
@@ -269,18 +251,11 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
   const activeBatchEntries = useMemo(() => activeLibraryBatches.flatMap(batch => (
     batch.images.map(image => ({ batch, image }))
   )), [activeLibraryBatches])
-  const selectableBatchEntries = useMemo(
-    () => questionBankSaveTarget === null
-      ? activeBatchEntries
-      : activeBatchEntries.filter(entry => !readOnlyBatchIds.has(entry.batch.id)),
-    [activeBatchEntries, questionBankSaveTarget, readOnlyBatchIds],
-  )
+  const selectableBatchEntries = activeBatchEntries
   const selectedBatchEntries = useMemo(
     () => activeBatchEntries.filter(entry => selectedBatchImageIds.has(entry.image.id)),
     [activeBatchEntries, selectedBatchImageIds],
   )
-  const selectedReadOnlyBatch = questionBankSaveTarget !== null
-    && selectedBatchEntries.some(entry => readOnlyBatchIds.has(entry.batch.id))
   const classStudents = useMemo(
     () => students.filter(student => student.classId === activeClassId),
     [activeClassId, students],
@@ -294,13 +269,9 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
       && (activeFolderId === '' || item.folderId === activeFolderId)),
     [activeFolderId, activeStudentId, questionAssignments],
   )
-  const writableStudentAssignments = useMemo(
-    () => studentAssignments.filter(item => !readOnlyAssignmentIds.has(item.id)),
-    [readOnlyAssignmentIds, studentAssignments],
-  )
-  const writableSelectedAssignmentIds = useMemo(
-    () => writableStudentAssignments.filter(item => selectedAssignmentIds.has(item.id)).map(item => item.id),
-    [selectedAssignmentIds, writableStudentAssignments],
+  const selectedStudentAssignmentIds = useMemo(
+    () => studentAssignments.filter(item => selectedAssignmentIds.has(item.id)).map(item => item.id),
+    [selectedAssignmentIds, studentAssignments],
   )
   const hierarchyRows = useMemo(
     () => buildStudentHierarchyRows(classStudents, questionFolders, expandedHierarchy),
@@ -319,8 +290,8 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     ],
   )
   const libraryFolderOptions = useMemo(
-    () => buildQuestionLibraryFolderOptions(state.questionLibraryFolders),
-    [state.questionLibraryFolders],
+    () => buildQuestionLibraryFolderOptions(questionLibraryFolders),
+    [questionLibraryFolders],
   )
   const classHierarchy = useMemo(() => {
     const groups = new Map<string, TeacherClass[]>()
@@ -372,7 +343,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
 
   useEffect(() => {
     let active = true
-    const studentIds = students.filter(student => !readOnlyStudentIds.has(student.id)).map(student => student.id)
+    const studentIds = students.map(student => student.id)
     if (studentIds.length === 0) {
       setTemporarySelections(new Map())
       return () => { active = false }
@@ -382,7 +353,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
       setTemporarySelections(new Map(result.value.map(item => [item.studentId, item.imageCount] as const)))
     })
     return () => { active = false }
-  }, [commands, readOnlyStudentIds, students])
+  }, [commands, students])
 
   useEffect(() => () => {
     const timer = hierarchyClickRef.current.timer
@@ -533,7 +504,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     if (year === '' || grade === '' || className === '' || busy !== null) return
     setExpandedYears(current => new Set([...current, year]))
     setBusy('student')
-    const existingClass = durableClasses.find(item => classAcademicYear(item, fallbackYear) === year
+    const existingClass = classes.find(item => classAcademicYear(item, fallbackYear) === year
       && item.grade === grade && item.name === className)
     if (existingClass !== undefined) {
       setActiveClassId(existingClass.id)
@@ -543,18 +514,27 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
         setToast(t('questions.classExists'))
         return
       }
-      const result = await commands.saveStudent({
-        classId: existingClass.id,
-        name: studentName,
-        studentNumber: '',
-        gender: '',
-        guardian: '',
-        relation: '',
-        phone: '',
-        address: '',
-      })
+      const result = durableClassIds.has(existingClass.id)
+        ? await commands.saveStudent({
+          classId: existingClass.id,
+          name: studentName,
+          studentNumber: '',
+          gender: '',
+          guardian: '',
+          relation: '',
+          phone: '',
+          address: '',
+        })
+        : await commands.createQuestionMediaDirectory({
+          parent: { kind: 'class', id: existingClass.id },
+          name: studentName,
+        })
       setBusy(null)
       setAddStudentOpen(false)
+      if (result.ok && !durableClassIds.has(existingClass.id)) {
+        await refreshQuestionMedia()
+        await refreshQuestionMedia()
+      }
       setToast(result.ok ? t('questions.studentCreated') : result.error.message)
       return
     }
@@ -606,9 +586,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     if (student !== undefined) {
       setActiveStudentId(student.id)
       setActiveFolderId(folderId)
-      const writableTarget = !readOnlyStudentIds.has(student.id)
-        && (folderId === '' || !readOnlyFolderIds.has(folderId))
-      setQuestionBankSaveTarget(writableTarget ? { studentId: student.id, folderId } : null)
+      setQuestionBankSaveTarget({ studentId: student.id, folderId })
     } else {
       setQuestionBankSaveTarget(null)
     }
@@ -628,9 +606,9 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     setActiveFolderId(row.folder?.id ?? '')
     setFolderName('')
     const filesystemParent: TeacherQuestionMediaDirectoryParent | undefined = row.folder !== undefined
-      && readOnlyFolderIds.has(row.folder.id)
+      && !durableFolderIds.has(row.folder.id)
       ? { kind: 'student-folder', id: row.folder.id }
-      : row.folder === undefined && readOnlyStudentIds.has(row.student.id)
+      : row.folder === undefined && !durableStudentIds.has(row.student.id)
         ? { kind: 'student', id: row.student.id }
         : undefined
     setFolderPrompt({
@@ -752,9 +730,9 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     setBusy('folder')
     const filesystemCreate = libraryFolderPrompt.mode === 'create'
       && libraryFolderPrompt.parent !== undefined
-      && readOnlyLibraryFolderIds.has(libraryFolderPrompt.parent.id)
+      && !durableLibraryFolderIds.has(libraryFolderPrompt.parent.id)
     const filesystemRename = libraryFolderPrompt.mode === 'rename'
-      && readOnlyLibraryFolderIds.has(libraryFolderPrompt.folder.id)
+      && !durableLibraryFolderIds.has(libraryFolderPrompt.folder.id)
     const result = filesystemCreate
       ? await commands.createQuestionMediaDirectory({
         parent: { kind: 'library-folder', id: libraryFolderPrompt.parent.id },
@@ -791,12 +769,9 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
   }
 
   const deleteLibraryFolder = async (folder: TeacherQuestionLibraryFolder): Promise<void> => {
-    const filesystemDirectory = readOnlyLibraryFolderIds.has(folder.id)
     if (!globalThis.confirm(t('questions.confirmDeleteFolder', { name: folder.name }))) return
     setBusy('folder')
-    const result = filesystemDirectory
-      ? await commands.deleteQuestionMediaDirectory({ target: { kind: 'library-folder', id: folder.id } })
-      : await commands.deleteQuestionLibraryFolder(folder.id)
+    const result = await commands.deleteQuestionMediaDirectory({ target: { kind: 'library-folder', id: folder.id } })
     setBusy(null)
     if (result.ok) {
       const removed = questionLibraryFolderDescendants(questionLibraryFolders, folder.id)
@@ -806,37 +781,13 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
         setActiveLibraryDirectoryKey('')
         setBatchImagesOpen(false)
       }
-      if (filesystemDirectory) {
-        await refreshQuestionMedia()
-        await refreshQuestionMedia()
-      }
-    }
-    setToast(result.ok ? t('questions.deleted') : result.error.message)
-  }
-
-  const deleteFolder = async (folder: TeacherQuestionFolder): Promise<void> => {
-    if (!globalThis.confirm(t('questions.confirmDeleteFolder', { name: folder.name }))) return
-    const result = await commands.deleteQuestionFolder(folder.id)
-    if (result.ok) {
-      setActiveFolderId('')
-      setStudentImagesOpen(false)
-      setExpandedHierarchy((current) => {
-        const removed = questionFolderDescendants(questionFolders, folder.id)
-        return new Set([...current].filter(key => ![...removed].some(id => key === hierarchyKey(folder.studentId, id))))
-      })
+      await refreshQuestionMedia()
+      await refreshQuestionMedia()
     }
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
   const deleteHierarchyRow = async (row: StudentHierarchyRow): Promise<void> => {
-    const filesystemDirectory = row.folder === undefined
-      ? readOnlyStudentIds.has(row.student.id)
-      : readOnlyFolderIds.has(row.folder.id)
-    if (!filesystemDirectory) {
-      if (row.folder === undefined) await deleteStudent(row.student)
-      else await deleteFolder(row.folder)
-      return
-    }
     const name = row.folder?.name ?? row.student.name
     if (!globalThis.confirm(t('questions.confirmDeleteFolder', { name }))) return
     setBusy('folder')
@@ -952,7 +903,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
   }
 
   const saveSelectedBatchImages = async (): Promise<void> => {
-    if (selectedBatchEntries.length === 0 || selectedReadOnlyBatch || busy !== null) return
+    if (selectedBatchEntries.length === 0 || busy !== null) return
     const selectedImages = selectedBatchEntries.map(entry => entry.image)
     if (questionBankSaveTarget === null) {
       try {
@@ -997,16 +948,20 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
       imageIds: selectedImages.map(image => image.id),
     })
     setBusy(null)
-    if (result.ok) setSelectedBatchImageIds(new Set())
+    if (result.ok) {
+      setSelectedBatchImageIds(new Set())
+      await refreshQuestionMedia()
+      await refreshQuestionMedia()
+    }
     setToast(result.ok ? t('questions.assigned') : result.error.message)
   }
 
   const saveTemporarySelection = async (): Promise<void> => {
-    if (activeStudent === undefined || writableSelectedAssignmentIds.length === 0 || busy !== null) return
+    if (activeStudent === undefined || selectedStudentAssignmentIds.length === 0 || busy !== null) return
     setBusy('temporary')
     const result = await commands.saveTemporaryQuestionSelection({
       studentId: activeStudent.id,
-      assignmentIds: writableSelectedAssignmentIds,
+      assignmentIds: selectedStudentAssignmentIds,
     })
     setBusy(null)
     if (!result.ok) {
@@ -1204,19 +1159,21 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
 
   const deleteClass = async (item: TeacherClass): Promise<void> => {
     if (!globalThis.confirm(t('questions.confirmDeleteClass', { name: classDisplayName(item) }))) return
-    const result = await commands.deleteClass(item.id)
-    setToast(result.ok ? t('questions.deleted') : result.error.message)
-  }
-
-  const deleteStudent = async (student: TeacherStudent): Promise<void> => {
-    if (!globalThis.confirm(t('questions.confirmDeleteStudent', { name: student.name }))) return
-    const result = await commands.deleteStudent(student.id)
+    const result = await commands.deleteQuestionMediaDirectory({ target: { kind: 'class', id: item.id } })
+    if (result.ok) {
+      await refreshQuestionMedia()
+      await refreshQuestionMedia()
+    }
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
   const deleteImage = async (target: TeacherQuestionImageTarget): Promise<void> => {
     if (!globalThis.confirm(t('confirm.delete'))) return
     const result = await commands.deleteQuestionImage({ target })
+    if (result.ok) {
+      await refreshQuestionMedia()
+      await refreshQuestionMedia()
+    }
     setToast(result.ok ? t('questions.deleted') : result.error.message)
   }
 
@@ -1291,9 +1248,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
                       >
                         {classDisplayName(item)}
                       </button>
-                      {!readOnlyClassIds.has(item.id) && (
-                        <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteClass(item) }}><X size={13} /></button>
-                      )}
+                      <button type="button" className={css.legacyHoverDelete} aria-label={t('delete')} onClick={() => { void deleteClass(item) }}><X size={13} /></button>
                     </div>
                   ))}
                 </div>
@@ -1351,8 +1306,6 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
             {classStudents.length === 0 && <div className={css.legacyDrawerState}>{t('questions.noStudents')}</div>}
             {hierarchyRows.map((row) => {
               const selected = activeStudentId === row.student.id && activeFolderId === (row.folder?.id ?? '')
-              const readOnlyFolder = row.folder !== undefined && readOnlyFolderIds.has(row.folder.id)
-              const readOnlyStudent = readOnlyStudentIds.has(row.student.id)
               const indentation = row.depth * 16
               return (
                 <div
@@ -1369,7 +1322,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
                     <span className={css.legacyHierarchyMarker} aria-hidden="true">{row.hasChildren ? row.expanded ? '▾' : '▸' : '·'}</span>
                     <span className={css.legacyHierarchyName}>{row.folder?.name ?? row.student.name}</span>
                   </button>
-                  {row.folder !== undefined && !row.hasChildren && !readOnlyFolder && !readOnlyStudent && (
+                  {row.folder !== undefined && !row.hasChildren && (
                     <button type="button" className={css.legacyStudentAdd} aria-label={t('questions.addFromLibrary')} onClick={() => { openQuestionBank(row.student, row.folder?.id ?? '') }}>+</button>
                   )}
                   <button
@@ -1456,16 +1409,14 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
             </button>
             <button
               type="button"
-              disabled={selectedBatchEntries.length === 0 || selectedReadOnlyBatch || busy !== null}
+              disabled={selectedBatchEntries.length === 0 || busy !== null}
               onClick={() => { void saveSelectedBatchImages() }}
             >
               {questionBankSaveTarget === null ? t('questions.saveAs') : t('questions.saveGenerated')}
             </button>
           </div>
           <div className={css.legacyImageScroll}>
-            {activeBatchEntries.map(({ batch, image }) => {
-              const readOnly = readOnlyBatchIds.has(batch.id)
-              const selectable = questionBankSaveTarget === null || !readOnly
+            {activeBatchEntries.map(({ image }) => {
               return (
                 <StoredQuestionTile
                   key={image.id}
@@ -1473,22 +1424,19 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
                   meta={image}
                   label={t('questions.questionAlt', { number: image.questionNo })}
                   mediaRevision={questionMediaRevision}
-                  checked={selectable && selectedBatchImageIds.has(image.id)}
+                  checked={selectedBatchImageIds.has(image.id)}
                   commands={commands}
                   t={t}
-                  selectable={selectable}
-                  onToggle={() => { if (selectable) toggleBatchImage(image.id) }}
+                  selectable
+                  onToggle={() => { toggleBatchImage(image.id) }}
                   onOpen={() => {
                     setEditor({
                       target: { kind: 'batch', id: image.id },
                       questionNo: image.questionNo,
                       fileName: image.fileName,
-                      readOnly,
                     })
                   }}
-                  {...(readOnly ? {} : {
-                    onDelete: () => { void deleteImage({ kind: 'batch', id: image.id }) },
-                  })}
+                  onDelete={() => { void deleteImage({ kind: 'batch', id: image.id }) }}
                 />
               )
             })}
@@ -1500,14 +1448,14 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
         <aside className={`${css.legacyDrawer} ${css.legacyStudentImages}`} aria-label={t('questions.studentImages')}>
           <div className={css.legacyImagesHeader}>
             <button type="button" onClick={() => {
-              setSelectedAssignmentIds(writableSelectedAssignmentIds.length === writableStudentAssignments.length
+              setSelectedAssignmentIds(selectedStudentAssignmentIds.length === studentAssignments.length
                 ? new Set()
-                : new Set(writableStudentAssignments.map(item => item.id)))
+                : new Set(studentAssignments.map(item => item.id)))
             }}>
-              {writableSelectedAssignmentIds.length === writableStudentAssignments.length
-                && writableStudentAssignments.length > 0 ? t('questions.clearAll') : t('questions.selectAll')}
+              {selectedStudentAssignmentIds.length === studentAssignments.length
+                && studentAssignments.length > 0 ? t('questions.clearAll') : t('questions.selectAll')}
             </button>
-            <button type="button" disabled={writableSelectedAssignmentIds.length === 0 || busy !== null} onClick={() => { void saveTemporarySelection() }}>
+            <button type="button" disabled={selectedStudentAssignmentIds.length === 0 || busy !== null} onClick={() => { void saveTemporarySelection() }}>
               {t('questions.tempSave')}
             </button>
             <button type="button" onClick={() => { openQuestionBank(activeStudent, activeFolderId) }}>{t('questions.library')}</button>
@@ -1523,26 +1471,21 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
                 {...(assignment.lastTemporarySavedAt === undefined ? {} : { lastTemporarySavedAt: assignment.lastTemporarySavedAt })}
                 label={assignment.fileName}
                 mediaRevision={questionMediaRevision}
-                checked={!readOnlyAssignmentIds.has(assignment.id) && selectedAssignmentIds.has(assignment.id)}
+                checked={selectedAssignmentIds.has(assignment.id)}
                 commands={commands}
                 t={t}
-                selectable={!readOnlyAssignmentIds.has(assignment.id)}
+                selectable
                 onToggle={() => {
-                  if (!readOnlyAssignmentIds.has(assignment.id)) {
-                    setSelectedAssignmentIds(current => toggleSet(current, assignment.id))
-                  }
+                  setSelectedAssignmentIds(current => toggleSet(current, assignment.id))
                 }}
                 onOpen={() => {
                   setEditor({
                     target: { kind: 'assignment', id: assignment.id },
                     questionNo: assignmentQuestionNo(assignment, index),
                     fileName: assignment.fileName,
-                    readOnly: readOnlyAssignmentIds.has(assignment.id),
                   })
                 }}
-                {...(readOnlyAssignmentIds.has(assignment.id) ? {} : {
-                  onDelete: () => { void deleteImage({ kind: 'assignment', id: assignment.id }) },
-                })}
+                onDelete={() => { void deleteImage({ kind: 'assignment', id: assignment.id }) }}
               />
             ))}
           </div>
@@ -1690,11 +1633,13 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
           target={editor.target}
           questionNo={editor.questionNo}
           fileName={editor.fileName}
-          readOnly={editor.readOnly}
           commands={commands}
           t={t}
           onClose={() => { setEditor(null) }}
-          onSaved={() => { setToast(t('questions.imageSaved')) }}
+          onSaved={() => {
+            setToast(t('questions.imageSaved'))
+            void refreshQuestionMedia().then(refreshQuestionMedia)
+          }}
         />
       )}
 

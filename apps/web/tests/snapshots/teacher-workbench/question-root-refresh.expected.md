@@ -17,23 +17,21 @@
 - button "关闭工作台"
 - complementary "学生列表":
   - heading "高一（1）班" [level=2]
-  - button "Word" [disabled]
-  - button "PPT" [disabled]
+  - button "Word"
+  - button "PPT"
   - button "关闭工作台"
   - paragraph: 单击打开图片，双击展开或收起下级目录，三击新建子目录，四击重命名
-  - button "张同学"
-  - button "删除"
-  - button "李同学"
-  - button "删除"
   - button "目录学生"
   - button "删除"
   - button "实时新增学生目录"
+  - button "从试题库添加": +
   - button "删除"
   - button "月考"
   - button "删除"
   - button "第一周"
   - button "删除"
   - button "第二周订正"
+  - button "从试题库添加": +
   - button "删除"
 - complementary "试题图片库":
   - heading "试题图片库" [level=2]
@@ -56,18 +54,15 @@
   - button "删除目录“空目录”"
   - button "下一层": 下一层 0
   - button "删除目录“下一层”"
-  - button "模拟题库": 模拟题库 0
-  - button "删除目录“模拟题库”"
-  - button "layout": layout 0
-  - button "删除目录“layout”"
   - button "实时新增图片目录": 实时新增图片目… 0
   - button "删除目录“实时新增图片目录”"
 - complementary "试题库图片":
   - button "全选"
-  - button "另存为" [disabled]
+  - button "保存" [disabled]
   - article:
     - button "第 8 题":
       - img "第 8 题"
+    - button "删除"
     - text: 月考_8.png
     - checkbox "选择"
     - text: 选择

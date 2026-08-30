@@ -939,7 +939,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/host/teacher-workbench/src/index.ts:181`](../packages/host/teacher-workbench/src/index.ts)
+来源：[`packages/host/teacher-workbench/src/index.ts:188`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

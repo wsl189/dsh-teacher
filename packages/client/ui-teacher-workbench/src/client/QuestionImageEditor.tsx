@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import type { CSSProperties, PointerEvent as ReactPointerEvent } from 'react'
 import { RotateCw, X } from 'lucide-react'
 import type {
+  TeacherQuestionImageMediaType,
   TeacherQuestionImagePayload,
   TeacherQuestionImageTarget,
   TeacherQuestionImageUpload,
@@ -29,9 +30,7 @@ export interface QuestionImageEditorProps {
   readonly questionNo: number
   /** Image display name used by Save As. */
   readonly fileName: string
-  /** Prevent overwriting an image discovered outside durable metadata. */
-  readonly readOnly: boolean
-  /** Durable image commands. */
+  /** Current-root image commands. */
   readonly commands: Pick<TeacherWorkbenchCommands, 'readQuestionImage' | 'replaceQuestionImage'>
   /** Namespace translator. */
   readonly t: TeacherWorkbenchTranslate
@@ -46,6 +45,7 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const dragStartRef = useRef<{ x: number; y: number } | null>(null)
   const [payload, setPayload] = useState<TeacherQuestionImagePayload | null>(null)
+  const [storedMediaType, setStoredMediaType] = useState<TeacherQuestionImageMediaType | null>(null)
   const [selection, setSelection] = useState<SelectionRect | null>(null)
   const [saving, setSaving] = useState(false)
   const [erased, setErased] = useState(false)
@@ -55,7 +55,10 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
     let active = true
     void props.commands.readQuestionImage({ target: props.target }).then((result) => {
       if (!active) return
-      if (result.ok) setPayload(result.value)
+      if (result.ok) {
+        setPayload(result.value)
+        setStoredMediaType(result.value.mediaType)
+      }
       else setError(result.error.message)
     })
     return () => { active = false }
@@ -165,7 +168,12 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
     }
   }
 
-  const buildOutput = async (): Promise<{ blob: Blob; width: number; height: number }> => {
+  const buildOutput = async (): Promise<{
+    blob: Blob
+    width: number
+    height: number
+    mediaType: TeacherQuestionImageMediaType
+  }> => {
     const canvas = canvasRef.current
     if (canvas === null) throw new Error(props.t('questions.editorCanvasError'))
     const rect = erased || selection === null
@@ -179,7 +187,8 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
     context.fillStyle = '#ffffff'
     context.fillRect(0, 0, output.width, output.height)
     context.drawImage(canvas, rect.x, rect.y, rect.width, rect.height, 0, 0, output.width, output.height)
-    return { blob: await canvasToBlob(output), width: output.width, height: output.height }
+    const mediaType = storedMediaType ?? 'image/png'
+    return { blob: await canvasToBlob(output, mediaType), width: output.width, height: output.height, mediaType }
   }
 
   const saveCopy = async (): Promise<void> => {
@@ -191,7 +200,7 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
       const url = URL.createObjectURL(output.blob)
       const anchor = document.createElement('a')
       anchor.href = url
-      anchor.download = editedFileName(props.fileName)
+      anchor.download = editedFileName(props.fileName, output.mediaType)
       anchor.click()
       setTimeout(() => { URL.revokeObjectURL(url) }, 0)
     } catch (cause) {
@@ -210,7 +219,7 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
       const result = await props.commands.replaceQuestionImage({
         target: props.target,
         fileName: props.fileName,
-        mediaType: 'image/png',
+        mediaType: output.mediaType,
         width: output.width,
         height: output.height,
         contentBase64: await blobBase64(output.blob),
@@ -249,9 +258,7 @@ export function QuestionImageEditor(props: QuestionImageEditorProps) {
             <button type="button" disabled={saving || selection === null} onClick={eraseSelection}>{props.t('questions.eraseText')}</button>
             <button type="button" disabled={saving || payload === null} onClick={() => { void rotate() }}><RotateCw size={15} />{props.t('questions.rotate')}</button>
             <button type="button" disabled={saving || payload === null} onClick={() => { void saveCopy() }}>{props.t('questions.saveCopy')}</button>
-            {!props.readOnly && (
-              <button type="button" disabled={saving || payload === null} onClick={() => { void overwrite() }}>{props.t('questions.overwrite')}</button>
-            )}
+            <button type="button" disabled={saving || payload === null} onClick={() => { void overwrite() }}>{props.t('questions.overwrite')}</button>
             <button type="button" className={css.legacyEditorClose} aria-label={props.t('close')} onClick={props.onClose}><X size={16} /></button>
           </div>
         </header>
@@ -285,12 +292,12 @@ function normalizedRect(rect: SelectionRect, width: number, height: number): { x
   }
 }
 
-function canvasToBlob(canvas: HTMLCanvasElement): Promise<Blob> {
+function canvasToBlob(canvas: HTMLCanvasElement, mediaType: TeacherQuestionImageMediaType = 'image/png'): Promise<Blob> {
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
       if (blob === null) reject(new Error('图片编码失败'))
       else resolve(blob)
-    }, 'image/png')
+    }, mediaType, mediaType === 'image/jpeg' ? 0.92 : undefined)
   })
 }
 
@@ -303,9 +310,10 @@ async function blobBase64(blob: Blob): Promise<string> {
   return btoa(binary)
 }
 
-function editedFileName(fileName: string): string {
+function editedFileName(fileName: string, mediaType: TeacherQuestionImageMediaType): string {
   const index = fileName.lastIndexOf('.')
-  return index > 0 ? `${fileName.slice(0, index)}_edited.png` : `${fileName}_edited.png`
+  const extension = mediaType === 'image/jpeg' ? '.jpg' : mediaType === 'image/webp' ? '.webp' : '.png'
+  return index > 0 ? `${fileName.slice(0, index)}_edited${extension}` : `${fileName}_edited${extension}`
 }
 
 function clamp(value: number, minimum: number, maximum: number): number {

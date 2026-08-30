@@ -33,6 +33,7 @@ import type {
   TeacherQuestionImageMediaType,
   TeacherQuestionImagePayload,
   TeacherQuestionImageTarget,
+  TeacherQuestionMediaDirectoryTarget,
   TeacherQuestionMediaDirectoryRenameRequest,
   TeacherQuestionTemporaryListRequest,
   TeacherQuestionTemporarySaveRequest,
@@ -107,7 +108,8 @@ interface DecodedImage {
   readonly height: number
 }
 
-interface ResolvedImage {
+/** Validated current-root raster selected for one filesystem operation. */
+export interface TeacherQuestionImageFile {
   readonly fileName: string
   readonly mediaType: TeacherQuestionImageMediaType
   readonly width: number
@@ -115,6 +117,7 @@ interface ResolvedImage {
   readonly path: string
 }
 
+type ResolvedImage = TeacherQuestionImageFile
 type RenderableImage = Omit<ResolvedImage, 'path'> & { readonly bytes: Buffer }
 
 interface TemporaryQuestionImage {
@@ -169,46 +172,76 @@ export function validateQuestionDirectoryName(value: string): string {
 }
 
 /**
- * Materialize every durable roster and question-library directory before a document write commits.
+ * Materialize directories introduced by one durable document write.
  * @param config - current student and question-library roots.
- * @param state - validated replacement state whose directory hierarchy must exist.
+ * @param state - validated replacement state whose new directory entries must exist.
+ * @param previousState - committed state used to distinguish new entries from retained metadata.
+ * @param locateCurrentDirectory - optional current-root relative path lookup for an existing parent.
  * @returns rollback for directories created by this operation and still empty at rollback time.
  */
 export async function prepareQuestionStateDirectories(
   config: TeacherQuestionMediaConfig,
   state: TeacherWorkbenchState,
+  previousState: TeacherWorkbenchState,
+  locateCurrentDirectory: (
+    target: TeacherQuestionMediaDirectoryTarget,
+  ) => Promise<string | undefined> = () => Promise.resolve(undefined),
 ): Promise<PreparedQuestionDirectories> {
   const targets: { readonly root: string; readonly label: string; readonly relativePath: string }[] = []
   const classes = new Map(state.classes.map(item => [item.id, item] as const))
+  const previousClasses = new Map(previousState.classes.map(item => [item.id, item] as const))
+  const previousStudentIds = new Set(previousState.students.map(item => item.id))
+  const previousFolderIds = new Set(previousState.questionFolders.map(item => item.id))
+  const previousLibraryFolderIds = new Set(previousState.questionLibraryFolders.map(item => item.id))
   for (const item of state.classes) {
-    if (item.usage === 'roster') {
+    if (item.usage === 'roster' && previousClasses.get(item.id)?.usage !== 'roster') {
       targets.push({ root: config.studentsRoot, label: '学生目录', relativePath: studentClassDirectory(item) })
     }
   }
   for (const student of state.students) {
+    if (previousStudentIds.has(student.id)) continue
     const owningClass = classes.get(student.classId)
     if (owningClass?.usage !== 'roster') continue
+    const currentClassDirectory = previousClasses.get(owningClass.id)?.usage === 'roster'
+      ? await locateCurrentDirectory({ kind: 'class', id: owningClass.id })
+      : undefined
     targets.push({
       root: config.studentsRoot,
       label: '学生目录',
-      relativePath: studentQuestionDirectory(state, owningClass, student),
+      relativePath: currentClassDirectory === undefined
+        ? studentQuestionDirectory(state, owningClass, student)
+        : join(currentClassDirectory, questionMediaPathSegment(student.name)),
     })
   }
   for (const folder of state.questionFolders) {
+    if (previousFolderIds.has(folder.id)) continue
     const student = state.students.find(item => item.id === folder.studentId)
     const owningClass = student === undefined ? undefined : classes.get(student.classId)
     if (student === undefined || owningClass?.usage !== 'roster') continue
+    const currentParentDirectory = folder.parentId !== undefined && previousFolderIds.has(folder.parentId)
+      ? await locateCurrentDirectory({ kind: 'student-folder', id: folder.parentId })
+      : previousStudentIds.has(student.id)
+        ? await locateCurrentDirectory({ kind: 'student', id: student.id })
+        : undefined
     targets.push({
       root: config.studentsRoot,
       label: '学生目录',
-      relativePath: studentQuestionDirectory(state, owningClass, student, folder.id),
+      relativePath: currentParentDirectory === undefined
+        ? studentQuestionDirectory(state, owningClass, student, folder.id)
+        : join(currentParentDirectory, questionMediaPathSegment(folder.name)),
     })
   }
   for (const folder of state.questionLibraryFolders) {
+    if (previousLibraryFolderIds.has(folder.id)) continue
+    const currentParentDirectory = folder.parentId !== undefined && previousLibraryFolderIds.has(folder.parentId)
+      ? await locateCurrentDirectory({ kind: 'library-folder', id: folder.parentId })
+      : undefined
     targets.push({
       root: config.segmentsRoot,
       label: '试题切割目录',
-      relativePath: questionLibraryDirectory(state, folder.id),
+      relativePath: currentParentDirectory === undefined
+        ? questionLibraryDirectory(state, folder.id)
+        : join(currentParentDirectory, questionMediaPathSegment(folder.name)),
     })
   }
 
@@ -282,10 +315,10 @@ async function removeCreatedQuestionDirectories(paths: readonly string[]): Promi
 }
 
 /**
- * Prepare a durable student or nested-folder rename and move its physical directory when present.
- * @param config - current student storage root.
+ * Prepare a durable class, student, or nested-folder rename and move its physical directory when present.
+ * @param config - current question-media roots.
  * @param state - authoritative roster, folder, and assignment metadata.
- * @param request - durable student hierarchy target and replacement name.
+ * @param request - durable current-root directory target and replacement name.
  * @param now - shared folder update timestamp.
  * @param physicalDirectory - optional revalidated directory found under the current configured root.
  * @returns updated state plus physical rollback.
@@ -300,6 +333,9 @@ export async function prepareDurableQuestionDirectoryRename(
   const name = validateQuestionDirectoryName(request.name)
   if (request.target.kind === 'library-folder') {
     return prepareDurableLibraryDirectoryRename(config, state, request.target.id, name, now, physicalDirectory)
+  }
+  if (request.target.kind === 'class') {
+    return prepareDurableClassDirectoryRename(config, state, request.target.id, name, physicalDirectory)
   }
   const root = configuredRoot(config.studentsRoot, '学生目录')
   const studentId = request.target.kind === 'student' ? request.target.id : state.questionFolders.find(
@@ -375,6 +411,58 @@ export async function prepareDurableQuestionDirectoryRename(
     rollback: moved
       ? async () => { await rename(destination, source) }
       : async () => {},
+  }
+}
+
+async function prepareDurableClassDirectoryRename(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+  classId: TeacherClass['id'],
+  name: string,
+  physicalDirectory?: string,
+): Promise<PreparedQuestionDirectoryRename> {
+  const owningClass = state.classes.find(item => item.id === classId && item.usage === 'roster')
+  if (owningClass === undefined) throw new TeacherQuestionMediaError('not-found', '班级目录不存在')
+  const root = configuredRoot(config.studentsRoot, '学生目录')
+  const oldDirectory = physicalDirectory === undefined
+    ? studentClassDirectory(owningClass)
+    : relative(root, physicalDirectory)
+  const renamedClass = { ...owningClass, name }
+  const newDirectory = physicalDirectory === undefined
+    ? studentClassDirectory(renamedClass)
+    : join(dirname(oldDirectory), questionMediaPathSegment(name))
+  const studentIds = new Set(state.students
+    .filter(student => student.classId === owningClass.id)
+    .map(student => student.id))
+  const oldPrefix = normalizeStoredPath(oldDirectory)
+  const newPrefix = normalizeStoredPath(newDirectory)
+  const nextState: TeacherWorkbenchState = {
+    ...state,
+    classes: state.classes.map(item => item.id === owningClass.id ? renamedClass : item),
+    questionAssignments: state.questionAssignments.map((assignment) => {
+      if (!studentIds.has(assignment.studentId)) return assignment
+      const relativePath = normalizeStoredPath(assignment.relativePath)
+      if (!relativePath.startsWith(`${oldPrefix}/`)) return assignment
+      return { ...assignment, relativePath: `${newPrefix}${relativePath.slice(oldPrefix.length)}` }
+    }),
+  }
+  const source = within(root, oldDirectory)
+  const destination = within(root, newDirectory)
+  if (source === destination) return { state: nextState, rollback: async () => {} }
+  try {
+    await assertDirectoryMissing(destination)
+    const sourceEntry = await lstat(source)
+    if (sourceEntry.isSymbolicLink() || !sourceEntry.isDirectory()) {
+      throw new TeacherQuestionMediaError('invalid-request', '目标班级目录不是普通目录')
+    }
+    await rename(source, destination)
+  } catch (error) {
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('storage-failure', '重命名班级目录失败', { cause: error })
+  }
+  return {
+    state: nextState,
+    rollback: async () => { await rename(destination, source) },
   }
 }
 
@@ -738,6 +826,7 @@ async function removeQuestionFiles(paths: readonly string[]): Promise<void> {
  * @param student - destination roster student.
  * @param sourceImages - ordered source batch images.
  * @param now - shared creation timestamp for the assignment copies.
+ * @param destinationDirectory - revalidated current-root student or nested-folder directory.
  * @param folderId - optional nested destination below the student.
  * @returns prepared assignment metadata plus a filesystem rollback.
  */
@@ -747,12 +836,19 @@ export async function persistQuestionAssignments(
   student: TeacherStudent,
   sourceImages: readonly TeacherQuestionImage[],
   now: number,
+  destinationDirectory: string,
   folderId?: TeacherQuestionFolderId,
 ): Promise<PersistedQuestionAssignments> {
   const owningClass = state.classes.find(item => item.id === student.classId)
   if (owningClass === undefined) throw new TeacherQuestionMediaError('not-found', '学生所属班级不存在')
-  const root = configuredRoot(config.studentsRoot, '学生目录')
-  const folder = studentQuestionDirectory(state, owningClass, student, folderId)
+  if (folderId !== undefined && !state.questionFolders.some(
+    folder => folder.id === folderId && folder.studentId === student.id,
+  )) {
+    throw new TeacherQuestionMediaError('not-found', '学生试题目录不存在')
+  }
+  const root = await realpath(configuredRoot(config.studentsRoot, '学生目录'))
+  const folder = relative(root, destinationDirectory)
+  within(root, folder)
   const createdPaths: string[] = []
   const assignments: TeacherQuestionAssignment[] = []
   try {
@@ -940,22 +1036,37 @@ export async function replaceQuestionImage(
   upload: TeacherQuestionImagePayload,
 ): Promise<{ readonly image: DecodedImage; rollback(): Promise<void> }> {
   const resolved = resolveImage(config, state, target)
+  return await replaceQuestionImageFile(config, resolved, upload)
+}
+
+/**
+ * Replace one validated current-root raster and return a byte-level rollback.
+ * @param config - current decoded-byte limit.
+ * @param file - validated image path and stored media metadata.
+ * @param upload - replacement image metadata and bytes.
+ * @returns decoded replacement metadata plus a filesystem rollback.
+ */
+export async function replaceQuestionImageFile(
+  config: TeacherQuestionMediaConfig,
+  file: TeacherQuestionImageFile,
+  upload: TeacherQuestionImagePayload,
+): Promise<{ readonly image: DecodedImage; rollback(): Promise<void> }> {
   const decoded = await decodeImage(upload, config.maxImageBytes)
-  if (decoded.mediaType !== resolved.mediaType) {
+  if (decoded.mediaType !== file.mediaType) {
     throw new TeacherQuestionMediaError('invalid-request', '图片编辑结果必须保持原图片格式')
   }
   let previous: Buffer
   try {
-    previous = await readFile(resolved.path)
-    const pending = `${resolved.path}.pending-${randomUUID()}`
+    previous = await readFile(file.path)
+    const pending = `${file.path}.pending-${randomUUID()}`
     await writeFile(pending, decoded.bytes, { flag: 'wx' })
-    await rename(pending, resolved.path)
+    await rename(pending, file.path)
   } catch (error) {
     throw new TeacherQuestionMediaError('storage-failure', '保存图片编辑结果失败', { cause: error })
   }
   return {
     image: decoded,
-    rollback: async () => { await writeFile(resolved.path, previous) },
+    rollback: async () => { await writeFile(file.path, previous) },
   }
 }
 
@@ -989,7 +1100,16 @@ export async function deleteQuestionImageFile(
   target: TeacherQuestionImageTarget,
 ): Promise<void> {
   const image = resolveImage(config, state, target)
-  await unlink(image.path).catch((error: unknown) => {
+  await deleteQuestionFile(image)
+}
+
+/**
+ * Delete one validated current-root raster.
+ * @param file - validated image path selected by the latest scan.
+ * @returns when the file is absent.
+ */
+export async function deleteQuestionFile(file: Pick<TeacherQuestionImageFile, 'path'>): Promise<void> {
+  await unlink(file.path).catch((error: unknown) => {
     if (!isNodeError(error) || error.code !== 'ENOENT') throw error
   })
 }

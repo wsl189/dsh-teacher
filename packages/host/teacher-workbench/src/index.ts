@@ -8,6 +8,7 @@ import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-sett
 import type { DomainGlobal } from '@deepseek-ai/dsh-storage-domain'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from '@deepseek-ai/schemastery'
+import { relative } from 'node:path'
 import {
   teacherWorkbenchDomainSpec,
   teacherWorkbenchStateSchema,
@@ -18,8 +19,7 @@ import {
   TeacherWeatherProvider,
 } from './weather.ts'
 import {
-  deleteQuestionBatchFiles,
-  deleteQuestionImageFile,
+  deleteQuestionFile,
   generateQuestionDocument,
   generateStudentDocuments as generateStudentOfficeDocuments,
   generateUploadedQuestionDocument,
@@ -30,7 +30,7 @@ import {
   prepareDurableQuestionLibraryDirectoryDelete,
   prepareQuestionStateDirectories,
   readQuestionImage,
-  replaceQuestionImage,
+  replaceQuestionImageFile,
   saveTemporaryQuestionSelection,
   TeacherQuestionMediaError,
   type PersistedTemporaryQuestionSelection,
@@ -39,13 +39,17 @@ import {
 import {
   discoverQuestionMedia,
   discoveredQuestionTargetKey,
+  persistDiscoveredQuestionCopies,
   readDiscoveredQuestionFile,
+  resolveDiscoveredQuestionFile,
   type DiscoveredQuestionFile,
+  type DiscoveredQuestionMedia,
 } from './question-media-browser.ts'
 import {
   createDiscoveredQuestionDirectory,
   deleteDiscoveredQuestionDirectory,
   discoveredQuestionDirectoryTargetKey,
+  prepareDiscoveredQuestionDirectoryDelete,
   renameDiscoveredQuestionDirectory,
   resolveDiscoveredQuestionDirectory,
   type DiscoveredQuestionDirectory,
@@ -81,10 +85,12 @@ import type {
   TeacherQuestionImageDeleteRequest,
   TeacherQuestionMediaBrowseRequest,
   TeacherQuestionMediaBrowseResult,
+  TeacherQuestionMediaBrowseValue,
   TeacherQuestionImageReadRequest,
   TeacherQuestionImageReadResult,
   TeacherQuestionImageReplaceRequest,
   TeacherQuestionImageTarget,
+  TeacherQuestionLibraryFolderId,
   TeacherQuestionMediaDirectoryCreateRequest,
   TeacherQuestionMediaDirectoryDeleteRequest,
   TeacherQuestionMediaDirectoryRenameRequest,
@@ -312,6 +318,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   private readonly weatherProvider: TeacherWeatherProvider
   private readonly reminderRuntime: TeacherReminderRuntime
   private configSource: () => Config
+  private questionMediaSettingsRevision = 0
   private discoveredQuestionFiles: ReadonlyMap<string, DiscoveredQuestionFile> = new Map()
   private discoveredQuestionDirectories: ReadonlyMap<string, DiscoveredQuestionDirectory> = new Map()
 
@@ -367,7 +374,11 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     )
     installSettingsSection(ctx, TEACHER_WORKBENCH_SETTINGS_NAMESPACE, TeacherWorkbenchService.Config, config, {
       setSource: (source) => { this.configSource = source },
-      onChange: () => {},
+      onChange: () => {
+        this.questionMediaSettingsRevision += 1
+        this.discoveredQuestionFiles = new Map()
+        this.discoveredQuestionDirectories = new Map()
+      },
     })
     registerQuestionSegmentationSkill(ctx)
   }
@@ -437,24 +448,39 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         })
       }
       const next = snapshotDocument({ revision: current.revision + 1, state: parsed.data })
-      const preparedDirectories = await prepareQuestionStateDirectories(this.questionMediaConfig(), parsed.data)
+      const questionMediaConfig = this.questionMediaConfig()
+      const currentQuestionFiles = this.discoveredQuestionFiles
+      const currentDirectories = this.discoveredQuestionDirectories
+      const preparedDirectories = await prepareQuestionStateDirectories(
+        questionMediaConfig,
+        parsed.data,
+        current.state,
+        async (target) => {
+          const directory = currentDirectories.get(discoveredQuestionDirectoryTargetKey(target))
+          if (directory === undefined) return undefined
+          await resolveDiscoveredQuestionDirectory(questionMediaConfig, currentDirectories, target)
+          return relative(directory.root, directory.path)
+        },
+      )
       try {
         await global.set(next)
       } catch (error) {
         await preparedDirectories.rollback()
         throw error
       }
-      this.discoveredQuestionFiles = new Map()
-      this.discoveredQuestionDirectories = new Map()
       this.reminderRuntime.requestDrive()
       const retainedAssignments = new Set(parsed.data.questionAssignments.map(item => item.id))
       const removedAssignments = current.state.questionAssignments.filter(item => !retainedAssignments.has(item.id))
       await Promise.all(removedAssignments.map(async (assignment) => {
-        await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
+        await deleteCurrentQuestionFileIfPresent(questionMediaConfig, currentQuestionFiles, {
           kind: 'assignment',
           id: assignment.id,
-        }).catch(() => {})
+        }).catch(() => {
+          // The durable relation has committed, so a failed current-root residue cleanup is best-effort.
+        })
       }))
+      this.discoveredQuestionFiles = new Map()
+      this.discoveredQuestionDirectories = new Map()
       return success(snapshotDocument(next))
     })
     this.operationTail = operation.then(() => {}, () => {})
@@ -527,15 +553,29 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   saveQuestionBatch(request: TeacherQuestionBatchSaveRequest): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
       const existingBatch = request.appendToBatchId === undefined
         ? undefined
         : current.state.questionBatches.find(batch => batch.id === request.appendToBatchId)
       if (request.appendToBatchId !== undefined && existingBatch === undefined) {
         throw new TeacherQuestionMediaError('not-found', '待追加的试卷批次不存在')
       }
+      if (existingBatch !== undefined
+        && !discovered.value.questionBatches.some(batch => batch.id === existingBatch.id)) {
+        throw new TeacherQuestionMediaError('not-found', '待追加的试卷批次不在当前试题库目录中')
+      }
+      const adoptedFolders = request.destination.kind === 'library-folder'
+        ? adoptCurrentQuestionLibraryFolder(current.state, discovered.value, request.destination.folderId)
+        : []
+      const persistenceState: TeacherWorkbenchState = adoptedFolders.length === 0
+        ? current.state
+        : {
+          ...current.state,
+          questionLibraryFolders: [...current.state.questionLibraryFolders, ...adoptedFolders],
+        }
       const persisted = await persistQuestionBatch(
-        this.questionMediaConfig(),
-        current.state,
+        config,
+        persistenceState,
         request,
         Date.now(),
         existingBatch,
@@ -543,9 +583,11 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       try {
         const document = await this.commitQuestionState(state => ({
           ...state,
-          questionLibraryFolders: persisted.createdFolder === undefined
-            ? state.questionLibraryFolders
-            : [...state.questionLibraryFolders, persisted.createdFolder],
+          questionLibraryFolders: [
+            ...state.questionLibraryFolders,
+            ...adoptedFolders,
+            ...(persisted.createdFolder === undefined ? [] : [persisted.createdFolder]),
+          ],
           questionBatches: existingBatch === undefined
             ? [...state.questionBatches, persisted.batch]
             : state.questionBatches.map(batch => batch.id === persisted.batch.id ? persisted.batch : batch),
@@ -572,7 +614,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         ok: true,
         value: Object.freeze(discovered === undefined
           ? await readQuestionImage(config, this.requireGlobal().get().state, request.target)
-          : await readDiscoveredQuestionFile(discovered, config.maxImageBytes)),
+          : await readDiscoveredQuestionFile(config, discovered, request.target)),
       })
     } catch (error) {
       return questionRejected(error)
@@ -587,9 +629,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('browseQuestionMedia')
   async browseQuestionMedia(_request: TeacherQuestionMediaBrowseRequest): Promise<TeacherQuestionMediaBrowseResult> {
     try {
-      const discovered = await discoverQuestionMedia(this.questionMediaConfig(), this.requireGlobal().get().state)
-      this.discoveredQuestionFiles = discovered.files
-      this.discoveredQuestionDirectories = discovered.directories
+      const { discovered } = await this.discoverCurrentQuestionMedia(this.requireGlobal().get().state)
       return Object.freeze({ ok: true, value: discovered.value })
     } catch (error) {
       return questionRejected(error)
@@ -607,18 +647,18 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   ): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
       await createDiscoveredQuestionDirectory(
-        this.questionMediaConfig(),
-        this.discoveredQuestionDirectories,
+        config,
+        discovered.directories,
         request,
       )
-      this.discoveredQuestionDirectories = new Map()
       return questionMutationSuccess(current)
     })
   }
 
   /**
-   * Delete one external directory or one durable question-library hierarchy.
+   * Delete one current-root directory and update matching durable relationships.
    * @param request - opaque directory target from the latest scan or durable state.
    * @returns the committed or unchanged durable document, or a stable failure.
    */
@@ -628,10 +668,12 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   ): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      await resolveDiscoveredQuestionDirectory(config, discovered.directories, request.target)
       if (request.target.kind === 'library-folder'
         && current.state.questionLibraryFolders.some(folder => folder.id === request.target.id)) {
         const prepared = await prepareDurableQuestionLibraryDirectoryDelete(
-          this.questionMediaConfig(),
+          config,
           current.state,
           request.target.id,
         )
@@ -650,38 +692,55 @@ export class TeacherWorkbenchService extends TypertRemoteService {
           // The committed state remains valid when removing the detached residue fails.
         })
         await Promise.all(removedAssignments.map(async (assignment) => {
-          await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
+          await deleteCurrentQuestionFileIfPresent(config, discovered.files, {
             kind: 'assignment',
             id: assignment.id,
           }).catch(() => {
-            // The assignment is already absent from durable state, so an orphaned copy cannot be addressed again.
+            // The assignment relation is committed as absent; current-root residue cleanup is best-effort.
           })
         }))
         this.discoveredQuestionFiles = new Map()
-        this.discoveredQuestionDirectories = new Map()
         return questionMutationSuccess(document)
       }
       const durableTarget = request.target.kind === 'student'
         ? current.state.students.some(student => student.id === request.target.id)
         : request.target.kind === 'student-folder'
           ? current.state.questionFolders.some(folder => folder.id === request.target.id)
-          : false
-      if (durableTarget) {
-        throw new TeacherQuestionMediaError('invalid-request', '持久化学生目录必须通过工作台删除')
+          : request.target.kind === 'class'
+            ? current.state.classes.some(item => item.id === request.target.id)
+            : false
+      if (request.target.kind !== 'library-folder' && durableTarget) {
+        const target = request.target
+        const prepared = await prepareDiscoveredQuestionDirectoryDelete(
+          config,
+          discovered.directories,
+          request,
+        )
+        let document: TeacherWorkbenchDocument
+        try {
+          document = await this.commitQuestionState(state => removeQuestionDirectoryTarget(state, target))
+        } catch (error) {
+          await prepared.rollback()
+          throw error
+        }
+        await prepared.commit().catch(() => {
+          // The committed state remains valid when removing the detached residue fails.
+        })
+        this.discoveredQuestionFiles = new Map()
+        return questionMutationSuccess(document)
       }
       await deleteDiscoveredQuestionDirectory(
-        this.questionMediaConfig(),
-        this.discoveredQuestionDirectories,
+        config,
+        discovered.directories,
         request,
       )
       this.discoveredQuestionFiles = new Map()
-      this.discoveredQuestionDirectories = new Map()
       return questionMutationSuccess(current)
     })
   }
 
   /**
-   * Rename one external, durable student, or durable question-library directory.
+   * Rename one current-root directory and update matching durable metadata.
    * @param request - opaque directory target and safe replacement name.
    * @returns the committed or unchanged durable document, or a stable failure.
    */
@@ -691,33 +750,30 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   ): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
-      const durableTarget = request.target.kind === 'student'
-        ? current.state.students.some(student => student.id === request.target.id)
-        : request.target.kind === 'student-folder'
-          ? current.state.questionFolders.some(folder => folder.id === request.target.id)
-          : current.state.questionLibraryFolders.some(folder => folder.id === request.target.id)
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      const durableTarget = request.target.kind === 'class'
+        ? current.state.classes.some(item => item.id === request.target.id)
+        : request.target.kind === 'student'
+          ? current.state.students.some(student => student.id === request.target.id)
+          : request.target.kind === 'student-folder'
+            ? current.state.questionFolders.some(folder => folder.id === request.target.id)
+            : current.state.questionLibraryFolders.some(folder => folder.id === request.target.id)
       if (!durableTarget) {
         await renameDiscoveredQuestionDirectory(
-          this.questionMediaConfig(),
-          this.discoveredQuestionDirectories,
+          config,
+          discovered.directories,
           request,
         )
         this.discoveredQuestionFiles = new Map()
-        this.discoveredQuestionDirectories = new Map()
         return questionMutationSuccess(current)
       }
-      const discoveredDirectory = this.discoveredQuestionDirectories.get(
-        discoveredQuestionDirectoryTargetKey(request.target),
+      const physicalDirectory = await resolveDiscoveredQuestionDirectory(
+        config,
+        discovered.directories,
+        request.target,
       )
-      const physicalDirectory = discoveredDirectory === undefined
-        ? undefined
-        : await resolveDiscoveredQuestionDirectory(
-          this.questionMediaConfig(),
-          this.discoveredQuestionDirectories,
-          request.target,
-        )
       const prepared = await prepareDurableQuestionDirectoryRename(
-        this.questionMediaConfig(),
+        config,
         current.state,
         request,
         Date.now(),
@@ -726,7 +782,6 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       try {
         const document = await this.commitQuestionState(() => prepared.state)
         this.discoveredQuestionFiles = new Map()
-        this.discoveredQuestionDirectories = new Map()
         return questionMutationSuccess(document)
       } catch (error) {
         await prepared.rollback()
@@ -744,7 +799,16 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   replaceQuestionImage(request: TeacherQuestionImageReplaceRequest): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
-      const persisted = await replaceQuestionImage(this.questionMediaConfig(), current.state, request.target, request)
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      const file = discovered.files.get(discoveredQuestionTargetKey(request.target))
+      if (file === undefined) throw new TeacherQuestionMediaError('not-found', '试题图片不存在')
+      const resolved = await resolveDiscoveredQuestionFile(config, file, request.target)
+      const persisted = await replaceQuestionImageFile(config, resolved, request)
+      const durableTarget = hasQuestionTarget(current.state, request.target)
+      if (!durableTarget) {
+        this.discoveredQuestionFiles = new Map()
+        return questionMutationSuccess(current)
+      }
       try {
         const document = await this.commitQuestionState(state => updateQuestionImageMetadata(
           state,
@@ -753,6 +817,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
           persisted.image.height,
           Date.now(),
         ))
+        this.discoveredQuestionFiles = new Map()
         return questionMutationSuccess(document)
       } catch (error) {
         await persisted.rollback()
@@ -770,18 +835,31 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   deleteQuestionImage(request: TeacherQuestionImageDeleteRequest): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
-      assertQuestionTarget(current.state, request.target)
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      const file = discovered.files.get(discoveredQuestionTargetKey(request.target))
+      if (file === undefined) throw new TeacherQuestionMediaError('not-found', '试题图片不存在')
+      const resolved = await resolveDiscoveredQuestionFile(config, file, request.target)
+      if (!hasQuestionTarget(current.state, request.target)) {
+        await deleteQuestionFile(resolved)
+        this.discoveredQuestionFiles = new Map()
+        return questionMutationSuccess(current)
+      }
       const assignmentCopies = request.target.kind === 'batch'
         ? current.state.questionAssignments.filter(item => item.sourceImageId === request.target.id)
         : []
       const document = await this.commitQuestionState(state => removeQuestionTarget(state, request.target))
-      await deleteQuestionImageFile(this.questionMediaConfig(), current.state, request.target).catch(() => {})
+      await deleteQuestionFile(resolved).catch(() => {
+        // The image relation is committed as absent; current-root residue cleanup is best-effort.
+      })
       await Promise.all(assignmentCopies.map(async (assignment) => {
-        await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
+        await deleteCurrentQuestionFileIfPresent(config, discovered.files, {
           kind: 'assignment',
           id: assignment.id,
-        }).catch(() => {})
+        }).catch(() => {
+          // The assignment relation is committed as absent; current-root residue cleanup is best-effort.
+        })
       }))
+      this.discoveredQuestionFiles = new Map()
       return questionMutationSuccess(document)
     })
   }
@@ -795,8 +873,20 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   deleteQuestionBatch(request: TeacherQuestionBatchDeleteRequest): Promise<TeacherQuestionMutationResult> {
     return this.enqueueQuestionMutation(async () => {
       const current = this.requireGlobal().get()
-      const batch = current.state.questionBatches.find(item => item.id === request.batchId)
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      const batch = discovered.value.questionBatches.find(item => item.id === request.batchId)
       if (batch === undefined) throw new TeacherQuestionMediaError('not-found', '试卷批次不存在')
+      const durableBatch = current.state.questionBatches.find(item => item.id === request.batchId)
+      if (durableBatch === undefined) {
+        await Promise.all(batch.images.map(async (image) => {
+          const target = { kind: 'batch' as const, id: image.id }
+          const file = discovered.files.get(discoveredQuestionTargetKey(target))
+          if (file === undefined) throw new TeacherQuestionMediaError('not-found', '切题图片已变化，请刷新后重试')
+          await deleteQuestionFile(await resolveDiscoveredQuestionFile(config, file, target))
+        }))
+        this.discoveredQuestionFiles = new Map()
+        return questionMutationSuccess(current)
+      }
       const imageIds = new Set(batch.images.map(image => image.id))
       const assignmentCopies = current.state.questionAssignments.filter(item => imageIds.has(item.sourceImageId))
       const document = await this.commitQuestionState(state => ({
@@ -804,13 +894,23 @@ export class TeacherWorkbenchService extends TypertRemoteService {
         questionBatches: state.questionBatches.filter(item => item.id !== request.batchId),
         questionAssignments: state.questionAssignments.filter(item => !imageIds.has(item.sourceImageId)),
       }))
-      await deleteQuestionBatchFiles(this.questionMediaConfig(), current.state, request.batchId).catch(() => {})
+      await Promise.all(batch.images.map(async (image) => {
+        await deleteCurrentQuestionFileIfPresent(config, discovered.files, {
+          kind: 'batch',
+          id: image.id,
+        }).catch(() => {
+          // The batch relation is committed as absent; current-root residue cleanup is best-effort.
+        })
+      }))
       await Promise.all(assignmentCopies.map(async (assignment) => {
-        await deleteQuestionImageFile(this.questionMediaConfig(), current.state, {
+        await deleteCurrentQuestionFileIfPresent(config, discovered.files, {
           kind: 'assignment',
           id: assignment.id,
-        }).catch(() => {})
+        }).catch(() => {
+          // The assignment relation is committed as absent; current-root residue cleanup is best-effort.
+        })
       }))
+      this.discoveredQuestionFiles = new Map()
       return questionMutationSuccess(document)
     })
   }
@@ -825,25 +925,57 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     return this.enqueueQuestionMutation(async () => {
       if (request.imageIds.length === 0) throw new TeacherQuestionMediaError('invalid-request', '请至少选择一道试题')
       const current = this.requireGlobal().get()
-      const student = current.state.students.find(item => item.id === request.studentId)
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+      const student = discovered.value.students.find(item => item.id === request.studentId)
       if (student === undefined) throw new TeacherQuestionMediaError('not-found', '学生不存在')
+      if (request.folderId !== undefined && !discovered.value.questionFolders.some(
+        folder => folder.id === request.folderId && folder.studentId === student.id,
+      )) {
+        throw new TeacherQuestionMediaError('not-found', '学生试题目录不存在')
+      }
       const requested = new Set(request.imageIds)
       if (requested.size !== request.imageIds.length) throw new TeacherQuestionMediaError('invalid-request', '试题选择存在重复项')
-      const sourceImages = current.state.questionBatches.flatMap(batch => batch.images).filter(image => requested.has(image.id))
+      const sourceImages = discovered.value.questionBatches.flatMap(batch => batch.images).filter(
+        image => requested.has(image.id),
+      )
       if (sourceImages.length !== requested.size) throw new TeacherQuestionMediaError('not-found', '部分切题图片不存在')
       const ordered = request.imageIds.map((id) => {
         const image = sourceImages.find(candidate => candidate.id === id)
         if (image === undefined) throw new TeacherQuestionMediaError('not-found', '切题图片不存在')
         return image
       })
+      const durableStudent = current.state.students.some(item => item.id === student.id)
+      const durableFolder = request.folderId === undefined
+        || current.state.questionFolders.some(folder => folder.id === request.folderId && folder.studentId === student.id)
+      const durableImageIds = new Set(current.state.questionBatches.flatMap(batch => batch.images.map(image => image.id)))
+      if (!durableStudent || !durableFolder || ordered.some(image => !durableImageIds.has(image.id))) {
+        await persistDiscoveredQuestionCopies(
+          config,
+          discovered.files,
+          discovered.directories,
+          student.id,
+          request.folderId,
+          request.imageIds,
+        )
+        this.discoveredQuestionFiles = new Map()
+        return questionMutationSuccess(current)
+      }
+      const destinationDirectory = await resolveDiscoveredQuestionDirectory(
+        config,
+        discovered.directories,
+        request.folderId === undefined
+          ? { kind: 'student', id: student.id }
+          : { kind: 'student-folder', id: request.folderId },
+      )
       const persisted = await persistQuestionAssignments(
-        this.questionMediaConfig(), current.state, student, ordered, Date.now(), request.folderId,
+        config, current.state, student, ordered, Date.now(), destinationDirectory, request.folderId,
       )
       try {
         const document = await this.commitQuestionState(state => ({
           ...state,
           questionAssignments: [...state.questionAssignments, ...persisted.assignments],
         }))
+        this.discoveredQuestionFiles = new Map()
         return questionMutationSuccess(document)
       } catch (error) {
         await persisted.rollback()
@@ -867,19 +999,27 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       let persisted: PersistedTemporaryQuestionSelection | undefined
       try {
         const savedAt = Date.now()
-        persisted = await saveTemporaryQuestionSelection(this.questionMediaConfig(), current.state, request)
-        const selected = new Set(request.assignmentIds)
-        const document = await this.commitQuestionState(state => ({
-          ...state,
-          questionAssignments: state.questionAssignments.map((assignment) => {
-            if (!selected.has(assignment.id)) return assignment
-            return {
-              ...assignment,
-              temporarySaveCount: assignment.temporarySaveCount + 1,
-              lastTemporarySavedAt: savedAt,
-            }
-          }),
-        }))
+        const { config, discovered } = await this.discoverCurrentQuestionMedia(current.state)
+        persisted = await saveTemporaryQuestionSelection(
+          config,
+          currentQuestionMediaState(current.state, discovered.value),
+          request,
+        )
+        const durableAssignmentIds = new Set(current.state.questionAssignments.map(assignment => assignment.id))
+        const selected = new Set(request.assignmentIds.filter(id => durableAssignmentIds.has(id)))
+        const document = selected.size === 0
+          ? current
+          : await this.commitQuestionState(state => ({
+            ...state,
+            questionAssignments: state.questionAssignments.map((assignment) => {
+              if (!selected.has(assignment.id)) return assignment
+              return {
+                ...assignment,
+                temporarySaveCount: assignment.temporarySaveCount + 1,
+                lastTemporarySavedAt: savedAt,
+              }
+            }),
+          }))
         await persisted.commit().catch(() => {
           // Backup cleanup is best-effort after the document and active selection have committed.
         })
@@ -910,11 +1050,13 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     request: TeacherQuestionTemporaryListRequest,
   ): Promise<TeacherQuestionTemporaryListResult> {
     try {
+      const current = this.requireGlobal().get().state
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current)
       return Object.freeze({
         ok: true,
         value: Object.freeze(await listTemporaryQuestionSelections(
-          this.questionMediaConfig(),
-          this.requireGlobal().get().state,
+          config,
+          currentQuestionMediaState(current, discovered.value),
           request,
         )),
       })
@@ -971,11 +1113,13 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('generateStudentDocuments')
   async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult> {
     try {
+      const current = this.requireGlobal().get().state
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current)
       return Object.freeze({
         ok: true,
         value: Object.freeze(await generateStudentOfficeDocuments(
-          this.questionMediaConfig(),
-          this.requireGlobal().get().state,
+          config,
+          currentQuestionMediaState(current, discovered.value),
           request,
         )),
       })
@@ -992,6 +1136,24 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       maxImageBytes: config.maxQuestionImageBytes,
       maxBatchBytes: config.maxQuestionBatchBytes,
     }
+  }
+
+  private rememberQuestionMedia(discovered: DiscoveredQuestionMedia): void {
+    this.discoveredQuestionFiles = discovered.files
+    this.discoveredQuestionDirectories = discovered.directories
+  }
+
+  private async discoverCurrentQuestionMedia(
+    state: TeacherWorkbenchState,
+  ): Promise<{ readonly config: TeacherQuestionMediaConfig; readonly discovered: DiscoveredQuestionMedia }> {
+    const settingsRevision = this.questionMediaSettingsRevision
+    const config = this.questionMediaConfig()
+    const discovered = await discoverQuestionMedia(config, state)
+    if (settingsRevision !== this.questionMediaSettingsRevision) {
+      throw new TeacherQuestionMediaError('storage-failure', '试题工作区目录设置已更改，请重试')
+    }
+    this.rememberQuestionMedia(discovered)
+    return { config, discovered }
   }
 
   /**
@@ -1094,6 +1256,58 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     if (this.global === undefined) throw new Error('teacher-workbench: service is not initialized')
     return this.global
   }
+}
+
+/** Overlay current configured-root question collections onto unrelated durable workbench data. */
+function currentQuestionMediaState(
+  state: TeacherWorkbenchState,
+  media: TeacherQuestionMediaBrowseValue,
+): TeacherWorkbenchState {
+  return {
+    ...state,
+    classes: [...state.classes.filter(item => item.usage !== 'roster'), ...media.classes],
+    students: media.students,
+    questionBatches: media.questionBatches,
+    questionLibraryFolders: media.questionLibraryFolders,
+    questionFolders: media.questionFolders,
+    questionAssignments: media.questionAssignments,
+  }
+}
+
+function adoptCurrentQuestionLibraryFolder(
+  state: TeacherWorkbenchState,
+  media: TeacherQuestionMediaBrowseValue,
+  folderId: TeacherQuestionLibraryFolderId,
+): TeacherWorkbenchState['questionLibraryFolders'] {
+  const byId = new Map(media.questionLibraryFolders.map(folder => [folder.id, folder] as const))
+  const target = byId.get(folderId)
+  if (target === undefined) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不在当前设置的根目录中')
+  if (media.questionLibraryFolders.some(folder => folder.parentId === target.id)) {
+    throw new TeacherQuestionMediaError('invalid-request', '保存目录必须是末级目录')
+  }
+  const durableIds = new Set(state.questionLibraryFolders.map(folder => folder.id))
+  const visited = new Set<TeacherQuestionLibraryFolderId>()
+  const adopted: TeacherWorkbenchState['questionLibraryFolders'][number][] = []
+  let current = target
+  while (true) {
+    if (visited.has(current.id)) throw new TeacherQuestionMediaError('invalid-request', '试题库目录存在循环关系')
+    visited.add(current.id)
+    if (!durableIds.has(current.id)) adopted.unshift(current)
+    if (current.parentId === undefined) return adopted
+    const parent = byId.get(current.parentId)
+    if (parent === undefined) throw new TeacherQuestionMediaError('invalid-request', '试题库目录缺少上级目录')
+    current = parent
+  }
+}
+
+async function deleteCurrentQuestionFileIfPresent(
+  config: TeacherQuestionMediaConfig,
+  files: ReadonlyMap<string, DiscoveredQuestionFile>,
+  target: TeacherQuestionImageTarget,
+): Promise<void> {
+  const file = files.get(discoveredQuestionTargetKey(target))
+  if (file === undefined) return
+  await deleteQuestionFile(await resolveDiscoveredQuestionFile(config, file, target))
 }
 
 /** Copy and freeze a document before it crosses a service boundary. */
@@ -1213,11 +1427,85 @@ function removeQuestionTarget(
   }
 }
 
+function removeQuestionDirectoryTarget(
+  state: TeacherWorkbenchState,
+  target: Exclude<
+    TeacherQuestionMediaDirectoryDeleteRequest['target'],
+    { readonly kind: 'library-folder' }
+  >,
+): TeacherWorkbenchState {
+  switch (target.kind) {
+    case 'class': {
+      const removedStudents = new Set(state.students
+        .filter(student => student.classId === target.id)
+        .map(student => student.id))
+      return {
+        ...state,
+        classes: state.classes.filter(item => item.id !== target.id),
+        students: state.students.filter(item => item.classId !== target.id),
+        timetableEntries: state.timetableEntries.filter(item => item.classId !== target.id),
+        exams: state.exams
+          .filter(item => item.classId !== target.id)
+          .map(item => ({
+            ...item,
+            entries: item.entries.filter(entry => !removedStudents.has(entry.studentId)),
+          })),
+        questionFolders: state.questionFolders.filter(item => !removedStudents.has(item.studentId)),
+        questionAssignments: state.questionAssignments.filter(item => !removedStudents.has(item.studentId)),
+        seatingLayouts: state.seatingLayouts.filter(item => item.classId !== target.id),
+      }
+    }
+    case 'student':
+      return {
+        ...state,
+        students: state.students.filter(item => item.id !== target.id),
+        exams: state.exams.map(item => ({
+          ...item,
+          entries: item.entries.filter(entry => entry.studentId !== target.id),
+        })),
+        questionFolders: state.questionFolders.filter(item => item.studentId !== target.id),
+        questionAssignments: state.questionAssignments.filter(item => item.studentId !== target.id),
+        seatingLayouts: state.seatingLayouts.map(item => ({
+          ...item,
+          slots: item.slots.map(studentId => studentId === target.id ? null : studentId),
+        })),
+      }
+    case 'student-folder': {
+      const removed = new Set([target.id])
+      let changed = true
+      while (changed) {
+        changed = false
+        for (const folder of state.questionFolders) {
+          if (folder.parentId === undefined || !removed.has(folder.parentId) || removed.has(folder.id)) continue
+          removed.add(folder.id)
+          changed = true
+        }
+      }
+      return {
+        ...state,
+        questionFolders: state.questionFolders.filter(item => !removed.has(item.id)),
+        questionAssignments: state.questionAssignments.filter(
+          item => item.folderId === undefined || !removed.has(item.folderId),
+        ),
+      }
+    }
+    default:
+      return assertNeverQuestionDirectoryTarget(target)
+  }
+}
+
+function assertNeverQuestionDirectoryTarget(target: never): never {
+  throw new TeacherQuestionMediaError('invalid-request', `不支持的试题目录类型: ${JSON.stringify(target)}`)
+}
+
 function assertQuestionTarget(state: TeacherWorkbenchState, target: TeacherQuestionImageTarget): void {
-  const exists = target.kind === 'batch'
+  if (!hasQuestionTarget(state, target)) throw new TeacherQuestionMediaError('not-found', '试题图片不存在')
+}
+
+function hasQuestionTarget(state: TeacherWorkbenchState, target: TeacherQuestionImageTarget): boolean {
+  return target.kind === 'batch'
     ? state.questionBatches.some(batch => batch.images.some(image => image.id === target.id))
     : state.questionAssignments.some(item => item.id === target.id)
-  if (!exists) throw new TeacherQuestionMediaError('not-found', '试题图片不存在')
 }
 
 function questionMutationSuccess(

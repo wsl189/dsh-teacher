@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -1030,7 +1030,6 @@ describe('TeacherWorkbenchService', () => {
     const browsed = await b.service.browseQuestionMedia({})
     if (!browsed.ok) throw new Error(browsed.error.message)
     expect(browsed.value.questionLibraryFolders.filter(folder => folder.id === nestedLibraryFolderId)).toHaveLength(1)
-    expect(browsed.value.readOnlyLibraryFolderIds).not.toContain(nestedLibraryFolderId)
     expect(browsed.value.questionBatches).toEqual(expect.arrayContaining([
       expect.objectContaining({ id: batch.id, folderId: nestedLibraryFolderId, images: [expect.objectContaining({ questionNo: 1 })] }),
     ]))
@@ -1792,6 +1791,9 @@ describe('TeacherWorkbenchService', () => {
     contexts.push(b.ctx)
     const owningClass = { ...classItem('class-root-change', '高一（1）班'), academicYear: '2026' }
     const studentId = 'student-root-change' as TeacherStudentId
+    const durableFolderId = 'folder-root-change' as TeacherQuestionFolderId
+    const oldOnlyStudentId = 'student-old-root-only' as TeacherStudentId
+    const oldLibraryFolderId = 'library-old-root-only' as TeacherQuestionLibraryFolderId
     const seeded = await b.service.write({
       expectedRevision: 0,
       state: {
@@ -1803,6 +1805,25 @@ describe('TeacherWorkbenchService', () => {
           name: '张同学',
           studentNumber: '1',
           gender: '', guardian: '', relation: '', phone: '', address: '', extras: {},
+        }, {
+          id: oldOnlyStudentId,
+          classId: owningClass.id,
+          name: '旧目录学生',
+          studentNumber: '2',
+          gender: '', guardian: '', relation: '', phone: '', address: '', extras: {},
+        }],
+        questionLibraryFolders: [{
+          id: oldLibraryFolderId,
+          name: '旧图片文件夹',
+          createdAt: 1,
+          updatedAt: 1,
+        }],
+        questionFolders: [{
+          id: durableFolderId,
+          studentId,
+          name: '月考',
+          createdAt: 1,
+          updatedAt: 1,
         }],
       },
     })
@@ -1847,6 +1868,7 @@ describe('TeacherWorkbenchService', () => {
       mkdir(join(nextSegments, '空目录', '下一层'), { recursive: true }),
       mkdir(join(nextStudents, '2026', '高一', '（1）班', '张同学', '月考'), { recursive: true }),
       mkdir(join(nextStudents, '2026', '高一', '（1）班', '目录学生', '复习', '第一周'), { recursive: true }),
+      mkdir(join(nextStudents, '2026', '高二', '二班', '临时学生'), { recursive: true }),
     ])
     await Promise.all([
       writeFile(batchPath, nextBytes),
@@ -1859,14 +1881,21 @@ describe('TeacherWorkbenchService', () => {
       segmentsRoot: nextSegments,
       studentsRoot: nextStudents,
     })
+    const beforeUnrelatedWrite = await b.service.read({})
+    if (!beforeUnrelatedWrite.ok) throw new Error('missing current document')
+    await expect(b.service.write({
+      expectedRevision: beforeUnrelatedWrite.value.revision,
+      state: beforeUnrelatedWrite.value.state,
+    })).resolves.toMatchObject({ ok: true })
+    await expect(stat(join(nextStudents, '2026', '高一(1)班', '旧目录学生')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(stat(join(nextSegments, '旧图片文件夹'))).rejects.toMatchObject({ code: 'ENOENT' })
     const browsed = await b.service.browseQuestionMedia({})
-    expect(browsed).toMatchObject({
-      ok: true,
-      value: {
-        classes: [{ id: owningClass.id, name: owningClass.name }],
-      },
-    })
+    expect(browsed).toMatchObject({ ok: true })
     if (!browsed.ok) throw new Error(browsed.error.message)
+    expect(browsed.value.classes).toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: owningClass.id, name: owningClass.name }),
+    ]))
     expect(browsed.value.questionBatches).toEqual(expect.arrayContaining([
       expect.objectContaining({
         name: '新路径试卷',
@@ -1881,11 +1910,13 @@ describe('TeacherWorkbenchService', () => {
       expect.objectContaining({ id: studentId, name: '张同学' }),
       expect.objectContaining({ name: '目录学生', classId: owningClass.id }),
     ]))
+    expect(browsed.value.students.some(student => student.id === oldOnlyStudentId)).toBe(false)
     expect(browsed.value.questionAssignments).toEqual(expect.arrayContaining([
       expect.objectContaining({ studentId, fileName: '新路径学生题.png' }),
       expect.objectContaining({ fileName: '四级目录题.png' }),
     ]))
     const libraryFolderByName = new Map(browsed.value.questionLibraryFolders.map(folder => [folder.name, folder] as const))
+    expect(libraryFolderByName.has('旧图片文件夹')).toBe(false)
     expect(libraryFolderByName.get('第一次')?.parentId).toBe(libraryFolderByName.get('月考')?.id)
     expect(libraryFolderByName.get('下一层')?.parentId).toBe(libraryFolderByName.get('空目录')?.id)
     expect(browsed.value.questionBatches.find(batch => batch.name === '新路径试卷')?.folderId)
@@ -1896,19 +1927,8 @@ describe('TeacherWorkbenchService', () => {
     expect(studentFolderByName.get('第一周')?.parentId).toBe(studentFolderByName.get('复习')?.id)
     const nestedStudentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '四级目录题.png')
     expect(nestedStudentAssignment?.folderId).toBe(studentFolderByName.get('第一周')?.id)
-    expect(browsed.value.readOnlyLibraryFolderIds).toEqual(expect.arrayContaining([
-      libraryFolderByName.get('月考')?.id,
-      libraryFolderByName.get('第一次')?.id,
-      libraryFolderByName.get('空目录')?.id,
-      libraryFolderByName.get('下一层')?.id,
-      libraryFolderByName.get('新路径试卷')?.id,
-      libraryFolderByName.get('套题甲')?.id,
-    ]))
-    expect(browsed.value.readOnlyFolderIds).toEqual(expect.arrayContaining([
-      studentFolderByName.get('复习')?.id,
-      studentFolderByName.get('第一周')?.id,
-    ]))
     expect(browsed.value.questionBatches.some(batch => batch.name === '旧目录试卷')).toBe(false)
+    expect(browsed.value.questionAssignments.some(assignment => assignment.fileName === '旧题.png')).toBe(false)
     const discoveredBatchImage = browsed.value.questionBatches.find(batch => batch.name === '新路径试卷')!.images[0]!
     const studentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '新路径学生题.png')!
     const directoryStudentAssignment = browsed.value.questionAssignments.find(item => item.fileName === '四级目录题.png')!
@@ -1921,13 +1941,144 @@ describe('TeacherWorkbenchService', () => {
     expect(studentRead).toMatchObject({ ok: true, value: { width: 17, height: 9 } })
     expect(directoryStudentRead).toMatchObject({ ok: true, value: { width: 17, height: 9 } })
 
-    await expect(b.service.renameQuestionMediaDirectory({
-      target: { kind: 'student', id: studentId },
-      name: '张同学重命名',
+    const beforeAddingCurrentStudent = await b.service.read({})
+    if (!beforeAddingCurrentStudent.ok) throw new Error('missing current document')
+    const addedCurrentStudentId = 'student-current-root-added' as TeacherStudentId
+    await expect(b.service.write({
+      expectedRevision: beforeAddingCurrentStudent.value.revision,
+      state: {
+        ...beforeAddingCurrentStudent.value.state,
+        students: [...beforeAddingCurrentStudent.value.state.students, {
+          id: addedCurrentStudentId,
+          classId: owningClass.id,
+          name: '新增持久学生',
+          studentNumber: '3',
+          gender: '', guardian: '', relation: '', phone: '', address: '', extras: {},
+        }],
+      },
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(nextStudents, '2026', '高一', '（1）班', '新增持久学生'))).isDirectory()).toBe(true)
+    await expect(stat(join(nextStudents, '2026', '高一(1)班', '新增持久学生')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+
+    const externalStudent = browsed.value.students.find(student => student.name === '目录学生')
+    if (externalStudent === undefined) throw new Error('missing directory student')
+    const scannedClass = browsed.value.classes.find(item => item.grade === '高二' && item.name === '二班')
+    if (scannedClass === undefined) throw new Error('missing scanned current-root class')
+    await expect(b.service.createQuestionMediaDirectory({
+      parent: { kind: 'class', id: scannedClass.id },
+      name: '新增学生',
+    })).resolves.toMatchObject({ ok: true })
+    expect((await stat(join(nextStudents, '2026', '高二', '二班', '新增学生'))).isDirectory()).toBe(true)
+    const afterStudentDirectoryCreate = await b.service.browseQuestionMedia({})
+    if (!afterStudentDirectoryCreate.ok) throw new Error(afterStudentDirectoryCreate.error.message)
+    const createdDirectoryStudent = afterStudentDirectoryCreate.value.students.find(student => student.name === '新增学生')
+    if (createdDirectoryStudent === undefined) throw new Error('missing created current-root student')
+    await expect(b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'student', id: createdDirectoryStudent.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(stat(join(nextStudents, '2026', '高二', '二班', '新增学生')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+    const beforeScannedClassDelete = await b.service.browseQuestionMedia({})
+    if (!beforeScannedClassDelete.ok) throw new Error(beforeScannedClassDelete.error.message)
+    const currentScannedClass = beforeScannedClassDelete.value.classes.find(item => item.name === '二班')
+    if (currentScannedClass === undefined) throw new Error('missing current-root class before deletion')
+    await expect(b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'class', id: currentScannedClass.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(stat(join(nextStudents, '2026', '高二', '二班'))).rejects.toMatchObject({ code: 'ENOENT' })
+    const externalStudentFolder = studentFolderByName.get('第一周')
+    if (externalStudentFolder === undefined) throw new Error('missing external student folder')
+    const editedBytes = await sharp({ create: {
+      width: 19,
+      height: 11,
+      channels: 3,
+      background: '#663399',
+    } }).png().toBuffer()
+    await expect(b.service.replaceQuestionImage({
+      target: { kind: 'batch', id: discoveredBatchImage.id },
+      fileName: discoveredBatchImage.fileName,
+      mediaType: 'image/png',
+      width: 19,
+      height: 11,
+      contentBase64: editedBytes.toString('base64'),
+    })).resolves.toMatchObject({ ok: true })
+    expect(await readFile(batchPath)).toEqual(editedBytes)
+
+    await expect(b.service.assignQuestions({
+      studentId: externalStudent.id,
+      folderId: externalStudentFolder.id,
+      imageIds: [discoveredBatchImage.id],
+    })).resolves.toMatchObject({ ok: true })
+    const copiedPath = join(
+      nextStudents,
+      '2026',
+      '高一',
+      '（1）班',
+      '目录学生',
+      '复习',
+      '第一周',
+      discoveredBatchImage.fileName,
+    )
+    expect(await readFile(copiedPath)).toEqual(editedBytes)
+    const afterAssignment = await b.service.browseQuestionMedia({})
+    if (!afterAssignment.ok) throw new Error(afterAssignment.error.message)
+    const copiedAssignment = afterAssignment.value.questionAssignments.find(
+      assignment => assignment.studentId === externalStudent.id && assignment.fileName === discoveredBatchImage.fileName,
+    )
+    if (copiedAssignment === undefined) throw new Error('missing copied current-root assignment')
+    await expect(b.service.deleteQuestionImage({
+      target: { kind: 'assignment', id: copiedAssignment.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(readFile(copiedPath)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readdir(join(nextStudents, '2026', '高一', '（1）班', '目录学生', '复习', '第一周')))
+      .toContain('四级目录题.png')
+
+    await expect(b.service.saveTemporaryQuestionSelection({
+      studentId: externalStudent.id,
+      assignmentIds: [directoryStudentAssignment.id],
     })).resolves.toMatchObject({
       ok: true,
-      value: { document: { state: { students: [expect.objectContaining({ id: studentId, name: '张同学重命名' })] } } },
+      value: { studentId: externalStudent.id, imageCount: 1 },
     })
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [externalStudent.id] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId: externalStudent.id, imageCount: 1 }] })
+    expect(await readFile(directoryStudentPath)).toEqual(nextBytes)
+    const directoryStudentDocuments = await b.service.generateStudentDocuments({
+      kind: 'word',
+      source: 'temporary',
+      students: [{ studentId: externalStudent.id, title: '', includeName: false, includeDate: false }],
+    })
+    expect(directoryStudentDocuments).toMatchObject({
+      ok: true,
+      value: { artifacts: [{ fileName: '目录学生.docx' }], skipped: [] },
+    })
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [externalStudent.id] }))
+      .resolves.toMatchObject({ ok: true, value: [] })
+
+    await expect(b.service.deleteQuestionImage({
+      target: { kind: 'batch', id: discoveredBatchImage.id },
+    })).resolves.toMatchObject({ ok: true })
+    await expect(readFile(batchPath)).rejects.toMatchObject({ code: 'ENOENT' })
+
+    const deletedDurableFolder = await b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'student-folder', id: durableFolderId },
+    })
+    expect(deletedDurableFolder).toMatchObject({ ok: true })
+    if (!deletedDurableFolder.ok) throw new Error(deletedDurableFolder.error.message)
+    expect(deletedDurableFolder.value.document.state.questionFolders.some(folder => folder.id === durableFolderId))
+      .toBe(false)
+    await expect(stat(join(nextStudents, '2026', '高一', '（1）班', '张同学', '月考')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+
+    const renamedStudent = await b.service.renameQuestionMediaDirectory({
+      target: { kind: 'student', id: studentId },
+      name: '张同学重命名',
+    })
+    expect(renamedStudent).toMatchObject({ ok: true })
+    if (!renamedStudent.ok) throw new Error(renamedStudent.error.message)
+    expect(renamedStudent.value.document.state.students.find(student => student.id === studentId))
+      .toMatchObject({ name: '张同学重命名' })
     expect((await stat(join(nextStudents, '2026', '高一', '（1）班', '张同学重命名'))).isDirectory()).toBe(true)
 
     const afterDurableRename = await b.service.browseQuestionMedia({})
@@ -2000,6 +2151,56 @@ describe('TeacherWorkbenchService', () => {
     })).resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } })
     await expect(stat(join(nextSegments, '月考', '第一次', '越界'))).rejects.toMatchObject({ code: 'ENOENT' })
 
+    const savedInScannedFolder = await b.service.saveQuestionBatch({
+      destination: { kind: 'library-folder', folderId: renamedExamFolder.id },
+      name: '当前目录试卷',
+      sourceName: 'current.pdf',
+      pageRange: '1',
+      images: [{
+        questionNo: 1,
+        fileName: '当前目录题.png',
+        mediaType: 'image/png',
+        width: 17,
+        height: 9,
+        contentBase64: nextBytes.toString('base64'),
+      }],
+    })
+    expect(savedInScannedFolder).toMatchObject({ ok: true })
+    if (!savedInScannedFolder.ok) throw new Error(savedInScannedFolder.error.message)
+    expect(savedInScannedFolder.value.document.state.questionLibraryFolders.some(
+      folder => folder.id === renamedExamFolder.id && folder.name === '第二次月考',
+    )).toBe(true)
+    expect(savedInScannedFolder.value.document.state.questionBatches.some(
+      batch => batch.folderId === renamedExamFolder.id && batch.name === '当前目录试卷',
+    )).toBe(true)
+    expect((await readdir(join(nextSegments, '月考', '第一次', '第二次月考')))
+      .some(name => name.endsWith('.png'))).toBe(true)
+
+    const currentRootBatch = savedInScannedFolder.value.document.state.questionBatches.find(
+      batch => batch.id === savedInScannedFolder.value.batchId,
+    )
+    const currentRootImage = currentRootBatch?.images[0]
+    if (currentRootImage === undefined) throw new Error('missing current-root durable image')
+    const assignedCurrentRootImage = await b.service.assignQuestions({
+      studentId,
+      imageIds: [currentRootImage.id],
+    })
+    expect(assignedCurrentRootImage).toMatchObject({ ok: true })
+    if (!assignedCurrentRootImage.ok) throw new Error(assignedCurrentRootImage.error.message)
+    const currentRootAssignment = assignedCurrentRootImage.value.document.state.questionAssignments.find(
+      assignment => assignment.sourceImageId === currentRootImage.id,
+    )
+    if (currentRootAssignment === undefined) throw new Error('missing current-root durable assignment')
+    expect(await readFile(join(nextStudents, currentRootAssignment.relativePath))).toEqual(nextBytes)
+    expect(currentRootAssignment.relativePath).toContain(join('2026', '高一', '（1）班', '张同学重命名'))
+    await expect(stat(join(
+      nextStudents,
+      '2026',
+      '高一(1)班',
+      '张同学重命名',
+      `${String(currentRootAssignment.id)}.png`,
+    ))).rejects.toMatchObject({ code: 'ENOENT' })
+
     await expect(b.service.deleteQuestionMediaDirectory({
       target: { kind: 'library-folder', id: renamedExamFolder.id },
     })).resolves.toMatchObject({ ok: true })
@@ -2015,6 +2216,30 @@ describe('TeacherWorkbenchService', () => {
     })).resolves.toMatchObject({ ok: true })
     await expect(stat(join(nextStudents, '2026', '高一', '（1）班', '目录学生')))
       .rejects.toMatchObject({ code: 'ENOENT' })
+    const deletedDurableStudent = await b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'student', id: studentId },
+    })
+    expect(deletedDurableStudent).toMatchObject({ ok: true })
+    if (!deletedDurableStudent.ok) throw new Error(deletedDurableStudent.error.message)
+    expect(deletedDurableStudent.value.document.state.students.some(student => student.id === studentId)).toBe(false)
+    await expect(stat(join(nextStudents, '2026', '高一', '（1）班', '张同学重命名')))
+      .rejects.toMatchObject({ code: 'ENOENT' })
+    const renamedDurableClass = await b.service.renameQuestionMediaDirectory({
+      target: { kind: 'class', id: owningClass.id },
+      name: '（1）班重命名',
+    })
+    expect(renamedDurableClass).toMatchObject({ ok: true })
+    if (!renamedDurableClass.ok) throw new Error(renamedDurableClass.error.message)
+    expect(renamedDurableClass.value.document.state.classes.find(item => item.id === owningClass.id))
+      .toMatchObject({ name: '（1）班重命名' })
+    expect((await stat(join(nextStudents, '2026', '高一', '(1)班重命名'))).isDirectory()).toBe(true)
+    const deletedDurableClass = await b.service.deleteQuestionMediaDirectory({
+      target: { kind: 'class', id: owningClass.id },
+    })
+    expect(deletedDurableClass).toMatchObject({ ok: true })
+    if (!deletedDurableClass.ok) throw new Error(deletedDurableClass.error.message)
+    expect(deletedDurableClass.value.document.state.classes.some(item => item.id === owningClass.id)).toBe(false)
+    await expect(stat(join(nextStudents, '2026', '高一', '(1)班重命名'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(readFile(join(nextSegments, String(saved.value.batchId), `${String(image.id)}.png`))).rejects.toMatchObject({ code: 'ENOENT' })
   })
 

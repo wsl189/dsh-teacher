@@ -882,6 +882,10 @@ describe('web e2e: durable teacher workbench', () => {
       rosterClass = document.value.state.classes.find(item => item.usage === 'roster')
     }
     if (rosterClass === undefined) throw new Error('question root roster setup failed')
+    const previousStudentNames = document.value.state.students
+      .filter(student => student.classId === rosterClass.id)
+      .map(student => student.name)
+    const previousLibraryFolderNames = document.value.state.questionLibraryFolders.map(folder => folder.name)
 
     const segmentsRoot = join(scaffold.harnessHome, 'external-question-media', 'segments')
     const studentsRoot = join(scaffold.harnessHome, 'external-question-media', 'students')
@@ -925,11 +929,21 @@ describe('web e2e: durable teacher workbench', () => {
     await hierarchy.getByRole('button', { name: rosterClass.name, exact: true }).dblclick()
     const classDrawer = page.getByRole('complementary', { name: '学生列表' })
     await classDrawer.waitFor({ timeout: 10_000 })
+    for (const name of previousStudentNames) {
+      if (name !== directoryStudentName) {
+        expect(await classDrawer.getByRole('button', { name, exact: true }).count()).toBe(0)
+      }
+    }
     const directoryStudent = classDrawer.getByRole('button', { name: directoryStudentName, exact: true })
     await directoryStudent.click()
     const studentImages = page.getByRole('complementary', { name: '学生图片' })
     await studentImages.getByRole('button', { name: '新路径学生题.png', exact: true }).waitFor({ timeout: 10_000 })
     await studentImages.locator('img').first().waitFor({ timeout: 10_000 })
+    await studentImages.getByRole('checkbox', { name: '选择' }).check()
+    await studentImages.getByRole('button', { name: '临时保存', exact: true }).click()
+    await page.getByText('已临时保存 1 张图片', { exact: true }).waitFor({ timeout: 10_000 })
+    expect(await classDrawer.getByRole('button', { name: 'Word', exact: true }).isDisabled()).toBe(false)
+    expect(await classDrawer.getByRole('button', { name: 'PPT', exact: true }).isDisabled()).toBe(false)
     await directoryStudent.click({ clickCount: 2 })
     const studentMonthFolder = classDrawer.getByRole('button', { name: '月考', exact: true })
     await studentMonthFolder.waitFor({ timeout: 10_000 })
@@ -951,15 +965,37 @@ describe('web e2e: durable teacher workbench', () => {
     await classDrawer.getByRole('button', { name: '第二周订正', exact: true }).waitFor({ timeout: 10_000 })
     expect((await stat(join(studentDirectory, '第二周订正'))).isDirectory()).toBe(true)
 
+    await classDrawer.getByRole('button', { name: '第二周订正', exact: true }).click()
+    await studentImages.waitFor({ timeout: 10_000 })
+    await expect.poll(async () => await studentImages
+      .getByRole('button', { name: '新路径学生题.png', exact: true })
+      .count()).toBe(0)
     await studentImages.getByRole('button', { name: '试题图片库' }).click()
     const bankFolders = page.getByRole('complementary', { name: '试题图片库' })
+    const currentLibraryNames = new Set(['新路径试卷', '月考', '第一次', '套题甲', '空目录', '下一层'])
+    for (const name of previousLibraryFolderNames) {
+      if (!currentLibraryNames.has(name)) {
+        expect(await bankFolders.getByRole('button', { name, exact: true }).count()).toBe(0)
+      }
+    }
     const batchDirectoryFolder = bankFolders.getByRole('button', { name: '新路径试卷', exact: true })
     await batchDirectoryFolder.waitFor({ timeout: 10_000 })
-    await batchDirectoryFolder.click()
+    await batchDirectoryFolder.click({ force: true })
     expect(await bankFolders.getByRole('button', { name: '新路径试卷 1', exact: true }).count()).toBe(0)
     const bankImages = page.getByRole('complementary', { name: '试题库图片' })
-    await bankImages.getByRole('button', { name: '第 7 题', exact: true }).waitFor({ timeout: 10_000 })
+    const scannedQuestion = bankImages.getByRole('button', { name: '第 7 题', exact: true })
+    await scannedQuestion.waitFor({ timeout: 10_000 })
     await bankImages.locator('img').first().waitFor({ timeout: 10_000 })
+    expect(await bankImages.getByRole('button', { name: '删除', exact: true }).count()).toBe(1)
+    await scannedQuestion.click()
+    const imageEditor = page.getByRole('dialog', { name: '图片编辑' })
+    await imageEditor.getByRole('button', { name: '覆盖', exact: true }).waitFor({ timeout: 10_000 })
+    await imageEditor.locator('header').getByRole('button', { name: '关闭工作台', exact: true }).click()
+    await bankImages.getByRole('checkbox', { name: '选择' }).check()
+    await bankImages.getByRole('button', { name: '保存', exact: true }).click()
+    await page.getByText('试题已分发到学生目录', { exact: true }).waitFor({ timeout: 10_000 })
+    const assignedCurrentRootImage = join(studentDirectory, '第二周订正', '新路径试卷_7.png')
+    await expect.poll(async () => await readFile(assignedCurrentRootImage), { timeout: 10_000 }).toEqual(raster)
     const libraryMonthFolder = bankFolders.getByRole('button', { name: '月考', exact: true })
     await libraryMonthFolder.waitFor({ timeout: 10_000 })
     const [libraryMonthBox, libraryMonthMarkerBox] = await Promise.all([

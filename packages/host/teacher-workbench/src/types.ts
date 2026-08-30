@@ -1073,6 +1073,7 @@ export type TeacherQuestionMediaBrowseRequest = Record<never, never>
 
 /** One directory selected from the latest configured-root scan. */
 export type TeacherQuestionMediaDirectoryTarget =
+  | { readonly kind: 'class'; readonly id: TeacherClassId }
   | { readonly kind: 'student'; readonly id: TeacherStudentId }
   | { readonly kind: 'student-folder'; readonly id: TeacherQuestionFolderId }
   | { readonly kind: 'library-folder'; readonly id: TeacherQuestionLibraryFolderId }
@@ -1106,30 +1107,18 @@ export interface TeacherQuestionMediaDirectoryDeleteRequest {
 
 /** Filesystem-backed question collections available under the current roots. */
 export interface TeacherQuestionMediaBrowseValue {
-  /** Roster classes merged with class directories found below the configured student root. */
+  /** Class directories found below the configured student root, reusing matching roster identities. */
   readonly classes: readonly TeacherClass[]
-  /** Roster students merged with student directories found below the configured student root. */
+  /** Student directories found below the configured student root, reusing matching roster identities. */
   readonly students: readonly TeacherStudent[]
   /** Paper batches and direct images found below the configured library root. */
   readonly questionBatches: readonly TeacherQuestionBatch[]
-  /** Durable and filesystem-derived directories visible in the question library. */
+  /** Physical directories visible below the configured question-library root. */
   readonly questionLibraryFolders: readonly TeacherQuestionLibraryFolder[]
-  /** Durable and filesystem-derived directories below visible students. */
+  /** Physical directories below students visible in the configured student root. */
   readonly questionFolders: readonly TeacherQuestionFolder[]
   /** Student images found below the configured student root. */
   readonly questionAssignments: readonly TeacherQuestionAssignment[]
-  /** Batch ids derived from external directories rather than durable metadata. */
-  readonly readOnlyBatchIds: readonly TeacherQuestionBatchId[]
-  /** Library folder ids derived from external directories rather than durable metadata. */
-  readonly readOnlyLibraryFolderIds: readonly TeacherQuestionLibraryFolderId[]
-  /** Assignment ids derived from external files rather than durable metadata. */
-  readonly readOnlyAssignmentIds: readonly TeacherQuestionAssignmentId[]
-  /** Class ids derived from external directories rather than durable roster metadata. */
-  readonly readOnlyClassIds: readonly TeacherClassId[]
-  /** Student ids derived from external directories rather than durable roster metadata. */
-  readonly readOnlyStudentIds: readonly TeacherStudentId[]
-  /** Folder ids derived from external directories rather than durable metadata. */
-  readonly readOnlyFolderIds: readonly TeacherQuestionFolderId[]
 }
 
 /** Browser-safe stored image bytes. */
@@ -1176,21 +1165,21 @@ export interface TeacherQuestionAssignRequest {
 
 /** Replace one student's temporary Office-generation image selection. */
 export interface TeacherQuestionTemporarySaveRequest {
-  /** Roster student that owns every selected assignment. */
+  /** Student visible below the current configured root that owns every selected image. */
   readonly studentId: TeacherStudentId
   /** Ordered student-image copies to snapshot into temporary storage. */
   readonly assignmentIds: readonly TeacherQuestionAssignmentId[]
 }
 
-/** Query temporary Office-generation selections for roster students. */
+/** Query temporary Office-generation selections for currently visible students. */
 export interface TeacherQuestionTemporaryListRequest {
-  /** Students whose temporary image counts should be returned. */
+  /** Currently visible students whose temporary image counts should be returned. */
   readonly studentIds: readonly TeacherStudentId[]
 }
 
 /** One available temporary Office-generation selection. */
 export interface TeacherQuestionTemporarySelection {
-  /** Roster student that owns the selection. */
+  /** Currently visible student that owns the selection. */
   readonly studentId: TeacherStudentId
   /** Naturally ordered image count in temporary storage. */
   readonly imageCount: number
@@ -1307,7 +1296,7 @@ export interface TeacherQuestionUploadedDocumentRequest {
 
 /** Per-student options for class Office generation. */
 export interface TeacherQuestionStudentDocumentOptions {
-  /** Roster student whose assigned images should be rendered. */
+  /** Currently visible student whose selected source images should be rendered. */
   readonly studentId: TeacherStudentId
   /** Optional Word title for this student. */
   readonly title: string
@@ -1350,9 +1339,9 @@ export type TeacherQuestionDocumentResult = TeacherQuestionDocumentSuccess | Tea
 
 /** One student skipped during class Office generation. */
 export interface TeacherQuestionDocumentSkipped {
-  /** Requested roster identity. */
+  /** Requested current-root student identity. */
   readonly studentId: TeacherStudentId
-  /** Current roster display name when available. */
+  /** Current configured-root display name when available. */
   readonly name: string
   /** User-safe reason for skipping this student. */
   readonly reason: string

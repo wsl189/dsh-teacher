@@ -301,14 +301,14 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('createQuestionMediaDirectory') createQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryCreateRequest, ): Promise<TeacherQuestionMutationResult>
 
 /**
- * Delete one external directory or one durable question-library hierarchy.
+ * Delete one current-root directory and update matching durable relationships.
  * @param request - opaque directory target from the latest scan or durable state.
  * @returns the committed or unchanged durable document, or a stable failure.
  */
 @Remote('deleteQuestionMediaDirectory') deleteQuestionMediaDirectory( request: TeacherQuestionMediaDirectoryDeleteRequest, ): Promise<TeacherQuestionMutationResult>
 
 /**
- * Rename one external, durable student, or durable question-library directory.
+ * Rename one current-root directory and update matching durable metadata.
  * @param request - opaque directory target and safe replacement name.
  * @returns the committed or unchanged durable document, or a stable failure.
  */
