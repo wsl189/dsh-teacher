@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-code-runtime-python",
   "description": "CPython subprocess implementation of the DeepSeek Harness code-execution seam",
-  "version": "1.0.7-rc3",
+  "version": "1.0.8",
   "publishConfig": {
     "access": "public"
   },
