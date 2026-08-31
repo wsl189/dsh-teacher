@@ -47,9 +47,14 @@ describe('VoiceInputButton', () => {
     installMediaRecorder()
     const disabled = new Error('disabled')
     disabled.name = 'provider-disabled'
-    const failed = new Error('failed')
-    failed.name = 'provider-failure'
-    const transcribe = vi.fn().mockRejectedValueOnce(disabled).mockRejectedValueOnce(failed)
+    const unavailable = new Error('unavailable')
+    unavailable.name = 'provider-unavailable'
+    const rejected = new Error('rejected')
+    rejected.name = 'provider-failure'
+    const transcribe = vi.fn()
+      .mockRejectedValueOnce(disabled)
+      .mockRejectedValueOnce(unavailable)
+      .mockRejectedValueOnce(rejected)
     render(<VoiceInputButton transcribe={transcribe} onTranscript={vi.fn()} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
@@ -61,6 +66,11 @@ describe('VoiceInputButton', () => {
     fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
     await screen.findByRole('button', { name: '语音识别服务连接失败' })
     expect(screen.getByRole('alert').textContent).toBe('语音识别服务连接失败')
+
+    fireEvent.click(screen.getByRole('button', { name: '语音识别服务连接失败' }))
+    fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
+    await screen.findByRole('button', { name: '语音识别请求失败，请检查服务地址、模型和 API Key' })
+    expect(screen.getByRole('alert').textContent).toBe('语音识别请求失败，请检查服务地址、模型和 API Key')
   })
 
   it('reports microphone permission and device failures', async () => {

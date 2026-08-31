@@ -47,7 +47,7 @@ The QQ settings document must have `version: 1` and a `speech` object containing
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-Each request reloads the QQ document and credential reference, validates the endpoint, and submits `file`, `model`, `language`, and `response_format=json`; Authorization is omitted when the key is blank. Successful `text` or `transcript` fields are trimmed before return, and upstream diagnostics never cross the provider result.
+Each request reloads the QQ document and credential reference, validates the endpoint, and submits `file`, `model`, `language`, and `response_format=json`; Authorization is omitted when the key is blank. Successful `text` or `transcript` fields are trimmed before return, and upstream diagnostics never cross the provider result. A transport failure returns `provider-unavailable`; a redirect, non-success HTTP status, or invalid configuration returns `provider-failure`, so browser Consumers distinguish connection failures from requests rejected because of the service URL, model, or API key.
 
 </details>
 
@@ -72,6 +72,7 @@ None until a user submits the edited transcript through an ordinary message path
 ## Known Limitations and Deferred Work
 
 - **The ASR server is external** — the executable includes this adapter, not Whisper, model weights, GPU drivers, or a service process.
+- **Model selection is explicit** — `speech.model` must name a model the configured service can serve; the adapter does not infer or retry another model.
 - **No streaming transcript** — one upstream request begins only after the browser stops recording.
 - **QQ owns configuration** — without a valid enabled dsh-im QQ document the provider returns `provider-disabled`; there is intentionally no second speech settings page.
 

@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-bundled-windows-mcp.md
+2026-08-31-bundled-windows-mcp.md: b133affa48390a8d619a36356d4d82b6b2c65fec
+2026-08-31-bundled-windows-mcp.zh.md: 379bc488964e30def51ecca35679974efa564a2f

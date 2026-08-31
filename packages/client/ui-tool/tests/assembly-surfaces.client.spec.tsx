@@ -76,6 +76,9 @@ async function bench(nodes: ToolResultNode[]) {
     generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
   })
   new TestRemote(runtime.ctx, {
+    ocr: {},
+    speech: {},
+    teacherWorkbench: {},
     session: {
       openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })),
     },

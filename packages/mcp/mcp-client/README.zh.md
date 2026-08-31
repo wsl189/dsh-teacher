@@ -58,6 +58,7 @@ kind: "package-reference"
 | `serverName` | 必填 | 服务器工具名称的 namespace；`[A-Za-z0-9_-]{1,32}`，在一个注册作用域内唯一 |
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
+| `includeTools` | `[]` | 对原始工具名进行精确、区分大小写的 allowlist；空数组表示全部已发布工具 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 调用的超时 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
@@ -73,9 +74,12 @@ kind: "package-reference"
 
 模型看到每个工具都带有稳定的服务器限定名称：`mcp__<serverName>__<rawName>`，例如 `mcp__github__create_issue`——与 Claude Code 和 Codex 使用的命名形态相同。只要服务器保持相同的工具名称，名称就保持不变，因此会话历史与权限规则在重启和重载后仍然有效。两个服务器可以同时提供名为 `search` 的工具，分别以 `mcp__github__search` 和 `mcp__web__search` 共存。
 
+当组合只能公开经过审阅的子集时，设置 `includeTools`。匹配直接使用原始 MCP 名称并区分大小写；不匹配的工具永远不会注册，后续工具列表更新也使用同一过滤器。空数组保持默认行为，即公开全部有效的已发布工具。
+
 - 发布相同工具名称（例如 `search`）的两个服务器会在各自的 namespace 下共存。
 - 两条配置项使用相同的服务器名称时，后加载的一条会在加载时以明确错误失败。
 - 服务器在工具列表中两次列出同一工具时，其工具列表会被作为无效列表拒绝，上一组工具保持可用。
+- 原始名称重复会在 `includeTools` 过滤前被拒绝，因此无效服务器列表不能把重复项藏在所选子集之外。
 - 工具更新与已有工具名称冲突时，该更新会被整体拒绝——绝不会得到该服务器的部分工具集。
 
 ### 调用工具与读取结果
@@ -157,7 +161,7 @@ kind: "package-reference"
 
 #### 模型看到什么
 
-初始发现成功后，每个已声明的 MCP 工具都会显示为名为 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）的原生工具，并携带服务器提供的描述与输入 schema。成功的重新同步——包括自动重连后的同步——会替换整个世代；对插件执行 dispose（资源释放）或重连预算耗尽会移除该世代。
+初始发现成功后，`includeTools` 选中的每个已声明 MCP 工具都会显示为名为 `mcp__<serverName>__<rawName>`（或其确定性规范化形式）的原生工具，并携带服务器提供的描述与输入 schema。成功的重新同步——包括自动重连后的同步——会替换整个世代；对插件执行 dispose（资源释放）或重连预算耗尽会移除该世代。
 
 #### Token 影响
 

@@ -45,6 +45,10 @@
   max-width: 118px;
 }
 
+.current.wide {
+  max-width: 154px;
+}
+
 .rail {
   width: 36px;
   height: 36px;

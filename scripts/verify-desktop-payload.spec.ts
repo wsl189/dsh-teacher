@@ -2,7 +2,10 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { inspectDesktopPayload } from './verify-desktop-payload.ts'
+import {
+  inspectDesktopPayload,
+  REQUIRED_WINDOWS_RUNTIME_FILES,
+} from './verify-desktop-payload.ts'
 
 const roots: string[] = []
 
@@ -31,7 +34,7 @@ describe('desktop payload gate', () => {
       'node_modules/example/native/addon.node',
     ])
 
-    expect(inspectDesktopPayload(root)).toEqual({ fileCount: 4, failures: [] })
+    expect(inspectDesktopPayload(root, { requiredFiles: [] })).toEqual({ fileCount: 4, failures: [] })
   })
 
   it('rejects nested source maps and TypeScript incremental compiler state', () => {
@@ -41,7 +44,7 @@ describe('desktop payload gate', () => {
       'node_modules/example/lib/tsconfig.tsbuildinfo',
     ])
 
-    expect(inspectDesktopPayload(root)).toEqual({
+    expect(inspectDesktopPayload(root, { requiredFiles: [] })).toEqual({
       fileCount: 3,
       failures: [
         'node_modules/example/dist/index.js.map: source map must not be packaged',
@@ -64,7 +67,7 @@ describe('desktop payload gate', () => {
       'node_modules/@deepseek-ai/present/package.json',
     ], { 'node_modules/@deepseek-ai/consumer/package.json': manifest })
 
-    expect(inspectDesktopPayload(root)).toEqual({ fileCount: 2, failures: [] })
+    expect(inspectDesktopPayload(root, { requiredFiles: [] })).toEqual({ fileCount: 2, failures: [] })
   })
 
   it('rejects missing required workspace dependencies and peers', () => {
@@ -76,12 +79,28 @@ describe('desktop payload gate', () => {
       'node_modules/@deepseek-ai/consumer/package.json',
     ], { 'node_modules/@deepseek-ai/consumer/package.json': manifest })
 
-    expect(inspectDesktopPayload(root)).toEqual({
+    expect(inspectDesktopPayload(root, { requiredFiles: [] })).toEqual({
       fileCount: 1,
       failures: [
         'node_modules/@deepseek-ai/consumer/package.json: required workspace dependency @deepseek-ai/missing-dependency is absent from payload',
         'node_modules/@deepseek-ai/consumer/package.json: required workspace peer @deepseek-ai/missing-peer is absent from payload',
       ],
     })
+  })
+
+  it('requires the bundled extension code, assets, skills, and Windows native bindings', () => {
+    expect(REQUIRED_WINDOWS_RUNTIME_FILES).toContain('../windows-mcp/python.exe')
+    expect(REQUIRED_WINDOWS_RUNTIME_FILES)
+      .toContain('../windows-mcp/Lib/site-packages/windows_mcp/__main__.py')
+    const [missing, ...present] = REQUIRED_WINDOWS_RUNTIME_FILES
+    const root = createPayload(present)
+
+    const failures = inspectDesktopPayload(root).failures
+    expect(failures).toContain(
+      `${missing}: required product runtime file is absent from payload`,
+    )
+    expect(failures).toContain(
+      'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master: packaged skill inventory is 9 files and 63 bytes; expected 12939 files and 79496215 bytes',
+    )
   })
 })

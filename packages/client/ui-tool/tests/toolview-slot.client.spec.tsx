@@ -64,7 +64,12 @@ async function bench(nodes: ToolResultNode[]) {
     generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
   })
   const openWorkspacePath = vi.fn(async () => ({ ok: true, value: { opened: true } }))
-  new TestRemote(runtime.ctx, { session: { openWorkspacePath } })
+  new TestRemote(runtime.ctx, {
+    ocr: {},
+    speech: {},
+    teacherWorkbench: {},
+    session: { openWorkspacePath },
+  })
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const layout = { openDetails: vi.fn(), closeDetails: vi.fn() }
   runtime.ctx.provide('layout', layout)
@@ -210,6 +215,9 @@ describe('registrant declaration injection', () => {
       generation: { getSnapshot: () => undefined, subscribe: () => () => {} },
     })
     new TestRemote(runtime.ctx, {
+      ocr: {},
+      speech: {},
+      teacherWorkbench: {},
       session: {
         openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })),
       },

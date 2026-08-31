@@ -4,16 +4,18 @@ import { Context } from '@deepseek-ai/cordis'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
-import { UpdateButton } from '../src/client/UpdateButton.tsx'
+import { UpdateButton, type UpdateButtonInjected } from '../src/client/UpdateButton.tsx'
 import type { DesktopUpdateBridge } from '../src/client/bridge.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
+const download = vi.fn(() => Promise.resolve())
+const install = vi.fn(() => Promise.resolve())
 const bridge: DesktopUpdateBridge = {
   getState: () => ({ status: 'available', version: '1.2.0' }),
   subscribe: vi.fn(() => 1),
   unsubscribe: vi.fn(),
-  download: vi.fn(() => Promise.resolve()),
-  install: vi.fn(() => Promise.resolve()),
+  download,
+  install,
 }
 
 async function bench(declare = true) {
@@ -56,7 +58,14 @@ describe('ui-desktop-update browser apply', () => {
       name: 'root', children: { 'sidebar.update': { kind: 'single', scope: 'root' } },
     } as never, () => null)
     await Promise.resolve()
-    expect(b.slots.entries('sidebar.update')[0]?.component).toBe(UpdateButton)
+    const entry = b.slots.entries('sidebar.update')[0]
+    expect(entry?.component).toBe(UpdateButton)
+    const injected = (entry?.inject as unknown as () => UpdateButtonInjected)()
+    expect(injected.hooks.update.getSnapshot()).toEqual({ status: 'available', version: '1.2.0' })
+    await injected.download()
+    await injected.install()
+    expect(download).toHaveBeenCalledOnce()
+    expect(install).toHaveBeenCalledOnce()
     await fiber.dispose()
     expect(b.slots.entries('sidebar.update')).toHaveLength(0)
   })

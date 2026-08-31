@@ -6,7 +6,7 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
 import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
-import { CardForm, numberField, textField } from '../src/client/card-form.ts'
+import { booleanField, CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
 import {
@@ -19,6 +19,7 @@ import {
   type SubagentModelSelectionSettings,
 } from '../src/client/subagent-model-selection-card-controller.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
+import { WindowsMcpCardController, type WindowsMcpSettings } from '../src/client/windows-mcp-card-controller.ts'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -319,6 +320,64 @@ describe('CardForm', () => {
     host.publish({ status: 'unavailable' })
 
     expect(subject.shell()).toMatchObject({ available: false, writable: false })
+  })
+
+  it('round-trips exact boolean drafts', async () => {
+    const host = stubSettingsScope<Record<string, unknown>>()
+    acceptWrites(host)
+    const subject = new CardForm(host.scope, [booleanField('enabled')])
+    host.publish({ status: 'ready', writable: true, value: { enabled: false }, user: {} })
+
+    subject.actions().edit('enabled', 'true')
+    await subject.save()
+
+    expect(host.set).toHaveBeenCalledWith('enabled', true)
+    expect(subject.field('enabled').text).toBe('true')
+
+    const spec = booleanField('enabled')
+    expect(spec.parse('false')).toEqual({ kind: 'set', value: false })
+    expect(spec.parse('invalid')).toBeUndefined()
+  })
+})
+
+describe('WindowsMcpCardController', () => {
+  it('stages the opt-in and reports launcher runtime availability', async () => {
+    const host = stubSettingsScope<WindowsMcpSettings>()
+    acceptWrites(host)
+    const controller = new WindowsMcpCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { enabled: false, runtimeCommand: 'C:/DSH/windows-mcp/python.exe' },
+      base: { enabled: false, runtimeCommand: 'C:/DSH/windows-mcp/python.exe' },
+      user: {},
+    })
+    const face = controller.inject()
+
+    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({
+      available: true,
+      runtimeAvailable: true,
+      enabled: false,
+      dirty: false,
+    })
+    face.toggleEnabled()
+    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({ enabled: true, dirty: true })
+
+    face.save()
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('enabled', true) })
+    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({ enabled: true, dirty: false })
+  })
+
+  it('reports an absent bundled runtime without making the namespace disappear', () => {
+    const host = stubSettingsScope<WindowsMcpSettings>()
+    const controller = new WindowsMcpCardController(host.scope)
+    host.publish({ status: 'ready', writable: true, value: { enabled: false, runtimeCommand: '' } })
+
+    expect(controller.inject().hooks.windowsMcpCard.getSnapshot()).toMatchObject({
+      available: true,
+      runtimeAvailable: false,
+      enabled: false,
+    })
   })
 })
 

@@ -55,7 +55,7 @@ vi.mock('@modelcontextprotocol/sdk/client/streamableHttp.js', () => ({
 
 // vi.mock is hoisted above static imports, so the module under test sees the
 // mocked SDK even through a static import.
-import { apply, name, inject, Config as ConfigSchema } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
+import { apply, name, inject, Config as ConfigSchema, resolveIncludedTools } from '@deepseek-ai/dsh-mcp-client/src/index.ts'
 
 // ---- Helpers ----
 
@@ -124,6 +124,14 @@ describe('mcp-client plugin module exports', () => {
       command: 'echo',
     } as never)
     expect(resolved.serverName).toBe('github-prod_1')
+  })
+
+  it('resolves an exact raw-name filter and rejects ambiguous entries', () => {
+    expect(resolveIncludedTools(undefined, 'includeTools')).toBeUndefined()
+    expect(resolveIncludedTools([], 'includeTools')).toBeUndefined()
+    expect([...resolveIncludedTools(['Snapshot', 'Click'], 'includeTools')!]).toEqual(['Snapshot', 'Click'])
+    expect(() => resolveIncludedTools([''], 'includeTools')).toThrow('must not contain an empty tool name')
+    expect(() => resolveIncludedTools(['Click', 'Click'], 'includeTools')).toThrow('duplicate tool name "Click"')
   })
 
   it('Config schema materializes reconnect defaults and merges partial overrides', () => {

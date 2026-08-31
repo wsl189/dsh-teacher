@@ -5,16 +5,22 @@ import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_AGENT_SDK_PACKAGE,
   OFFICE_VIEWER_PACKAGE,
+  UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256,
+  UNIVER_OFFICE_PACKAGE,
+  UNIVER_PRO_RUNTIME_PACKAGES,
   claudeDistributionFromManifest,
   collectPythonDependencies,
   isOwnerAuthorizedRuntime,
   isPermissive,
   type Manifest,
   manifestPatterns,
+  parseHashedRequirementPins,
   parsePyprojectRequirements,
   parseVendoredRows,
   render,
   tierExternalDeps,
+  univerBundledReviewManifestHash,
+  univerCommercialDistributionFromManifests,
   virtualManifest,
 } from './gen-third-party-notices.ts'
 
@@ -28,7 +34,24 @@ describe('THIRD_PARTY_NOTICES.md', () => {
   it('matches what the generator produces from the current manifests', () => {
     const generated = render()
     expect(generated).toContain('It depends on the third-party software listed below.')
+    expect(generated).toContain('## Bundled skill distributions')
+    expect(generated).toContain('[`PPT Master`](https://github.com/hugohe3/ppt-master) 6.1.0')
+    expect(generated).toContain('12,939-file, 79,496,215-byte upstream Skill directory')
+    expect(generated).toContain('## Bundled Windows-MCP desktop runtime')
+    expect(generated).toContain('CPython](https://www.python.org/) 3.14.7')
+    expect(generated).toContain('Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5')
+    expect(generated).toContain('The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded.')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
+  })
+})
+
+describe('parseHashedRequirementPins', () => {
+  it('normalizes Python distribution names and rejects duplicates', () => {
+    expect(parseHashedRequirementPins('The_Fuzz==0.22.1\nwindows-mcp==0.8.5\n')).toEqual(new Map([
+      ['the-fuzz', '0.22.1'],
+      ['windows-mcp', '0.8.5'],
+    ]))
+    expect(() => parseHashedRequirementPins('the.fuzz==1 \\\nthe_fuzz==2 \\\n')).toThrow(/duplicate Windows-MCP requirement the-fuzz/)
   })
 })
 
@@ -294,9 +317,11 @@ describe('owner-authorized runtime distributions', () => {
   it('authorizes only recorded package identities without relabeling their licenses', () => {
     expect(isOwnerAuthorizedRuntime(CLAUDE_AGENT_SDK_PACKAGE)).toBe(true)
     expect(isOwnerAuthorizedRuntime(OFFICE_VIEWER_PACKAGE)).toBe(true)
+    expect(UNIVER_PRO_RUNTIME_PACKAGES.every(isOwnerAuthorizedRuntime)).toBe(true)
     expect(isOwnerAuthorizedRuntime(`${CLAUDE_AGENT_SDK_PACKAGE}-linux-x64`))
       .toBe(false)
     expect(isOwnerAuthorizedRuntime(`${OFFICE_VIEWER_PACKAGE}-fork`)).toBe(false)
+    expect(isOwnerAuthorizedRuntime(`${UNIVER_PRO_RUNTIME_PACKAGES[1]}-win32-x64-msvc`)).toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
     expect(isPermissive('AGPL-3.0')).toBe(false)
@@ -350,6 +375,98 @@ describe('owner-authorized runtime distributions', () => {
         '@anthropic-ai/unrelated': '1.0.0',
       },
     })).toThrow('outside its authorized platform-payload identity')
+  })
+
+  it('derives the exact commercial Univer roots and their platform payloads', () => {
+    expect(univerCommercialDistributionFromManifests({
+      name: UNIVER_OFFICE_PACKAGE,
+      version: '0.2.12',
+      dependencies: {
+        '@univerjs-pro/cli-assets': '0.1.0',
+        '@univerjs-pro/engine-formula-rust-binding': '1.2.3',
+        '@univerjs-pro/exchange-node-binding': '0.4.5',
+      },
+      devDependencies: {
+        '@univer-cli/content-execution': '9.8.7',
+        '@univerjs-pro/sheets': '9.8.7',
+        'react': '18.3.1',
+      },
+    }, [
+      { name: '@univerjs-pro/cli-assets', version: '0.1.0' },
+      {
+        name: '@univerjs-pro/engine-formula-rust-binding',
+        version: '1.2.3',
+        optionalDependencies: {
+          '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc': '1.2.3',
+        },
+      },
+      {
+        name: '@univerjs-pro/exchange-node-binding',
+        version: '0.4.5',
+        optionalDependencies: {
+          '@univerjs-pro/exchange-node-binding-linux-x64-gnu': '0.4.5',
+        },
+      },
+    ])).toEqual({
+      pluginVersion: '0.2.12',
+      packages: [
+        { name: '@univer-cli/content-execution', version: '9.8.7', role: 'bundled artifact module' },
+        { name: '@univerjs-pro/cli-assets', version: '0.1.0', role: 'runtime dependency' },
+        { name: '@univerjs-pro/engine-formula-rust-binding', version: '1.2.3', role: 'runtime dependency' },
+        { name: '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc', version: '1.2.3', role: 'optional platform payload' },
+        { name: '@univerjs-pro/exchange-node-binding', version: '0.4.5', role: 'runtime dependency' },
+        { name: '@univerjs-pro/exchange-node-binding-linux-x64-gnu', version: '0.4.5', role: 'optional platform payload' },
+        { name: '@univerjs-pro/sheets', version: '9.8.7', role: 'bundled artifact module' },
+      ],
+    })
+  })
+
+  it('rejects a changed Univer commercial identity set, version, or payload namespace', () => {
+    const dependencies = Object.fromEntries(UNIVER_PRO_RUNTIME_PACKAGES.map(name => [name, '1.0.0']))
+    const devDependencies = {
+      '@univer-cli/content-execution': '1.0.0',
+      '@univerjs-pro/sheets': '1.0.0',
+    }
+    const roots: Manifest[] = UNIVER_PRO_RUNTIME_PACKAGES.map(name => ({
+      name,
+      version: '1.0.0',
+      ...(name.endsWith('binding')
+        ? { optionalDependencies: { [`${name}-win32-x64-msvc`]: '1.0.0' } }
+        : {}),
+    }))
+
+    expect(() => univerCommercialDistributionFromManifests({
+      name: UNIVER_OFFICE_PACKAGE,
+      version: '1.0.0',
+      dependencies: { ...dependencies, '@univerjs-pro/new-runtime': '1.0.0' },
+      devDependencies,
+    }, roots)).toThrow('commercial runtime set')
+    expect(() => univerCommercialDistributionFromManifests({
+      name: UNIVER_OFFICE_PACKAGE,
+      version: '1.0.0',
+      dependencies,
+      devDependencies,
+    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[1]
+      ? { ...root, version: '2.0.0' }
+      : root))).toThrow('does not match the 1.0.0 version')
+    expect(() => univerCommercialDistributionFromManifests({
+      name: UNIVER_OFFICE_PACKAGE,
+      version: '1.0.0',
+      dependencies,
+      devDependencies,
+    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[1]
+      ? { ...root, optionalDependencies: { '@univerjs-pro/unrelated': '1.0.0' } }
+      : root))).toThrow('outside its authorized platform-payload identity')
+  })
+
+  it('pins the exact module declarations in the bundled Univer artifact', () => {
+    const manifest = JSON.parse(readFileSync(resolve(
+      root,
+      'packages/bundle/web-app/node_modules/dsh-univer-office/package.json',
+    ), 'utf8')) as Manifest
+
+    expect(univerBundledReviewManifestHash(manifest))
+      .toBe(UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256)
   })
 })
 

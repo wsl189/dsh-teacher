@@ -1,14 +1,15 @@
 /**
  * Generate `THIRD_PARTY_NOTICES.md` from the workspace manifests: every
  * external dependency named by a workspace `package.json`, the vendored-package
- * manifest in `vendor/README.md`, the Python `pyproject.toml` files, and the
- * pnpm patch list. License and repository metadata come from the installed
- * store, so the tree must be installed. `--check` verifies the committed
- * artifact. Tier policy and ownership live in
- * `.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md`.
+ * manifest in `vendor/README.md`, packaged third-party Skill resources, the
+ * Python `pyproject.toml` files, and the pnpm patch list. License and repository
+ * metadata come from those resources and the installed store, so the tree must
+ * be installed. `--check` verifies the committed artifact. Tier policy and
+ * ownership live in `.agents/notes/implemented/process/2026-07-30-generated-third-party-notices.md`.
  */
 
-import { existsSync, globSync, readdirSync, readFileSync, writeFileSync } from 'node:fs'
+import { createHash } from 'node:crypto'
+import { existsSync, globSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutBigInt } from 'smol-toml'
@@ -16,6 +17,17 @@ import parseSpdx from 'spdx-expression-parse'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'THIRD_PARTY_NOTICES.md'
+const PPT_MASTER_ROOT = 'packages/skill/skill-ppt-master/assets/ppt-master'
+const PPT_MASTER_VERSION = '6.1.0'
+const PPT_MASTER_LICENSE_SHA256 = '80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921'
+const PPT_MASTER_FILE_COUNT = 12_939
+const PPT_MASTER_BYTE_COUNT = 79_496_215
+const WINDOWS_MCP_RUNTIME_ROOT = 'third-party/windows-mcp'
+const WINDOWS_MCP_FORBIDDEN_DISTRIBUTIONS = new Set([
+  'fuzzywuzzy',
+  'levenshtein',
+  'python-levenshtein',
+])
 
 /** Dependency-declaration kinds a consumer resolves at runtime. */
 const RUNTIME_KINDS = ['dependencies', 'optionalDependencies'] as const
@@ -49,11 +61,26 @@ const FIRST_PARTY = new Set([
 export const CLAUDE_AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
 /** Office viewer identity covered by the bundled-extension distribution decision. */
 export const OFFICE_VIEWER_PACKAGE = '@huanlin/dsh-plugin-better-sidebar-plugin-office'
+/** Univer integration identity whose commercial dependency closure is disclosed separately. */
+export const UNIVER_OFFICE_PACKAGE = 'dsh-univer-office'
+/** Direct Univer Pro packages accepted by the bundled-extension distribution decision. */
+export const UNIVER_PRO_RUNTIME_PACKAGES = [
+  '@univerjs-pro/cli-assets',
+  '@univerjs-pro/engine-formula-rust-binding',
+  '@univerjs-pro/exchange-node-binding',
+] as const
+/** Namespaces whose build-time modules the Univer build script inlines into shipped artifacts. */
+export const UNIVER_BUNDLED_REVIEW_PREFIXES = ['@univer-cli/', '@univerjs-pro/'] as const
+/** Reviewed identity-and-version digest for the bundled modules declared by Univer 0.2.12. */
+export const UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256 = 'd3745a5594ae357ef0a5acbff58ad729e6691d36f9a541217667cd650edfc588'
 const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
+const UNIVER_COMMERCIAL_LICENSE = 'Univer Commercial License'
+const UNIVER_COMMERCIAL_TERMS = 'https://docs.univer.ai/guides/pro/license'
 const OWNER_AUTHORIZED_RUNTIME_PACKAGES = new Set([
   CLAUDE_AGENT_SDK_PACKAGE,
   OFFICE_VIEWER_PACKAGE,
+  ...UNIVER_PRO_RUNTIME_PACKAGES,
 ])
 
 /**
@@ -81,6 +108,12 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
   // No repository field in the published manifest.
   'node-addon-require-builtin': { repo: 'https://www.npmjs.com/package/node-addon-require-builtin' },
   '@huanlin/dsh-plugin-better-sidebar-plugin-office': { repo: 'https://github.com/HuanLinOTO/dsh-plugin-better-sidebar-plugin-office' },
+  'dsh-skill-mcp-panel': { repo: 'https://github.com/Fishquito7/dsh-skill-mcp-panel' },
+  // These packages omit license metadata; Univer documents Pro production use
+  // under its commercial license instead of an SPDX package license.
+  '@univerjs-pro/cli-assets': { license: UNIVER_COMMERCIAL_LICENSE, repo: UNIVER_COMMERCIAL_TERMS },
+  '@univerjs-pro/engine-formula-rust-binding': { license: UNIVER_COMMERCIAL_LICENSE, repo: UNIVER_COMMERCIAL_TERMS },
+  '@univerjs-pro/exchange-node-binding': { license: UNIVER_COMMERCIAL_LICENSE, repo: UNIVER_COMMERCIAL_TERMS },
 }
 
 /**
@@ -126,6 +159,173 @@ interface ExternalDep {
   repo: string
   /** True when some shipped workspace consumer reaches it through runtime dependency edges. */
   runtime: boolean
+}
+
+/** Identity and complete-tree inventory for one packaged third-party skill. */
+interface BundledSkillDistribution {
+  name: string
+  version: string
+  license: string
+  repository: string
+  fileCount: number
+  byteCount: number
+}
+
+/** Reviewed identity and patch state for the Windows desktop MCP runtime. */
+interface WindowsMcpRuntimeDistribution {
+  pythonVersion: string
+  pythonSha256: string
+  windowsMcpVersion: string
+  windowsMcpWheelSha256: string
+  patchPath: string
+}
+
+/** One patch declaration read from the Windows-MCP runtime manifest. */
+interface WindowsMcpPatch {
+  path: string
+  target: string
+  before: string
+  after: string
+  sha256: string
+}
+
+/** The fields consumed from `third-party/windows-mcp/runtime.json`. */
+interface WindowsMcpRuntimeManifest {
+  python: {
+    version: string
+    url: string
+    sha256: string
+  }
+  windowsMcp: {
+    version: string
+    repository: string
+    sourceCommit: string
+    wheelUrl: string
+    wheelSha256: string
+    sourceSha256: string
+  }
+  patches: WindowsMcpPatch[]
+}
+
+/**
+ * Parse exact distribution pins from a pip requirements lock.
+ * @param source - complete requirements file text.
+ * @returns normalized distribution names mapped to exact versions.
+ */
+export function parseHashedRequirementPins(source: string): Map<string, string> {
+  const pins = new Map<string, string>()
+  for (const line of source.split(/\r?\n/u)) {
+    const match = /^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\]+)(?:\s+\\)?$/u.exec(line)
+    if (match === null) continue
+    const rawName = match[1]
+    const version = match[2]
+    if (rawName === undefined || version === undefined) {
+      throw new Error('gen-third-party-notices: malformed Windows-MCP requirement pin.')
+    }
+    const name = rawName.toLowerCase().replace(/[._]+/gu, '-')
+    if (pins.has(name)) {
+      throw new Error(`gen-third-party-notices: duplicate Windows-MCP requirement ${name}.`)
+    }
+    pins.set(name, version)
+  }
+  return pins
+}
+
+/** Read and validate the pinned Windows-MCP runtime inputs and local patch. */
+function collectWindowsMcpRuntimeDistribution(): WindowsMcpRuntimeDistribution {
+  const runtimeRoot = resolve(root, WINDOWS_MCP_RUNTIME_ROOT)
+  const manifest = JSON.parse(
+    readFileSync(resolve(runtimeRoot, 'runtime.json'), 'utf8'),
+  ) as WindowsMcpRuntimeManifest
+  const requirements = readFileSync(resolve(runtimeRoot, 'requirements.lock'), 'utf8')
+  const pins = parseHashedRequirementPins(requirements)
+  if (pins.get('windows-mcp') !== manifest.windowsMcp.version) {
+    throw new Error('gen-third-party-notices: Windows-MCP runtime manifest and requirements lock disagree.')
+  }
+  if (!requirements.includes(`sha256:${manifest.windowsMcp.wheelSha256}`)) {
+    throw new Error('gen-third-party-notices: Windows-MCP wheel digest is absent from the requirements lock.')
+  }
+  if (!pins.has('thefuzz')) {
+    throw new Error('gen-third-party-notices: patched Windows-MCP runtime must include TheFuzz.')
+  }
+  const forbidden = [...WINDOWS_MCP_FORBIDDEN_DISTRIBUTIONS].filter(name => pins.has(name))
+  if (forbidden.length > 0) {
+    throw new Error(`gen-third-party-notices: Windows-MCP runtime includes forbidden GPL distributions: ${forbidden.join(', ')}.`)
+  }
+  if (manifest.patches.length !== 1) {
+    throw new Error(`gen-third-party-notices: Windows-MCP runtime declares ${manifest.patches.length} patches; expected 1.`)
+  }
+  const patch = manifest.patches[0]
+  if (patch === undefined) {
+    throw new Error('gen-third-party-notices: Windows-MCP runtime patch is missing.')
+  }
+  const patchSource = readFileSync(resolve(root, patch.path), 'utf8')
+  const patchHash = createHash('sha256').update(patchSource).digest('hex')
+  if (
+    patchHash !== patch.sha256
+    || !patchSource.includes(`-${patch.before}`)
+    || !patchSource.includes(`+${patch.after}`)
+  ) {
+    throw new Error('gen-third-party-notices: Windows-MCP patch content or digest changed.')
+  }
+  const buildScript = readFileSync(resolve(root, 'scripts/build-windows-mcp-runtime.ps1'), 'utf8')
+  for (const required of ['$Metadata.patches', '--require-hashes', '--no-deps', '$EmbeddedPython $SmokePath']) {
+    if (!buildScript.includes(required)) {
+      throw new Error(`gen-third-party-notices: Windows-MCP build script no longer proves ${required}.`)
+    }
+  }
+  return {
+    pythonVersion: manifest.python.version,
+    pythonSha256: manifest.python.sha256,
+    windowsMcpVersion: manifest.windowsMcp.version,
+    windowsMcpWheelSha256: manifest.windowsMcp.wheelSha256,
+    patchPath: patch.path,
+  }
+}
+
+/** Read and validate the pinned PPT Master distribution carried by the package. */
+function collectPptMasterDistribution(): BundledSkillDistribution {
+  const skillRoot = resolve(root, PPT_MASTER_ROOT)
+  const skill = readFileSync(resolve(skillRoot, 'SKILL.md'), 'utf8')
+  const license = readFileSync(resolve(skillRoot, 'LICENSE'))
+  const guard = readFileSync(resolve(skillRoot, 'scripts/attribution_guard.py'), 'utf8')
+  const required = ['SPONSORS.md', 'SPONSORS_CN.md', 'requirements.txt']
+  if (!required.every(path => existsSync(resolve(skillRoot, path)))) {
+    throw new Error('gen-third-party-notices: PPT Master attribution or dependency files are incomplete.')
+  }
+  if (
+    !skill.includes(`version: "${PPT_MASTER_VERSION}"`)
+    || !skill.includes('license: "MIT"')
+    || !skill.includes('official_repository: "https://github.com/hugohe3/ppt-master"')
+    || !guard.includes(PPT_MASTER_LICENSE_SHA256)
+  ) {
+    throw new Error('gen-third-party-notices: PPT Master identity metadata or attribution guard changed.')
+  }
+  const licenseHash = createHash('sha256').update(license).digest('hex')
+  if (licenseHash !== PPT_MASTER_LICENSE_SHA256) {
+    throw new Error(`gen-third-party-notices: PPT Master license digest is ${licenseHash}; expected ${PPT_MASTER_LICENSE_SHA256}.`)
+  }
+
+  let fileCount = 0
+  let byteCount = 0
+  for (const entry of readdirSync(skillRoot, { recursive: true, withFileTypes: true })) {
+    if (!entry.isFile()) continue
+    fileCount++
+    byteCount += statSync(resolve(entry.parentPath, entry.name)).size
+  }
+  if (fileCount !== PPT_MASTER_FILE_COUNT || byteCount !== PPT_MASTER_BYTE_COUNT) {
+    throw new Error(
+      `gen-third-party-notices: PPT Master inventory is ${fileCount} files and ${byteCount} bytes; expected ${PPT_MASTER_FILE_COUNT} files and ${PPT_MASTER_BYTE_COUNT} bytes.`,
+    )
+  }
+  return {
+    name: 'PPT Master',
+    version: PPT_MASTER_VERSION,
+    license: 'MIT',
+    repository: 'https://github.com/hugohe3/ppt-master',
+    fileCount,
+    byteCount,
+  }
 }
 
 /** Read and parse a workspace-relative `package.json`. */
@@ -197,6 +397,19 @@ export interface ClaudeDistribution {
   readonly payloads: ClaudePlatformPayload[]
 }
 
+/** One package in the commercial Univer runtime closure. */
+export interface UniverCommercialPackage {
+  readonly name: string
+  readonly version: string
+  readonly role: 'runtime dependency' | 'optional platform payload' | 'bundled artifact module'
+}
+
+/** Plugin and package facts derived from the pinned Univer integration. */
+export interface UniverCommercialDistribution {
+  readonly pluginVersion: string
+  readonly packages: UniverCommercialPackage[]
+}
+
 function requiredManifestString(
   value: string | undefined,
   field: string,
@@ -205,6 +418,109 @@ function requiredManifestString(
     throw new Error(`gen-third-party-notices: ${CLAUDE_AGENT_SDK_PACKAGE} has no ${field}.`)
   }
   return value
+}
+
+/** Read the exact authorized Univer Pro dependencies from the integration manifest. */
+function univerCommercialRootDependencies(
+  manifest: Manifest,
+): [name: string, version: string][] {
+  if (manifest.name !== UNIVER_OFFICE_PACKAGE) {
+    throw new Error(
+      `gen-third-party-notices: expected ${UNIVER_OFFICE_PACKAGE} manifest, got ${JSON.stringify(manifest.name)}.`,
+    )
+  }
+  const dependencies = manifest.dependencies ?? {}
+  const declared = Object.entries(dependencies)
+    .filter(([name]) => name.startsWith('@univerjs-pro/'))
+    .sort(([left], [right]) => left.localeCompare(right))
+  const expected = [...UNIVER_PRO_RUNTIME_PACKAGES].sort()
+  const declaredNames = declared.map(([name]) => name)
+  if (declaredNames.join('\n') !== expected.join('\n')) {
+    throw new Error(
+      `gen-third-party-notices: ${UNIVER_OFFICE_PACKAGE} commercial runtime set is ${declaredNames.join(', ') || '(empty)'}; expected ${expected.join(', ')}.`,
+    )
+  }
+  return declared.map(([name, version]) => {
+    if (version.length === 0) {
+      throw new Error(`gen-third-party-notices: ${UNIVER_OFFICE_PACKAGE} has no version for ${name}.`)
+    }
+    return [name, version]
+  })
+}
+
+/** Read Univer modules that the plugin build declares for artifact bundling. */
+export function univerBundledReviewedPackagesFromManifest(
+  manifest: Manifest,
+): UniverCommercialPackage[] {
+  const packages = Object.entries(manifest.devDependencies ?? {})
+    .filter(([name]) => UNIVER_BUNDLED_REVIEW_PREFIXES.some(prefix => name.startsWith(prefix)))
+    .map(([name, version]) => ({ name, version, role: 'bundled artifact module' as const }))
+    .sort((left, right) => left.name.localeCompare(right.name))
+  if (!UNIVER_BUNDLED_REVIEW_PREFIXES.every(prefix => packages.some(entry => entry.name.startsWith(prefix)))) {
+    throw new Error(
+      `gen-third-party-notices: ${UNIVER_OFFICE_PACKAGE} must declare bundled modules in ${UNIVER_BUNDLED_REVIEW_PREFIXES.join(' and ')}.`,
+    )
+  }
+  return packages
+}
+
+/** Hash the exact build-time identities and versions reviewed for one Univer artifact. */
+export function univerBundledReviewManifestHash(manifest: Manifest): string {
+  const declarations = univerBundledReviewedPackagesFromManifest(manifest)
+    .map(entry => `${entry.name}@${entry.version}`)
+    .join('\n')
+  return createHash('sha256').update(declarations).digest('hex')
+}
+
+/**
+ * Derive the commercial Univer package closure from the integration and its
+ * direct Pro package manifests. Native payload identities come only from each
+ * binding package's own `optionalDependencies` namespace.
+ * @param pluginManifest - pinned `dsh-univer-office` manifest.
+ * @param runtimeManifests - installed manifests for its direct Univer Pro dependencies.
+ * @returns exact external, optional-platform, and artifact-bundled package identities and versions.
+ */
+export function univerCommercialDistributionFromManifests(
+  pluginManifest: Manifest,
+  runtimeManifests: readonly Manifest[],
+): UniverCommercialDistribution {
+  const pluginVersion = pluginManifest.version
+  if (pluginVersion === undefined || pluginVersion.length === 0) {
+    throw new Error(`gen-third-party-notices: ${UNIVER_OFFICE_PACKAGE} has no version.`)
+  }
+  const roots = univerCommercialRootDependencies(pluginManifest)
+  const manifests = new Map(runtimeManifests.map(manifest => [manifest.name, manifest]))
+  const packages = univerBundledReviewedPackagesFromManifest(pluginManifest)
+  for (const [name, version] of roots) {
+    const manifest = manifests.get(name)
+    if (manifest?.version !== version) {
+      throw new Error(
+        `gen-third-party-notices: installed ${name} does not match the ${version} version declared by ${UNIVER_OFFICE_PACKAGE}.`,
+      )
+    }
+    packages.push({ name, version, role: 'runtime dependency' })
+    const optionals = Object.entries(manifest.optionalDependencies ?? {})
+    if (name !== UNIVER_PRO_RUNTIME_PACKAGES[0] && optionals.length === 0) {
+      throw new Error(`gen-third-party-notices: ${name} declares no optional platform payloads.`)
+    }
+    for (const [payloadName, payloadVersion] of optionals) {
+      if (!payloadName.startsWith(`${name}-`)) {
+        throw new Error(
+          `gen-third-party-notices: ${name} optional dependency ${payloadName} is outside its authorized platform-payload identity.`,
+        )
+      }
+      if (payloadVersion.length === 0) {
+        throw new Error(`gen-third-party-notices: ${name} has no version for ${payloadName}.`)
+      }
+      packages.push({
+        name: payloadName,
+        version: payloadVersion,
+        role: 'optional platform payload',
+      })
+    }
+  }
+  packages.sort((left, right) => left.name.localeCompare(right.name))
+  return { pluginVersion, packages }
 }
 
 /**
@@ -365,6 +681,39 @@ function collectClaudeDistribution(): ClaudeDistribution {
   if (installedPayloads === 0) {
     throw new Error(
       'gen-third-party-notices: no SDK-declared Claude platform payload is installed; install optional dependencies before regenerating.',
+    )
+  }
+  return distribution
+}
+
+/** Resolve and verify the installed commercial Univer dependency closure. */
+function collectUniverCommercialDistribution(): UniverCommercialDistribution {
+  const plugin = installedManifest(UNIVER_OFFICE_PACKAGE)
+  if (plugin === undefined) {
+    throw new Error(
+      `gen-third-party-notices: cannot resolve ${UNIVER_OFFICE_PACKAGE}; run \`pnpm install\`.`,
+    )
+  }
+  const bundledHash = univerBundledReviewManifestHash(plugin)
+  if (bundledHash !== UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256) {
+    throw new Error(
+      `gen-third-party-notices: ${UNIVER_OFFICE_PACKAGE} bundled module manifest is ${bundledHash}; review the artifact and update UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256.`,
+    )
+  }
+  const roots = univerCommercialRootDependencies(plugin).map(([name, version]) => {
+    const manifest = installedManifest(name, version)
+    if (manifest === undefined) {
+      throw new Error(
+        `gen-third-party-notices: cannot resolve ${name}@${version}; run \`pnpm install\`.`,
+      )
+    }
+    return manifest
+  })
+  const distribution = univerCommercialDistributionFromManifests(plugin, roots)
+  const payloads = distribution.packages.filter(entry => entry.role === 'optional platform payload')
+  if (!payloads.some(payload => installedManifest(payload.name, payload.version) !== undefined)) {
+    throw new Error(
+      'gen-third-party-notices: no Univer binding platform payload is installed; install optional dependencies before regenerating.',
     )
   }
   return distribution
@@ -702,6 +1051,49 @@ function renderOfficeDistribution(deps: ExternalDep[]): string {
 `
 }
 
+/** Render third-party Skill resources distributed inside first-party packages. */
+function renderBundledSkillDistributions(
+  distribution: BundledSkillDistribution,
+): string {
+  return `
+## Bundled skill distributions
+
+[\`${distribution.name}\`](${distribution.repository}) ${distribution.version} is distributed inside \`@deepseek-ai/dsh-skill-ppt-master\` under the ${distribution.license} license. The complete ${distribution.fileCount.toLocaleString('en-US')}-file, ${distribution.byteCount.toLocaleString('en-US')}-byte upstream Skill directory preserves its \`LICENSE\`, sponsor records, dependency declaration, integrity guard, scripts, references, templates, images, and sounds. The package does not install the optional Python dependencies listed by the Skill; those remain operator-provided runtime components. The retained license is available at [\`${PPT_MASTER_ROOT}/LICENSE\`](${PPT_MASTER_ROOT}/LICENSE).
+`
+}
+
+/** Render the pinned Python runtime and patched Windows-MCP distribution. */
+function renderWindowsMcpRuntime(
+  distribution: WindowsMcpRuntimeDistribution,
+): string {
+  return `
+## Bundled Windows-MCP desktop runtime
+
+The Windows desktop installer embeds [CPython](https://www.python.org/) ${distribution.pythonVersion} under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) ${distribution.windowsMcpVersion} under MIT. The CPython embedded archive is pinned to SHA-256 \`${distribution.pythonSha256}\`; the Windows-MCP wheel is pinned to SHA-256 \`${distribution.windowsMcpWheelSha256}\`.
+
+DSH applies [\`${distribution.patchPath}\`](${distribution.patchPath}) while assembling the runtime, replacing Windows-MCP's sole \`fuzzywuzzy\` import with the MIT-licensed \`TheFuzz\` API. The GPL \`fuzzywuzzy\`, \`Levenshtein\`, and \`python-Levenshtein\` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock), and its source identities, download URLs, digests, and patch digest are recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json\`](${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json). The installed wheel \`.dist-info\` trees remain inside the packaged \`resources/windows-mcp/Lib/site-packages\` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
+`
+}
+
+/** Render the installed and artifact-bundled Univer closure and its downstream obligation. */
+function renderUniverCommercialDistribution(
+  distribution: UniverCommercialDistribution | undefined,
+): string {
+  if (distribution === undefined) return ''
+  const rows = distribution.packages.map(entry =>
+    `| [\`${entry.name}\`](https://www.npmjs.com/package/${entry.name}) | ${entry.version} | ${entry.role} |`,
+  )
+  return `
+## Univer installed and artifact-bundled closure
+
+\`${UNIVER_OFFICE_PACKAGE}\` ${distribution.pluginVersion} is Apache-2.0, but its executable closure also contains the packages below. Its three external \`@univerjs-pro/*\` runtime roots select native payloads at install time. Its build script inlines the listed \`@univerjs-pro/*\` and \`@univer-cli/*\` build-time modules into the shipped Host, Viewer, Gateway, worker, and render artifacts. Those modules retain their own terms; the wrapper's Apache-2.0 declaration does not relicense them, and the compiled tarball does not carry their individual package manifests or notices. [Univer's licensing guide](${UNIVER_COMMERCIAL_TERMS}) requires a valid Univer Pro commercial license for production use. Inclusion in this repository or an installer does not grant that license; every distributor and production operator must obtain all production and distribution rights required by Univer. A package identity, version, bundled-declaration digest, or platform-payload change requires another dependency, compatibility, terms, and notices review.
+
+| Univer package | Version | Role |
+| --- | --- | --- |
+${rows.join('\n')}
+`
+}
+
 /**
  * Render the complete notices document.
  * @returns the exact bytes `THIRD_PARTY_NOTICES.md` must hold.
@@ -712,12 +1104,19 @@ export function render(): string {
   const runtimeDeps = npm.filter(dep => dep.runtime)
   const devDeps = npm.filter(dep => !dep.runtime)
   const vendored = collectVendored()
+  const pptMaster = collectPptMasterDistribution()
+  const windowsMcpRuntime = collectWindowsMcpRuntimeDistribution()
   const python = collectPython()
   const patched = collectPatched()
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
   )
     ? collectClaudeDistribution()
+    : undefined
+  const univerDistribution = runtimeDeps.some(
+    dep => dep.name === UNIVER_OFFICE_PACKAGE,
+  )
+    ? collectUniverCommercialDistribution()
     : undefined
   const nonPermissiveDev = devDeps.filter(dep => !isPermissive(dep.license))
   // A copyleft license reaching a shipped surface is a distribution decision,
@@ -738,9 +1137,9 @@ export function render(): string {
 
 DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party software listed below. Each project remains under its own license; nothing in this file changes those terms.
 
-This file lists **direct** dependencies declared by the workspace and the explicitly disclosed official Claude Code platform payload closure. It is generated from the workspace manifests by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
+This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the bundled Windows-MCP desktop runtime, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
 
-The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
+The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock), and the Windows-MCP desktop runtime closure is recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock).
 
 ## Vendored source (\`vendor/\`)
 
@@ -749,6 +1148,9 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | Package | Upstream name | Upstream | License |
 | --- | --- | --- | --- |
 ${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.upstream.replace('https://', '')}](${row.upstream}) | MIT |`).join('\n')}
+
+${renderBundledSkillDistributions(pptMaster)}
+${renderWindowsMcpRuntime(windowsMcpRuntime)}
 
 ## Runtime npm dependencies
 
@@ -761,6 +1163,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 
 ${patchedLines.join('\n')}
 ${renderClaudeDistribution(claudeDistribution)}
+${renderUniverCommercialDistribution(univerDistribution)}
 
 ## Development-only npm dependencies
 

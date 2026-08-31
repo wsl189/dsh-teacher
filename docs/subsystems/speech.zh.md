@@ -95,7 +95,7 @@ interface SpeechProvider {
 }
 ```
 
-提供方校验请求字段、强制自身资源上限，并用稳定 `SpeechErrorCode` 抛出 `SpeechError`。运行时把预期失败转换为 `SpeechTranscribeRejected`，隐藏意外提供方诊断，并拒绝有歧义的自动选择，而不依赖注册顺序。QQ 适配器会为每次操作重新读取 QQ 集成的 ASR 设置与凭据，只接受 HTTPS 或回环 HTTP 端点，并且不持久化音频或返回文本。
+提供方校验请求字段、强制自身资源上限，并用稳定 `SpeechErrorCode` 抛出 `SpeechError`。运行时把预期失败转换为 `SpeechTranscribeRejected`，隐藏意外提供方诊断，并拒绝有歧义的自动选择，而不依赖注册顺序。QQ 适配器会为每次操作重新读取 QQ 集成的 ASR 设置与凭据，只接受 HTTPS 或回环 HTTP 端点，把传输失败报告为 `provider-unavailable`，把被拒绝的 HTTP 请求与无效设置报告为 `provider-failure`，并且不持久化音频或返回文本。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

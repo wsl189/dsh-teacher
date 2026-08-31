@@ -42,6 +42,11 @@ jobs:
           node-version: ${{ env.PRIMARY_NODE_VERSION }}
           cache: pnpm
 
+      - uses: actions/setup-python@v6
+        with:
+          python-version: '3.14.7'
+          architecture: x64
+
       - name: Install (immutable)
         shell: pwsh
         run: pnpm install --frozen-lockfile
@@ -61,6 +66,10 @@ jobs:
           if ($env:GITHUB_REF_NAME -ne $expected) {
             throw "Desktop release tag must be $expected, received $env:GITHUB_REF_NAME"
           }
+
+      - name: Build and smoke bundled Windows-MCP runtime
+        shell: pwsh
+        run: ./scripts/build-windows-mcp-runtime.ps1
 
       - name: Build NSIS installer
         shell: pwsh

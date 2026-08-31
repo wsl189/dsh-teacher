@@ -77,18 +77,34 @@ describe('web e2e: plugin configuration section', () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-cards'))
     const dialog = await openPlugins()
 
-    // Every card the shipped web composition exposes: the shell executor, the
-    // agent loop, subagent selection, and the DeepSeek search provider.
+    // Every card the shipped Web composition exposes, including the dormant
+    // Windows desktop integration whose runtime exists only in the installer.
     await dialog.getByText('Subagent', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('button', { name: '展开设置: Subagent' }).count()).toBe(1)
     await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByText('Agent 循环', { exact: true }).count()).toBe(1)
     expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('文档提取', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('试题切割工作区', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('Windows 桌面控制', { exact: true }).count()).toBe(1)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
 
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(SECTION_EXPECTED, snapshot, MODE)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('keeps Windows desktop control unavailable without the packaged runtime', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-windows-mcp'))
+    const dialog = await openPlugins()
+    await dialog.getByText('Windows 桌面控制', { exact: true }).click()
+
+    const toggle = dialog.getByRole('switch', { name: '启用 Windows 桌面工具' })
+    await toggle.waitFor({ timeout: 10_000 })
+    expect(await toggle.isDisabled()).toBe(true)
+    expect(await dialog.getByText('内置运行时不可用；请安装并运行 Windows 桌面版后再启用。').count()).toBe(1)
+    expect(await settingsDocument()).not.toContain('windows-mcp')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -178,6 +194,9 @@ describe('web e2e: plugin configuration section', () => {
 
     await expect.poll(async () => (await settingsDocument()).includes('maxFileBytes: 67108864'), { timeout: 10_000 })
       .toBe(true)
+    const expandMineru = dialog.getByRole('button', { name: '展开设置: 文档提取' })
+    await expandMineru.waitFor({ timeout: 5_000 })
+    await expandMineru.click()
     expect(await maxFile.inputValue()).toBe('64')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

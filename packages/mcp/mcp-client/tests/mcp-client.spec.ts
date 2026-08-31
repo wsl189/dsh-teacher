@@ -145,6 +145,7 @@ function textAt(content: readonly ContentBlock[], index = 0): string {
 
 const defaultOpts: ToolBridgeOptions = {
   registrationFailure: 'contain',
+  includeTools: undefined,
   serverName: 'srv',
   toolCallTimeoutMs: 60_000,
 }
@@ -201,6 +202,24 @@ describe('syncTools', () => {
     // Raw names are NOT registered.
     expect(ctx.tools.get('greet')).toBeUndefined()
     expect(ctx.tools.get('add')).toBeUndefined()
+  })
+
+  it('publishes only exact raw names selected by includeTools', async () => {
+    const client = createMockClient([
+      { name: 'Snapshot', inputSchema: { type: 'object' } },
+      { name: 'PowerShell', inputSchema: { type: 'object' } },
+      { name: 'snapshot', inputSchema: { type: 'object' } },
+    ])
+
+    const disposers = await syncTools(client as never, ctx, {
+      ...defaultOpts,
+      includeTools: new Set(['Snapshot']),
+    }, new Map())
+
+    expect([...disposers.keys()]).toEqual(['mcp__srv__Snapshot'])
+    expect(ctx.tools.get('mcp__srv__Snapshot')).toBeDefined()
+    expect(ctx.tools.get('mcp__srv__PowerShell')).toBeUndefined()
+    expect(ctx.tools.get('mcp__srv__snapshot')).toBeUndefined()
   })
 
   it('lets two servers publish the same raw name side by side', async () => {

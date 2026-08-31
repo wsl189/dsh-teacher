@@ -16,7 +16,7 @@ Review the [safety notice](SAFETY.md) before running the project.
 
 ## Run
 
-> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, Office preview, teacher workbench (question cutting, student folders), QQ-backed voice input, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
+> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, skill/MCP manager, Office preview and Univer authoring, teacher workbench (question cutting, student folders), QQ-backed voice input, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
 
 ### Windows installer
 
@@ -68,9 +68,11 @@ pnpm dsh web
 
 Do NOT use `npx @deepseek-ai/dsh web` — it installs the official npm package without the fork's custom features (teacher workbench, built-in better-sidebar, upload preview, overlay collapse rules).
 
-### 2. Built-in IM, cron, and Office preview
+### 2. Built-in image generation, IM, cron, skill/MCP management, and Office
 
-The Web composition and Windows EXE already contain the reviewed `@xmanrui/dsh-im` 1.0.3, `dsh-plugin-cron` 0.1.3, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine. Configure bots and QQ speech under **Settings → Plugins → Connected Platforms**; cron and Office-preview sidebar entries load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
+The Web composition and Windows EXE already contain the reviewed `@dickpy/dsh-imagegen` 1.5.1 runtime repack, `@xmanrui/dsh-im` 1.0.3, `dsh-plugin-cron` 0.1.3, `dsh-skill-mcp-panel` 2.0.1, `dsh-univer-office` 0.2.12 DSH rebuild, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine, and remove a separately installed image-generation row before starting this built-in version. Configure OpenAI-compatible image-provider channels under **Settings → Plugins → AI Image Generation**; adding an image model under **Settings → Models** alone does not create image-generation tools. Configure bots and QQ speech under **Settings → Plugins → Connected Platforms**, manage skills under **Settings → Skills**, and manage profile servers under **Settings → MCP** or through `dsh-panel mcp`; image generation, cron, Office preview, and Univer review surfaces load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
+
+The Univer wrapper is Apache-2.0, but its executable closure includes commercial `@univerjs-pro/*` components. Supply a valid license through `UNIVER_LICENSE` before launch and obtain the required distribution rights before shipping an installer; the built-in row disables product telemetry. Some Slide layout, SVG measurement, and screenshot operations also need local Chrome or Chromium, with `UNIVER_RENDER_BROWSER` available to select its executable.
 
 ### 3. Configure MinerU (document extraction)
 
@@ -84,16 +86,16 @@ Edit `~/.dsh/integrations/dsh-qq/config.json` and enable `speech` (the current m
 "speech": {
   "enabled": true,
   "baseUrl": "http://127.0.0.1:8000/v1/",
-  "model": "whisper-1",
+  "model": "Systran/faster-whisper-small",
   "language": "zh"
 }
 ```
 
-`baseUrl` must be HTTPS or a loopback HTTP URL, and must point to an OpenAI-compatible transcription server (the current machine runs one at `127.0.0.1:8000`). If the server requires an API key, store it through the QQ settings page or set `DSH_QQ_ASR_API_KEY`. The QQ bot, main composer, and Workbench Daily Management microphone controls share these settings; the next completed recording reads the saved values without a Host restart.
+`baseUrl` must be HTTPS or a loopback HTTP URL, and must point to an OpenAI-compatible transcription server (the current machine runs Speaches at `127.0.0.1:8000`). Set `model` to an installed ASR model returned by that server's `GET /v1/models`; this machine exposes `Systran/faster-whisper-small`, while its `whisper-1` alias targets an uninstalled large model and returns HTTP 404. If the server requires an API key, store it through the QQ settings page or set `DSH_QQ_ASR_API_KEY`. The QQ bot, main composer, and Workbench Daily Management microphone controls share these settings; the next completed recording reads the saved values without a Host restart. A QQ voice message can use text supplied directly by QQ, so verify the configured ASR service with either browser microphone control instead of treating bot recognition alone as an endpoint check.
 
-### 5. Office preview formats
+### 5. Office preview and authoring formats
 
-The built-in AGPL-3.0 Office viewer previews workspace `.docx`, `.xlsx`, and `.pptx` files. Composer uploads retain the existing right-sidebar preview path. Legacy `.doc`, `.xls`, and `.ppt` remain download-only and require conversion.
+The built-in AGPL-3.0 Office viewer previews workspace `.docx`, `.xlsx`, and `.pptx` files, while Univer Office creates and reviews editable `.univer` Sheets, Docs, Slides, Bases, and Boards. Univer imports `.xlsx`, `.csv`, `.tsv`, `.docx`, and `.pptx` and exports the supported Office formats after review. Composer uploads retain the existing right-sidebar preview path. Legacy `.doc`, `.xls`, and `.ppt` remain download-only and require conversion.
 
 ### Windows differences
 
@@ -113,6 +115,7 @@ The steps below need adjustment on Windows; everything else (repository or EXE l
   Either `/` or `\\` separators work; the path must be absolute. When unset, the plugin falls back to `C:\Users\<user>\Desktop`.
 - **`workspaces.json`**: point the QQ bot workspace at the Windows clone path, e.g. `C:/Users/<user>/dsh-teacher`.
 - **`DSH_HOME` environment variable** (optional): default needs no override; on Windows use `set DSH_HOME=C:\...` or the system environment panel to customize the data directory.
+- **Univer environment**: add a valid `UNIVER_LICENSE` to the Windows user or system environment before starting the installed app. If Chrome is not discovered automatically, set `UNIVER_RENDER_BROWSER` to its absolute executable path.
 - **`dshHomePath` adapts automatically**: teacher-workbench storage (`segments`/`students`/`sources`/`generated`) and session storage use `dshHomePath()` and land under `C:\Users\<user>\.dsh\...` with no manual edit.
 - **Shell**: run `pnpm dsh web` etc. in PowerShell; if the execution policy blocks scripts, run `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned` first.
 - **MinerU and voice services**: loopback `127.0.0.1` endpoints work on Windows too; when the services run inside WSL, point `baseUrl`/`endpoint` at the WSL address instead.
@@ -124,6 +127,8 @@ The steps below need adjustment on Windows; everything else (repository or EXE l
 - Selecting a composer upload card opens its preview tab in the right sidebar (PDF, DOCX, XLSX, PPTX, images).
 - QQ bot replies; `qq_send_local_file` sends images/files; voice messages transcribe when ASR is enabled.
 - Cron sidebar entry lists and manages scheduled jobs.
+- **Settings → Skills** lists global and workspace skills, and **Settings → MCP** can list and test configured servers.
+- An agent can create a `.univer` file, show its isolated review card, and export an approved Sheet, Doc, or Slide to a supported Office format.
 
 ## Community and support
 

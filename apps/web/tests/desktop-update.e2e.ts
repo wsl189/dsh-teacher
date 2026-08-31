@@ -70,13 +70,13 @@ describe('web e2e: desktop update action', () => {
     await scaffold?.close()
   })
 
-  it('shows the current version and exposes the available Release beside Settings', async () => {
+  it('shows the current version only when expanded and exposes the available Release beside Settings', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-update-available'))
     const settings = page.getByRole('button', { name: '设置', exact: true })
     await settings.waitFor({ timeout: 10_000 })
     const current = page.getByRole('status', { name: `当前版本 ${CURRENT_VERSION}` })
     await current.waitFor({ timeout: 10_000 })
-    expect(await current.textContent()).toBe(`v${CURRENT_VERSION}`)
+    expect(await current.textContent()).toBe(`版本号 ${CURRENT_VERSION}`)
     const settingsBox = await settings.boundingBox()
     const currentBox = await current.boundingBox()
     if (settingsBox === null || currentBox === null) throw new Error('sidebar footer status has no layout box')
@@ -86,6 +86,16 @@ describe('web e2e: desktop update action', () => {
       await captureStableAria(page, '[data-desktop-update-status="up-to-date"]', scaffold.workspaceCwd),
       MODE,
     )
+
+    await page.getByRole('button', { name: '收起侧边栏', exact: true }).click()
+    await page.locator('[data-sidebar-collapsed]').waitFor({ timeout: 10_000 })
+    await expect.poll(
+      () => page.locator('[data-desktop-update-status="up-to-date"]').count(),
+      { timeout: 10_000 },
+    ).toBe(0)
+    await page.getByRole('button', { name: '打开侧边栏', exact: true }).click()
+    await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'detached', timeout: 10_000 })
+    await current.waitFor({ timeout: 10_000 })
 
     await page.evaluate((version) => {
       window.__publishDesktopUpdate({ status: 'available', version })

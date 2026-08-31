@@ -52,7 +52,12 @@ async function bench() {
   const openWorkspacePath = vi.fn<ClientRemote['session']['openWorkspacePath']>(
     () => Promise.resolve({ ok: true, value: { opened: true } }),
   )
-  new TestRemote(runtime.ctx, { session: { openWorkspacePath } })
+  new TestRemote(runtime.ctx, {
+    ocr: {},
+    speech: {},
+    teacherWorkbench: {},
+    session: { openWorkspacePath },
+  })
   runtime.ctx.provide('uiWorkspace', {
     connectWorkspace: vi.fn(async () => ROOT),
   } as never)

@@ -31,13 +31,22 @@ function setup(state: DesktopUpdateState, wide = true) {
   return { store, download, install, view }
 }
 
+function deferred(): {
+  promise: Promise<void>
+  reject: (reason?: unknown) => void
+} {
+  let reject!: (reason?: unknown) => void
+  const promise = new Promise<void>((_resolve, rejectPromise) => { reject = rejectPromise })
+  return { promise, reject }
+}
+
 describe('UpdateButton', () => {
   it('renders nothing while checking and shows the current version when up to date', () => {
     const checking = setup({ status: 'checking' })
     expect(checking.view.container.innerHTML).toBe('')
     act(() => { checking.store.set({ status: 'up-to-date', version: '1.2.0' }) })
     const current = screen.getByRole('status', { name: '当前版本 1.2.0' })
-    expect(current.textContent).toBe('v1.2.0')
+    expect(current.textContent).toBe('版本号 1.2.0')
     expect(checking.download).not.toHaveBeenCalled()
     expect(checking.install).not.toHaveBeenCalled()
   })
@@ -73,9 +82,39 @@ describe('UpdateButton', () => {
     expect(button.textContent).toBe('')
   })
 
-  it('uses an icon-only current-version status in the rail', () => {
-    setup({ status: 'up-to-date', version: '1.2.0' }, false)
-    const current = screen.getByRole('status', { name: '当前版本 1.2.0' })
-    expect(current.textContent).toBe('')
+  it('hides the current-version status in the rail', () => {
+    const current = setup({ status: 'up-to-date', version: '1.2.0' }, false)
+    expect(current.view.container.innerHTML).toBe('')
+  })
+
+  it('shows rejected action details and accepts non-Error rejections', async () => {
+    const b = setup({ status: 'available', version: '1.2.0' })
+    b.download.mockRejectedValueOnce(new Error('download unavailable'))
+    const button = screen.getByRole('button', { name: '发现新版本 1.2.0，下载更新' })
+    fireEvent.click(button)
+    await waitFor(() => { expect(button.getAttribute('title')).toBe('download unavailable') })
+
+    b.download.mockRejectedValueOnce('offline')
+    fireEvent.click(button)
+    await waitFor(() => { expect(button.getAttribute('title')).toBe('offline') })
+  })
+
+  it('ignores a rejected action after unmount', async () => {
+    const pending = deferred()
+    const b = setup({ status: 'available', version: '1.2.0' })
+    b.download.mockReturnValueOnce(pending.promise)
+    fireEvent.click(screen.getByRole('button', { name: '发现新版本 1.2.0，下载更新' }))
+    b.view.unmount()
+
+    await act(async () => {
+      pending.reject(new Error('late failure'))
+      await pending.promise.catch(() => undefined)
+    })
+    expect(b.download).toHaveBeenCalledOnce()
+  })
+
+  it('renders the retry icon in the collapsed rail', () => {
+    setup({ status: 'error', version: '1.2.0', message: 'offline' }, false)
+    expect(screen.getByRole('button', { name: '版本 1.2.0 下载失败，重试更新' })).toBeDefined()
   })
 })

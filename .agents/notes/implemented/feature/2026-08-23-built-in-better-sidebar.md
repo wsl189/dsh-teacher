@@ -10,7 +10,7 @@ The standard Web profile exposes workspace files through the chat and workspace 
 
 ## Decision
 
-`@deepseek-ai/dsh-web-app` declares `dsh-better-sidebar@^0.17.1` as a runtime dependency and mounts it under the `web-better-sidebar` row. The upstream plugin remains an independently versioned MIT package; DSH consumes its published package instead of copying its source into this repository. A package patch only rewires the client injection list to the current DSH API, connection, renderer, and settings plugins. The plugin's default keeps the workbench closed until the user opens it.
+`@deepseek-ai/dsh-web-app` declares `dsh-better-sidebar@^0.17.1` as a runtime dependency and mounts it under the `web-better-sidebar` row. The upstream plugin remains an independently versioned MIT package; DSH consumes its published package instead of copying its source into this repository. A package patch rewires the client injection list to the current DSH API, connection, renderer, and settings plugins. It also provides the plugin-owned `sidechat.events` route used by Side Chat to read seed-filtered live or persisted events, because the current connection client does not expose the legacy session-history API. The plugin's default keeps the workbench closed until the user opens it.
 
 The `0.17.1` baseline uses the authenticated Remote gateway and current rich-text labels. Its workbench includes movable free windows, bounded multi-repository Git discovery, terminal and loopback-browser surfaces, expanded editor language support, and Markdown previews with local images, sanitized inline HTML, and a table of contents. The model-facing `sidebar_open` tool remains disabled by default.
 
@@ -20,7 +20,7 @@ The [bundled extensions and QQ speech decision](2026-08-25-bundled-extensions-an
 
 ## Verification
 
-The assembled built-client snapshot requires the workbench host marker and better-sidebar's plugin-owned stylesheet. The dedicated `better-sidebar.e2e.ts` scenario boots the shipped Web composition in Chromium, selects a seeded session, proves that exactly one workbench is mounted and closed by default, opens its Files surface, and moves the Files tab into a free window before docking it back. Its context-menu snapshot records the user-visible command. Cordis config validation checks that the Web bundle can resolve the bare plugin name, shipped-composition tests require the Office client module, and generated third-party notices record both the MIT workbench and AGPL Office runtime dependencies.
+The assembled built-client snapshot requires the workbench host marker and better-sidebar's plugin-owned stylesheet. The dedicated `better-sidebar.e2e.ts` scenario boots the shipped Web composition in Chromium, selects a seeded session, proves that exactly one workbench is mounted and closed by default, opens its Files surface, and moves the Files tab into a free window before docking it back. Its snapshots record the free-window command and a Side Chat transcript containing both the submitted user message and returned assistant message. The Side Chat scenario exercises the plugin-owned event route rather than the removed connection API. Cordis config validation checks that the Web bundle can resolve the bare plugin name, shipped-composition tests require the Office client module, and generated third-party notices record both the MIT workbench and AGPL Office runtime dependencies.
 
 ## Alternatives considered
 

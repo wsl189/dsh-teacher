@@ -5,17 +5,23 @@ import {
 import { DesktopUpdateSource } from '../src/client/source.ts'
 
 class FakeBridge implements DesktopUpdateBridge {
-  private state: DesktopUpdateState = { status: 'checking' }
+  private state: DesktopUpdateState
   private nextId = 1
   private readonly listeners = new Map<number, (state: DesktopUpdateState) => void>()
+  private lastListener: ((state: DesktopUpdateState) => void) | undefined
   readonly download = vi.fn<() => Promise<void>>(() => Promise.resolve())
   readonly install = vi.fn<() => Promise<void>>(() => Promise.resolve())
   readonly unsubscribed: number[] = []
+
+  constructor(initial: unknown = { status: 'checking' }) {
+    this.state = initial as DesktopUpdateState
+  }
 
   getState(): DesktopUpdateState { return this.state }
   subscribe(listener: (state: DesktopUpdateState) => void): number {
     const id = this.nextId++
     this.listeners.set(id, listener)
+    this.lastListener = listener
     listener(this.state)
     return id
   }
@@ -23,9 +29,12 @@ class FakeBridge implements DesktopUpdateBridge {
     this.unsubscribed.push(id)
     this.listeners.delete(id)
   }
-  emit(state: DesktopUpdateState): void {
-    this.state = state
-    for (const listener of this.listeners.values()) listener(state)
+  emit(state: unknown): void {
+    this.state = state as DesktopUpdateState
+    for (const listener of this.listeners.values()) listener(state as DesktopUpdateState)
+  }
+  emitAfterUnsubscribe(state: DesktopUpdateState): void {
+    this.lastListener?.(state)
   }
 }
 
@@ -68,6 +77,28 @@ describe('desktop update preload source', () => {
     source.dispose()
     source.dispose()
     expect(bridge.unsubscribed).toEqual([1])
-    expect(source.subscribe(vi.fn())).toEqual(expect.any(Function))
+    const unsubscribe = source.subscribe(vi.fn())
+    expect(unsubscribe).toEqual(expect.any(Function))
+    unsubscribe()
+    bridge.emitAfterUnsubscribe({ status: 'available', version: '1.3.0' })
+  })
+
+  it('rejects invalid snapshots and keeps one lazy bridge subscription', () => {
+    const bridge = new FakeBridge({ status: 'invalid' })
+    const source = new DesktopUpdateSource(bridge)
+    expect(source.getSnapshot()).toEqual({ status: 'checking' })
+    const first = vi.fn()
+    const second = vi.fn()
+    const unsubscribeFirst = source.subscribe(first)
+    const unsubscribeSecond = source.subscribe(second)
+    bridge.emit({ status: 'invalid' })
+    expect(source.getSnapshot()).toEqual({ status: 'checking' })
+
+    unsubscribeFirst()
+    expect(bridge.unsubscribed).toEqual([])
+    unsubscribeSecond()
+    unsubscribeSecond()
+    expect(bridge.unsubscribed).toEqual([1])
+    source.dispose()
   })
 })

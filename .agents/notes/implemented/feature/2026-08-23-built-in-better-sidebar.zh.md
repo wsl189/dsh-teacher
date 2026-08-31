@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-`@deepseek-ai/dsh-web-app` 把 `dsh-better-sidebar@^0.17.1` 声明为运行时依赖，并通过 `web-better-sidebar` 配置项挂载。上游插件仍是独立版本的 MIT 包；DSH 使用其已发布包，不把源码复制到本仓库。包补丁仅把客户端注入列表改接到当前 DSH 的 API、连接、渲染器与设置插件。插件默认保持工作台收起，直到用户主动打开。
+`@deepseek-ai/dsh-web-app` 把 `dsh-better-sidebar@^0.17.1` 声明为运行时依赖，并通过 `web-better-sidebar` 配置项挂载。上游插件仍是独立版本的 MIT 包；DSH 使用其已发布包，不把源码复制到本仓库。包补丁把客户端注入列表改接到当前 DSH 的 API、连接、渲染器与设置插件。补丁还提供 Side Chat 用来读取已过滤继承种子的实时或持久化事件的插件自有 `sidechat.events` 路由，因为当前连接客户端不再公开旧版会话历史 API。插件默认保持工作台收起，直到用户主动打开。
 
 `0.17.1` 基线使用经过认证的 Remote 网关和当前富文本标签。工作台包含可移动自由窗口、范围受限的多仓库 Git 发现、终端与本机回环地址浏览器界面、更多编辑器语言支持，以及包含本地图片、经过净化的内联 HTML 和目录的 Markdown 预览。面向模型的 `sidebar_open` 工具默认保持禁用。
 
@@ -20,7 +20,7 @@ Status: implemented
 
 ## 验证
 
-组装后的已构建客户端快照要求存在工作台宿主标记与 better-sidebar 自有样式表。专用的 `better-sidebar.e2e.ts` 场景会在 Chromium 中启动发行的 Web 组合，选择预置会话，证明工作台只挂载一次并默认收起，打开其 Files 界面，再把 Files 标签页移入自由窗口并停靠回侧边栏。上下文菜单快照记录面向用户的命令。Cordis 配置校验会检查 Web 组合包能够解析插件裸名称，发行组合测试要求存在 Office 客户端模块，生成的第三方声明则同时记录 MIT 工作台与 AGPL Office 运行时依赖。
+组装后的已构建客户端快照要求存在工作台宿主标记与 better-sidebar 自有样式表。专用的 `better-sidebar.e2e.ts` 场景会在 Chromium 中启动发行的 Web 组合，选择预置会话，证明工作台只挂载一次并默认收起，打开其 Files 界面，再把 Files 标签页移入自由窗口并停靠回侧边栏。快照会记录自由窗口命令，以及同时包含已提交用户消息和返回助手消息的 Side Chat 对话记录。Side Chat 场景使用插件自有事件路由，而不是已移除的连接 API。Cordis 配置校验会检查 Web 组合包能够解析插件裸名称，发行组合测试要求存在 Office 客户端模块，生成的第三方声明则同时记录 MIT 工作台与 AGPL Office 运行时依赖。
 
 ## 考虑过的替代方案
 

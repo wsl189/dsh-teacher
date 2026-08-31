@@ -50,6 +50,7 @@ type VoiceErrorTranslate = (key:
   | 'voice.noMicrophone'
   | 'voice.noSpeech'
   | 'voice.networkError'
+  | 'voice.requestFailed'
   | 'voice.notConfigured'
   | 'voice.fileTooLarge'
   | 'voice.failed') => string
@@ -67,9 +68,9 @@ function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
     case 'empty-result': return t('voice.noSpeech')
     case 'provider-disabled': return t('voice.notConfigured')
     case 'file-too-large': return t('voice.fileTooLarge')
+    case 'provider-failure': return t('voice.requestFailed')
     case 'network':
-    case 'provider-unavailable':
-    case 'provider-failure': return t('voice.networkError')
+    case 'provider-unavailable': return t('voice.networkError')
     default: return t('voice.failed')
   }
 }

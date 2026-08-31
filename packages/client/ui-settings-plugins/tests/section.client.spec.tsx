@@ -16,12 +16,15 @@ import { SubagentModelSelectionCard } from '../src/client/SubagentModelSelection
 import type { SubagentModelSelectionCardProps } from '../src/client/SubagentModelSelectionCard.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
 import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
+import { WindowsMcpCard } from '../src/client/WindowsMcpCard.tsx'
+import type { WindowsMcpCardProps } from '../src/client/WindowsMcpCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import type { SubagentModelSelectionCardState } from '../src/client/subagent-model-selection-card-controller.ts'
+import type { WindowsMcpCardState } from '../src/client/windows-mcp-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -109,6 +112,23 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
     useSubagentModelSelectionCard: bindSnapshotSelector(store),
   } as unknown as SubagentModelSelectionCardProps
   render(<SubagentModelSelectionCard {...props} />)
+  return actions
+}
+
+function renderWindowsMcp(state: Partial<WindowsMcpCardState> = {}) {
+  const store = createSnapshotStore<WindowsMcpCardState>({
+    ...settled,
+    enabled: false,
+    runtimeAvailable: true,
+    ...state,
+  })
+  const actions = { toggleEnabled: vi.fn(), save: vi.fn(), discard: vi.fn() }
+  const props = {
+    ...actions,
+    t,
+    useWindowsMcpCard: bindSnapshotSelector(store),
+  } as unknown as WindowsMcpCardProps
+  render(<WindowsMcpCard {...props} />)
   return actions
 }
 
@@ -455,6 +475,44 @@ describe('SubagentModelSelectionCard', () => {
     expect(control.disabled).toBe(true)
     fireEvent.click(control)
     expect(actions.toggleEnabled).not.toHaveBeenCalled()
+  })
+})
+
+describe('WindowsMcpCard', () => {
+  it('stages an explicit opt-in and explains per-call approval', () => {
+    const actions = renderWindowsMcp()
+    fireEvent.click(screen.getByText(en.windowsMcpTitle))
+
+    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle })
+    expect(toggle.getAttribute('aria-checked')).toBe('false')
+    expect(screen.getByText(en.windowsMcpRuntimeReady)).toBeTruthy()
+    expect(screen.getByText(en.windowsMcpApprovalWarning)).toBeTruthy()
+    fireEvent.click(toggle)
+
+    expect(actions.toggleEnabled).toHaveBeenCalledOnce()
+  })
+
+  it('disables opt-in when this deployment has no bundled runtime', () => {
+    const actions = renderWindowsMcp({ runtimeAvailable: false })
+    fireEvent.click(screen.getByText(en.windowsMcpTitle))
+
+    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle }) as HTMLButtonElement
+    expect(toggle.disabled).toBe(true)
+    expect(screen.getByText(en.windowsMcpRuntimeUnavailable)).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(actions.toggleEnabled).not.toHaveBeenCalled()
+  })
+
+  it('keeps an already-enabled unavailable runtime switch operable for shutdown', () => {
+    const actions = renderWindowsMcp({ enabled: true, runtimeAvailable: false })
+    fireEvent.click(screen.getByText(en.windowsMcpTitle))
+
+    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle }) as HTMLButtonElement
+    expect(toggle.disabled).toBe(false)
+    expect(toggle.getAttribute('aria-checked')).toBe('true')
+    expect(screen.getByText(en.windowsMcpEnabledHint)).toBeTruthy()
+    fireEvent.click(toggle)
+    expect(actions.toggleEnabled).toHaveBeenCalledOnce()
   })
 })
 

@@ -2,7 +2,7 @@
 
 /** Simplified Chinese dictionary (the key-set source of truth). */
 export const zh = {
-  'status.current': 'v{version}',
+  'status.current': '版本号 {version}',
   'action.available': '更新',
   'action.downloading': '更新中',
   'action.install': '重启更新',
@@ -19,7 +19,7 @@ export type DesktopUpdateKey = keyof typeof zh
 
 /** English dictionary, checked complete against the zh key set. */
 export const en = {
-  'status.current': 'v{version}',
+  'status.current': 'Version {version}',
   'action.available': 'Update',
   'action.downloading': 'Updating',
   'action.install': 'Restart to update',

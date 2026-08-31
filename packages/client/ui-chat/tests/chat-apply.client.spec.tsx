@@ -42,6 +42,9 @@ async function bench() {
     connectWorkspace: vi.fn(async () => SID),
   } as never)
   new TestRemote(runtime.ctx, {
+    ocr: {},
+    speech: {},
+    teacherWorkbench: {},
     session: { openWorkspacePath: vi.fn(async () => ({ ok: true, value: { opened: true } })) },
   })
   const locale = new LocaleRuntime(runtime.ctx)

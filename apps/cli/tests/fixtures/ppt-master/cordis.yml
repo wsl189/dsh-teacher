@@ -1,0 +1,10 @@
+- id: skill-ppt-master
+  name: '@deepseek-ai/dsh-skill-ppt-master'
+  disabled: false
+
+- id: skill-filesystem
+  config:
+    watch: false
+
+- id: session-telemetry-otel
+  disabled: true

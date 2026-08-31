@@ -1,0 +1,16 @@
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -16 +16 @@
+-        "@deepseek-ai/dsh-client-runtime",
++        "@deepseek-ai/dsh-client-ui-renderer",
+@@ -18 +18,2 @@
+-        "@deepseek-ai/dsh-api-gateway"
++        "@deepseek-ai/dsh-api-gateway",
++        "@deepseek-ai/dsh-api-session-controller"
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -2769 +2769 @@
+-            const currentSessionId = () => ctx.get("sessions").currentProvideInfo.getSnapshot().sessionId;
++            const currentSessionId = () => ctx.get("sessions").list.getSnapshot().current;

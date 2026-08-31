@@ -66,6 +66,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Exact raw MCP tool names to publish; omission or an empty list publishes every discovered tool. */
+  includeTools?: string[]
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -88,6 +90,8 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Exact raw MCP tool names to publish; omission or an empty list publishes every discovered tool. */
+  includeTools?: string[]
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -119,6 +123,7 @@ export const Config = z.union([
     env: z.dict(String).default({}),
     cwd: z.string().default(''),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    includeTools: z.array(String).default([]),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
   }),
@@ -128,10 +133,33 @@ export const Config = z.union([
     url: z.string().required(),
     headers: z.dict(String).default({}),
     toolCallTimeoutMs: z.number().default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+    includeTools: z.array(String).default([]),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
   }),
 ]) as unknown as z<ConfigInput, Config>
+
+/** Resolved exact-name filter used by every discovery generation. */
+export type ResolvedToolFilter = ReadonlySet<string> | undefined
+
+/**
+ * Resolve and validate the optional raw-name allowlist at plugin activation.
+ * Empty lists mean unrestricted discovery; non-empty lists reject empty and
+ * duplicate entries so configuration mistakes cannot silently narrow access.
+ * @param includeTools - raw MCP tool names from configuration.
+ * @param path - diagnostic prefix naming the owning configuration.
+ * @returns an immutable-by-convention exact-name set, or `undefined` for all tools.
+ */
+export function resolveIncludedTools(includeTools: readonly string[] | undefined, path: string): ResolvedToolFilter {
+  if (includeTools === undefined || includeTools.length === 0) return undefined
+  const resolved = new Set<string>()
+  for (const rawName of includeTools) {
+    if (rawName.length === 0) throw new Error(`${path} must not contain an empty tool name`)
+    if (resolved.has(rawName)) throw new Error(`${path} contains duplicate tool name "${rawName}"`)
+    resolved.add(rawName)
+  }
+  return resolved
+}
 
 // ---- Plugin apply ----
 
@@ -148,6 +176,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // construction that bypassed Schemastery) rejects THIS instance before any
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
+  const includeTools = resolveIncludedTools(config.includeTools, `mcp-client(${config.serverName}): includeTools`)
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
@@ -170,7 +199,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect)
+  const connection = startConnection(ctx, config, reconnect, includeTools)
 
   ctx.effect(() => {
     return () => connection.dispose()

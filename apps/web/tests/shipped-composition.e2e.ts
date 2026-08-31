@@ -18,6 +18,7 @@ import type {} from '@deepseek-ai/dsh-user-approval'
 import type {} from '@deepseek-ai/dsh-permission-presets'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-commands'
+import type {} from '@deepseek-ai/dsh-client-modules'
 import type {} from '@deepseek-ai/dsh-system-prompt'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
 
@@ -74,10 +75,14 @@ const EXPECTED_PRODUCT_AGENT_TOOLS = ['read_document']
 
 /** Product additions mounted outside the official default Agent preset. */
 const EXPECTED_GLOBAL_TOOLS = [
+  'cancel_image_generation_task',
   'cron_add',
   'cron_list',
   'cron_remove',
   'cron_run',
+  'edit_image',
+  'generate_image',
+  'get_image_generation_task',
   'qq_send_local_file',
   'teacher_daily_management',
   'teacher_question_image_read',
@@ -86,6 +91,29 @@ const EXPECTED_GLOBAL_TOOLS = [
   'teacher_student_roster',
   'teacher_timetable',
   'teacher_workbench_read',
+  'univer_api',
+  'univer_compile_svg',
+  'univer_execute',
+  'univer_export',
+  'univer_import',
+  'univer_inspect',
+  'univer_lint',
+  'univer_new',
+  'univer_resources',
+  'univer_screenshot',
+  'univer_status',
+  'univer_unit',
+  'univer_worktree',
+]
+
+/** Third-party browser modules that the shipped profile mounts directly. */
+const EXPECTED_BUNDLED_CLIENT_MODULES = [
+  '@dickpy/dsh-imagegen',
+  '@huanlin/dsh-plugin-better-sidebar-plugin-office',
+  '@xmanrui/dsh-im',
+  'dsh-plugin-cron',
+  'dsh-skill-mcp-panel',
+  'dsh-univer-office',
 ]
 
 let scaffold: WebScaffold | undefined
@@ -104,6 +132,25 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   expect(index.headers.get('content-encoding')).toBe('gzip')
   expect(index.headers.get('vary')).toContain('Accept-Encoding')
   await index.body?.cancel()
+  expect(ctx.clientModules.graph().entries.map(entry => entry.id)).toEqual(
+    expect.arrayContaining(EXPECTED_BUNDLED_CLIENT_MODULES),
+  )
+  expect(ctx.settings.describe().find(row => String(row.ns) === 'windows-mcp')).toMatchObject({
+    base: {
+      enabled: false,
+      runtimeCommand: '',
+      runtimeCwd: '',
+      toolCallTimeoutMs: 60_000,
+    },
+  })
+  expect(ctx.tools.schemas().map(schema => schema.name).some(name => name.startsWith('mcp__windows__')))
+    .toBe(false)
+  expect(await ctx.skills.list()).toContainEqual(expect.objectContaining({
+    name: 'ppt-master',
+    provider: 'ppt-master',
+    source: 'bundled',
+    invocation: { modelInvocable: true, userInvocable: true },
+  }))
   expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchInlineSnapshot(`
     {
       "initialDelayMs": 500,
@@ -179,6 +226,13 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     // The packaged ripgrep binary ships with the dependency, so the pair is a
     // fixed roster member on every host.
     expect(names.filter(name => RIPGREP_TOOLS.includes(name))).toEqual(RIPGREP_TOOLS)
+    const pptMaster = await ctx.skills.get('ppt-master', { scope: handle.agent })
+    expect(pptMaster).toMatchObject({
+      name: 'ppt-master',
+      metadata: { version: '6.1.0', license: 'MIT' },
+      resourceBase: { kind: 'directory' },
+    })
+    expect(pptMaster?.content).toContain('# PPT Master Skill')
     const fileReferenceSection = (await ctx.systemPrompt.assemble({ scope: handle.agent })).sections
       .find(section => section.name === 'ui:deliverable-file-references')
     expect(fileReferenceSection?.text).toBe(readFileSync(FILE_REFERENCE_PROMPT, 'utf8').trimEnd())

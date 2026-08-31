@@ -1,12 +1,68 @@
 /** Verify the runtime closure and file policy of a packaged desktop application. */
 
-import { existsSync, readFileSync, readdirSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
 
 interface PackageManifest {
   dependencies?: Record<string, unknown>
   peerDependencies?: Record<string, unknown>
   peerDependenciesMeta?: Record<string, { optional?: unknown }>
+}
+
+const PPT_MASTER_RUNTIME_ROOT = 'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master'
+const PPT_MASTER_RUNTIME_FILES = 12_939
+const PPT_MASTER_RUNTIME_BYTES = 79_496_215
+
+/** Product runtime files whose omission would leave a successful but incomplete Windows build. */
+export const REQUIRED_WINDOWS_RUNTIME_FILES = [
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/package.json',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/lib/index.js',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SKILL.md',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/LICENSE',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SPONSORS.md',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SPONSORS_CN.md',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/requirements.txt',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/scripts/attribution_guard.py',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/references/shared-standards.md',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/templates/layouts/presentation_core/templates/17_two_picture_caption.svg',
+  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/templates/sounds/bigsoundbank/0572.wav',
+  'node_modules/@dickpy/dsh-imagegen/package.json',
+  'node_modules/@dickpy/dsh-imagegen/LICENSE',
+  'node_modules/@dickpy/dsh-imagegen/lib/index.js',
+  'node_modules/@dickpy/dsh-imagegen/lib/client.js',
+  'node_modules/@dickpy/dsh-imagegen/src/templates/cases.json',
+  'node_modules/dsh-skill-mcp-panel/package.json',
+  'node_modules/dsh-skill-mcp-panel/lib/index.js',
+  'node_modules/dsh-skill-mcp-panel/lib/client.js',
+  'node_modules/dsh-univer-office/package.json',
+  'node_modules/dsh-univer-office/lib/index.js',
+  'node_modules/dsh-univer-office/lib/client.js',
+  'node_modules/dsh-univer-office/artifacts/gateway.cjs',
+  'node_modules/dsh-univer-office/artifacts/unit-content-worker.mjs',
+  'node_modules/dsh-univer-office/artifacts/render-machine/index.html',
+  'node_modules/dsh-univer-office/artifacts/viewer/index.html',
+  'node_modules/dsh-univer-office/skills/univer/SKILL.md',
+  'node_modules/@univerjs-pro/cli-assets/resource-manifest.json',
+  'node_modules/@libsql/win32-x64-msvc/index.node',
+  'node_modules/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/univer-formula.win32-x64-msvc.node',
+  'node_modules/@univerjs-pro/exchange-node-binding-win32-x64-msvc/univer-exchange-node.win32-x64-msvc.node',
+  '../windows-mcp/python.exe',
+  '../windows-mcp/python314.dll',
+  '../windows-mcp/python314.zip',
+  '../windows-mcp/python314._pth',
+  '../windows-mcp/LICENSE.txt',
+  '../windows-mcp/Lib/site-packages/windows_mcp/__main__.py',
+  '../windows-mcp/Lib/site-packages/windows_mcp-0.8.5.dist-info/METADATA',
+  '../windows-mcp/Lib/site-packages/comtypes/__init__.py',
+  '../windows-mcp/Lib/site-packages/dxcam/__init__.py',
+  '../windows-mcp/Lib/site-packages/fastmcp/__init__.py',
+  '../windows-mcp/Lib/site-packages/win32/win32api.pyd',
+] as const
+
+/** Optional inspection inputs used by platform-neutral unit fixtures. */
+export interface DesktopPayloadOptions {
+  /** Product files required in addition to the generic dependency and artifact checks. */
+  requiredFiles?: readonly string[]
 }
 
 /** Result of inspecting one unpacked Electron application payload. */
@@ -74,16 +130,33 @@ function normalizedRelative(root: string, parentPath: string, name: string): str
 /**
  * Inspect one unpacked Electron application for files the desktop does not consume at runtime.
  * @param root - absolute path to the unpacked application's `resources/app` directory.
- * @returns the inspected file count and every forbidden build artifact.
+ * @param options - product files that must be present; defaults to the Windows runtime set.
+ * @returns the inspected file count and every forbidden build artifact or missing runtime file.
  */
-export function inspectDesktopPayload(root: string): DesktopPayloadReport {
+export function inspectDesktopPayload(
+  root: string,
+  options: DesktopPayloadOptions = {},
+): DesktopPayloadReport {
   let fileCount = 0
+  let pptMasterFileCount = 0
+  let pptMasterByteCount = 0
   const failures: string[] = []
+  const requiredFiles = options.requiredFiles ?? REQUIRED_WINDOWS_RUNTIME_FILES
+
+  for (const path of requiredFiles) {
+    if (!existsSync(join(root, ...path.split('/')))) {
+      failures.push(`${path}: required product runtime file is absent from payload`)
+    }
+  }
 
   for (const entry of readdirSync(root, { recursive: true, withFileTypes: true })) {
     if (entry.isDirectory()) continue
     fileCount++
     const path = normalizedRelative(root, entry.parentPath, entry.name)
+    if (path.startsWith(`${PPT_MASTER_RUNTIME_ROOT}/`)) {
+      pptMasterFileCount++
+      pptMasterByteCount += statSync(join(entry.parentPath, entry.name)).size
+    }
     if (entry.name.endsWith('.map')) {
       failures.push(`${path}: source map must not be packaged`)
     } else if (entry.name.endsWith('.tsbuildinfo')) {
@@ -91,6 +164,15 @@ export function inspectDesktopPayload(root: string): DesktopPayloadReport {
     } else if (entry.name === 'package.json' && path.startsWith('node_modules/')) {
       failures.push(...inspectManifest(root, path, join(entry.parentPath, entry.name)))
     }
+  }
+
+  if (
+    options.requiredFiles === undefined
+    && (pptMasterFileCount !== PPT_MASTER_RUNTIME_FILES || pptMasterByteCount !== PPT_MASTER_RUNTIME_BYTES)
+  ) {
+    failures.push(
+      `${PPT_MASTER_RUNTIME_ROOT}: packaged skill inventory is ${String(pptMasterFileCount)} files and ${String(pptMasterByteCount)} bytes; expected ${String(PPT_MASTER_RUNTIME_FILES)} files and ${String(PPT_MASTER_RUNTIME_BYTES)} bytes`,
+    )
   }
 
   failures.sort()
@@ -113,7 +195,7 @@ if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
     process.exitCode = 1
   } else {
     process.stdout.write(
-      `verify-desktop-payload: ${String(report.fileCount)} packaged file(s) contain a complete workspace runtime closure and no source maps or compiler state.\n`,
+      `verify-desktop-payload: ${String(report.fileCount)} packaged file(s) contain the required product files, a complete workspace runtime closure, and no source maps or compiler state.\n`,
     )
   }
 }

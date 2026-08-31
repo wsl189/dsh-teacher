@@ -1,0 +1,26 @@
+- button "Expand bottom panel":
+  - img
+- button "Collapse sidebar":
+  - img
+- img
+- text: Files
+- button "Close":
+  - img
+- img
+- text: New thread
+- button "Close":
+  - img
+- button "New tab":
+  - img
+- text: standard · mock
+- button "Switch thread / new":
+  - img
+- button "Save as new session — Promote this thread to a top-level session in the main session list" [disabled]:
+  - img
+- text: Save is available after the first completed turn
+- paragraph: Show this side-chat question.
+- paragraph: This side-chat answer is visible.
+- textbox "Ask a follow-up…"
+- text: standard · mock
+- button "Send" [disabled]:
+  - img

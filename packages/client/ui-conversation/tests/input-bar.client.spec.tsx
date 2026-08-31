@@ -515,6 +515,19 @@ describe('image draft rail', () => {
       expect(instances[1]?.stop).toHaveBeenCalledOnce()
       await act(async () => { await Promise.resolve(); await Promise.resolve() })
       expect(keyboard.shell.snapshot.draft).toBe('A 口述')
+
+      cleanup()
+      vi.useRealTimers()
+      const rejection = new Error('HTTP 404')
+      rejection.name = 'provider-failure'
+      const failed = bench({ transcribeVoice: vi.fn().mockRejectedValue(rejection) })
+      fireEvent.click(failed.view.getByRole('button', { name: '语音输入（也可长按空格）' }))
+      await vi.waitFor(() => { expect(instances).toHaveLength(3) })
+      fireEvent.click(failed.view.getByRole('button', { name: '停止语音输入' }))
+      await vi.waitFor(() => {
+        expect(failed.view.getByRole('alert').textContent)
+          .toContain('语音识别请求失败，请检查服务地址、模型和 API Key')
+      })
     } finally {
       vi.useRealTimers()
       if (recorderDescriptor === undefined) Reflect.deleteProperty(window, 'MediaRecorder')

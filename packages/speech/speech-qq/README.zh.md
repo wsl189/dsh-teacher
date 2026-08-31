@@ -47,7 +47,7 @@ QQ 设置文档必须使用 `version: 1`，并包含具有 `enabled`、`baseUrl`
 <details>
 <summary>实现细节——点击展开</summary>
 
-每次请求都会重新加载 QQ 文档与凭据引用、校验端点，并提交 `file`、`model`、`language` 与 `response_format=json`；key 为空时省略 Authorization。成功响应中的 `text` 或 `transcript` 会去除首尾空白后返回，上游诊断不会进入提供方结果。
+每次请求都会重新加载 QQ 文档与凭据引用、校验端点，并提交 `file`、`model`、`language` 与 `response_format=json`；key 为空时省略 Authorization。成功响应中的 `text` 或 `transcript` 会去除首尾空白后返回，上游诊断不会进入提供方结果。传输失败返回 `provider-unavailable`；重定向、非成功 HTTP 状态或无效配置返回 `provider-failure`，因此浏览器 Consumer 能区分连接失败与服务地址、模型或 API key 导致的请求拒绝。
 
 </details>
 
@@ -74,6 +74,7 @@ QQ 设置文档必须使用 `version: 1`，并包含具有 `enabled`、`baseUrl`
 <a id="known-limitations-and-deferred-work"></a>
 
 - **ASR 服务器仍是外部服务**：可执行文件包含该适配器，不包含 Whisper、模型权重、GPU 驱动或服务进程。
+- **模型选择是显式配置**：`speech.model` 必须命名已配置服务能够提供的模型；适配器不会推断或重试另一个模型。
 - **没有流式转写**：浏览器停止录音后才发起一次上游请求。
 - **配置归 QQ 所有**：缺少有效且已启用的 dsh-im QQ 文档时会返回 `provider-disabled`；项目有意不提供第二套语音设置页。
 

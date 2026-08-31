@@ -13,6 +13,7 @@ import {
   UPDATE_CHANNELS, type DesktopUpdateState,
 } from './update-protocol.ts'
 import { installRendererPermissions } from './renderer-permissions.ts'
+import { resolveRuntimeEnvironment } from './runtime-environment.ts'
 
 const require = createRequire(import.meta.url)
 const BACKEND_ENTRY = require.resolve('@deepseek-ai/dsh/desktop-backend')
@@ -53,7 +54,14 @@ function backendMessage(value: unknown): BackendMessage | undefined {
 function startBackend(): Promise<string> {
   const child = fork(BACKEND_ENTRY, [], {
     execPath: process.execPath,
-    env: { ...process.env, ELECTRON_RUN_AS_NODE: '1' },
+    env: {
+      ...resolveRuntimeEnvironment({
+        env: process.env,
+        packaged: app.isPackaged,
+        resourcesPath: process.resourcesPath,
+      }),
+      ELECTRON_RUN_AS_NODE: '1',
+    },
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
   })
   backend = child

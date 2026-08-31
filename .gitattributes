@@ -8,6 +8,10 @@
 
 *.pdf binary
 
+# Preserve the bundled upstream skill distribution byte-for-byte; its inventory
+# and attribution tests verify the unmodified release contents.
+packages/skill/skill-ppt-master/assets/ppt-master/** -whitespace
+
 # Pairing records are generated from the three confirmed owner-blob pairs.
 # The worktree-local installer registers the fail-closed driver command.
 *.i18n.yaml merge=dsh-translation-pairing

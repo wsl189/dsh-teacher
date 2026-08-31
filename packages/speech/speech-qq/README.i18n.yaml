@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/speech/speech-qq/README.md
-README.md: eae64ea3b2d5638313deca7d58d7df544a0132ca
-README.zh.md: a9c1fd6b80a8631b89ec50fba05f5c65774d69af
+README.md: b697afa8b94cbea9bf7051846413eb00d3e9a042
+README.zh.md: 336f91cfaa9a037dcd757ab3ae7dacebe8b5de54

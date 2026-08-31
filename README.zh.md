@@ -18,7 +18,7 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来
 
 ## 运行
 
-> **本 fork 包含 npm 官方发布的 `@deepseek-ai/dsh` 所没有的定制功能**——内置 better-sidebar 工作台、IM 连接、cron 管理、Office 预览、教师工作台（试题切割、学生目录）、共用 QQ 设置的语音输入、输入框上传文件的右侧预览，以及 overlay 挂载时隐藏右上角收起按钮的规则。`npx @deepseek-ai/dsh web` 安装的是官方 npm 包，**不会有这些功能**。请始终从本仓库运行。
+> **本 fork 包含 npm 官方发布的 `@deepseek-ai/dsh` 所没有的定制功能**——内置 better-sidebar 工作台、IM 连接、cron 管理、技能／MCP 管理、Office 预览与 Univer 创作、教师工作台（试题切割、学生目录）、共用 QQ 设置的语音输入、输入框上传文件的右侧预览，以及 overlay 挂载时隐藏右上角收起按钮的规则。`npx @deepseek-ai/dsh web` 安装的是官方 npm 包，**不会有这些功能**。请始终从本仓库运行。
 
 ### Windows 安装包
 
@@ -70,9 +70,11 @@ pnpm dsh web
 
 **不要**使用 `npx @deepseek-ai/dsh web`——它会安装官方 npm 包，不含本 fork 的定制功能（教师工作台、内置 better-sidebar、上传预览、overlay 收起规则）。
 
-### 2. 内置 IM、cron 与 Office 预览
+### 2. 内置生图、IM、cron、技能／MCP 管理与 Office
 
-Web 组合与 Windows EXE 已包含经过审阅的 `@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3 和 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`。机器人与 QQ 语音在**设置 → 插件 → 连接平台**中配置；cron 与 Office 预览侧边栏入口由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
+Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 插件 → AI 生图**中配置；只在**设置 → 模型**中添加生图模型并不会创建生图工具。机器人与 QQ 语音在**设置 → 插件 → 连接平台**中配置，技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
+
+Univer 封装层采用 Apache-2.0，但其可执行依赖闭包含有商业 `@univerjs-pro/*` 组件。启动前必须通过 `UNIVER_LICENSE` 提供有效许可证，分发安装器前还要取得所需分发权；内置配置项已关闭产品遥测。部分 Slide 布局、SVG 测量与截图操作还需要本机 Chrome 或 Chromium，可用 `UNIVER_RENDER_BROWSER` 指定其可执行文件。
 
 ### 3. 配置 MinerU（文档提取）
 
@@ -86,16 +88,16 @@ Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`
 "speech": {
   "enabled": true,
   "baseUrl": "http://127.0.0.1:8000/v1/",
-  "model": "whisper-1",
+  "model": "Systran/faster-whisper-small",
   "language": "zh"
 }
 ```
 
-`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行了一个）。若服务需要 API key，可通过 QQ 设置页保存，或设置 `DSH_QQ_ASR_API_KEY`。QQ 机器人、主输入框和工作台「日常管理」的麦克风控件共用这些设置；保存后下一次完整录音会直接读取新值，无需重启 Host。
+`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行 Speaches）。`model` 必须是该服务通过 `GET /v1/models` 返回的已安装 ASR 模型；本机开放 `Systran/faster-whisper-small`，而 `whisper-1` 别名指向未安装的大模型并返回 HTTP 404。若服务需要 API key，可通过 QQ 设置页保存，或设置 `DSH_QQ_ASR_API_KEY`。QQ 机器人、主输入框和工作台「日常管理」的麦克风控件共用这些设置；保存后下一次完整录音会直接读取新值，无需重启 Host。QQ 语音消息可以直接采用 QQ 平台提供的文字，因此应使用任一浏览器麦克风控件验证已配置的 ASR 服务，不能只根据机器人识别成功判断端点可用。
 
-### 5. Office 预览格式
+### 5. Office 预览与创作格式
 
-内置的 AGPL-3.0 Office 查看器可预览工作区中的 `.docx`、`.xlsx` 与 `.pptx`；输入框上传仍沿用既有的右侧栏预览路径。旧版 `.doc`、`.xls`、`.ppt` 仍只能下载，需要先转换格式。
+内置的 AGPL-3.0 Office 查看器可预览工作区中的 `.docx`、`.xlsx` 与 `.pptx`，Univer Office 则能创建并审阅可编辑的 `.univer` Sheets、Docs、Slides、Bases 与 Boards。Univer 可导入 `.xlsx`、`.csv`、`.tsv`、`.docx` 与 `.pptx`，并在审阅后导出支持的 Office 格式；输入框上传仍沿用既有的右侧栏预览路径。旧版 `.doc`、`.xls`、`.ppt` 仍只能下载，需要先转换格式。
 
 ### Windows 系统差异
 
@@ -115,6 +117,7 @@ Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`
   路径分隔符用 `/` 或 `\\` 均可，必须是绝对路径。若不配置此项，插件会回退到 `C:\Users\<用户名>\Desktop`（Windows 桌面）。
 - **`workspaces.json`**：QQ 机器人的工作区路径也要改成 Windows 路径，例如 `C:/Users/你的用户名/dsh-teacher`（克隆仓库的位置）。
 - **`DSH_HOME` 环境变量**（可选）：默认无需设置；如需自定义数据目录，Windows 用 `set DSH_HOME=C:\...` 或系统环境变量。
+- **Univer 环境变量**：启动安装版前，请在 Windows 用户或系统环境中添加有效的 `UNIVER_LICENSE`。若无法自动发现 Chrome，请把 `UNIVER_RENDER_BROWSER` 设置为其可执行文件的绝对路径。
 - **`dshHomePath` 自动适配**：教师工作台的存储（`segments`/`students`/`sources`/`generated`）和会话存储用 `dshHomePath()` 生成，自动落到 `C:\Users\<用户名>\.dsh\...`，**无需手动改**。
 - **命令提示符**：PowerShell 中运行 `pnpm dsh web` 等命令即可；若提示执行策略限制，先运行 `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`。
 - **MinerU 与语音服务**：`baseUrl`/`endpoint` 用 `127.0.0.1` 回环地址即可（Windows 上同样支持）；这些服务若装在 WSL 里，则把地址改成 WSL 的 IP。
@@ -126,6 +129,8 @@ Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`
 - 点击输入框上传的文件卡片，会在右侧栏打开预览标签页（PDF、DOCX、XLSX、PPTX、图片）。
 - QQ 机器人可收发消息；`qq_send_local_file` 可发送图片/文件；开启 ASR 后语音消息可转写。
 - 侧边栏出现定时任务入口，可查看与管理定时任务。
+- **设置 → 技能**会列出全局与工作区技能，**设置 → MCP**可以列出并测试已配置服务器。
+- agent 可以创建 `.univer` 文件、显示其隔离审阅卡片，并把通过审阅的 Sheet、Doc 或 Slide 导出为支持的 Office 格式。
 
 ## 社区与支持
 

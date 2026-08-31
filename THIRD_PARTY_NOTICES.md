@@ -5,9 +5,9 @@
 
 DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party software listed below. Each project remains under its own license; nothing in this file changes those terms.
 
-This file lists **direct** dependencies declared by the workspace and the explicitly disclosed official Claude Code platform payload closure. It is generated from the workspace manifests by `scripts/gen-third-party-notices.ts`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and `scripts/gen-third-party-notices.spec.ts` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run `pnpm run verify-third-party-notices` for the standalone check.
+This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the bundled Windows-MCP desktop runtime, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by `scripts/gen-third-party-notices.ts`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and `scripts/gen-third-party-notices.spec.ts` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run `pnpm run verify-third-party-notices` for the standalone check.
 
-The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [`pnpm-lock.yaml`](pnpm-lock.yaml) — inspect it with `pnpm licenses list`. The Python closure is recorded separately in [`python/sdk/uv.lock`](python/sdk/uv.lock).
+The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [`pnpm-lock.yaml`](pnpm-lock.yaml) — inspect it with `pnpm licenses list`. The Python SDK closure is recorded separately in [`python/sdk/uv.lock`](python/sdk/uv.lock), and the Windows-MCP desktop runtime closure is recorded in [`third-party/windows-mcp/requirements.lock`](third-party/windows-mcp/requirements.lock).
 
 ## Vendored source (`vendor/`)
 
@@ -25,6 +25,19 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 | `@deepseek-ai/cordis-plugin-hmr` | `@cordisjs/plugin-hmr` | [github.com/deepseek-harness/cordis](https://github.com/deepseek-harness/cordis) | MIT |
 | `@deepseek-ai/cordis-plugin-logger-console` | `@cordisjs/plugin-logger-console` | [github.com/deepseek-harness/cordis](https://github.com/deepseek-harness/cordis) | MIT |
 
+
+## Bundled skill distributions
+
+[`PPT Master`](https://github.com/hugohe3/ppt-master) 6.1.0 is distributed inside `@deepseek-ai/dsh-skill-ppt-master` under the MIT license. The complete 12,939-file, 79,496,215-byte upstream Skill directory preserves its `LICENSE`, sponsor records, dependency declaration, integrity guard, scripts, references, templates, images, and sounds. The package does not install the optional Python dependencies listed by the Skill; those remain operator-provided runtime components. The retained license is available at [`packages/skill/skill-ppt-master/assets/ppt-master/LICENSE`](packages/skill/skill-ppt-master/assets/ppt-master/LICENSE).
+
+
+## Bundled Windows-MCP desktop runtime
+
+The Windows desktop installer embeds [CPython](https://www.python.org/) 3.14.7 under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5 under MIT. The CPython embedded archive is pinned to SHA-256 `d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15`; the Windows-MCP wheel is pinned to SHA-256 `a68dff0a493b620cf0febdb5b31cf140199e5d54fa8b737dfadb4aa73100630d`.
+
+DSH applies [`third-party/windows-mcp/patches/use-thefuzz.patch`](third-party/windows-mcp/patches/use-thefuzz.patch) while assembling the runtime, replacing Windows-MCP's sole `fuzzywuzzy` import with the MIT-licensed `TheFuzz` API. The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [`third-party/windows-mcp/requirements.lock`](third-party/windows-mcp/requirements.lock), and its source identities, download URLs, digests, and patch digest are recorded in [`third-party/windows-mcp/runtime.json`](third-party/windows-mcp/runtime.json). The installed wheel `.dist-info` trees remain inside the packaged `resources/windows-mcp/Lib/site-packages` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
+
+
 ## Runtime npm dependencies
 
 External packages that a workspace package resolves at runtime. The tier covers every plugin a user can mount from `cordis.yml` — not only what the `dsh` CLI, Web UI, and Python SDK runtime load by default.
@@ -35,6 +48,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript) | SEE LICENSE IN README.md |
 | [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
+| [`@dickpy/dsh-imagegen`](https://github.com/dickpy/dsh-imagegen) | Apache-2.0 |
 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | MIT |
 | [`@huanlin/dsh-plugin-better-sidebar-plugin-office`](https://github.com/HuanLinOTO/dsh-plugin-better-sidebar-plugin-office) | AGPL-3.0 |
 | [`@joplin/turndown-plugin-gfm`](https://github.com/laurent22/joplin-turndown-plugin-gfm) | MIT |
@@ -79,6 +93,8 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
 | [`dsh-better-sidebar`](https://github.com/omdsh-dev/DSH-better-sidebar) | MIT |
 | [`dsh-plugin-cron`](https://github.com/abiaoa1314/dsh-plugin-cron) | MIT |
+| [`dsh-skill-mcp-panel`](https://github.com/Fishquito7/dsh-skill-mcp-panel) | MIT |
+| [`dsh-univer-office`](https://github.com/dream-num/dsh-univer-office) | Apache-2.0 |
 | [`e2b`](https://github.com/e2b-dev/e2b) | MIT |
 | [`electron-log`](https://github.com/megahertz/electron-log) | MIT |
 | [`electron-updater`](https://github.com/electron-userland/electron-builder) | MIT |
@@ -139,6 +155,7 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `@xmanrui/dsh-im@1.0.3` — [`patches/xmanrui-dsh-im@1.0.3.patch`](patches/xmanrui-dsh-im@1.0.3.patch)
 - `dsh-better-sidebar@0.17.1` — [`patches/dsh-better-sidebar@0.17.1.patch`](patches/dsh-better-sidebar@0.17.1.patch)
 - `dsh-plugin-cron@0.1.3` — [`patches/dsh-plugin-cron@0.1.3.patch`](patches/dsh-plugin-cron@0.1.3.patch)
+- `dsh-skill-mcp-panel@2.0.1` — [`patches/dsh-skill-mcp-panel@2.0.1.patch`](patches/dsh-skill-mcp-panel@2.0.1.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
 
 ## Official Claude Code platform payloads
@@ -157,6 +174,115 @@ The installed SDK 0.3.241 declares the following optional platform packages. Eac
 | [`@anthropic-ai/claude-agent-sdk-linux-x64-musl`](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk-linux-x64-musl) | 0.3.241 | SEE LICENSE IN LICENSE.md |
 | [`@anthropic-ai/claude-agent-sdk-win32-arm64`](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk-win32-arm64) | 0.3.241 | SEE LICENSE IN LICENSE.md |
 | [`@anthropic-ai/claude-agent-sdk-win32-x64`](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk-win32-x64) | 0.3.241 | SEE LICENSE IN LICENSE.md |
+
+
+## Univer installed and artifact-bundled closure
+
+`dsh-univer-office` 0.2.12 is Apache-2.0, but its executable closure also contains the packages below. Its three external `@univerjs-pro/*` runtime roots select native payloads at install time. Its build script inlines the listed `@univerjs-pro/*` and `@univer-cli/*` build-time modules into the shipped Host, Viewer, Gateway, worker, and render artifacts. Those modules retain their own terms; the wrapper's Apache-2.0 declaration does not relicense them, and the compiled tarball does not carry their individual package manifests or notices. [Univer's licensing guide](https://docs.univer.ai/guides/pro/license) requires a valid Univer Pro commercial license for production use. Inclusion in this repository or an installer does not grant that license; every distributor and production operator must obtain all production and distribution rights required by Univer. A package identity, version, bundled-declaration digest, or platform-payload change requires another dependency, compatibility, terms, and notices review.
+
+| Univer package | Version | Role |
+| --- | --- | --- |
+| [`@univer-cli/api-reference`](https://www.npmjs.com/package/@univer-cli/api-reference) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/content-execution`](https://www.npmjs.com/package/@univer-cli/content-execution) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/content-inspection`](https://www.npmjs.com/package/@univer-cli/content-inspection) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/headless-univer`](https://www.npmjs.com/package/@univer-cli/headless-univer) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/resource-library`](https://www.npmjs.com/package/@univer-cli/resource-library) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/svg-facade`](https://www.npmjs.com/package/@univer-cli/svg-facade) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/unit-layout-lint`](https://www.npmjs.com/package/@univer-cli/unit-layout-lint) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/unit-screenshot`](https://www.npmjs.com/package/@univer-cli/unit-screenshot) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/univer-collaboration-runtime`](https://www.npmjs.com/package/@univer-cli/univer-collaboration-runtime) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/univer-render-page`](https://www.npmjs.com/package/@univer-cli/univer-render-page) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univer-cli/univer-render-runtime`](https://www.npmjs.com/package/@univer-cli/univer-render-runtime) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/bases`](https://www.npmjs.com/package/@univerjs-pro/bases) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/bases-exchange-client`](https://www.npmjs.com/package/@univerjs-pro/bases-exchange-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/bases-ui`](https://www.npmjs.com/package/@univerjs-pro/bases-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards`](https://www.npmjs.com/package/@univerjs-pro/boards) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-chart`](https://www.npmjs.com/package/@univerjs-pro/boards-chart) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-chart-ui`](https://www.npmjs.com/package/@univerjs-pro/boards-chart-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-mind`](https://www.npmjs.com/package/@univerjs-pro/boards-mind) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-mind-ui`](https://www.npmjs.com/package/@univerjs-pro/boards-mind-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-print`](https://www.npmjs.com/package/@univerjs-pro/boards-print) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-table`](https://www.npmjs.com/package/@univerjs-pro/boards-table) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-table-ui`](https://www.npmjs.com/package/@univerjs-pro/boards-table-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/boards-ui`](https://www.npmjs.com/package/@univerjs-pro/boards-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/chart-ui`](https://www.npmjs.com/package/@univerjs-pro/chart-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/cli-assets`](https://www.npmjs.com/package/@univerjs-pro/cli-assets) | 0.1.0 | runtime dependency |
+| [`@univerjs-pro/collaboration`](https://www.npmjs.com/package/@univerjs-pro/collaboration) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-client`](https://www.npmjs.com/package/@univerjs-pro/collaboration-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-client-ui`](https://www.npmjs.com/package/@univerjs-pro/collaboration-client-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-embed`](https://www.npmjs.com/package/@univerjs-pro/collaboration-embed) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-endpoint`](https://www.npmjs.com/package/@univerjs-pro/collaboration-endpoint) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-history-endpoint`](https://www.npmjs.com/package/@univerjs-pro/collaboration-history-endpoint) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-history-service`](https://www.npmjs.com/package/@univerjs-pro/collaboration-history-service) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-service`](https://www.npmjs.com/package/@univerjs-pro/collaboration-service) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-transport-node`](https://www.npmjs.com/package/@univerjs-pro/collaboration-transport-node) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-worktree-endpoint`](https://www.npmjs.com/package/@univerjs-pro/collaboration-worktree-endpoint) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/collaboration-worktree-service`](https://www.npmjs.com/package/@univerjs-pro/collaboration-worktree-service) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-callout`](https://www.npmjs.com/package/@univerjs-pro/docs-callout) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-callout-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-callout-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-chart`](https://www.npmjs.com/package/@univerjs-pro/docs-chart) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-chart-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-chart-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-code`](https://www.npmjs.com/package/@univerjs-pro/docs-code) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-code-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-code-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-column`](https://www.npmjs.com/package/@univerjs-pro/docs-column) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-column-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-column-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-exchange-client`](https://www.npmjs.com/package/@univerjs-pro/docs-exchange-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-latex`](https://www.npmjs.com/package/@univerjs-pro/docs-latex) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-latex-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-latex-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-list`](https://www.npmjs.com/package/@univerjs-pro/docs-list) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-list-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-list-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-print`](https://www.npmjs.com/package/@univerjs-pro/docs-print) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-quote`](https://www.npmjs.com/package/@univerjs-pro/docs-quote) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-quote-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-quote-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-shape`](https://www.npmjs.com/package/@univerjs-pro/docs-shape) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-shape-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-shape-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-table`](https://www.npmjs.com/package/@univerjs-pro/docs-table) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/docs-table-ui`](https://www.npmjs.com/package/@univerjs-pro/docs-table-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/edit-history-loader`](https://www.npmjs.com/package/@univerjs-pro/edit-history-loader) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/edit-history-viewer`](https://www.npmjs.com/package/@univerjs-pro/edit-history-viewer) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/embed`](https://www.npmjs.com/package/@univerjs-pro/embed) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/embed-ui`](https://www.npmjs.com/package/@univerjs-pro/embed-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/engine-chart`](https://www.npmjs.com/package/@univerjs-pro/engine-chart) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/engine-formula`](https://www.npmjs.com/package/@univerjs-pro/engine-formula) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/engine-formula-rust-binding`](https://www.npmjs.com/package/@univerjs-pro/engine-formula-rust-binding) | 1.0.0-insiders.20260819-8209aa8 | runtime dependency |
+| [`@univerjs-pro/engine-formula-rust-binding-darwin-arm64`](https://www.npmjs.com/package/@univerjs-pro/engine-formula-rust-binding-darwin-arm64) | 1.0.0-insiders.20260819-8209aa8 | optional platform payload |
+| [`@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu`](https://www.npmjs.com/package/@univerjs-pro/engine-formula-rust-binding-linux-arm64-gnu) | 1.0.0-insiders.20260819-8209aa8 | optional platform payload |
+| [`@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu`](https://www.npmjs.com/package/@univerjs-pro/engine-formula-rust-binding-linux-x64-gnu) | 1.0.0-insiders.20260819-8209aa8 | optional platform payload |
+| [`@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc`](https://www.npmjs.com/package/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc) | 1.0.0-insiders.20260819-8209aa8 | optional platform payload |
+| [`@univerjs-pro/engine-shape`](https://www.npmjs.com/package/@univerjs-pro/engine-shape) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/exchange-client`](https://www.npmjs.com/package/@univerjs-pro/exchange-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/exchange-node`](https://www.npmjs.com/package/@univerjs-pro/exchange-node) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/exchange-node-binding`](https://www.npmjs.com/package/@univerjs-pro/exchange-node-binding) | 0.1.0 | runtime dependency |
+| [`@univerjs-pro/exchange-node-binding-darwin-arm64`](https://www.npmjs.com/package/@univerjs-pro/exchange-node-binding-darwin-arm64) | 0.1.0 | optional platform payload |
+| [`@univerjs-pro/exchange-node-binding-linux-arm64-gnu`](https://www.npmjs.com/package/@univerjs-pro/exchange-node-binding-linux-arm64-gnu) | 0.1.0 | optional platform payload |
+| [`@univerjs-pro/exchange-node-binding-linux-x64-gnu`](https://www.npmjs.com/package/@univerjs-pro/exchange-node-binding-linux-x64-gnu) | 0.1.0 | optional platform payload |
+| [`@univerjs-pro/exchange-node-binding-win32-x64-msvc`](https://www.npmjs.com/package/@univerjs-pro/exchange-node-binding-win32-x64-msvc) | 0.1.0 | optional platform payload |
+| [`@univerjs-pro/ink`](https://www.npmjs.com/package/@univerjs-pro/ink) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/ink-ui`](https://www.npmjs.com/package/@univerjs-pro/ink-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/license`](https://www.npmjs.com/package/@univerjs-pro/license) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/range-preprocess`](https://www.npmjs.com/package/@univerjs-pro/range-preprocess) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/shape-editor`](https://www.npmjs.com/package/@univerjs-pro/shape-editor) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/shape-editor-ui`](https://www.npmjs.com/package/@univerjs-pro/shape-editor-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-chart`](https://www.npmjs.com/package/@univerjs-pro/sheets-chart) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-chart-ui`](https://www.npmjs.com/package/@univerjs-pro/sheets-chart-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-exchange-client`](https://www.npmjs.com/package/@univerjs-pro/sheets-exchange-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-outline`](https://www.npmjs.com/package/@univerjs-pro/sheets-outline) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-outline-ui`](https://www.npmjs.com/package/@univerjs-pro/sheets-outline-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-pivot`](https://www.npmjs.com/package/@univerjs-pro/sheets-pivot) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-pivot-ui`](https://www.npmjs.com/package/@univerjs-pro/sheets-pivot-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-print`](https://www.npmjs.com/package/@univerjs-pro/sheets-print) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-shape`](https://www.npmjs.com/package/@univerjs-pro/sheets-shape) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-shape-ui`](https://www.npmjs.com/package/@univerjs-pro/sheets-shape-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-sparkline`](https://www.npmjs.com/package/@univerjs-pro/sheets-sparkline) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/sheets-sparkline-ui`](https://www.npmjs.com/package/@univerjs-pro/sheets-sparkline-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides`](https://www.npmjs.com/package/@univerjs-pro/slides) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-chart`](https://www.npmjs.com/package/@univerjs-pro/slides-chart) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-chart-ui`](https://www.npmjs.com/package/@univerjs-pro/slides-chart-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-exchange-client`](https://www.npmjs.com/package/@univerjs-pro/slides-exchange-client) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-print`](https://www.npmjs.com/package/@univerjs-pro/slides-print) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-table`](https://www.npmjs.com/package/@univerjs-pro/slides-table) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-table-ui`](https://www.npmjs.com/package/@univerjs-pro/slides-table-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
+| [`@univerjs-pro/slides-ui`](https://www.npmjs.com/package/@univerjs-pro/slides-ui) | 1.0.0-insiders.20260822-0c0c0dd | bundled artifact module |
 
 
 ## Development-only npm dependencies

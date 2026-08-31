@@ -10,6 +10,8 @@
     - button "插件":
       - img
       - text: 插件
+    - button "技能"
+    - button "MCP"
     - button "Agent 预设":
       - img
       - text: Agent 预设
@@ -50,3 +52,11 @@
         - 'button "展开设置: 试题切割工作区"':
           - text: 试题切割工作区 设置切题试卷和学生试题副本的存储策略。
           - img
+      - listitem:
+        - 'button "展开设置: Windows 桌面控制"':
+          - text: Windows 桌面控制 通过安装包内置的 Windows-MCP 运行时操作可见的 Windows 应用。
+          - img
+      - listitem:
+        - 'button "展开: AI 生图（dsh-imagegen）"': AI 生图（dsh-imagegen） 配置图像生成 API 地址与密钥 ▾
+      - listitem:
+        - 'button "展开: Univer Office"': Univer Office 控制文档编辑期间的实时预览体验。

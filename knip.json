@@ -19,7 +19,6 @@
   ],
   "ignoreDependencies": [
     "@yarnpkg/cli-dist",
-    "dsh-better-sidebar",
     "lightningcss"
   ],
   "workspaces": {
@@ -695,9 +694,12 @@
     "packages/bundle/web-app": {
       "ignoreDependencies": [
         "@deepseek-ai/.+",
+        "@dickpy/dsh-imagegen",
         "@huanlin/dsh-plugin-better-sidebar-plugin-office",
         "@xmanrui/dsh-im",
-        "dsh-plugin-cron"
+        "dsh-plugin-cron",
+        "dsh-skill-mcp-panel",
+        "dsh-univer-office"
       ]
     },
     "packages/host/tool-teacher-workbench": {

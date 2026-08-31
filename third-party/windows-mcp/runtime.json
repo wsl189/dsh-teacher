@@ -1,0 +1,24 @@
+{
+  "python": {
+    "version": "3.14.7",
+    "url": "https://www.python.org/ftp/python/3.14.7/python-3.14.7-embed-amd64.zip",
+    "sha256": "d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15"
+  },
+  "windowsMcp": {
+    "version": "0.8.5",
+    "repository": "https://github.com/CursorTouch/Windows-MCP",
+    "sourceCommit": "30c1472f807eefa44774a2fe23a5b10502a59f23",
+    "wheelUrl": "https://files.pythonhosted.org/packages/5d/7a/c52fbd66776394e4e94f8e2814a1784837f9bca3ab34562c5c851ad8c751/windows_mcp-0.8.5-py3-none-any.whl",
+    "wheelSha256": "a68dff0a493b620cf0febdb5b31cf140199e5d54fa8b737dfadb4aa73100630d",
+    "sourceSha256": "ee9ccd03348d6a50f3c03fcd78c195c75a613890a8f3c26a68ce01797c4174ae"
+  },
+  "patches": [
+    {
+      "path": "third-party/windows-mcp/patches/use-thefuzz.patch",
+      "target": "windows_mcp/desktop/service.py",
+      "before": "from fuzzywuzzy import process",
+      "after": "from thefuzz import process",
+      "sha256": "0ea924d9603e170c2dce00396313ea15ca99dd92e00ffcdc54127b18aa7d09fe"
+    }
+  ]
+}

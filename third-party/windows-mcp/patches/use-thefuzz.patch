@@ -1,0 +1,12 @@
+diff --git a/windows_mcp/desktop/service.py b/windows_mcp/desktop/service.py
+--- a/windows_mcp/desktop/service.py
++++ b/windows_mcp/desktop/service.py
+@@ -19,7 +19,7 @@ from urllib.parse import urljoin
+ from locale import getpreferredencoding
+ from typing import Literal
+ from markdownify import markdownify
+-from fuzzywuzzy import process
++from thefuzz import process
+ from time import sleep, time, perf_counter
+ from psutil import Process
+ import math

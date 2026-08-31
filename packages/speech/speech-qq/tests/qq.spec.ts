@@ -202,9 +202,13 @@ describe('QqConfiguredSpeechProvider', () => {
       .mockResolvedValueOnce(new Response('no', { status: 503 }))
     const provider = new QqConfiguredSpeechProvider(config(configPath), credentials(), fetch)
 
-    await expect(provider.transcribe(request())).rejects.toMatchObject({ code: 'provider-failure' })
-    await expect(provider.transcribe(request())).rejects.toThrow('redirects are not allowed')
-    await expect(provider.transcribe(request())).rejects.toThrow('HTTP 503')
+    await expect(provider.transcribe(request())).rejects.toMatchObject({ code: 'provider-unavailable' })
+    const redirect = provider.transcribe(request())
+    await expect(redirect).rejects.toMatchObject({ code: 'provider-failure' })
+    await expect(redirect).rejects.toThrow('redirects are not allowed')
+    const rejected = provider.transcribe(request())
+    await expect(rejected).rejects.toMatchObject({ code: 'provider-failure' })
+    await expect(rejected).rejects.toThrow('HTTP 503')
   })
 
   it('preserves caller cancellation instead of remapping it as a service outage', async () => {

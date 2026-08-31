@@ -36,6 +36,9 @@
     # once the web UI owns the choice per session.
     mode: !!js process.env.DSH_TOOLS_MODE
 
+- id: skill-ppt-master
+  disabled: false
+
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 
 # `dsh.client` rows are the browser roster the modules node half scans into
@@ -45,6 +48,16 @@
     # delegation tools. The Plugins page edits this settings namespace.
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
+
+    # The desktop launcher supplies the private Python runtime path. This row
+    # remains dormant until the user enables it from Settings > Plugins.
+    - id: windows-mcp
+      name: '@deepseek-ai/dsh-windows-mcp'
+      config:
+        enabled: false
+        runtimeCommand: !!js process.env.DSH_WINDOWS_MCP_COMMAND ?? ''
+        runtimeCwd: !!js process.env.DSH_WINDOWS_MCP_RUNTIME_ROOT ?? ''
+        toolCallTimeoutMs: 60000
 
     - id: code-runtime
       name: '@deepseek-ai/dsh-code-runtime-worker-thread'
@@ -90,12 +103,25 @@
         maxResponseBytes: 65536
 
     # Product-bundled third-party extensions. Their configuration and durable
-    # data remain under DSH_HOME; only their executable closure ships here.
+    # data remain outside the application payload; only executable code ships.
+    - id: dickpy-dsh-imagegen
+      name: '@dickpy/dsh-imagegen'
+
     - id: xmanrui-dsh-im
       name: '@xmanrui/dsh-im'
 
     - id: dsh-plugin-cron
       name: dsh-plugin-cron
+
+    - id: dsh-skill-mcp-panel
+      name: dsh-skill-mcp-panel
+
+    - id: dsh-univer-office
+      name: dsh-univer-office
+      config:
+        # The built-in distribution does not opt users into third-party
+        # telemetry. All other plugin defaults remain available in Settings.
+        telemetry: false
 
     - id: teacher-workbench
       name: '@deepseek-ai/dsh-host-teacher-workbench'

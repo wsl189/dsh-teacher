@@ -95,7 +95,7 @@ interface SpeechProvider {
 }
 ```
 
-Providers validate request fields, enforce their own resource limits, and throw `SpeechError` with a stable `SpeechErrorCode`. The runtime converts expected failures to `SpeechTranscribeRejected`, hides unexpected provider diagnostics, and rejects ambiguous automatic selection instead of depending on registration order. The QQ adapter re-reads the QQ integration's ASR settings and credential for each operation; it accepts HTTPS or loopback HTTP endpoints and never persists audio or returned text.
+Providers validate request fields, enforce their own resource limits, and throw `SpeechError` with a stable `SpeechErrorCode`. The runtime converts expected failures to `SpeechTranscribeRejected`, hides unexpected provider diagnostics, and rejects ambiguous automatic selection instead of depending on registration order. The QQ adapter re-reads the QQ integration's ASR settings and credential for each operation; it accepts HTTPS or loopback HTTP endpoints, reports transport failures as `provider-unavailable`, reports rejected HTTP requests and invalid settings as `provider-failure`, and never persists audio or returned text.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

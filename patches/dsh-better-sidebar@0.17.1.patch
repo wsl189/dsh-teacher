@@ -1,17 +1,436 @@
+diff --git a/lib/client-registry.js b/lib/client-registry.js
+index b1630afa37..5dcc13d4d6 100644
+--- a/lib/client-registry.js
++++ b/lib/client-registry.js
+@@ -10652,0 +10652,5 @@ window.__ModuleLoader__.load({
++			/** Return the thread's own transcript events after the optional sequence. */
++			sidechatEvents: (childId, afterSeq, signal) => call("sidechat.events", {
++				childId,
++				...afterSeq !== void 0 ? { afterSeq } : {}
++			}, signal),
+@@ -16398,6 +16403,3 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-		* sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
+-		* info go through the plugin's own /sidebar/api sidechat.* routes
+-		* (subagent-origin identities are fenced from the generic session RPCs);
+-		* the transcript is polled from the generic session.history RPC (seed-cut
+-		* at session/end-seed, boundary row dropped, chunk streaming accumulated)
+-		* — see sidechat-transcript.ts.
++		* sidechat-core.ts). Every thread operation, including transcript polling,
++		* goes through the plugin's own /sidebar/api sidechat.* routes. The host
++		* removes inherited seed events before returning transcript deltas.
+@@ -16405,7 +16406,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-		/** Tail-page size for one transcript poll (events per page). Small on
+-		*  purpose: streaming polls ride the tail and merge by seq. */
+-		const PAGE_MESSAGES = 8;
+-		/** First-attach walk page size: cold reads re-expand chunk-rows into one
+-		*  event per streamed delta, so a single answer can be hundreds of events —
+-		*  the walk must page big or earlier tool/call rows fall out of the window. */
+-		const WALK_PAGE_EVENTS = 200;
+@@ -16554,4 +16549 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			const cacheRef = (0, react.useRef)({
+-				seedBoundary: null,
+-				entries: []
+-			});
++			const cacheRef = (0, react.useRef)({ entries: [] });
+@@ -16610,3 +16602 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			/** One transcript pull: the first read walks back to the seed boundary
+-			*  (big pages — chunk deltas re-expand on cold reads), later reads fetch
+-			*  one tail page and merge (seq-deduped). */
++			/** Pull and merge the thread's own events beyond the cached tail. */
+@@ -16617 +16606,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-				const cache = cacheRef.current;
+@@ -16619,19 +16608,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-					if (cache.seedBoundary === null) {
+-						const walk = await collectOwnEvents(async (beforeSeq) => {
+-							const response = await ctx.connection.api.sessions.history({
+-								sessionId: childId,
+-								maxMessages: WALK_PAGE_EVENTS,
+-								...beforeSeq === void 0 ? {} : { beforeSeq }
+-							}, controller.signal);
+-							if (!response.result.ok) throw new Error("history walk failed");
+-							return response.result.value.events;
+-						});
+-						cache.seedBoundary = walk.seedBoundary;
+-						cache.entries = mergeBySeq(cache.entries, walk.entries);
+-					} else {
+-						const response = await ctx.connection.api.sessions.history({
+-							sessionId: childId,
+-							maxMessages: PAGE_MESSAGES
+-						}, controller.signal);
+-						if (!response.result.ok) return;
+-						cache.entries = mergeBySeq(cache.entries, response.result.value.events);
++					const cache = cacheRef.current;
++					const afterSeq = cache.entries.at(-1)?.event.seq;
++					const { events } = await api.sidechatEvents(childId, afterSeq, controller.signal);
++					if (events.length > 0) {
++						const incoming = events.map((event) => ({ event }));
++						cache.entries = mergeBySeq(cache.entries, incoming);
++						setRevision((value) => value + 1);
+@@ -16639 +16615,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-					setRevision((value) => value + 1);
+@@ -16641 +16617 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			}, [ctx]);
++			}, []);
+@@ -16649,4 +16625 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-				cacheRef.current = {
+-					seedBoundary: null,
+-					entries: []
+-				};
++				cacheRef.current = { entries: [] };
+@@ -22432 +22405 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-//# sourceMappingURL=client-registry.js.map
+\ No newline at end of file
++//# sourceMappingURL=client-registry.js.map
+diff --git a/lib/client.js b/lib/client.js
+index 4f339ef28e..2f1e0f09a4 100644
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -10652,0 +10652,5 @@ window.__ModuleLoader__.load({
++			/** Return the thread's own transcript events after the optional sequence. */
++			sidechatEvents: (childId, afterSeq, signal) => call("sidechat.events", {
++				childId,
++				...afterSeq !== void 0 ? { afterSeq } : {}
++			}, signal),
+@@ -16398,6 +16403,3 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-		* sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
+-		* info go through the plugin's own /sidebar/api sidechat.* routes
+-		* (subagent-origin identities are fenced from the generic session RPCs);
+-		* the transcript is polled from the generic session.history RPC (seed-cut
+-		* at session/end-seed, boundary row dropped, chunk streaming accumulated)
+-		* — see sidechat-transcript.ts.
++		* sidechat-core.ts). Every thread operation, including transcript polling,
++		* goes through the plugin's own /sidebar/api sidechat.* routes. The host
++		* removes inherited seed events before returning transcript deltas.
+@@ -16405,7 +16406,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-		/** Tail-page size for one transcript poll (events per page). Small on
+-		*  purpose: streaming polls ride the tail and merge by seq. */
+-		const PAGE_MESSAGES = 8;
+-		/** First-attach walk page size: cold reads re-expand chunk-rows into one
+-		*  event per streamed delta, so a single answer can be hundreds of events —
+-		*  the walk must page big or earlier tool/call rows fall out of the window. */
+-		const WALK_PAGE_EVENTS = 200;
+@@ -16554,4 +16549 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			const cacheRef = (0, react.useRef)({
+-				seedBoundary: null,
+-				entries: []
+-			});
++			const cacheRef = (0, react.useRef)({ entries: [] });
+@@ -16610,3 +16602 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			/** One transcript pull: the first read walks back to the seed boundary
+-			*  (big pages — chunk deltas re-expand on cold reads), later reads fetch
+-			*  one tail page and merge (seq-deduped). */
++			/** Pull and merge the thread's own events beyond the cached tail. */
+@@ -16617 +16606,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-				const cache = cacheRef.current;
+@@ -16619,19 +16608,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-					if (cache.seedBoundary === null) {
+-						const walk = await collectOwnEvents(async (beforeSeq) => {
+-							const response = await ctx.connection.api.sessions.history({
+-								sessionId: childId,
+-								maxMessages: WALK_PAGE_EVENTS,
+-								...beforeSeq === void 0 ? {} : { beforeSeq }
+-							}, controller.signal);
+-							if (!response.result.ok) throw new Error("history walk failed");
+-							return response.result.value.events;
+-						});
+-						cache.seedBoundary = walk.seedBoundary;
+-						cache.entries = mergeBySeq(cache.entries, walk.entries);
+-					} else {
+-						const response = await ctx.connection.api.sessions.history({
+-							sessionId: childId,
+-							maxMessages: PAGE_MESSAGES
+-						}, controller.signal);
+-						if (!response.result.ok) return;
+-						cache.entries = mergeBySeq(cache.entries, response.result.value.events);
++					const cache = cacheRef.current;
++					const afterSeq = cache.entries.at(-1)?.event.seq;
++					const { events } = await api.sidechatEvents(childId, afterSeq, controller.signal);
++					if (events.length > 0) {
++						const incoming = events.map((event) => ({ event }));
++						cache.entries = mergeBySeq(cache.entries, incoming);
++						setRevision((value) => value + 1);
+@@ -16639 +16615,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-					setRevision((value) => value + 1);
+@@ -16641 +16617 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-			}, [ctx]);
++			}, []);
+@@ -16649,4 +16625 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-				cacheRef.current = {
+-					seedBoundary: null,
+-					entries: []
+-				};
++				cacheRef.current = { entries: [] };
+@@ -22432 +22405 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+-//# sourceMappingURL=client.js.map
+\ No newline at end of file
++//# sourceMappingURL=client.js.map
+diff --git a/lib/index.js b/lib/index.js
+index a3bab6f349..7b247a9776 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -3328,0 +3328,6 @@ function messageLeadText(data) {
++/** The events a thread produced itself: everything after the last
++* `session/end-seed` marker. A log without a marker is returned whole. */
++function threadOwnLogEvents(events) {
++	for (let index = events.length - 1; index >= 0; index--) if (events[index]?.type === "session/end-seed") return events.slice(index + 1);
++	return [...events];
++}
+@@ -3436 +3442,2 @@ function buildSubagentLiveApi(ctx) {
+-* 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose').
++* 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose' /
++* 'sidechat.info' / 'sidechat.events').
+@@ -3459,0 +3466,2 @@ const CREATE_TIMEOUT_MS = 15e3;
++/** Maximum number of transcript events returned by one request. */
++const EVENTS_CAP = 8e3;
+@@ -3535,0 +3544,12 @@ function liveThreadAgent(ctx, childId) {
++/** Read a thread's freshest logical event log from its live agent or persistence. */
++async function threadLogEvents(ctx, childId) {
++	const agent = liveThreadAgent(ctx, childId);
++	if (agent !== void 0) return agent.session.events;
++	const persistence = ctx.get("sessionPersistence");
++	if (persistence === void 0) throw new SidebarError("sidechat-error", "the session persistence service is unavailable", 503);
++	try {
++		return (await persistence.inspect(childId)).events;
++	} catch (error) {
++		throw new SidebarError("not-found", `thread "${childId}" is not available: ${error instanceof Error ? error.message : String(error)}`, 404);
++	}
++}
+@@ -3681,0 +3702,8 @@ function buildSidechatApi(ctx) {
++		},
++		"sidechat.events": async (payload) => {
++			const childId = requireString(payload, "childId");
++			const rawAfter = payload.afterSeq;
++			if (rawAfter !== void 0 && (typeof rawAfter !== "number" || !Number.isSafeInteger(rawAfter) || rawAfter < 0)) throw new SidebarError("bad-request", "afterSeq must be a non-negative integer");
++			const own = threadOwnLogEvents(await threadLogEvents(ctx, childId));
++			const fresh = rawAfter === void 0 ? own : own.filter((event) => event.seq > rawAfter);
++			return { events: fresh.length > EVENTS_CAP ? fresh.slice(fresh.length - EVENTS_CAP) : fresh };
+diff --git a/lib/types/client/api.d.ts b/lib/types/client/api.d.ts
+index 014e8d3a18..0a89bac971 100644
+--- a/lib/types/client/api.d.ts
++++ b/lib/types/client/api.d.ts
+@@ -2 +2 @@ import type { LastActivity } from '../subagent-activity.ts';
+-import type { SidechatThreadInfo } from '../sidechat-core.ts';
++import type { SidechatLogEvent, SidechatThreadInfo } from '../sidechat-core.ts';
+@@ -229,0 +229,4 @@ export declare const api: {
++    /** Return the thread's own transcript events after the optional sequence. */
++    sidechatEvents: (childId: string, afterSeq?: number, signal?: AbortSignal) => Promise<{
++        events: SidechatLogEvent[];
++    }>;
+diff --git a/lib/types/sidechat-core.d.ts b/lib/types/sidechat-core.d.ts
+index 40b93a99b5..360fd5e48a 100644
+--- a/lib/types/sidechat-core.d.ts
++++ b/lib/types/sidechat-core.d.ts
+@@ -151,2 +151,4 @@ export interface SidechatThreadInfo {
+-/** The events a thread produced itself: everything after the LAST
+- *  `session/end-seed` marker (the fork-seed boundary). */
++/** The events a thread produced itself: everything after the last
++ * `session/end-seed` marker. A log without a marker is returned whole. */
++export declare function threadOwnLogEvents(events: readonly SidechatLogEvent[]): SidechatLogEvent[];
++/** {@link threadOwnLogEvents} over client history rows. */
+diff --git a/lib/types/sidechat-routes.d.ts b/lib/types/sidechat-routes.d.ts
+index 8e52e51c58..fec188c835 100644
+--- a/lib/types/sidechat-routes.d.ts
++++ b/lib/types/sidechat-routes.d.ts
+@@ -2,2 +2,2 @@ import type { Context } from './context-types.ts';
+-import { type SidechatThreadInfo } from './sidechat-core.ts';
+-/** The five Side Chat routes of the sidebar API (wire method names). */
++import { type SidechatLogEvent, type SidechatThreadInfo } from './sidechat-core.ts';
++/** The six Side Chat routes of the sidebar API (wire method names). */
+@@ -26,0 +26,4 @@ export interface SidechatRoutes {
++    /** Return the thread's own transcript events after the optional sequence. */
++    'sidechat.events'(payload: unknown): Promise<{
++        events: SidechatLogEvent[];
++    }>;
 diff --git a/package.json b/package.json
+index f59585a988..57fe7de913 100644
 --- a/package.json
 +++ b/package.json
-@@ -46,8 +46,11 @@
-     "client": {
-       "inject": [
+@@ -48 +48,3 @@
 -        "@deepseek-ai/dsh-client-runtime",
 +        "@deepseek-ai/dsh-api-session-controller",
 +        "@deepseek-ai/dsh-api-workspace-controller",
 +        "@deepseek-ai/dsh-client-connection",
-         "@deepseek-ai/dsh-client-locale",
+@@ -50 +52 @@
 -        "@deepseek-ai/dsh-client-ui-slots",
 +        "@deepseek-ai/dsh-client-ui-renderer",
-         "@deepseek-ai/dsh-client-ui-conversation",
+@@ -52,0 +54 @@
 +        "@deepseek-ai/dsh-client-ui-settings",
-         "@deepseek-ai/dsh-client-modules"
-       ],
+diff --git a/src/client/SideChatView.tsx b/src/client/SideChatView.tsx
+index 0dc500d171..893ee10ba6 100644
+--- a/src/client/SideChatView.tsx
++++ b/src/client/SideChatView.tsx
+@@ -16,6 +16,3 @@
+- * sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
+- * info go through the plugin's own /sidebar/api sidechat.* routes
+- * (subagent-origin identities are fenced from the generic session RPCs);
+- * the transcript is polled from the generic session.history RPC (seed-cut
+- * at session/end-seed, boundary row dropped, chunk streaming accumulated)
+- * — see sidechat-transcript.ts.
++ * sidechat-core.ts). Every thread operation, including transcript polling,
++ * goes through the plugin's own /sidebar/api sidechat.* routes. The host
++ * removes inherited seed events before returning transcript deltas.
+@@ -39 +36 @@ import { IconHistoryOutline16, IconSaveOutline16 } from './icons.tsx'
+-import type { Context, SidebarHistoryEntry } from '../context-types.ts'
++import type { Context, SidebarHistoryEntry, SidebarSessionEvent } from '../context-types.ts'
+@@ -48 +45 @@ import {
+-import { collectOwnEvents, toolArgsSummary, transcriptRows, type SidechatTranscriptRow } from './sidechat-transcript.ts'
++import { toolArgsSummary, transcriptRows, type SidechatTranscriptRow } from './sidechat-transcript.ts'
+@@ -55,7 +51,0 @@ import css from './SideChatView.module.css'
+-/** Tail-page size for one transcript poll (events per page). Small on
+- *  purpose: streaming polls ride the tail and merge by seq. */
+-const PAGE_MESSAGES = 8
+-/** First-attach walk page size: cold reads re-expand chunk-rows into one
+- *  event per streamed delta, so a single answer can be hundreds of events —
+- *  the walk must page big or earlier tool/call rows fall out of the window. */
+-const WALK_PAGE_EVENTS = 200
+@@ -95,2 +85 @@ const inFlightStarts = new Set<string>()
+-/** Per-thread transcript cache: seed boundary + thread-own events merged by
+- *  seq (streaming polls never re-download the inherited seed). */
++/** Per-thread transcript cache, merged by event sequence. */
+@@ -98 +86,0 @@ interface ThreadCache {
+-  seedBoundary: number | null
+@@ -277 +265 @@ export function SideChatView(props: {
+-  const cacheRef = useRef<ThreadCache>({ seedBoundary: null, entries: [] })
++  const cacheRef = useRef<ThreadCache>({ entries: [] })
+@@ -330,3 +318 @@ export function SideChatView(props: {
+-  /** One transcript pull: the first read walks back to the seed boundary
+-   *  (big pages — chunk deltas re-expand on cold reads), later reads fetch
+-   *  one tail page and merge (seq-deduped). */
++  /** Pull and merge the thread's own events beyond the cached tail. */
+@@ -337 +322,0 @@ export function SideChatView(props: {
+-    const cache = cacheRef.current
+@@ -339,22 +324,7 @@ export function SideChatView(props: {
+-      if (cache.seedBoundary === null) {
+-        const walk = await collectOwnEvents(async (beforeSeq) => {
+-          const response = await ctx.connection.api.sessions.history(
+-            {
+-              sessionId: childId,
+-              maxMessages: WALK_PAGE_EVENTS,
+-              ...(beforeSeq === undefined ? {} : { beforeSeq }),
+-            },
+-            controller.signal,
+-          )
+-          if (!response.result.ok) throw new Error('history walk failed')
+-          return response.result.value.events
+-        })
+-        cache.seedBoundary = walk.seedBoundary
+-        cache.entries = mergeBySeq(cache.entries, walk.entries)
+-      } else {
+-        const response = await ctx.connection.api.sessions.history(
+-          { sessionId: childId, maxMessages: PAGE_MESSAGES },
+-          controller.signal,
+-        )
+-        if (!response.result.ok) return
+-        cache.entries = mergeBySeq(cache.entries, response.result.value.events)
++      const cache = cacheRef.current
++      const afterSeq = cache.entries.at(-1)?.event.seq
++      const { events } = await api.sidechatEvents(childId, afterSeq, controller.signal)
++      if (events.length > 0) {
++        const incoming = events.map(event => ({ event: event as SidebarSessionEvent }))
++        cache.entries = mergeBySeq(cache.entries, incoming)
++        setRevision(value => value + 1)
+@@ -362 +331,0 @@ export function SideChatView(props: {
+-      setRevision(value => value + 1)
+@@ -366 +335 @@ export function SideChatView(props: {
+-  }, [ctx])
++  }, [])
+@@ -380 +349 @@ export function SideChatView(props: {
+-    cacheRef.current = { seedBoundary: null, entries: [] }
++    cacheRef.current = { entries: [] }
+diff --git a/src/client/api.ts b/src/client/api.ts
+index 8173cd90cb..472391d9e5 100644
+--- a/src/client/api.ts
++++ b/src/client/api.ts
+@@ -11 +11 @@ import type { LastActivity } from '../subagent-activity.ts'
+-import type { SidechatThreadInfo } from '../sidechat-core.ts'
++import type { SidechatLogEvent, SidechatThreadInfo } from '../sidechat-core.ts'
+@@ -122 +122 @@ async function call<T>(method: string, payload: Record<string, unknown>, signal?
+-      signal,
++      ...(signal === undefined ? {} : { signal }),
+@@ -160 +160 @@ async function fetchUpload<T>(
+-      signal,
++      ...(signal === undefined ? {} : { signal }),
+@@ -304,0 +304,6 @@ export const api = {
++  /** Return the thread's own transcript events after the optional sequence. */
++  sidechatEvents: (childId: string, afterSeq?: number, signal?: AbortSignal) =>
++    call<{ events: SidechatLogEvent[] }>('sidechat.events', {
++      childId,
++      ...(afterSeq !== undefined ? { afterSeq } : {}),
++    }, signal),
+diff --git a/src/sidechat-core.ts b/src/sidechat-core.ts
+index 1171dd3d71..abfdd47f85 100644
+--- a/src/sidechat-core.ts
++++ b/src/sidechat-core.ts
+@@ -418,4 +418,3 @@ export interface SidechatThreadInfo {
+-/** The events a thread produced itself: everything after the LAST
+- *  `session/end-seed` marker (the fork-seed boundary). */
+-export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[] {
+-  const events = entries.map(entry => entry.event)
++/** The events a thread produced itself: everything after the last
++ * `session/end-seed` marker. A log without a marker is returned whole. */
++export function threadOwnLogEvents(events: readonly SidechatLogEvent[]): SidechatLogEvent[] {
+@@ -425 +424,6 @@ export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): Sidech
+-  return events
++  return [...events]
++}
++
++/** {@link threadOwnLogEvents} over client history rows. */
++export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[] {
++  return threadOwnLogEvents(entries.map(entry => entry.event))
+diff --git a/src/sidechat-routes.ts b/src/sidechat-routes.ts
+index c718de9a0b..52662ddc54 100644
+--- a/src/sidechat-routes.ts
++++ b/src/sidechat-routes.ts
+@@ -3 +3,2 @@
+- * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose').
++ * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose' /
++ * 'sidechat.info' / 'sidechat.events').
+@@ -46,0 +47 @@ import {
++  threadOwnLogEvents,
+@@ -49 +51 @@ import { requireString, SidebarError } from './wire.ts'
+-/** The five Side Chat routes of the sidebar API (wire method names). */
++/** The six Side Chat routes of the sidebar API (wire method names). */
+@@ -64,0 +66,2 @@ export interface SidechatRoutes {
++  /** Return the thread's own transcript events after the optional sequence. */
++  'sidechat.events'(payload: unknown): Promise<{ events: SidechatLogEvent[] }>
+@@ -70,0 +74,3 @@ const CREATE_TIMEOUT_MS = 15_000
++/** Maximum number of transcript events returned by one request. */
++const EVENTS_CAP = 8_000
++
+@@ -154,0 +161,22 @@ function liveThreadAgent(ctx: Context, childId: string): Agent | undefined {
++/** Read a thread's freshest logical event log from its live agent or persistence. */
++async function threadLogEvents(ctx: Context, childId: string): Promise<readonly SidechatLogEvent[]> {
++  const agent = liveThreadAgent(ctx, childId)
++  if (agent !== undefined) {
++    return agent.session.events as unknown as readonly SidechatLogEvent[]
++  }
++  const persistence = ctx.get('sessionPersistence') as SidebarSessionPersistenceService | undefined
++  if (persistence === undefined) {
++    throw new SidebarError('sidechat-error', 'the session persistence service is unavailable', 503)
++  }
++  try {
++    const inspected = await persistence.inspect(childId)
++    return inspected.events as unknown as readonly SidechatLogEvent[]
++  } catch (error: unknown) {
++    throw new SidebarError(
++      'not-found',
++      `thread "${childId}" is not available: ${error instanceof Error ? error.message : String(error)}`,
++      404,
++    )
++  }
++}
++
+@@ -343,0 +373,13 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
++
++    'sidechat.events': async (payload: unknown) => {
++      const childId = requireString(payload, 'childId')
++      const rawAfter = (payload as { afterSeq?: unknown }).afterSeq
++      if (rawAfter !== undefined
++        && (typeof rawAfter !== 'number' || !Number.isSafeInteger(rawAfter) || rawAfter < 0)) {
++        throw new SidebarError('bad-request', 'afterSeq must be a non-negative integer')
++      }
++      const events = await threadLogEvents(ctx, childId)
++      const own = threadOwnLogEvents(events)
++      const fresh = rawAfter === undefined ? own : own.filter(event => event.seq > rawAfter)
++      return { events: fresh.length > EVENTS_CAP ? fresh.slice(fresh.length - EVENTS_CAP) : fresh }
++    },

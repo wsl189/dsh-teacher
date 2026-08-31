@@ -20,6 +20,7 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/better-sidebar', import.meta.url))
 const FREE_WINDOW_MENU_EXPECTED = join(SNAPSHOT_DIR, 'free-window-menu.expected.md')
+const SIDE_CHAT_TRANSCRIPT_EXPECTED = join(SNAPSHOT_DIR, 'side-chat-transcript.expected.md')
 const MODE = webSnapshotMode()
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.jsonl', import.meta.url))
 const PDF_FIXTURE = fileURLToPath(new URL(
@@ -127,6 +128,89 @@ describe('web e2e: built-in better-sidebar workbench', () => {
     await page.locator('[data-upload-document-preview="roster.pdf"]').waitFor({ state: 'detached', timeout: 15_000 })
   })
 
+  it('renders Side Chat user and assistant messages through its own event route', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-better-sidebar-side-chat'))
+    const childId = 'session-side-chat-e2e'
+    const prompt = 'Show this side-chat question.'
+    const reply = 'This side-chat answer is visible.'
+    let events: Array<Record<string, unknown>> = []
+
+    await page.route('**/sidebar/api/**', async (route) => {
+      const method = new URL(route.request().url()).pathname.split('/').at(-1)
+      if (method?.startsWith('sidechat.') !== true) {
+        await route.fallback()
+        return
+      }
+      const payload = route.request().postDataJSON() as { afterSeq?: number }
+      let value: unknown
+      switch (method) {
+        case 'sidechat.start':
+          value = { childId }
+          break
+        case 'sidechat.prompt':
+          events = [{
+            type: 'user/message',
+            seq: 1,
+            time: 1,
+            data: { content: [{ type: 'text', text: prompt }], source: { kind: 'user' } },
+          }, {
+            type: 'assistant/message',
+            seq: 2,
+            time: 2,
+            data: {
+              turn: 1,
+              step: 1,
+              message: { content: [{ type: 'text', text: reply }] },
+            },
+          }]
+          value = { accepted: true }
+          break
+        case 'sidechat.events': {
+          const { afterSeq } = payload
+          value = {
+            events: afterSeq === undefined
+              ? events
+              : events.filter(event => typeof event.seq === 'number' && event.seq > afterSeq),
+          }
+          break
+        }
+        case 'sidechat.info':
+          value = { live: true, status: 'idle', preset: 'standard', model: 'mock' }
+          break
+        default:
+          value = { accepted: true }
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, value }),
+      })
+    })
+
+    try {
+      const workbench = page.locator('[data-dsh-better-sidebar]')
+      const panel = page.locator('[data-dsh-panel="true"]:not([data-dsh-bottom-panel])')
+      if (!await panel.isVisible()) await page.getByRole('button', { name: 'Expand sidebar' }).click()
+      await workbench.getByRole('button', { name: 'New tab' }).first().click()
+      await page.getByRole('menuitem', { name: 'Side Chat (beta)' }).click()
+
+      const composer = page.getByPlaceholder('Ask the first question — context inherited…')
+      await composer.waitFor({ timeout: 15_000 })
+      await composer.fill(prompt)
+      await composer.press('Enter')
+      await page.getByText(prompt, { exact: true }).waitFor({ timeout: 15_000 })
+      await page.getByText(reply, { exact: true }).waitFor({ timeout: 15_000 })
+      await compareOrRefreshGolden(
+        SIDE_CHAT_TRANSCRIPT_EXPECTED,
+        await captureStableAria(page, '[data-dsh-better-sidebar]', scaffold.workspaceCwd),
+        MODE,
+      )
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      await page.unroute('**/sidebar/api/**')
+    }
+  })
+
   it('hides its top-right toggles while a shell overlay owns that corner', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-better-sidebar-shell-overlay'))
     const toggles = page.locator('[data-dsh-toggle-cluster]')
@@ -149,6 +233,9 @@ describe('web e2e: built-in better-sidebar workbench', () => {
   })
 
   it('keeps its snapshot inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['free-window-menu.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, [
+      'free-window-menu.expected.md',
+      'side-chat-transcript.expected.md',
+    ])
   })
 })

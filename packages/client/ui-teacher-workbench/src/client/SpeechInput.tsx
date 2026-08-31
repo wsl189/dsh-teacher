@@ -11,6 +11,7 @@ type VoiceErrorTranslationKey =
   | 'voice.noMicrophone'
   | 'voice.noSpeech'
   | 'voice.networkError'
+  | 'voice.requestFailed'
   | 'voice.notConfigured'
   | 'voice.fileTooLarge'
 
@@ -28,7 +29,7 @@ const VOICE_ERROR_KEYS: Readonly<Record<string, VoiceErrorTranslationKey>> = Obj
   'empty-result': 'voice.noSpeech',
   network: 'voice.networkError',
   'provider-unavailable': 'voice.networkError',
-  'provider-failure': 'voice.networkError',
+  'provider-failure': 'voice.requestFailed',
   'provider-disabled': 'voice.notConfigured',
   'file-too-large': 'voice.fileTooLarge',
 })

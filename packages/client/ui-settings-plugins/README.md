@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Open the Plugins section in Settings and select the **Plugin configuration** tab to edit the host-plane plugins this deployment composes. The cards appear in this order: the shell executor (`bash`), the agent loop's tool-call parallelism (`agent-loop`), subagent model selection (`subagent-model-selection`), and the DeepSeek search provider (`web-search-deepseek`).
+Open the Plugins section in Settings and select the **Plugin configuration** tab to edit the host-plane plugins this deployment composes. The seven built-in cards appear in this order when their namespaces are served: the shell executor (`bash`), agent-loop tool-call parallelism (`agent-loop`), subagent model selection (`subagent-model-selection`), DeepSeek search (`web-search-deepseek`), MinerU document extraction (`mineru`), question-workspace storage (`teacher-workbench`), and Windows desktop control (`windows-mcp`).
 
 ### What appears here
 
@@ -36,6 +36,8 @@ The tab reads which settings namespaces the Host serves and dispatches one slot 
 A card stages what the user types and writes it only when they save. Each control renders staged text, so what is on screen is exactly what a save would store; **Discard** drops the drafts, and a card holding unsaved edits says so on its header even while collapsed. A successful save collapses the card after the read-back confirms the writes; a failed save keeps the card open, reports the failure, and retains the drafts for correction. A reset stages the composed default rather than writing immediately, and a draft the field does not accept blocks the save instead of being dropped. The Host is the only authority on whether a value was accepted.
 
 The Subagent card stages its permission switch and exact model checkboxes together. Enabling requires at least one selected adapter route. Saving submits `enabled` and `allowedModels` in one mutation fenced by the revision where that draft began; a newer Host revision marks the draft failed instead of restoring a revoked route. Disabling retains the selected routes for later reuse. Available models are grouped by provider, while saved routes absent from the current catalog appear last and remain removable. Adapter names and model descriptions remain live directory metadata and are not stored, and the card refreshes them after adapter changes, settings commits, and reconnects.
+
+The Windows desktop card stages a single `enabled` switch. It reports whether the Host received a trusted bundled runtime path and prevents enabling when that payload is unavailable; an already-enabled value can still be turned off. Its warning remains visible because every desktop call requires approval and executes outside the DSH sandbox.
 
 ### Secret-role fields
 
@@ -96,6 +98,7 @@ These limits define which plugins appear and how fresh the list is; they are cur
 - **A card still needs a browser bundle** — the browser half must be a `dsh.client` package built in the client module system's lazy-CJS factory format, and the `clientBundle` preset that emits it lives in `../../../packages/client/tsdown.client.ts` rather than a published package, so a plugin outside this repository has to reproduce that build itself.
 - **The served namespaces re-read on two signals only** — the wire announces settings-document commits and connection resets, not registrations, so a namespace whose owner registers after the tab's read joins the list on the next document commit or reconnect.
 - **The shell card follows the composed executor** — the POSIX and PowerShell executor families share the `bash` namespace because a host composes exactly one of them, so the served schema differs by platform (PowerShell adds `pwshPath`) even though the card edits the same two fields on both.
+- **The Windows card does not install a runtime** — it can enable only the trusted payload advertised by the desktop Host; browser-only and source deployments without that path keep the switch unavailable.
 
 <a id="dev-note"></a>
 ### Dev Note

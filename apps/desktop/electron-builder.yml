@@ -8,6 +8,11 @@ files:
   - package.json
   - '!**/*.map'
   - '!**/*.tsbuildinfo'
+extraResources:
+  - from: runtime/windows-mcp
+    to: windows-mcp
+    filter:
+      - '**/*'
 npmRebuild: true
 generateUpdatesFilesForAllChannels: true
 win:

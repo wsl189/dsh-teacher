@@ -29,6 +29,8 @@ import type { JsonSchemaNode, JsonValue } from '@deepseek-ai/dsh-tools'
 export interface ToolBridgeOptions {
   /** Whether a registry conflict is contained or rejects this synchronization. */
   registrationFailure: 'contain' | 'throw'
+  /** Exact raw MCP names to publish, or `undefined` to publish every discovered tool. */
+  includeTools: ReadonlySet<string> | undefined
   serverName: string
   toolCallTimeoutMs: number
 }
@@ -122,7 +124,7 @@ export function publicToolName(serverName: string, rawName: string): string {
  * Two phases keep the swap safe:
  *
  * 1. Fetch: drain uncached `tools/list` pagination and build the full next
- *    generation of `ToolDefinition`s under public names. Any failure here
+ *    generation of allowed `ToolDefinition`s under public names. Any failure here
  *    (network error, duplicate raw name in the server's list) rejects and
  *    leaves the previous generation registered untouched.
  * 2. Swap: dispose the previous generation, register the new one. A registry
@@ -134,7 +136,7 @@ export function publicToolName(serverName: string, rawName: string): string {
  *
  * @param client - Connected MCP Client instance used to list and call tools.
  * @param ctx - Cordis context providing the `tools` service for registration.
- * @param opts - Bridge options: server namespace and per-call timeout.
+ * @param opts - Bridge options: server namespace, exact-name filter, and per-call timeout.
  * @param previous - Disposer map from the prior sync generation; disposed
  *   during the swap phase (only after the fetch phase succeeded).
  * @returns A map of registered public tool names to their unregister
@@ -148,16 +150,19 @@ export async function syncTools(
 ): Promise<ToolDisposers> {
   // Phase 1: fetch and build the next generation without touching the registry.
   const definitions = new Map<string, ToolDefinition>()
+  const rawNames = new Set<string>()
   let cursor: string | undefined
   do {
     const response = await listToolsUncached(client, cursor)
     for (const tool of response.tools) {
-      const publicName = publicToolName(opts.serverName, tool.name)
-      if (definitions.has(publicName)) {
+      if (rawNames.has(tool.name)) {
         throw new Error(
           `mcp-client(${opts.serverName}): server listed tool "${tool.name}" more than once — invalid tool list`,
         )
       }
+      rawNames.add(tool.name)
+      if (opts.includeTools !== undefined && !opts.includeTools.has(tool.name)) continue
+      const publicName = publicToolName(opts.serverName, tool.name)
       definitions.set(publicName, createDefinition(
         client,
         ctx,

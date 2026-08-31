@@ -151,7 +151,7 @@ export class QqConfiguredSpeechProvider implements SpeechProvider {
       })
     } catch (error) {
       if (signal?.aborted === true) throw error
-      throw new SpeechError('configured QQ speech service is unreachable', 'provider-failure', { cause: error })
+      throw new SpeechError('configured QQ speech service is unreachable', 'provider-unavailable', { cause: error })
     }
     if (response.status >= 300 && response.status < 400) {
       await cancelResponse(response)

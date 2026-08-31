@@ -1550,6 +1550,8 @@ export interface StdioConfig {
   cwd: string
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Exact raw MCP tool names to publish; omission or an empty list publishes every discovered tool. */
+  includeTools?: string[]
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1572,6 +1574,8 @@ export interface StreamableHttpConfig {
   headers: Record<string, string>
   /** Per-tool-call timeout in milliseconds. */
   toolCallTimeoutMs: number
+  /** Exact raw MCP tool names to publish; omission or an empty list publishes every discovered tool. */
+  includeTools?: string[]
   /** Fail plugin activation when the initial connection or tool synchronization fails. */
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
@@ -1591,7 +1595,7 @@ export interface ReconnectConfig {
 }
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:98`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:102`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -3543,6 +3547,28 @@ export interface Config {
 
 Source: [`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/webhook-github/src/index.ts)
 
+<a id="deepseek-aidsh-windows-mcp"></a>
+
+## `@deepseek-ai/dsh-windows-mcp`
+
+Requires: `loader` · `tools`
+
+```ts config-catalog
+/** User and composition configuration for the bundled Windows-MCP runtime. */
+export interface Config {
+  /** Whether the Windows desktop tool server is mounted. Defaults to false. */
+  enabled?: boolean
+  /** Absolute bundled Python executable, or another trusted Python command. */
+  runtimeCommand?: string
+  /** Working directory for the bundled Python runtime. */
+  runtimeCwd?: string
+  /** Deadline for each MCP desktop tool call in milliseconds. */
+  toolCallTimeoutMs?: number
+}
+```
+
+Source: [`packages/mcp/windows-mcp/src/index.ts:60`](../packages/mcp/windows-mcp/src/index.ts)
+
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 
 ## `@deepseek-ai/dsh-workflow-worker-thread`
@@ -3643,6 +3669,7 @@ These load from a `cordis.yml` entry with no `config:` block; they declare no co
 - `@deepseek-ai/dsh-session-projection` ([`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts))
 - `@deepseek-ai/dsh-session-stats` — requires `sessionProjections` ([`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts))
 - `@deepseek-ai/dsh-skill-badge` — requires `skills` ([`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts))
+- `@deepseek-ai/dsh-skill-ppt-master` — requires `skills` ([`packages/skill/skill-ppt-master/src/index.ts`](../packages/skill/skill-ppt-master/src/index.ts))
 - `@deepseek-ai/dsh-storage` ([`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts))
 - `@deepseek-ai/dsh-subagent` ([`packages/subagent/subagent/src/index.ts`](../packages/subagent/subagent/src/index.ts))
 - `@deepseek-ai/dsh-subprocess-local` ([`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts))
