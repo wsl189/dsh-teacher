@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-teacher-workbench",
   "description": "Model-facing tools for the durable teacher workbench",
-  "version": "1.0.7-rc1",
+  "version": "1.0.7-rc2",
   "publishConfig": {
     "access": "public"
   },

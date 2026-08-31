@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-tool-fs",
   "description": "Model-facing text, document, image, and mutation tools over the DeepSeek Harness filesystem seam (ctx.fs)",
-  "version": "1.0.7-rc1",
+  "version": "1.0.7-rc2",
   "publishConfig": {
     "access": "public"
   },
