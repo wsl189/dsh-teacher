@@ -24,6 +24,8 @@ Use the official [`@modelcontextprotocol/sdk`](https://github.com/modelcontextpr
 
 MCP Client only (no server side — ACP already covers the "expose harness as an agent" role). Bridge **Tools** only — Resources and Prompts are deferred (they require harness-side consumption mechanisms that don't exist yet, and design space is large).
 
+[Tool-correlated sampling](2026-09-01-windows-mcp-source-parity.md) adds explicit, bounded auxiliary model access for opted-in tool invocations. Resources and Prompts remain outside this bridge.
+
 ### Plugin shape
 
 Namespace plugin (named exports `name`/`inject`/`Config`/`apply`, no `export default`). `inject: ['tools']`. Each MCP server is one plugin instance in `cordis.yml` — the same package loaded N times with different configs, like `dsh-tool-subagent`.

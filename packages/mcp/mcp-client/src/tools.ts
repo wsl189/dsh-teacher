@@ -24,6 +24,7 @@ import type { ContentBlock } from '@deepseek-ai/dsh-llm'
 import type { ToolDefinition, ToolExecution, ToolExecutionResult } from '@deepseek-ai/dsh-tools'
 import { assertSupportedJsonSchema } from '@deepseek-ai/dsh-tools'
 import type { JsonSchemaNode, JsonValue } from '@deepseek-ai/dsh-tools'
+import type { SamplingBridge } from './sampling.ts'
 
 /** Resolved options relevant to tool bridging. */
 export interface ToolBridgeOptions {
@@ -33,6 +34,8 @@ export interface ToolBridgeOptions {
   includeTools: ReadonlySet<string> | undefined
   serverName: string
   toolCallTimeoutMs: number
+  /** This exact connection generation's opt-in sampling authority. */
+  sampling?: SamplingBridge
 }
 
 /** State for one sync generation: the current set of disposers keyed by public name. */
@@ -86,14 +89,15 @@ function callToolUncached(
   exec: ToolExecution,
   opts: ToolBridgeOptions,
 ) {
-  return client.request(
-    { method: 'tools/call', params: { name: rawName, arguments: args } },
+  const send = (meta: Record<string, string> | undefined, signal: AbortSignal) => client.request(
+    { method: 'tools/call', params: { name: rawName, arguments: args, ...meta === undefined ? {} : { _meta: meta } } },
     RawCallToolResultSchema,
     {
-      signal: exec.signal,
+      signal,
       timeout: opts.toolCallTimeoutMs,
     },
   )
+  return opts.sampling === undefined ? send(undefined, exec.signal) : opts.sampling.call(rawName, exec, send)
 }
 
 /**

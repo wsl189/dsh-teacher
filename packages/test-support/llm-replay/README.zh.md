@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-llm-replay` 让快照测试无需 API 密钥即可运行：它安装一个回放 LLM（大语言模型）适配器，从已记录的会话 JSONL fixture（测试前置数据）重建模型流，使测试针对固定 transcript（文本记录）启动真实 agent（智能体）。fixture 是持久化会话日志的投影——`assistant/chunk` 事件按调用分组为分片序列，显式标记的本地压缩（compaction）调用回放为一条规范流。`replay.override.json` 伴随文件覆盖日志无法重建的情况：任何分片之前就抛出、取消/挂起，或注入重试。实时会话按首次调用顺序绑定到已记录脚本，因此父会话与 subagent 场景各自获得自己的脚本。它是 ACP 与 headless 快照套件以及 Web 浏览器 e2e 流水线的模型来源。
+`dsh-llm-replay` 让快照测试无需 API 密钥即可运行：它安装一个回放 LLM（大语言模型）适配器，从已记录的会话 JSONL fixture（测试前置数据）重建模型流，使测试针对固定 transcript（文本记录）启动真实 agent（智能体）。fixture 会重现普通 assistant 流、带标记的本地压缩调用，以及已记录的 MCP 采样补全。`replay.override.json` 伴随文件覆盖日志无法重建的情况：任何分片之前就抛出、取消/挂起，或注入重试。实时会话按首次调用顺序绑定到已记录脚本，因此父会话与 subagent 场景各自获得自己的脚本。它是 ACP 与 headless 快照套件以及 Web 浏览器 e2e 流水线的模型来源。
 
 ## 目录
 
@@ -65,7 +65,9 @@ kind: "package-reference"
 
 ### fixture 的工作方式
 
-fixture 是运行一次真实 agent 所产生的持久化会话日志（`<scenario>/session.jsonl`）的投影——本插件不录制。它保留 header 与每个事件 payload，但省略正文的 `seq`/`time` envelope（打包行使用 `seq0`/`time0`）；回放在解析时恢复连续的 synthetic envelope，且同一文件不能混用投影正文行与完整正文行。运行时持久化仍写入完整日志。回放从 `assistant/chunk` 事件派生每次模型调用的分片序列，因此已记录 fixture 会回放与在线模型产生的相同逻辑流。fixture 的 `request/header` 内容可能被标记化为 `{{system}}`/`{{tools}}`；回放不受影响，因为派生只读取分片与摘要事件以及第 0 行的会话 header。
+fixture 是运行一次真实 agent 所产生的持久化会话日志（`<scenario>/session.jsonl`）的投影——本插件不录制。它保留 header 与每个事件 payload，但省略正文的 `seq`/`time` envelope（打包行使用 `seq0`/`time0`）；回放在解析时恢复连续的 synthetic envelope，且同一文件不能混用投影正文行与完整正文行。运行时持久化仍写入完整日志。回放从 `assistant/chunk` 事件派生每次普通模型调用的分片序列。fixture 的 `request/header` 内容可能被标记化为 `{{system}}`/`{{tools}}`；派生读取分片与辅助补全事件以及第 0 行的会话 header，不读取这些提示词内容。
+
+一条 `mcp/sampling-request` 与对应的 `mcp/sampling-response` 按请求顺序重现一次辅助模型流，即使并发响应乱序到达也不改变顺序。缺失或重复的响应，以及没有终止 finish 的响应，都会导致派生失败。[MCP 客户端](../../mcp/mcp-client/README.zh.md#tool-correlated-sampling)负责记录这些请求与结果。
 
 ### 嵌套 agent
 
@@ -141,7 +143,7 @@ fixture 是运行一次真实 agent 所产生的持久化会话日志（`<scenar
 这些限制说明何时回放无法代替在线模型。它们是当前包约束，不是任务积压。
 
 - **首次调用顺序脚本绑定假设串行委托**——并发运行同级 subagent 的实现会非确定性地将实时会话绑定到已记录脚本；在这种场景出现前暂不实现更强的键控。
-- **只有普通 loop 分片与带标记的本地压缩输出才能派生**——在产生分片前直接抛出、取消/挂起，或未标记的外部摘要器调用场景需要 `replay.override.json` 伴随文件；替换与补丁两种形式都只影响主会话，子会话脚本仍从各自日志派生。
+- **只有普通 loop 分片、带标记的本地压缩与已记录的 MCP 采样才能派生**——在产生分片前直接抛出、取消/挂起，或未标记的外部摘要器调用场景需要 `replay.override.json` 伴随文件；替换与补丁两种形式都只影响主会话，子会话脚本仍从各自日志派生。
 
 <a id="dev-note"></a>
 ### 开发备注

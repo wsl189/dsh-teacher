@@ -103,4 +103,16 @@ describe('desktop payload gate', () => {
       'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master: packaged skill inventory is 9 files and 63 bytes; expected 12939 files and 79496215 bytes',
     )
   })
+
+  it('accepts complete AnySearch runtime files and rejects each missing module', () => {
+    const requiredFiles = REQUIRED_WINDOWS_RUNTIME_FILES.filter(path => path.includes('/@anysearch/'))
+    expect(requiredFiles).toHaveLength(12)
+    expect(inspectDesktopPayload(createPayload(requiredFiles), { requiredFiles }).failures).toEqual([])
+    for (const missing of requiredFiles) {
+      const root = createPayload(requiredFiles.filter(path => path !== missing))
+      expect(inspectDesktopPayload(root, { requiredFiles }).failures).toEqual([
+        `${missing}: required product runtime file is absent from payload`,
+      ])
+    }
+  })
 })

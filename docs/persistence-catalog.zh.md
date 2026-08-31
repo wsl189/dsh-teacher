@@ -489,6 +489,30 @@ export type SessionEvent<T extends SessionEventType = SessionEventType> = {
 
 来源：[`packages/llm/llm-retry/src/types.ts:11`](../packages/llm/llm-retry/src/types.ts)
 
+### `mcp/*`
+
+<a id="mcpsampling-request--log-only"></a>
+
+#### `mcp/sampling-request` — log-only
+
+```ts persistence-catalog
+/** Log-only input for a tool-correlated MCP completion. */
+'mcp/sampling-request': McpSamplingRequestData
+```
+
+来源：[`packages/mcp/mcp-client/src/sampling.ts:67`](../packages/mcp/mcp-client/src/sampling.ts)
+
+<a id="mcpsampling-response--log-only"></a>
+
+#### `mcp/sampling-response` — log-only
+
+```ts persistence-catalog
+/** Log-only output for one preceding MCP completion request. */
+'mcp/sampling-response': McpSamplingResponseData
+```
+
+来源：[`packages/mcp/mcp-client/src/sampling.ts:69`](../packages/mcp/mcp-client/src/sampling.ts)
+
 ### `model/*`
 
 <a id="modelselection--log-only"></a>

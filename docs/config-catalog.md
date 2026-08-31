@@ -1463,7 +1463,7 @@ export interface ReplayModelConfig {
 
 Depends on: [`ModelModality`](../packages/llm/llm/src/index.ts) · [`RetryPolicyConfig`](../packages/llm/llm/src/index.ts)
 
-Source: [`packages/test-support/llm-replay/src/index.ts:918`](../packages/test-support/llm-replay/src/index.ts)
+Source: [`packages/test-support/llm-replay/src/index.ts:939`](../packages/test-support/llm-replay/src/index.ts)
 
 <a id="deepseek-aidsh-llm-retry"></a>
 
@@ -1556,6 +1556,8 @@ export interface StdioConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Explicit, tool-correlated text sampling policy; omitted means no server model access. */
+  sampling?: SamplingConfig
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
@@ -1580,6 +1582,8 @@ export interface StreamableHttpConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Explicit, tool-correlated text sampling policy; omitted means no server model access. */
+  sampling?: SamplingConfig
 }
 
 /** Automatic reconnect policy for one MCP server connection. */
@@ -1593,9 +1597,19 @@ export interface ReconnectConfig {
   /** Consecutive failed attempts per outage before giving up for good (default 10). */
   maxAttempts?: number
 }
+
+/** Deployment policy for servers that echo the per-call sampling token. Omission disables sampling. */
+export interface SamplingConfig {
+  /** Exact raw tool names permitted to request one text completion per invocation. */
+  includeTools: string[]
+  /** Maximum UTF-8 bytes of sampling parameters, including prompts, messages, and metadata. */
+  maxInputBytes: number
+  /** Upper bound on the server-requested output-token limit. */
+  maxOutputTokens: number
+}
 ```
 
-Source: [`packages/mcp/mcp-client/src/index.ts:102`](../packages/mcp/mcp-client/src/index.ts)
+Source: [`packages/mcp/mcp-client/src/index.ts:109`](../packages/mcp/mcp-client/src/index.ts)
 
 <a id="deepseek-aidsh-message-feedback"></a>
 
@@ -3551,12 +3565,12 @@ Source: [`packages/webhook/webhook-github/src/index.ts:17`](../packages/webhook/
 
 ## `@deepseek-ai/dsh-windows-mcp`
 
-Requires: `loader` · `tools`
+Requires: `loader` · `tools` · `agents`
 
 ```ts config-catalog
 /** User and composition configuration for the bundled Windows-MCP runtime. */
 export interface Config {
-  /** Whether the Windows desktop tool server is mounted. Defaults to false. */
+  /** Whether the Windows desktop tool server is mounted. Defaults to true; requires a runtime command. */
   enabled?: boolean
   /** Absolute bundled Python executable, or another trusted Python command. */
   runtimeCommand?: string
@@ -3564,10 +3578,14 @@ export interface Config {
   runtimeCwd?: string
   /** Deadline for each MCP desktop tool call in milliseconds. */
   toolCallTimeoutMs?: number
+  /** Maximum UTF-8 bytes in Scrape's auxiliary model request. */
+  samplingMaxInputBytes?: number
+  /** Maximum generated tokens for Scrape's focused extraction or summary. */
+  samplingMaxOutputTokens?: number
 }
 ```
 
-Source: [`packages/mcp/windows-mcp/src/index.ts:60`](../packages/mcp/windows-mcp/src/index.ts)
+Source: [`packages/mcp/windows-mcp/src/index.ts:37`](../packages/mcp/windows-mcp/src/index.ts)
 
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 

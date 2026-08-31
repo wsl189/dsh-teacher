@@ -35,6 +35,8 @@ const EXECUTABLE_SOURCE_ALLOWLIST = new Map<string, string>([
   ['packages/context/time-context/tests/fixtures/driver.ts', 'test-only subprocess driver'],
   ['packages/experimental/webworker-packer/bin.js', 'private build-only wrapper'],
   ['packages/experimental/webworker-packer/src/bin.ts', 'private build-only implementation'],
+  ['packages/mcp/windows-mcp/tests/fixtures/capabilities-server.mjs', 'test-only Windows-MCP capture and sampling peer'],
+  ['packages/mcp/windows-mcp/tests/fixtures/desktop-server.mjs', 'test-only inert Windows-MCP server'],
   ['packages/sdk/client/tests/fake-runtime.ts', 'test-only SDK runtime peer'],
   ['packages/session/session-telemetry-otel/tests/fixtures/driver.ts', 'test-only subprocess driver'],
   ['packages/shell/tool-pwsh/tests/fixtures/loader/driver.ts', 'test-only subprocess driver'],

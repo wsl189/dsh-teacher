@@ -479,7 +479,7 @@ describe('SubagentModelSelectionCard', () => {
 })
 
 describe('WindowsMcpCard', () => {
-  it('stages an explicit opt-in and explains per-call approval', () => {
+  it('stages an explicit opt-in and explains full-access system authority', () => {
     const actions = renderWindowsMcp()
     fireEvent.click(screen.getByText(en.windowsMcpTitle))
 
@@ -487,6 +487,7 @@ describe('WindowsMcpCard', () => {
     expect(toggle.getAttribute('aria-checked')).toBe('false')
     expect(screen.getByText(en.windowsMcpRuntimeReady)).toBeTruthy()
     expect(screen.getByText(en.windowsMcpApprovalWarning)).toBeTruthy()
+    expect(screen.getByText(/Full access unlocks all 20 tools/).textContent).toContain('Windows permissions')
     fireEvent.click(toggle)
 
     expect(actions.toggleEnabled).toHaveBeenCalledOnce()

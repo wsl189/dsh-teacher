@@ -1,7 +1,7 @@
 /**
- * Opt-in Windows desktop automation composition. The plugin mounts the bundled
+ * Windows desktop automation composition. The plugin mounts the bundled
  * Windows-MCP Python server through the generic MCP client, publishes a fixed
- * desktop-only tool set, and requires DSH approval before every call.
+ * version-pinned tool set, and grants its complete catalog only in Full access.
  * @module @deepseek-ai/dsh-windows-mcp
  */
 
@@ -9,14 +9,19 @@ import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
 import type { Config as McpClientConfig } from '@deepseek-ai/dsh-mcp-client'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
-import type { PreToolDecision } from '@deepseek-ai/dsh-tools'
 import z from '@deepseek-ai/schemastery'
+import { installWindowsMcpPolicy, WINDOWS_MCP_ALLOWED_TOOLS, WINDOWS_MCP_SERVER_NAME } from './permissions.ts'
+
+export {
+  decideWindowsMcpCall, WINDOWS_MCP_ALLOWED_TOOLS, WINDOWS_MCP_DESKTOP_TOOLS,
+  WINDOWS_MCP_PUBLIC_TOOLS, WINDOWS_MCP_SERVER_NAME, WINDOWS_MCP_SYSTEM_TOOLS,
+} from './permissions.ts'
 
 /** Cordis plugin name used by Loader diagnostics. */
 export const name = 'windows-mcp'
 
 /** Services required to mount the MCP child and protect its tool calls. */
-export const inject = ['loader', 'tools']
+export const inject = ['loader', 'tools', 'agents']
 
 /** Settings namespace rendered by the built-in Plugins page. */
 export const WINDOWS_MCP_SETTINGS_NAMESPACE = settingsNamespace('windows-mcp')
@@ -24,41 +29,13 @@ export const WINDOWS_MCP_SETTINGS_NAMESPACE = settingsNamespace('windows-mcp')
 /** Loader specifier for the generic bridge mounted by this composition plugin. */
 export const WINDOWS_MCP_CLIENT_PACKAGE = '@deepseek-ai/dsh-mcp-client'
 
-/** Stable MCP namespace used in every model-facing tool name. */
-export const WINDOWS_MCP_SERVER_NAME = 'windows'
-
-/**
- * Reviewed Windows-MCP tools that interact with visible desktop UI only.
- * Shell, registry, process, clipboard, filesystem, notification, and scrape
- * capabilities remain absent from both upstream discovery and DSH registration.
- */
-export const WINDOWS_MCP_ALLOWED_TOOLS = Object.freeze([
-  'App',
-  'Click',
-  'DisplayInventory',
-  'Move',
-  'MultiEdit',
-  'MultiSelect',
-  'Screenshot',
-  'Scroll',
-  'Shortcut',
-  'Snapshot',
-  'Type',
-  'Wait',
-  'WaitFor',
-] as const)
-
-/** Public names protected by the approval listener. */
-export const WINDOWS_MCP_PUBLIC_TOOLS: ReadonlySet<string> = new Set(
-  WINDOWS_MCP_ALLOWED_TOOLS.map(rawName => `mcp__${WINDOWS_MCP_SERVER_NAME}__${rawName}`),
-)
-
-const WINDOWS_MCP_PUBLIC_PREFIX = `mcp__${WINDOWS_MCP_SERVER_NAME}__`
-const DEFAULT_TOOL_CALL_TIMEOUT_MS = 60_000
+const DEFAULT_TOOL_CALL_TIMEOUT_MS = 180_000
+const DEFAULT_SAMPLING_INPUT_BYTES = 1_048_576
+const DEFAULT_SAMPLING_OUTPUT_TOKENS = 2_048
 
 /** User and composition configuration for the bundled Windows-MCP runtime. */
 export interface Config {
-  /** Whether the Windows desktop tool server is mounted. Defaults to false. */
+  /** Whether the Windows desktop tool server is mounted. Defaults to true; requires a runtime command. */
   enabled?: boolean
   /** Absolute bundled Python executable, or another trusted Python command. */
   runtimeCommand?: string
@@ -66,6 +43,10 @@ export interface Config {
   runtimeCwd?: string
   /** Deadline for each MCP desktop tool call in milliseconds. */
   toolCallTimeoutMs?: number
+  /** Maximum UTF-8 bytes in Scrape's auxiliary model request. */
+  samplingMaxInputBytes?: number
+  /** Maximum generated tokens for Scrape's focused extraction or summary. */
+  samplingMaxOutputTokens?: number
 }
 
 /** Fully resolved configuration consumed by reconciliation. */
@@ -78,14 +59,20 @@ export interface ResolvedConfig {
   readonly runtimeCwd: string
   /** Deadline for each MCP desktop tool call in milliseconds. */
   readonly toolCallTimeoutMs: number
+  /** Auxiliary Scrape request byte ceiling. */
+  readonly samplingMaxInputBytes: number
+  /** Auxiliary Scrape completion token ceiling. */
+  readonly samplingMaxOutputTokens: number
 }
 
 /** Validated settings schema; the runtime path is supplied by the desktop launcher. */
 export const Config: z<Config> = z.object({
-  enabled: z.boolean().default(false),
+  enabled: z.boolean().default(true),
   runtimeCommand: z.string().default(''),
   runtimeCwd: z.string().default(''),
   toolCallTimeoutMs: z.natural().min(1).default(DEFAULT_TOOL_CALL_TIMEOUT_MS),
+  samplingMaxInputBytes: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_SAMPLING_INPUT_BYTES),
+  samplingMaxOutputTokens: z.natural().min(1).max(Number.MAX_SAFE_INTEGER).default(DEFAULT_SAMPLING_OUTPUT_TOKENS),
 })
 
 /**
@@ -95,13 +82,20 @@ export const Config: z<Config> = z.object({
  */
 export function resolveWindowsMcpConfig(config: Config): ResolvedConfig {
   const resolved: ResolvedConfig = {
-    enabled: config.enabled ?? false,
+    enabled: config.enabled ?? true,
     runtimeCommand: config.runtimeCommand ?? '',
     runtimeCwd: config.runtimeCwd ?? '',
     toolCallTimeoutMs: config.toolCallTimeoutMs ?? DEFAULT_TOOL_CALL_TIMEOUT_MS,
+    samplingMaxInputBytes: config.samplingMaxInputBytes ?? DEFAULT_SAMPLING_INPUT_BYTES,
+    samplingMaxOutputTokens: config.samplingMaxOutputTokens ?? DEFAULT_SAMPLING_OUTPUT_TOKENS,
   }
   if (!Number.isInteger(resolved.toolCallTimeoutMs) || resolved.toolCallTimeoutMs < 1) {
     throw new Error('windows-mcp: toolCallTimeoutMs must be a positive integer')
+  }
+  for (const field of ['samplingMaxInputBytes', 'samplingMaxOutputTokens'] as const) {
+    if (!Number.isSafeInteger(resolved[field]) || resolved[field] < 1) {
+      throw new Error(`windows-mcp: ${field} must be a positive safe integer`)
+    }
   }
   return Object.freeze(resolved)
 }
@@ -136,6 +130,11 @@ export function createWindowsMcpClientConfig(config: ResolvedConfig): McpClientC
     cwd: config.runtimeCwd,
     toolCallTimeoutMs: config.toolCallTimeoutMs,
     includeTools,
+    sampling: {
+      includeTools: ['Scrape'],
+      maxInputBytes: config.samplingMaxInputBytes,
+      maxOutputTokens: config.samplingMaxOutputTokens,
+    },
     failOnStartupError: true,
     reconnect: {
       enabled: true,
@@ -146,45 +145,24 @@ export function createWindowsMcpClientConfig(config: ResolvedConfig): McpClientC
   }
 }
 
-/**
- * Ask after all downstream pre-execute policy permits an allowed Windows tool;
- * deny any unreviewed name that somehow appears in the reserved namespace.
- * @param toolName - model-facing ToolRuntime name.
- * @param next - downstream policy decision.
- * @returns downstream denial/approval request, or this plugin's final decision.
- */
-export async function decideWindowsMcpCall(
-  toolName: string,
-  next: () => Promise<PreToolDecision>,
-): Promise<PreToolDecision> {
-  if (!toolName.startsWith(WINDOWS_MCP_PUBLIC_PREFIX)) return next()
-  const downstream = await next()
-  if (downstream.kind === 'deny') return downstream
-  if (!WINDOWS_MCP_PUBLIC_TOOLS.has(toolName)) {
-    return { kind: 'deny', reason: `Windows MCP tool "${toolName}" is not in the built-in allowlist` }
-  }
-  if (downstream.kind !== 'allow') return downstream
-  return {
-    kind: 'ask',
-    reason: 'Windows desktop automation can read or control applications outside the DSH sandbox',
-  }
-}
-
 interface ActiveMount {
   readonly entryId: string
-  readonly stopPolicy: () => boolean
+  readonly stopPolicy: () => void
 }
 
 /** Stable comparison key for values that require remounting the stdio child. */
 function mountSignature(config: ResolvedConfig): string {
-  return JSON.stringify([config.enabled, config.runtimeCommand, config.runtimeCwd, config.toolCallTimeoutMs])
+  return JSON.stringify([
+    config.enabled, config.runtimeCommand, config.runtimeCwd, config.toolCallTimeoutMs,
+    config.samplingMaxInputBytes, config.samplingMaxOutputTokens,
+  ])
 }
 
 /**
  * Reconcile the live Loader child with composition and user settings. The
  * generic client is a real Loader entry, so its activation and teardown retain
  * ordinary transaction, HMR, and dependency behavior.
- * @param ctx - plugin context carrying Loader, tools, and optional settings.
+ * @param ctx - plugin context carrying Loader, agents, tools, and optional settings.
  * @param entryConfig - composition-layer defaults, including the launcher-owned runtime path.
  */
 export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
@@ -219,7 +197,7 @@ export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
       return
     }
     await unmount()
-    const stopPolicy = ctx.on('tools/pre-execute', (exec, next) => decideWindowsMcpCall(exec.name, next))
+    const stopPolicy = installWindowsMcpPolicy(ctx)
     try {
       const entryId = await ctx.loader.create({
         name: WINDOWS_MCP_CLIENT_PACKAGE,

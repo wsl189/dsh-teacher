@@ -1,7 +1,28 @@
 diff --git a/package.json b/package.json
+index d0db800..d3ca353 100644
 --- a/package.json
 +++ b/package.json
-@@ -72,9 +72,9 @@
+@@ -46,9 +46,9 @@
+   "bin": {
+     "dsh-im": "bin/dsh-im.mjs"
+   },
+-  "main": "./lib/index.js",
++  "main": "./desktop-workspace.mjs",
+   "exports": {
+-    ".": "./lib/index.js",
++    ".": "./desktop-workspace.mjs",
+     "./client": "./lib/client.js",
+     "./package.json": "./package.json"
+   },
+@@ -56,6 +56,7 @@
+     "assets",
+     "bin",
+     "cordis.patch.yml",
++    "desktop-workspace.mjs",
+     "lib",
+     "plugin-src",
+     "scripts",
+@@ -72,9 +73,9 @@
      "client": {
        "inject": [
          "@deepseek-ai/dsh-client-connection",
@@ -283,3 +304,54 @@ diff --git a/lib/client.js b/lib/client.js
    });
    ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
      name: "settings.plugins.tab",
+diff --git a/desktop-workspace.mjs b/desktop-workspace.mjs
+new file mode 100644
+index 0000000..789f1df
+--- /dev/null
++++ b/desktop-workspace.mjs
+@@ -0,0 +1,45 @@
++/** Desktop workspace defaults for the bundled IM platforms. */
++import { homedir } from 'node:os';
++import { isAbsolute, join } from 'node:path';
++import { createImHostPlugin as createUpstreamPlugin } from './lib/index.js';
++
++export { inject, name } from './lib/index.js';
++
++const BOT_CHANNELS = [
++  'feishu', 'weixin', 'dingtalk', 'wecom', 'qq',
++  'slack', 'telegram', 'discord', 'whatsapp',
++];
++
++/**
++ * Create the IM plugin with desktop defaults for unassigned bot workspaces.
++ * Saved workspaces and explicit per-platform workspace settings take precedence.
++ * @param internals - upstream platform implementations, when supplied.
++ * @returns the plugin with its existing metadata and lifecycle ownership.
++ */
++export function createImHostPlugin(internals) {
++  const plugin = createUpstreamPlugin(internals);
++  return Object.freeze({
++    ...plugin,
++    async apply(ctx, config = {}) {
++      const desktop = process.env.DSH_DESKTOP_DIR ?? join(homedir(), 'Desktop');
++      if (!isAbsolute(desktop)) {
++        throw new Error('DSH_DESKTOP_DIR must be an absolute directory path');
++      }
++      const channels = Object.fromEntries(BOT_CHANNELS.map((channel) => [channel, {
++        ...config[channel],
++        workspace: config[channel]?.workspace ?? desktop,
++      }]));
++      return plugin.apply(ctx, { ...config, ...channels });
++    },
++  });
++}
++
++/**
++ * Mount the bundled IM plugin with Host desktop workspace defaults.
++ * @param ctx - the Cordis Host context.
++ * @param config - upstream IM settings, including per-platform overrides.
++ * @returns completion of the upstream plugin's startup.
++ */
++export async function apply(ctx, config) {
++  return createImHostPlugin().apply(ctx, config);
++}

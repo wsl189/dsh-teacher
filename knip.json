@@ -592,6 +592,18 @@
         "tests/**/*.ts"
       ]
     },
+    "packages/mcp/windows-mcp": {
+      "entry": [
+        "tests/**/*.spec.ts",
+        "tests/fixtures/snapshot.ts",
+        "tests/fixtures/capabilities-server.mjs",
+        "tests/fixtures/desktop-server.mjs"
+      ],
+      "project": [
+        "src/**/*.ts",
+        "tests/**/*.{ts,mjs}"
+      ]
+    },
     "packages/mcp/mcp-client": {
       "entry": [
         "tests/**/*.spec.ts",
@@ -693,10 +705,10 @@
     },
     "packages/bundle/web-app": {
       "ignoreDependencies": [
+        "@anysearch/anysearch-dsh",
         "@deepseek-ai/.+",
         "@dickpy/dsh-imagegen",
         "@huanlin/dsh-plugin-better-sidebar-plugin-office",
-        "@xmanrui/dsh-im",
         "dsh-plugin-cron",
         "dsh-skill-mcp-panel",
         "dsh-univer-office"

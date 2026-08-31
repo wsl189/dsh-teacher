@@ -1,0 +1,18 @@
+{
+  "model": "smoke-model",
+  "messages": [
+    {
+      "role": "user",
+      "content": "MCP sampling: add 19 and 23; return only the number."
+    }
+  ],
+  "stream": true,
+  "stream_options": {
+    "include_usage": true
+  },
+  "thinking": {
+    "type": "enabled"
+  },
+  "reasoning_effort": "high",
+  "max_tokens": 128
+}

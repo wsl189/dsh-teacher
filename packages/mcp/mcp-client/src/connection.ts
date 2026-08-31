@@ -23,6 +23,8 @@ import { createTransport } from './transport.ts'
 import { syncTools } from './tools.ts'
 import type { ToolBridgeOptions, ToolDisposers } from './tools.ts'
 import type { Config, ResolvedToolFilter } from './index.ts'
+import { createSamplingBridge } from './sampling.ts'
+import type { ResolvedSamplingConfig } from './sampling.ts'
 
 /** Automatic reconnect policy for one MCP server connection. */
 export interface ReconnectConfig {
@@ -119,6 +121,7 @@ export interface ConnectionHandle {
  * @param config - Resolved plugin config selecting the transport and server identity.
  * @param policy - Resolved reconnect policy from {@link resolveReconnectPolicy}.
  * @param includeTools - resolved exact-name discovery filter, or `undefined` for every tool.
+ * @param samplingPolicy - validated opt-in model access; absent disables sampling.
  * @returns Handle with a `ready` promise for startup-await and a `dispose` for teardown.
  */
 export function startConnection(
@@ -126,6 +129,7 @@ export function startConnection(
   config: Config,
   policy: ResolvedReconnectPolicy,
   includeTools: ResolvedToolFilter,
+  samplingPolicy?: ResolvedSamplingConfig,
 ): ConnectionHandle {
   const label = `mcp-client(${config.serverName})`
   const opts: ToolBridgeOptions = {
@@ -244,20 +248,37 @@ export function startConnection(
   async function connectGeneration(startup: boolean): Promise<void> {
     const generation = new Client(
       { name: 'dsh-mcp-client', version: '0.0.1' },
-      { capabilities: {} },
+      { capabilities: samplingPolicy === undefined ? {} : { sampling: {} } },
     )
+    const sampling = samplingPolicy === undefined ? undefined : createSamplingBridge(ctx, generation, config.serverName, samplingPolicy)
+    const generationOpts = sampling === undefined ? opts : { ...opts, sampling }
     const closed: PromiseWithResolvers<void> = Promise.withResolvers()
     let attemptSettled = false
     let closeObserved = false
     const hasClosed = (): boolean => closeObserved
+    const finishClosedGeneration = async (): Promise<void> => {
+      const quiesced = await waitForClose(closed.promise)
+      attemptSettled = true
+      if (!isCurrent(generation)) return
+      if (!quiesced) {
+        client = undefined
+        clientClosed = undefined
+        ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
+        return
+      }
+      generationDown(generation)
+    }
     client = generation
     clientClosed = closed.promise
     generation.onclose = () => {
       closeObserved = true
-      closed.resolve()
-      // A failed connect owns its close barrier in the catch path below. An
-      // established generation can transition down directly from this signal.
-      if (attemptSettled) generationDown(generation)
+      const settled = (): void => {
+        closed.resolve()
+        // Failed activation joins this close; an established generation owns reconnection.
+        if (attemptSettled) generationDown(generation)
+      }
+      if (sampling === undefined) settled()
+      else void sampling.dispose().then(settled)
     }
     // Registered before connect so a list change during the initial sync is
     // queued behind it rather than dropped.
@@ -267,7 +288,7 @@ export function startConnection(
         if (!isCurrent(generation)) return
         ctx.logger.info(`${label}: tool list changed, re-syncing`)
         try {
-          await enqueueSync(generation)
+          await enqueueSync(generation, generationOpts)
         } catch (error) {
           // Fetch-phase failure: the previous generation is still registered
           // and `disposers` still owns it — keep serving the last good list.
@@ -278,32 +299,22 @@ export function startConnection(
     try {
       await generation.connect(createTransport(config))
       if (hasClosed()) {
-        attemptSettled = true
-        generationDown(generation)
+        await finishClosedGeneration()
         return
       }
-      await enqueueSync(generation, startup ? startupOpts : opts)
+      await enqueueSync(generation, startup ? { ...generationOpts, registrationFailure: startupOpts.registrationFailure } : generationOpts)
     } catch (error) {
       if (firstAttemptError === undefined) firstAttemptError = error
       // Disposal clears current ownership before it closes the generation, so
       // only a live supervisor reports an attempt failure.
       if (isCurrent(generation)) ctx.logger.warn(`${label}: connection attempt failed: ${String(error)}`)
       try { await generation.close() } catch { /* transport already gone */ }
-      const quiesced = hasClosed() || await waitForClose(closed.promise)
-      attemptSettled = true
-      if (!isCurrent(generation)) return
-      if (!quiesced) {
-        client = undefined
-        clientClosed = undefined
-        ctx.logger.error(`${label}: failed generation did not close within ${GENERATION_CLOSE_TIMEOUT_MS}ms — reconnect stopped to avoid overlapping server processes; reload the plugin or restart the Host to retry`)
-        return
-      }
-      generationDown(generation)
+      await finishClosedGeneration()
       return
     }
     attemptSettled = true
     if (hasClosed()) {
-      generationDown(generation)
+      await finishClosedGeneration()
       return
     }
     if (!isCurrent(generation)) return

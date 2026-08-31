@@ -1,0 +1,13 @@
+version: 1
+scenario: windows-mcp-restricted
+profile: headless
+composition: windows-mcp
+recording: authored
+platform: posix
+permission: workspace-write
+header:
+  class: windows-mcp-restricted
+  pin: true
+  systemPromptSource: windows-mcp-full-access
+workspace:
+  final: true

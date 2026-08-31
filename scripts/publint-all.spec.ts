@@ -98,11 +98,12 @@ describe('publint package runner', () => {
 
   it('accepts only the exact reviewed local artifacts in the Web distribution bundle', () => {
     const dependencies = {
+      '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz',
       '@dickpy/dsh-imagegen': 'file:../../../third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz',
       '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz',
       'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
       'dsh-skill-mcp-panel': 'file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.1.tgz',
-      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz',
+      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz',
     }
     const accepted = run(fixture({ packagePath: 'packages/bundle/web-app', dependencies }))
     expect(accepted.status, accepted.stdout + accepted.stderr).toBe(0)
@@ -113,5 +114,12 @@ describe('publint package runner', () => {
     }))
     expect(changed.status).toBe(1)
     expect(changed.stdout).toContain('dsh-univer-office')
+
+    const changedSearch = run(fixture({
+      packagePath: 'packages/bundle/web-app',
+      dependencies: { ...dependencies, '@anysearch/anysearch-dsh': 'file:../../../third-party/other.tgz' },
+    }))
+    expect(changedSearch.status).toBe(1)
+    expect(changedSearch.stdout).toContain('@anysearch/anysearch-dsh')
   })
 })

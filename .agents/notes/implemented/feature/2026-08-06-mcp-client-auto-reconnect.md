@@ -24,6 +24,8 @@ The [MCP client](2026-07-07-mcp-client-plugin.md) connected once at plugin load.
 
 **Disposal.** Dispose flips the fence, cancels any pending timer, closes the current client, then awaits the in-flight attempt and the sync queue before unregistering — quiescence, not just a request to stop. The reconnect timer is unref'd so a waiting backoff never holds a finishing process open.
 
+An opted-in generation also aborts and joins its [tool-correlated model completions](2026-09-01-windows-mcp-source-parity.md) before the close barrier resolves. A replacement cannot inherit a prior generation's sampling authority or overlap its unfinished model call.
+
 ## Alternatives considered
 
 **Consecutive-failure counter that resets on every successful connect.** Rejected: a crash-looping server whose connects briefly succeed would reset the budget each cycle and restart forever — exactly the restart storm the failure cap exists to prevent. The uptime-gated reset distinguishes a recovered server from a looping one without new configuration.

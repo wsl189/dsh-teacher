@@ -1,0 +1,9 @@
+diff --git a/lib/index.js b/lib/index.js
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -3 +2,0 @@
+-import { applyWebFetchTool, DEFAULT_FETCH_MAX_OUTPUT_CHARS, DEFAULT_WEB_TOOL_TIMEOUT_MS, } from '@deepseek-ai/dsh-tool-web';
+@@ -65,3 +63,0 @@
+-    if (ctx.tools.get('web_fetch') === undefined) {
+-        applyWebFetchTool(ctx, DEFAULT_WEB_TOOL_TIMEOUT_MS, DEFAULT_FETCH_MAX_OUTPUT_CHARS);
+-    }

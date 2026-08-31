@@ -47,6 +47,18 @@ describe('application entrypoints', () => {
     ])
   })
 
+  it('classifies the Windows-MCP test servers without admitting sibling executables', () => {
+    const root = fixture()
+    write(root, 'packages/mcp/windows-mcp/tests/fixtures/desktop-server.mjs', '#!/usr/bin/env node\n')
+    write(root, 'packages/mcp/windows-mcp/tests/fixtures/capabilities-server.mjs', '#!/usr/bin/env node\n')
+    expect(applicationEntrypointViolations(root)).toEqual([])
+
+    write(root, 'packages/mcp/windows-mcp/tests/fixtures/rogue.mjs', '#!/usr/bin/env node\n')
+    expect(applicationEntrypointViolations(root)).toEqual([
+      'packages/mcp/windows-mcp/tests/fixtures/rogue.mjs: executable source has no application/build/test classification',
+    ])
+  })
+
   it('rejects an executable at an application package root', () => {
     const root = fixture()
     write(root, 'apps/example/rogue.mjs', '#!/usr/bin/env node\n')

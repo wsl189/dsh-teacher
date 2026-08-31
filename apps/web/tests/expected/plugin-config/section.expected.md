@@ -54,7 +54,7 @@
           - img
       - listitem:
         - 'button "展开设置: Windows 桌面控制"':
-          - text: Windows 桌面控制 通过安装包内置的 Windows-MCP 运行时操作可见的 Windows 应用。
+          - text: Windows 桌面控制 通过安装包内置的 Windows-MCP 运行时控制 Windows 应用并使用系统工具。
           - img
       - listitem:
         - 'button "展开: AI 生图（dsh-imagegen）"': AI 生图（dsh-imagegen） 配置图像生成 API 地址与密钥 ▾

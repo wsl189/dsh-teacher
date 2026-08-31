@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
-import type { SessionEvent } from '@deepseek-ai/dsh-session'
+import { Session, SessionId, type SessionEvent } from '@deepseek-ai/dsh-session'
 import { CompactionId } from '@deepseek-ai/dsh-compaction'
 import DeepSeekLlmApiExtensionRegistry from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
 import LlmRuntime, { ToolCallId, createUserMessage, GenerateOptions, LlmAdapter, StreamChunk } from '@deepseek-ai/dsh-llm'
@@ -160,6 +160,41 @@ describe('parseSessionLog', () => {
 })
 
 describe('deriveReplayScript', () => {
+  function samplingSession() {
+    const session = Session.create(SessionId('sampling-replay'))
+    const appendRequest = () => session.append('mcp/sampling-request', {
+      serverName: 'windows', callId: ToolCallId('scrape'), rootCallId: ToolCallId('scrape'),
+      config: { provider: 'test', model: 'model' }, messages: [],
+    })
+    return { session, appendRequest }
+  }
+
+  it('replays concurrent sampling in request order between the initiating and follow-up calls', () => {
+    const { session, appendRequest } = samplingSession()
+    for (const chunk of TEXT_CHUNKS) session.append('assistant/chunk', { turn: 1, step: 1, chunk })
+    const first = appendRequest()
+    const second = appendRequest()
+    const failed: StreamChunk[] = [{ type: 'finish', reason: { kind: 'error', failure: { code: 'FAILED', message: 'unavailable' } } }]
+    session.append('mcp/sampling-response', { requestSeq: second.seq, chunks: failed })
+    session.append('mcp/sampling-response', { requestSeq: first.seq, chunks: TEXT_CHUNKS })
+    for (const chunk of TEXT_CHUNKS) session.append('assistant/chunk', { turn: 1, step: 2, chunk })
+    expect(deriveReplayScript(session.events)).toEqual([
+      { kind: 'chunks', chunks: TEXT_CHUNKS },
+      { kind: 'chunks', chunks: TEXT_CHUNKS },
+      { kind: 'chunks', chunks: failed },
+      { kind: 'chunks', chunks: TEXT_CHUNKS },
+    ])
+  })
+
+  it.each(['missing request', 'missing response', 'missing finish', 'duplicate response'] as const)('rejects sampling with %s', (kind) => {
+    const { session, appendRequest } = samplingSession()
+    const request = appendRequest()
+    const data = { requestSeq: kind === 'missing request' ? 99 : request.seq, chunks: kind === 'missing finish' ? [] : TEXT_CHUNKS }
+    if (kind !== 'missing response') session.append('mcp/sampling-response', data)
+    if (kind === 'duplicate response') session.append('mcp/sampling-response', data)
+    expect(() => deriveReplayScript(session.events)).toThrow('llm-replay: sampling')
+  })
+
   it('groups one finished assistant/chunk stream into one replay entry', () => {
     const events: SessionEvent[] = TEXT_CHUNKS.map((c, i) => chunkEvent(i + 1, 1, 1, c))
     expect(deriveReplayScript(events)).toEqual([{ kind: 'chunks', chunks: TEXT_CHUNKS }])

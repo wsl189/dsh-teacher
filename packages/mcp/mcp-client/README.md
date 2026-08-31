@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-mcp-client` attaches external Model Context Protocol (MCP) servers to the harness so their tools work like any native tool. With one configuration entry per server, the model can call that server's tools — a filesystem, GitHub, database, or memory server — under stable names such as `mcp__github__create_issue`. Add it when the model should work with an external tool server; nothing ships enabled, so you opt in. The main cost is the tokens those tool definitions add to every request, and a slow or crashed server can delay startup or leave its tools failing until it recovers. Only tools are bridged: MCP resources and prompts are not supported.
+`dsh-mcp-client` attaches external Model Context Protocol (MCP) servers to the harness so their tools work like any native tool. With one configuration entry per server, the model can call that server's tools — a filesystem, GitHub, database, or memory server — under stable names such as `mcp__github__create_issue`. Add it when the model should work with an external tool server; nothing ships enabled, so you opt in. The main cost is the tokens those tool definitions add to every request, and a slow or crashed server can delay startup or leave its tools failing until it recovers. Tool-correlated text sampling is an explicit opt-in; MCP resources and prompts are not supported.
 
 ## Table of Contents
 
@@ -59,6 +59,7 @@ Add one entry per server; nothing else is required. After the harness starts, th
 | `command` / `args` / `env` / `cwd` | — | stdio: executable, arguments, extra env merged over scrubbed ambient env, working directory |
 | `url` / `headers` | — | streamable-http: endpoint URL and extra request headers |
 | `includeTools` | `[]` | Exact, case-sensitive raw tool-name allowlist; empty means all advertised tools |
+| `sampling` | absent | Optional text-sampling policy with required `includeTools`, `maxInputBytes`, and `maxOutputTokens`; requires the LLM service |
 | `toolCallTimeoutMs` | `60,000` | Timeout per `tools/call` invocation |
 | `failOnStartupError` | `false` | Reject plugin activation when the initial connection or tool synchronization fails |
 | `reconnect.enabled` | `true` | Reconnect automatically after a lost connection |
@@ -87,6 +88,13 @@ Set `includeTools` when a composition must expose only a reviewed subset. Matchi
 When the model calls an MCP tool, the call runs against the remote server with a per-call timeout (default 60 seconds) and can be cancelled like any other tool call. The result comes back as ordinary text in block order; resource links appear as text with their name and URI. If the server reports an error, the call fails visibly — the model does not see a fake success.
 
 Images are supported when the current model accepts image input and the harness attachment feature is enabled; they then appear in the conversation like other images. Otherwise — and for audio or embedded resources — the model sees a clear diagnostic message instead of nothing.
+
+<a id="tool-correlated-sampling"></a>
+### Tool-correlated sampling
+
+Set `sampling` only for a server that echoes the private `deepseek-harness/sampling-token` from `tools/call` `_meta` into `sampling/createMessage` `metadata`. The client issues a token only after an allowed tool reaches execution in a session; each token permits one text completion. Unsolicited, reused, expired, and uncorrelated requests fail without calling a model. Ordinary servers receive no sampling capability when this policy is absent.
+
+The completion uses the caller's latest logged provider/model route, with no conversation history, extra tools, or server-selected model override. `maxInputBytes` bounds the UTF-8 JSON parameters; `maxOutputTokens` caps the requested token budget. Cancellation, tool timeout, and connection closure abort nested completions; a connection generation waits for them before reconnecting. Request and response events retain exact prepared inputs and raw output chunks for replay, without logging the private token.
 
 ### Startup, updates, and reconnection
 
@@ -119,8 +127,9 @@ This section explains the design decisions behind the bridge and points at the c
 | [`src/index.ts`](src/index.ts) | Plugin entry: `Config` schema, `serverName` reservation, activation await |
 | [`src/connection.ts`](src/connection.ts) | Connection supervisor: client generations, reconnect policy, attempt budget, disposal |
 | [`src/tools.ts`](src/tools.ts) | Tool bridge: discovery, naming, registration swap, execution, image projection |
+| [`src/sampling.ts`](src/sampling.ts) | Opt-in invocation correlation, bounded model calls, durable auxiliary records, and cancellation |
 | [`src/transport.ts`](src/transport.ts) | Transport factory: stdio spawn with scrubbed env, Streamable HTTP |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion (no runtime invariant; generations are observable only through the tool registry) |
+| [`src/invariant.ts`](src/invariant.ts) | Sampling request/response correlation and terminal-chunk invariants |
 
 ### Lifecycle and sync
 
@@ -185,6 +194,20 @@ Arguments, mapped text, and durable image references are retained until compacti
 
 Append-only; newly visible content follows the reusable request prefix and does not invalidate existing KV-cache entries.
 
+### Auxiliary sampling requests
+
+#### What the model sees
+
+The auxiliary request contains only the server's text messages and optional system prompt. Its text response returns to the server; the parent conversation receives the ordinary tool result.
+
+#### Token effect
+
+Each admitted invocation can add one separately billed, byte-bounded input and token-capped completion. The calling session records both directions.
+
+#### KV Cache effect
+
+Sampling has its own request prefix. Its records do not replace the parent conversation or its tool-definition prefix.
+
 ## Known Limitations and Deferred Work
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -192,7 +215,7 @@ Append-only; newly visible content follows the reusable request prefix and does 
 
 These limits describe what you cannot do with this plugin and when it needs operational attention. They are current package constraints, not a comparison with other MCP clients or a task backlog.
 
-- **Tools are the only bridged MCP capability** — Resources and Prompts have no harness consumer mechanism and are deferred.
+- **Resources and Prompts are not bridged** — they have no harness consumer mechanism. Sampling is text-only, requires the correlation-token extension, and grants neither additional context nor tools.
 - **Startup and discovery timeouts are inherited from the MCP SDK** — the plugin exposes no connection or discovery timeout; each `initialize` and paginated `tools/list` request uses the SDK's 60-second request default, so an unresponsive server or cursor chain can delay both activation and teardown while the initial synchronization settles.
 - **Reconnect triggers on transport close** — a crashed stdio child fires it; Streamable HTTP failures surface per request through the SDK transport's own recovery, so an unreachable HTTP server is retried per call rather than respawned by the supervisor.
 - **Image is the only durable rich-result bridge** — PNG, JPEG, WebP, and GIF enter Native context after exact capability proof. Audio and embedded-resource payloads remain execution-local with explicit diagnostics, while resource links preserve only their name and URI as text.

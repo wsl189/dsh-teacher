@@ -38,6 +38,7 @@ FS_SEARCH_TEXT = "filesystem search smoke ok"
 FS_SEARCH_MARKER = "PACKAGED_FS_SEARCH_OK"
 MCP_PROMPT = "Exercise the packaged MCP client with one external stdio server."
 MCP_TEXT = "MCP client smoke ok"
+MCP_SAMPLING_PROMPT = "MCP sampling: add 19 and 23; return only the number."
 PROFILE_PLUGIN_PROMPT = "Verify the Python-installed dsh profile plugin."
 PROFILE_PLUGIN_TEXT = "profile plugin smoke ok"
 PROFILE_PLUGIN_MARKER = "PYTHON_INSTALLED_DSH_PROFILE_PLUGIN"
@@ -124,6 +125,8 @@ RESTART_SNAPSHOT_DIRECTORY = (
     Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "restart"
 )
 RESTART_SNAPSHOT_FILENAMES = ("result.json", "requests.json", "session.1.jsonl", "session.2.jsonl")
+MCP_SNAPSHOT_DIRECTORY = Path(__file__).resolve().parent / "snapshots" / "python-sdk-single-exe" / "mcp"
+MCP_SNAPSHOT_FILENAMES = ("result.json", "sampling-request.json")
 MCP_SERVER_SCRIPT = """\
 import json
 import os
@@ -149,6 +152,7 @@ for line in sys.stdin:
         continue
     method = request.get("method")
     if method == "initialize":
+        assert "sampling" in request["params"]["capabilities"]
         send({
             "jsonrpc": "2.0",
             "id": request_id,
@@ -190,8 +194,24 @@ for line in sys.stdin:
             continue
         send({
             "jsonrpc": "2.0",
+            "id": "mcp-sample",
+            "method": "sampling/createMessage",
+            "params": {
+                "messages": [{"role": "user", "content": {
+                    "type": "text", "text": "MCP sampling: add 19 and 23; return only the number.",
+                }}],
+                "maxTokens": 256,
+                "metadata": params["_meta"],
+            },
+        })
+        sampled = json.loads(sys.stdin.readline())
+        assert sampled["id"] == "mcp-sample", sampled
+        text = sampled["result"]["content"]["text"]
+        assert text == "42", sampled
+        send({
+            "jsonrpc": "2.0",
             "id": request_id,
-            "result": {"content": [{"type": "text", "text": "42"}]},
+            "result": {"content": [{"type": "text", "text": text}]},
         })
     else:
         send({
@@ -254,6 +274,8 @@ def write_advanced_profile_patch(root: Path, name: str, sessions: Path) -> Path:
 def write_mcp_patch(root: Path, sessions: Path, server_script: Path) -> Path:
     """Write a profile patch that mounts the packaged MCP client."""
     return write_profile_patch(root, "mcp.patch.yml", sessions, [{
+        "id": "plugin-package-inventory-deepseek", "disabled": True,
+    }, {
         "insert": [{
             "id": "mcp-fixture",
             "name": "@deepseek-ai/dsh-mcp-client",
@@ -265,6 +287,7 @@ def write_mcp_patch(root: Path, sessions: Path, server_script: Path) -> Path:
                 "env": {"MCP_SMOKE_LOG": str(server_script.with_suffix(".log"))},
                 "failOnStartupError": True,
                 "reconnect": {"enabled": False},
+                "sampling": {"includeTools": ["add"], "maxInputBytes": 4096, "maxOutputTokens": 128},
             },
         }],
     }])
@@ -353,6 +376,7 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
         WORKFLOW_PROMPT,
         FS_SEARCH_PROMPT,
         MCP_PROMPT,
+        MCP_SAMPLING_PROMPT,
         RESTART_FIRST_PROMPT,
         RESTART_SECOND_PROMPT,
         PROFILE_PLUGIN_PROMPT,
@@ -363,6 +387,10 @@ def completion_chunks(body: dict[str, object]) -> list[dict[str, object]]:
     )
     if prompt == SNAPSHOT_DIRECT_CHILD_PROMPT:
         return text_chunks("DIRECT_CHILD_OK")
+    if prompt == MCP_SAMPLING_PROMPT:
+        assert body.get("max_tokens") == 128
+        assert not body.get("tools")
+        return text_chunks("42")
     if prompt == SNAPSHOT_WORKFLOW_CHILD_PROMPT:
         return text_chunks("WORKFLOW_CHILD_OK")
     if prompt == SNAPSHOT_PROMPT:
@@ -733,8 +761,8 @@ def main() -> None:
         args.exe = assert_installed_wheel_environment()
     if args.scenario in {"all", "sdk-custom", "sdk-minimal", "sdk-fs-search", "sdk-snapshot", "sdk-restart", "direct"} and args.exe is None:
         parser.error("--exe is required for custom, minimal, snapshot, and direct scenarios")
-    if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-snapshot", "sdk-restart"}:
-        parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-snapshot, sdk-restart, or all")
+    if args.update_snapshots and args.scenario not in {"all", "sdk-minimal", "sdk-mcp", "sdk-snapshot", "sdk-restart"}:
+        parser.error("--update-snapshots requires --scenario sdk-minimal, sdk-mcp, sdk-snapshot, sdk-restart, or all")
     if args.exe is not None and not args.exe.is_file():
         parser.error(f"runtime executable does not exist: {args.exe}")
 
@@ -756,7 +784,7 @@ def main() -> None:
             assert args.exe is not None
             smoke_sdk_fs_search(model.url, args.exe.resolve())
         if args.scenario in {"all", "sdk-mcp"}:
-            smoke_sdk_mcp(model.url, None if args.exe is None else args.exe.resolve())
+            smoke_sdk_mcp(model.url, None if args.exe is None else args.exe.resolve(), args.update_snapshots)
         if args.scenario in {"all", "sdk-snapshot"}:
             assert args.exe is not None
             smoke_sdk_snapshot(model.url, args.exe.resolve(), args.update_snapshots)
@@ -1050,8 +1078,8 @@ def smoke_sdk_fs_search(base_url: str, executable: Path) -> None:
         assert_session_log(sessions, root, FS_SEARCH_TEXT, FS_SEARCH_MARKER, "needle.txt")
 
 
-def smoke_sdk_mcp(base_url: str, executable: Path | None) -> None:
-    """Discover and call an external stdio MCP tool through the packaged client."""
+def smoke_sdk_mcp(base_url: str, executable: Path | None, update_snapshots: bool = False) -> None:
+    """Discover, call, and sample through MCP with Python SDK and provider-wire projections."""
     from deepseek_harness import DeepSeekHarness
 
     with tempfile.TemporaryDirectory(prefix="dsh-sdk-mcp-") as temporary:
@@ -1080,13 +1108,40 @@ def smoke_sdk_mcp(base_url: str, executable: Path | None) -> None:
             result = harness.run(MCP_PROMPT, session_id="mcp-smoke")
 
         assert result.final_response == MCP_TEXT, result.final_response
-        assert discovery_log.read_text().splitlines() == [
+        observed_methods = discovery_log.read_text().splitlines()
+        assert observed_methods == [
             "initialize",
             "notifications/initialized",
             "tools/list",
             "tools/call",
-        ]
+        ], observed_methods
         assert_session_log(sessions, root, MCP_TEXT, "mcp__fixture__add", "42")
+        sampling_events = [event for event in result.events if event["type"].startswith("mcp/sampling-")]
+        assert [event["type"] for event in sampling_events] == ["mcp/sampling-request", "mcp/sampling-response"]
+        sampling_notifications = [
+            notification.payload["event"]
+            for notification in result.notifications
+            if notification.method == "session.event"
+            and notification.payload["event"]["type"].startswith("mcp/sampling-")
+        ]
+        assert sampling_notifications == sampling_events
+        assert sampling_events[1]["data"]["requestSeq"] == sampling_events[0]["seq"]
+        requests = [
+            request for request in MockModelHandler.requests
+            if request.get("messages") == [{"role": "user", "content": MCP_SAMPLING_PROMPT}]
+        ]
+        assert len(requests) == 1, requests
+        projected = {
+            "session_id": result.session_id,
+            "final_response": result.final_response,
+            "finish_reason": result.finish_reason,
+            "sampling_events": normalize_snapshot_value(sampling_events, [(str(root), "{{cwd}}")]),
+            "sampling_notification_count": len(sampling_notifications),
+        }
+        compare_snapshot_files({
+            "result.json": json.dumps(projected, indent=2, ensure_ascii=False) + "\n",
+            "sampling-request.json": json.dumps(requests[0], indent=2, ensure_ascii=False) + "\n",
+        }, update_snapshots, MCP_SNAPSHOT_DIRECTORY, MCP_SNAPSHOT_FILENAMES)
 
 
 def smoke_sdk_profile_plugin(base_url: str) -> None:

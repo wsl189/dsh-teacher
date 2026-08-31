@@ -1,0 +1,476 @@
+{
+  "App": [
+    {
+      "name": "mode",
+      "annotation": "Literal['launch', 'launch_executable', 'resize', 'switch']",
+      "default": "'launch'"
+    },
+    {
+      "name": "name",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "window_loc",
+      "annotation": "list[int] | None",
+      "default": "None"
+    },
+    {
+      "name": "window_size",
+      "annotation": "list[int] | None",
+      "default": "None"
+    },
+    {
+      "name": "executable",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "args",
+      "annotation": "list[str] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "cwd",
+      "annotation": "str | None",
+      "default": "None"
+    }
+  ],
+  "Click": [
+    {
+      "name": "loc",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "label",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "button",
+      "annotation": "Literal['left', 'right', 'middle']",
+      "default": "'left'"
+    },
+    {
+      "name": "clicks",
+      "annotation": "int",
+      "default": "1"
+    }
+  ],
+  "Clipboard": [
+    {
+      "name": "mode",
+      "annotation": "Literal['get', 'set']",
+      "default": null
+    },
+    {
+      "name": "text",
+      "annotation": "str | None",
+      "default": "None"
+    }
+  ],
+  "DisplayInventory": [],
+  "FileSystem": [
+    {
+      "name": "mode",
+      "annotation": "Literal['read', 'write', 'copy', 'move', 'delete', 'list', 'search', 'info']",
+      "default": null
+    },
+    {
+      "name": "path",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "destination",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "content",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "pattern",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "recursive",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "append",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "overwrite",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "offset",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "limit",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "encoding",
+      "annotation": "str",
+      "default": "'utf-8'"
+    },
+    {
+      "name": "show_hidden",
+      "annotation": "bool | str",
+      "default": "False"
+    }
+  ],
+  "Move": [
+    {
+      "name": "loc",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "label",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "drag",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "from_loc",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "duration",
+      "annotation": "float | int | str | None",
+      "default": "None"
+    }
+  ],
+  "MultiEdit": [
+    {
+      "name": "locs",
+      "annotation": "list[list] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "labels",
+      "annotation": "list[list] | str | None",
+      "default": "None"
+    }
+  ],
+  "MultiSelect": [
+    {
+      "name": "locs",
+      "annotation": "list[list[int]] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "labels",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "press_ctrl",
+      "annotation": "bool | str",
+      "default": "True"
+    }
+  ],
+  "Notification": [
+    {
+      "name": "title",
+      "annotation": "Annotated[str, Field(description='The title/heading of the toast notification.')]",
+      "default": null
+    },
+    {
+      "name": "message",
+      "annotation": "Annotated[str, Field(description='The body text of the toast notification displayed below the title.')]",
+      "default": null
+    },
+    {
+      "name": "app_id",
+      "annotation": "Annotated[str, Field(description='The valid Application User Model ID of the toast notification. Required to display the notification in a specific app.')]",
+      "default": null
+    }
+  ],
+  "PowerShell": [
+    {
+      "name": "command",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "timeout",
+      "annotation": "int",
+      "default": "30"
+    }
+  ],
+  "Process": [
+    {
+      "name": "mode",
+      "annotation": "Literal['list', 'kill']",
+      "default": null
+    },
+    {
+      "name": "name",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "pid",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "sort_by",
+      "annotation": "Literal['memory', 'cpu', 'name']",
+      "default": "'memory'"
+    },
+    {
+      "name": "limit",
+      "annotation": "int",
+      "default": "20"
+    },
+    {
+      "name": "force",
+      "annotation": "bool | str",
+      "default": "False"
+    }
+  ],
+  "Registry": [
+    {
+      "name": "mode",
+      "annotation": "Literal['get', 'set', 'delete', 'list']",
+      "default": null
+    },
+    {
+      "name": "path",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "name",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "value",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "type",
+      "annotation": "RegistryType",
+      "default": "'String'"
+    }
+  ],
+  "Scrape": [
+    {
+      "name": "url",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "query",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "use_dom",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "use_sampling",
+      "annotation": "bool | str",
+      "default": "True"
+    }
+  ],
+  "Screenshot": [
+    {
+      "name": "use_annotation",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "width_reference_line",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "height_reference_line",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "display",
+      "annotation": "list[int] | None",
+      "default": "None"
+    },
+    {
+      "name": "region",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    }
+  ],
+  "Scroll": [
+    {
+      "name": "loc",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "label",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "type",
+      "annotation": "Literal['horizontal', 'vertical']",
+      "default": "'vertical'"
+    },
+    {
+      "name": "direction",
+      "annotation": "Literal['up', 'down', 'left', 'right']",
+      "default": "'down'"
+    },
+    {
+      "name": "wheel_times",
+      "annotation": "int",
+      "default": "1"
+    }
+  ],
+  "Shortcut": [
+    {
+      "name": "shortcut",
+      "annotation": "str",
+      "default": null
+    }
+  ],
+  "Snapshot": [
+    {
+      "name": "use_vision",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "use_dom",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "use_annotation",
+      "annotation": "bool | str",
+      "default": "True"
+    },
+    {
+      "name": "use_ui_tree",
+      "annotation": "bool | str",
+      "default": "True"
+    },
+    {
+      "name": "width_reference_line",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "height_reference_line",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "display",
+      "annotation": "list[int] | None",
+      "default": "None"
+    },
+    {
+      "name": "region",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    }
+  ],
+  "Type": [
+    {
+      "name": "text",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "loc",
+      "annotation": "list[int] | str | None",
+      "default": "None"
+    },
+    {
+      "name": "label",
+      "annotation": "int | None",
+      "default": "None"
+    },
+    {
+      "name": "clear",
+      "annotation": "bool | str",
+      "default": "False"
+    },
+    {
+      "name": "caret_position",
+      "annotation": "Literal['start', 'idle', 'end']",
+      "default": "'idle'"
+    },
+    {
+      "name": "press_enter",
+      "annotation": "bool | str",
+      "default": "False"
+    }
+  ],
+  "Wait": [
+    {
+      "name": "duration",
+      "annotation": "int",
+      "default": null
+    }
+  ],
+  "WaitFor": [
+    {
+      "name": "condition",
+      "annotation": "str",
+      "default": null
+    },
+    {
+      "name": "text",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "window_name",
+      "annotation": "str | None",
+      "default": "None"
+    },
+    {
+      "name": "timeout",
+      "annotation": "float",
+      "default": "10.0"
+    },
+    {
+      "name": "interval",
+      "annotation": "float",
+      "default": "0.25"
+    },
+    {
+      "name": "use_dom",
+      "annotation": "bool | str",
+      "default": "False"
+    }
+  ]
+}

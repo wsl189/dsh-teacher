@@ -39,6 +39,11 @@
 - id: skill-ppt-master
   disabled: false
 
+- id: web
+  config:
+    searchProvider: anysearch
+    fetchProvider: anysearch
+
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 
 # `dsh.client` rows are the browser roster the modules node half scans into
@@ -49,15 +54,15 @@
     - id: subagent-model-selection-settings
       name: '@deepseek-ai/dsh-tool-subagent/model-selection-settings'
 
-    # The desktop launcher supplies the private Python runtime path. This row
-    # remains dormant until the user enables it from Settings > Plugins.
+    # The desktop launcher supplies the private Python runtime path. Deployments
+    # without that runtime stay disabled; saved user settings override this default.
     - id: windows-mcp
       name: '@deepseek-ai/dsh-windows-mcp'
       config:
-        enabled: false
+        enabled: !!js (process.env.DSH_WINDOWS_MCP_COMMAND ?? '').trim().length > 0
         runtimeCommand: !!js process.env.DSH_WINDOWS_MCP_COMMAND ?? ''
         runtimeCwd: !!js process.env.DSH_WINDOWS_MCP_RUNTIME_ROOT ?? ''
-        toolCallTimeoutMs: 60000
+        toolCallTimeoutMs: 180000
 
     - id: code-runtime
       name: '@deepseek-ai/dsh-code-runtime-worker-thread'
@@ -104,6 +109,11 @@
 
     # Product-bundled third-party extensions. Their configuration and durable
     # data remain outside the application payload; only executable code ships.
+    - id: web-search-anysearch
+      name: '@anysearch/anysearch-dsh'
+      config:
+        apiKeyEnv: ANYSEARCH_API_KEY
+
     - id: dickpy-dsh-imagegen
       name: '@dickpy/dsh-imagegen'
 

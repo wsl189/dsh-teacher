@@ -1,0 +1,4 @@
+# The production Windows-MCP plugin runs against an inert external MCP server.
+- insert:
+    - id: windows-mcp-fixture
+      name: '../../../packages/mcp/windows-mcp/tests/fixtures/snapshot.ts'

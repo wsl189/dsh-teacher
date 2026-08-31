@@ -4,9 +4,11 @@
 // No browser and no model call — these are composition facts, and the browser
 // scenarios in this lane cover the surface itself.
 import { readFileSync } from 'node:fs'
+import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { canonicalPath, writableRoots } from '@deepseek-ai/dsh-sandbox'
 import { SessionId } from '@deepseek-ai/dsh-session'
@@ -75,6 +77,9 @@ const EXPECTED_PRODUCT_AGENT_TOOLS = ['read_document']
 
 /** Product additions mounted outside the official default Agent preset. */
 const EXPECTED_GLOBAL_TOOLS = [
+  'anysearch_batch_search',
+  'anysearch_capabilities',
+  'anysearch_search',
   'cancel_image_generation_task',
   'cron_add',
   'cron_list',
@@ -117,11 +122,56 @@ const EXPECTED_BUNDLED_CLIENT_MODULES = [
 ]
 
 let scaffold: WebScaffold | undefined
+let windowsHarnessHome: string | undefined
+
+beforeEach(() => {
+  vi.stubEnv('DSH_WINDOWS_MCP_COMMAND', undefined)
+  vi.stubEnv('DSH_WINDOWS_MCP_RUNTIME_ROOT', undefined)
+})
 
 afterEach(async () => {
-  await scaffold?.close()
-  scaffold = undefined
+  try {
+    await scaffold?.close()
+  } finally {
+    scaffold = undefined
+    vi.unstubAllEnvs()
+    if (windowsHarnessHome !== undefined) await rm(windowsHarnessHome, { recursive: true, force: true })
+    windowsHarnessHome = undefined
+  }
 })
+
+it.skipIf(process.platform === 'win32')('starts the supplied desktop runtime by default and preserves a saved disable across launches', async () => {
+  const command = fileURLToPath(new URL('../../../packages/mcp/windows-mcp/tests/fixtures/desktop-server.mjs', import.meta.url))
+  vi.stubEnv('DSH_WINDOWS_MCP_COMMAND', command)
+  vi.stubEnv('DSH_WINDOWS_MCP_RUNTIME_ROOT', tmpdir())
+  windowsHarnessHome = await mkdtemp(join(tmpdir(), 'dsh-windows-mcp-home-'))
+  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, harnessHome: windowsHarnessHome })
+  const { ctx } = scaffold
+  const namespace = settingsNamespace('windows-mcp')
+  expect(ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
+    base: { enabled: true, runtimeCommand: command },
+    value: { enabled: true },
+  })
+  expect(ctx.tools.get('mcp__windows__Snapshot')).toBeDefined()
+  expect(ctx.tools.get('mcp__windows__PowerShell')).toBeDefined()
+
+  await ctx.settings.update(namespace, { enabled: false })
+  await vi.waitFor(() => { expect(ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined() })
+  expect(ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
+    value: { enabled: false },
+    user: { enabled: false },
+  })
+  await scaffold.close()
+  scaffold = undefined
+  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, harnessHome: windowsHarnessHome })
+  expect(scaffold.ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
+    base: { enabled: true },
+    value: { enabled: false },
+    user: { enabled: false },
+  })
+  expect(scaffold.ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined()
+  expect(scaffold.ctx.tools.get('mcp__windows__PowerShell')).toBeUndefined()
+}, 60_000)
 
 it('assembles the shipped Web transport, catalog, guidance, and defaults', async () => {
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
@@ -140,7 +190,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       enabled: false,
       runtimeCommand: '',
       runtimeCwd: '',
-      toolCallTimeoutMs: 60_000,
+      toolCallTimeoutMs: 180_000,
     },
   })
   expect(ctx.tools.schemas().map(schema => schema.name).some(name => name.startsWith('mcp__windows__')))

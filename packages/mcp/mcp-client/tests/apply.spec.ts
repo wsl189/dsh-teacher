@@ -89,6 +89,15 @@ const stdioConfig: Config = {
 // ---- Tests ----
 
 describe('mcp-client plugin module exports', () => {
+  it('rejects sampling opt-in before connecting when the model service is absent', async () => {
+    const ctx = await mountRegistry()
+    await expect(apply(ctx, {
+      ...stdioConfig,
+      sampling: { includeTools: ['Scrape'], maxInputBytes: 4096, maxOutputTokens: 2048 },
+    })).rejects.toThrow('sampling requires the llm service')
+    await ctx.fiber.dispose()
+  })
+
   it('exports name, inject, and Config', () => {
     expect(name).toBe('mcp-client')
     expect(inject).toEqual(['tools'])

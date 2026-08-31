@@ -1,0 +1,6 @@
+# Production Windows-MCP with external desktop effects replaced by a call ledger.
+- insert:
+    - id: windows-mcp-fixture
+      name: '../../../packages/mcp/windows-mcp/tests/fixtures/snapshot.ts'
+      config:
+        capabilities: true

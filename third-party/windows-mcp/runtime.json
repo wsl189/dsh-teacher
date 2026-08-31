@@ -19,6 +19,35 @@
       "before": "from fuzzywuzzy import process",
       "after": "from thefuzz import process",
       "sha256": "0ea924d9603e170c2dce00396313ea15ca99dd92e00ffcdc54127b18aa7d09fe"
+    },
+    {
+      "path": "third-party/windows-mcp/patches/correlated-sampling.patch",
+      "target": "windows_mcp/tools/scrape.py",
+      "before": "from mcp.types import ToolAnnotations",
+      "after": "from mcp.types import ToolAnnotations, SamplingMessage, TextContent",
+      "sha256": "c32a00c3e9fb7c95b34eea999a0e71e731ba05557a28fe25dc7bdba14101ae36"
+    },
+    {
+      "path": "third-party/windows-mcp/patches/correlated-sampling.patch",
+      "target": "windows_mcp/tools/scrape.py",
+      "before": "                result = await ctx.sample(\n                    messages=f\"Raw scraped content from {url}:\\n\\n{content}\",",
+      "after": "                token = getattr(ctx.request_context.meta, 'deepseek-harness/sampling-token', None)\n                result = await ctx.session.create_message(\n                    messages=[SamplingMessage(role='user', content=TextContent(\n                        type='text', text=f\"Raw scraped content from {url}:\\n\\n{content}\",\n                    ))],\n                    metadata={'deepseek-harness/sampling-token': token} if token is not None else None,\n                    related_request_id=ctx.request_context.request_id,",
+      "sha256": "c32a00c3e9fb7c95b34eea999a0e71e731ba05557a28fe25dc7bdba14101ae36"
+    },
+    {
+      "path": "third-party/windows-mcp/patches/correlated-sampling.patch",
+      "target": "windows_mcp/tools/scrape.py",
+      "before": "                return f\"URL: {url}\\nContent:\\n{result.text}\"",
+      "after": "                return f\"URL: {url}\\nContent:\\n{result.content.text}\"",
+      "sha256": "c32a00c3e9fb7c95b34eea999a0e71e731ba05557a28fe25dc7bdba14101ae36"
     }
-  ]
+  ],
+  "source": {
+    "description": "Reviewed Windows-MCP-main source snapshot",
+    "archive": "third-party/windows-mcp/windows-mcp-source.zip",
+    "sha256": "400341b4c158eae478b8fad989d1d58faff99bca9e1b99c2bb84c5422abe3a42",
+    "fileCount": 66,
+    "toolSignatures": "third-party/windows-mcp/tool-signatures.json",
+    "toolSignaturesSha256": "85a87404c043f07095f4e650648bebb6cdedf08a54c208fafd3c747e38dd8a7e"
+  }
 }

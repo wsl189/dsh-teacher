@@ -8,15 +8,17 @@ describe('desktop backend runtime environment', () => {
     const exists = vi.fn(() => true)
 
     const env = resolveRuntimeEnvironment({
-      env: { SAFE: 'kept', DSH_WINDOWS_MCP_COMMAND: 'ambient-python' },
+      env: { SAFE: 'kept', DSH_WINDOWS_MCP_COMMAND: 'ambient-python', DSH_DESKTOP_DIR: 'ambient-desktop' },
       packaged: true,
       resourcesPath,
+      desktopPath: 'D:\\课程资料\\桌面',
       exists,
     })
 
     expect(exists).toHaveBeenCalledWith(join(resourcesPath, 'windows-mcp', 'python.exe'))
     expect(env).toMatchObject({
       SAFE: 'kept',
+      DSH_DESKTOP_DIR: 'D:\\课程资料\\桌面',
       DSH_WINDOWS_MCP_COMMAND: join(resourcesPath, 'windows-mcp', 'python.exe'),
       DSH_WINDOWS_MCP_RUNTIME_ROOT: join(resourcesPath, 'windows-mcp'),
     })
@@ -30,11 +32,13 @@ describe('desktop backend runtime environment', () => {
       },
       packaged: true,
       resourcesPath: 'C:/missing',
+      desktopPath: 'C:/Users/teacher/OneDrive/Desktop',
       exists: () => false,
     })
 
     expect(env.DSH_WINDOWS_MCP_COMMAND).toBeUndefined()
     expect(env.DSH_WINDOWS_MCP_RUNTIME_ROOT).toBeUndefined()
+    expect(env.DSH_DESKTOP_DIR).toBe('C:/Users/teacher/OneDrive/Desktop')
   })
 
   it('retains explicit developer overrides in source runs', () => {
@@ -45,12 +49,14 @@ describe('desktop backend runtime environment', () => {
       },
       packaged: false,
       resourcesPath: 'unused',
+      desktopPath: 'C:/Users/teacher/Desktop',
       exists: () => false,
     })
 
     expect(env).toMatchObject({
       DSH_WINDOWS_MCP_COMMAND: 'python',
       DSH_WINDOWS_MCP_RUNTIME_ROOT: 'C:/checkout',
+      DSH_DESKTOP_DIR: 'C:/Users/teacher/Desktop',
     })
   })
 })

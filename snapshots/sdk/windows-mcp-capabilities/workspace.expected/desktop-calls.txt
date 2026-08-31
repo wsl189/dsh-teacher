@@ -1,0 +1,3 @@
+Snapshot {"region":[10,20,110,120]}
+Screenshot {"region":[10,20,110,120]}
+Scrape {"url":"https://example.com/tickets","query":"ticket price"}

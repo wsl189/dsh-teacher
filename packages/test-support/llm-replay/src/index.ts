@@ -12,6 +12,7 @@ import { delimiter as pathDelimiter } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-compaction'
 import type {} from '@deepseek-ai/dsh-deepseek-llm-api-extensions'
+import type {} from '@deepseek-ai/dsh-mcp-client'
 import { decodeSeqRanges, decodeStorageRecord, type SessionEvent } from '@deepseek-ai/dsh-session'
 import type {
   ContentBlock,
@@ -244,15 +245,17 @@ export function parseSessionHeader(text: string): { id: string; createdAt: numbe
  * Splits `assistant/chunk` events at every `finish`, using turn and step changes
  * to detect an unterminated prior call. A `compaction/summary` explicitly marked
  * as one local LLM-stream call becomes a canonical successful stream from its
- * complete `rawOutput` at the summary's log position. A
+ * complete `rawOutput` at the summary's log position. Logged MCP sampling pairs
+ * reserve their stream at the request's position, independent of response order. A
  * missing assistant terminator means the live stream threw, so derivation
  * rejects and the scenario must provide an explicit override. Multiple calls
  * may share one turn and step when the loop retries.
  * @param events - the recorded session's events.
  * @returns one `chunks` entry per recorded model call, in call order.
  */
-export function deriveReplayScript(events: SessionEvent[]): ReplayEntry[] {
+export function deriveReplayScript(events: readonly SessionEvent[]): ReplayEntry[] {
   const script: ReplayEntry[] = []
+  const sampling = new Map<number, Extract<ReplayEntry, { kind: 'chunks' }>>()
   let currentKey: string | undefined
   let current: StreamChunk[] = []
   const close = (key: string | undefined, chunks: StreamChunk[]): void => {
@@ -266,6 +269,23 @@ export function deriveReplayScript(events: SessionEvent[]): ReplayEntry[] {
     script.push({ kind: 'chunks', chunks })
   }
   for (const event of events) {
+    if (event.type === 'mcp/sampling-request') {
+      close(currentKey, current)
+      currentKey = undefined
+      current = []
+      const entry: Extract<ReplayEntry, { kind: 'chunks' }> = { kind: 'chunks', chunks: [] }
+      sampling.set(event.seq, entry)
+      script.push(entry)
+      continue
+    }
+    if (event.type === 'mcp/sampling-response') {
+      const entry = sampling.get(event.data.requestSeq)
+      if (entry === undefined) throw new Error('llm-replay: sampling response has no unmatched preceding request')
+      if (event.data.chunks.at(-1)?.type !== 'finish') throw new Error('llm-replay: sampling response has no terminal finish chunk')
+      entry.chunks = event.data.chunks
+      sampling.delete(event.data.requestSeq)
+      continue
+    }
     if (event.type === 'compaction/summary') {
       close(currentKey, current)
       currentKey = undefined
@@ -307,6 +327,7 @@ export function deriveReplayScript(events: SessionEvent[]): ReplayEntry[] {
     }
   }
   close(currentKey, current)
+  if (sampling.size > 0) throw new Error('llm-replay: sampling request has no recorded response')
   return script
 }
 

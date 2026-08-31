@@ -71,3 +71,20 @@ def test_mcp_smoke_accepts_the_external_server_result() -> None:
         for chunk in chunks
         for choice in chunk.get("choices", [])
     )
+
+
+def test_mcp_sampling_uses_a_bounded_tool_free_request() -> None:
+    chunks = SMOKE["completion_chunks"]({
+        "messages": [{"role": "user", "content": SMOKE["MCP_SAMPLING_PROMPT"]}],
+        "max_tokens": 128,
+    })
+    assert any(
+        choice.get("delta", {}).get("content") == "42"
+        for chunk in chunks
+        for choice in chunk.get("choices", [])
+    )
+    with pytest.raises(AssertionError):
+        SMOKE["completion_chunks"]({
+            "messages": [{"role": "user", "content": SMOKE["MCP_SAMPLING_PROMPT"]}],
+            "max_tokens": 256,
+        })

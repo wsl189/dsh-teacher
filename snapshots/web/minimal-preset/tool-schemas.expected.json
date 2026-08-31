@@ -1,6 +1,125 @@
 {
   "initial": [
     {
+      "name": "anysearch_batch_search",
+      "description": "Run one to five independent AnySearch searches concurrently. Results stay in input order and an item failure does not discard other results.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "items": {
+            "type": "array",
+            "description": "One to five search requests. Discover vertical tags with anysearch_capabilities first.",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "query": {
+                  "type": "string",
+                  "description": "Search query."
+                },
+                "maxResults": {
+                  "type": "integer",
+                  "description": "Result count from 1 to 20."
+                },
+                "tag": {
+                  "type": "string",
+                  "description": "Exact vertical tag returned by anysearch_capabilities."
+                },
+                "params": {
+                  "type": "object",
+                  "description": "Scalar parameters declared for the tag.",
+                  "additionalProperties": true
+                },
+                "zone": {
+                  "type": "string",
+                  "description": "Search region.",
+                  "enum": [
+                    "cn",
+                    "intl"
+                  ]
+                },
+                "language": {
+                  "type": "string",
+                  "description": "Provider language hint."
+                },
+                "includeContent": {
+                  "type": "boolean",
+                  "description": "Include cleaned content within the shared batch budget."
+                }
+              },
+              "required": [
+                "query"
+              ]
+            }
+          }
+        },
+        "required": [
+          "items"
+        ]
+      }
+    },
+    {
+      "name": "anysearch_capabilities",
+      "description": "Discover current AnySearch domains, vertical tags, and parameter definitions. Call without domains for the top-level catalog, then with up to five selected domains before using a vertical tag.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "domains": {
+            "type": "array",
+            "description": "Up to five top-level domain names. Omit to list all top-level domains.",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "anysearch_search",
+      "description": "Run an AnySearch vertical or metadata-preserving search. Use web_search for ordinary queries. Call anysearch_capabilities before supplying tag or params.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "query": {
+            "type": "string",
+            "description": "Search query."
+          },
+          "maxResults": {
+            "type": "integer",
+            "description": "Result count from 1 to 20."
+          },
+          "tag": {
+            "type": "string",
+            "description": "Exact vertical tag returned by anysearch_capabilities."
+          },
+          "params": {
+            "type": "object",
+            "description": "Scalar parameters declared for the selected tag.",
+            "additionalProperties": true
+          },
+          "zone": {
+            "type": "string",
+            "description": "Search region.",
+            "enum": [
+              "cn",
+              "intl"
+            ]
+          },
+          "language": {
+            "type": "string",
+            "description": "Provider language hint."
+          },
+          "includeContent": {
+            "type": "boolean",
+            "description": "Include bounded cleaned page content in model-visible text."
+          }
+        },
+        "required": [
+          "query"
+        ]
+      }
+    },
+    {
       "name": "bash",
       "description": "Run commands in a bash shell\n* When invoking this tool, the contents of the \"command\" parameter does NOT need to be XML-escaped.\n* You don't have access to the internet via this tool.\n* You do have access to a mirror of common linux and python packages via apt and pip.\n* State is persistent across command calls and discussions with the user.\n* To inspect a particular line range of a file, e.g. lines 10-25, try 'sed -n 10,25p /path/to/the/file'.\n* Please avoid commands that may produce a very large amount of output.\n* Please run long lived commands in the background, e.g. 'sleep 10 &' or start a server in the background.",
       "parameters": {
@@ -14,6 +133,263 @@
         "required": [
           "command"
         ]
+      }
+    },
+    {
+      "name": "cancel_image_generation_task",
+      "description": "Cancel a queued or running image generation task.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "Task id returned by generate_image or edit_image."
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    },
+    {
+      "name": "cron_add",
+      "description": "Register a scheduled command (cron job) that the dsh server runs automatically at the given times, or update an existing job with the same name. Standard 5-field cron expression: minute hour day-of-month month day-of-week. Minute 0-59, hour 0-23, dom 1-31, month 1-12 (or JAN-DEC), dow 0-7 (or SUN-SAT, 0 and 7 = Sunday). Each field supports * (every value), ? (same as *), a-b ranges, */n or a/n steps, and a,b,c lists. Common aliases: @hourly, @daily, @weekly, @monthly, @yearly. Examples: \"0 9 * * 1-5\" = 09:00 weekdays; \"*/15 * * * *\" = every 15 minutes; \"0 0 1 * *\" = monthly at midnight. Day-of-month and day-of-week combine with OR semantics when both are restricted. Returns the registered job with its next run time.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Unique job name (updates the job with this name if it already exists)."
+          },
+          "schedule": {
+            "type": "string",
+            "description": "Cron expression or alias. Standard 5-field cron expression: minute hour day-of-month month day-of-week. Minute 0-59, hour 0-23, dom 1-31, month 1-12 (or JAN-DEC), dow 0-7 (or SUN-SAT, 0 and 7 = Sunday). Each field supports * (every value), ? (same as *), a-b ranges, */n or a/n steps, and a,b,c lists. Common aliases: @hourly, @daily, @weekly, @monthly, @yearly. Examples: \"0 9 * * 1-5\" = 09:00 weekdays; \"*/15 * * * *\" = every 15 minutes; \"0 0 1 * *\" = monthly at midnight. Day-of-month and day-of-week combine with OR semantics when both are restricted."
+          },
+          "command": {
+            "type": "string",
+            "description": "Shell command to run (PowerShell syntax on Windows). Runs with the same privileges as the dsh process; treat it as trusted."
+          },
+          "cwd": {
+            "type": "string",
+            "description": "Working directory for the command; defaults to the dsh workspace."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "description": "Run timeout in milliseconds; defaults to 300000, capped at 600000."
+          },
+          "enabled": {
+            "type": "boolean",
+            "description": "Whether the job is active; defaults to true."
+          }
+        },
+        "required": [
+          "name",
+          "schedule",
+          "command"
+        ]
+      }
+    },
+    {
+      "name": "cron_list",
+      "description": "List all registered cron jobs with their schedules, enabled state, next run time, and the outcome of the last run.",
+      "parameters": {
+        "type": "object",
+        "properties": {}
+      }
+    },
+    {
+      "name": "cron_remove",
+      "description": "Remove a cron job by name. Returns whether a job with that name existed.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the job to remove."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "cron_run",
+      "description": "Run a registered cron job immediately (bypasses the schedule, like a manual trigger). Updates its last-run record. Returns the command output.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Name of the job to run."
+          },
+          "timeoutMs": {
+            "type": "integer",
+            "description": "Run timeout in milliseconds; defaults to the job's timeout or 300000, capped at 600000."
+          }
+        },
+        "required": [
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "edit_image",
+      "description": "Edit an image. By default this tool call stays pending until the task reaches a final state; completed images are shown beside this tool call, while the model receives their attachment references, without creating a user message. Set wait_for_completion to false for background mode, then use get_image_generation_task explicitly. source_image must be an image reference returned by a completed generation or get_image_generation_task; pass that entire object unchanged. Only configured image models are allowed; omit model to use the first configured model.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "How to transform the source image."
+          },
+          "source_image": {
+            "type": "object",
+            "description": "Image reference returned by get_image_generation_task.",
+            "additionalProperties": false,
+            "properties": {
+              "attachment_id": {
+                "type": "string"
+              },
+              "media_type": {
+                "type": "string"
+              },
+              "bytes": {
+                "type": "integer"
+              },
+              "width": {
+                "type": "integer"
+              },
+              "height": {
+                "type": "integer"
+              },
+              "name": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "attachment_id",
+              "media_type",
+              "bytes",
+              "width",
+              "height"
+            ]
+          },
+          "model": {
+            "type": "string",
+            "description": "One of the configured image models. Defaults to the first configured model."
+          },
+          "size": {
+            "type": "string",
+            "description": "Aspect ratio such as 1:1, 16:9, 9:16, or auto."
+          },
+          "quality": {
+            "type": "string",
+            "description": "auto, 1k, 2k, or 4k."
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of images, 1 to 4. Defaults to 1."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Optional provider detail value."
+          },
+          "wait_for_completion": {
+            "type": "boolean",
+            "description": "Wait for images and return them in this tool result. Defaults to true; set false for background mode."
+          }
+        },
+        "required": [
+          "prompt",
+          "source_image"
+        ]
+      }
+    },
+    {
+      "name": "generate_image",
+      "description": "Generate an image. By default this tool call stays pending until the task reaches a final state; completed images are shown beside this tool call, while the model receives their attachment references, without creating a user message. Set wait_for_completion to false for background mode, then use get_image_generation_task explicitly. Only use models configured for this plugin; omit model to use the first configured image model.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "description": "Detailed image-generation prompt."
+          },
+          "model": {
+            "type": "string",
+            "description": "One of the configured image models. Defaults to the first configured model."
+          },
+          "size": {
+            "type": "string",
+            "description": "Aspect ratio such as 1:1, 16:9, 9:16, or auto."
+          },
+          "quality": {
+            "type": "string",
+            "description": "auto, 1k, 2k, or 4k."
+          },
+          "count": {
+            "type": "integer",
+            "description": "Number of images, 1 to 4. Defaults to 1."
+          },
+          "detail": {
+            "type": "string",
+            "description": "Optional provider detail value, for example standard or high."
+          },
+          "wait_for_completion": {
+            "type": "boolean",
+            "description": "Wait for images and return them in this tool result. Defaults to true; set false for background mode."
+          }
+        },
+        "required": [
+          "prompt"
+        ]
+      }
+    },
+    {
+      "name": "get_image_generation_task",
+      "description": "Check an image-generation task status. Completed tasks return image references; their images are shown beside this tool call and the references can be passed to edit_image. Generation tools normally wait for completion, so use this for explicit recovery or status checks.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "task_id": {
+            "type": "string",
+            "description": "Task id returned by generate_image or edit_image."
+          }
+        },
+        "required": [
+          "task_id"
+        ]
+      }
+    },
+    {
+      "name": "qq_send_local_file",
+      "description": "Send one local image or file to the QQ conversation that owns the current turn. Use only when that QQ user explicitly asks to receive the file. The path must be absolute and inside the session workspace or an administrator-configured QQ media root.",
+      "parameters": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "path",
+          "kind"
+        ],
+        "properties": {
+          "path": {
+            "type": "string",
+            "description": "Absolute path of the local file to send."
+          },
+          "kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "file"
+            ],
+            "description": "Use image for GIF/JPEG/PNG/WebP display; otherwise use file."
+          },
+          "caption": {
+            "type": "string",
+            "description": "Optional short message sent with the QQ upload."
+          }
+        }
       }
     },
     {
@@ -98,6 +474,737 @@
         "required": [
           "command",
           "path"
+        ]
+      }
+    },
+    {
+      "name": "teacher_daily_management",
+      "description": "Create, edit, delete, complete, reschedule, or import daily-management data. Call teacher_workbench_read first. Actions: save_todo, delete_todo, save_note, delete_note, save_ledger_category, delete_ledger_category, save_ledger_entry, delete_ledger_entry, save_calendar_item, delete_calendar_item, import_calendar_items. Payloads: save_todo {id?,title,dueAt?,completed?,color?,reminder?}; save_note {id?,content,remindAt?,reminder?}; save_ledger_category {id?,name}; save_ledger_entry {id?,categoryId,description,amountCents,occurredAt,remindAt?,reminder?}; save_calendar_item {id?,date,time?,title,details?,reminder?}; import_calendar_items {items:[calendar fields]}; delete actions use {id}. Route only from literal words in the current user request: 备忘, 备忘录, or memo means save_note; 今日, 待办, today, or todo means save_todo; 紧急 or urgent means save_todo in Urgent; 重要 or important means save_todo in Important; 账单, 账本, 保险, 保费, 水费, 电费, 燃气费, bill, insurance, or premium means the matching ledger category or entry action; 日历 or calendar means a calendar action. The host validates every new item's action and destination against the original user message, so never substitute another action or invent a routing keyword. If a new item has no routing word, ask the user where it belongs and do not mutate the workbench. Never infer a destination from the content, deadline, tone, or consequences. Existing item edits retain their destination. For a requested mobile reminder, use reminder {channel,botId,rule:{kind:'once',minutesBefore}|{kind:'repeat',everyMinutes}} with the exact channel and botId from notificationTargets returned by teacher_workbench_read daily; never invent a bot id. Memos and ledger entries use remindAt as their reminder deadline. Set reminder to null to remove it. Omission preserves an existing reminder only while its deadline is unchanged. Amounts use integer CNY cents; local date-times use YYYY-MM-DDTHH:mm.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save_todo",
+              "delete_todo",
+              "save_note",
+              "delete_note",
+              "save_ledger_category",
+              "delete_ledger_category",
+              "save_ledger_entry",
+              "delete_ledger_entry",
+              "save_calendar_item",
+              "delete_calendar_item",
+              "import_calendar_items"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "description": "Action fields described by the selected action.",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "action",
+          "data"
+        ]
+      }
+    },
+    {
+      "name": "teacher_question_image_read",
+      "description": "Read one stored Question Cutting image and return the raster itself. Call teacher_workbench_read with section questions first to obtain a batch or assignment image id. The result states the source dimensions used by crop_image and erase_image_regions. Requires the current model route to accept image input.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "kind": {
+            "type": "string",
+            "enum": [
+              "batch",
+              "assignment"
+            ]
+          },
+          "id": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "kind",
+          "id"
+        ]
+      }
+    },
+    {
+      "name": "teacher_question_workbench",
+      "description": "Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: segment_pdf, create_folder, delete_folder, delete_batch, delete_image, rotate_image, crop_image, erase_image_regions, assign_questions, generate_folder_document, generate_document, generate_student_documents. segment_pdf has no default save destination and uses {sourceId,sourceName,destinationKind:library-root|library-folder,folderId?,pageRange?,batchName?,padding?} from uploaded-document context. Use library-root only when the current user explicitly names the question-library root. Use library-folder with the folderId from teacher_workbench_read only when the current user explicitly names that folder's complete path. Otherwise ask which destination to use and do not call segment_pdf. It keeps each accepted region's MinerU left, top, and bottom coordinates and gives every output the PDF-wide maximum non-outlier normalized safe-lane width from its fixed left edge. Source pixels stop at the inset horizontal lane limit; any remaining width is white padding instead of gutter or neighboring-column pixels. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "segment_pdf",
+              "create_folder",
+              "delete_folder",
+              "delete_batch",
+              "delete_image",
+              "rotate_image",
+              "crop_image",
+              "erase_image_regions",
+              "assign_questions",
+              "generate_folder_document",
+              "generate_document",
+              "generate_student_documents"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "action",
+          "data"
+        ]
+      }
+    },
+    {
+      "name": "teacher_score_analysis",
+      "description": "Create, replace, or delete an exam and its subject scores from uploaded OCR content. Call teacher_workbench_read first. Actions: save_exam, delete_exam. save_exam {id?,classId,name,date?,entries:[{studentId?|studentNumber?|studentName?,scores:{subject:number}}]}; delete_exam {id}. Each entry must identify exactly one student within the class.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save_exam",
+              "delete_exam"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "action",
+          "data"
+        ]
+      }
+    },
+    {
+      "name": "teacher_student_roster",
+      "description": "Create, edit, delete, or bulk-import roster classes and students from uploaded OCR content. Call teacher_workbench_read first. Actions: save_class, delete_class, save_student, delete_student, import_students. save_class {id?,name,grade?,subject?,academicYear?}; save_student {id?,classId,name,studentNumber?,gender?,guardian?,relation?,phone?,address?,extras?}; import_students {classId,students:[student fields]}; deletes use {id}. import_students merges by studentNumber, then by name when the number is blank.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save_class",
+              "delete_class",
+              "save_student",
+              "delete_student",
+              "import_students"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "action",
+          "data"
+        ]
+      }
+    },
+    {
+      "name": "teacher_timetable",
+      "description": "Create, edit, delete, or bulk-import classes and timetable entries. Call teacher_workbench_read first. Actions: save_class, delete_class, save_entry, delete_entry, import_entries. Every save/import payload requires view: week|grade. Use view=week for 本周课表, 今日课程, one class's weekly schedule, morning study, or evening study; use view=grade only when the user explicitly asks for 年级课表 covering multiple classes. A grade name such as 高三 never implies view=grade. Never reuse a class id whose usage belongs to the other view; omit classId and provide className to create the parallel class catalog entry. save_class {view,id?,name,grade?,subject?}; save_entry uses {view,id?,classId?,className,grade?,kind,weekday,period,startTime?,endTime?,subject,teacherName?,location?}; import_entries uses {view,entries:[...]}; deletes use {id}. Weekday is 1=Monday through 7=Sunday; kind is lesson, morningStudy, or eveningStudy. Period is the unique daily ordinal: if afternoon labels restart at 1, continue them after the morning periods instead of submitting duplicate slots. A success result includes a read-back confirmation naming the exact week or grade view.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "enum": [
+              "save_class",
+              "delete_class",
+              "save_entry",
+              "delete_entry",
+              "import_entries"
+            ]
+          },
+          "data": {
+            "type": "object",
+            "additionalProperties": true
+          }
+        },
+        "required": [
+          "action",
+          "data"
+        ]
+      }
+    },
+    {
+      "name": "teacher_workbench_read",
+      "description": "Read the authoritative teacher workbench before editing it. Returns stable ids needed by mutation tools.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "section": {
+            "type": "string",
+            "description": "daily | timetable | roster | scores | questions",
+            "enum": [
+              "daily",
+              "timetable",
+              "roster",
+              "scores",
+              "questions"
+            ]
+          },
+          "class_id": {
+            "type": "string",
+            "description": "Optional roster or timetable class id used to filter rows."
+          }
+        },
+        "required": [
+          "section"
+        ]
+      }
+    },
+    {
+      "name": "univer_api",
+      "description": "Look up the bundled, version-matched Univer Facade API. Use find when no relevant class or API label is known. Use show for a known class, type, or exact Class.member API label; to inspect APIs on a known class, show the class itself. Find is case-insensitive. Each query runs independently and returns its own matches: queries are never combined as AND, and find does not interpret intent.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "find discovers unknown class or API labels; show documents a known class, type, or exact Class.member label. Show a known class to inspect its APIs.",
+            "enum": [
+              "find",
+              "show"
+            ]
+          },
+          "queries": {
+            "type": "array",
+            "description": "For find, API-name keywords or identifier fragments such as conditionalFormat. For show, known class, type, or exact Class.member labels such as FRange or FRange.setValue. Find queries are case-insensitive and independent, not AND terms.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "unit": {
+            "type": "string",
+            "description": "Optional find-only Unit filter; shared APIs remain included.",
+            "enum": [
+              "sheet",
+              "doc",
+              "slide",
+              "base",
+              "board"
+            ]
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Find-only maximum matches per query. Prefer 10 or fewer."
+          }
+        },
+        "required": [
+          "action",
+          "queries"
+        ]
+      }
+    },
+    {
+      "name": "univer_compile_svg",
+      "description": "Compile an SVG with real font metrics and apply it to one explicit Slide page in a draft worktree.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Workspace-relative or absolute SVG source path."
+          },
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute target .univer path."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Writable draft worktree id."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Explicit Slide Unit id from univer_status."
+          },
+          "page": {
+            "type": "integer",
+            "description": "1-based Slide page number."
+          },
+          "mode": {
+            "type": "string",
+            "description": "Replace the page contents by default, or add the SVG as an overlay.",
+            "enum": [
+              "replace",
+              "add"
+            ]
+          }
+        },
+        "required": [
+          "source",
+          "file",
+          "worktreeId",
+          "unitId",
+          "page"
+        ]
+      }
+    },
+    {
+      "name": "univer_execute",
+      "description": "Execute Univer Facade JavaScript and commit mutations to a draft agent worktree. Use code only for small snippets; prefer codeFile for multi-line or reusable programs. Provide exactly one of code or codeFile.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "code": {
+            "type": "string",
+            "description": "Small Facade API JavaScript snippet. Mutually exclusive with codeFile."
+          },
+          "codeFile": {
+            "type": "string",
+            "description": "Workspace-relative or absolute JavaScript body file to execute. Preferred for multi-line code; mutually exclusive with code."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Writable agent worktree id."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Target unit id."
+          }
+        },
+        "required": [
+          "file",
+          "worktreeId",
+          "unitId"
+        ]
+      }
+    },
+    {
+      "name": "univer_export",
+      "description": "Export a .univer document or unit to a user-facing file format.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "output": {
+            "type": "string",
+            "description": "Workspace-relative or absolute output file path."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Explicit Unit id from univer_status."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Optional worktree scope; omit to export trunk."
+          }
+        },
+        "required": [
+          "file",
+          "output",
+          "unitId"
+        ]
+      }
+    },
+    {
+      "name": "univer_import",
+      "description": "Import an xlsx, csv, tsv, docx, or pptx file as a new Unit inside an explicit draft worktree.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "source": {
+            "type": "string",
+            "description": "Workspace-relative or absolute Office source path."
+          },
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute target .univer path."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Writable draft worktree id."
+          },
+          "name": {
+            "type": "string",
+            "description": "Name for the imported Unit."
+          }
+        },
+        "required": [
+          "source",
+          "file",
+          "worktreeId",
+          "name"
+        ]
+      }
+    },
+    {
+      "name": "univer_inspect",
+      "description": "Inspect structured content from a .univer document, optionally narrowed to a unit or range.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Explicit target Unit id from univer_status."
+          },
+          "range": {
+            "type": "string",
+            "description": "Optional unit range such as Sheet1!A1:D20."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Optional worktree scope; omit to inspect trunk."
+          }
+        },
+        "required": [
+          "file",
+          "unitId"
+        ]
+      }
+    },
+    {
+      "name": "univer_lint",
+      "description": "Analyze Slide text layout for off-page content, escaped containers, and text overlap without producing screenshots.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Explicit Slide Unit id from univer_status."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Optional worktree scope; omit to lint trunk."
+          },
+          "pages": {
+            "type": "array",
+            "description": "Optional 1-based page numbers or page IDs. Omit to lint every page.",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          }
+        },
+        "required": [
+          "file",
+          "unitId"
+        ]
+      }
+    },
+    {
+      "name": "univer_new",
+      "description": "Create a new empty .univer file in the current workspace. This never overwrites an existing file and does not create an implicit Unit.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute output path ending in .univer."
+          }
+        },
+        "required": [
+          "file"
+        ]
+      }
+    },
+    {
+      "name": "univer_resources",
+      "description": "Discover, read, export, and cache bundled SVG resources. Use find before read or export; resource handles are stable within the bundled manifest.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Resource-library operation.",
+            "enum": [
+              "registries",
+              "find",
+              "read",
+              "export",
+              "clear-cache"
+            ]
+          },
+          "queries": {
+            "type": "array",
+            "description": "Non-empty search terms for find.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "registries": {
+            "type": "array",
+            "description": "Optional registry IDs that constrain find.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "limit": {
+            "type": "integer",
+            "description": "Optional positive total result limit for find."
+          },
+          "handle": {
+            "type": "string",
+            "description": "One resource handle for read."
+          },
+          "handles": {
+            "type": "array",
+            "description": "Resource handles for export.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "output": {
+            "type": "string",
+            "description": "Workspace-relative or absolute export directory."
+          }
+        },
+        "required": [
+          "action"
+        ]
+      }
+    },
+    {
+      "name": "univer_screenshot",
+      "description": "Render one explicit Sheet, Doc, Slide, Base, or Board Unit to PNG files and return the images for visual verification.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Explicit Unit id from univer_status."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Optional worktree scope; omit to capture trunk."
+          },
+          "output": {
+            "type": "string",
+            "description": "Workspace-relative or absolute output directory for PNG files."
+          },
+          "sheetName": {
+            "type": "string",
+            "description": "Sheet name used with range."
+          },
+          "range": {
+            "type": "string",
+            "description": "Sheet A1 range such as B2:H40."
+          },
+          "pages": {
+            "type": "array",
+            "description": "Doc numeric pages or Slide page numbers/IDs. Omit to capture every page.",
+            "items": {
+              "oneOf": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "string"
+                }
+              ]
+            }
+          },
+          "contactSheet": {
+            "type": "boolean",
+            "description": "Also create one Slide contact sheet."
+          },
+          "tileColumns": {
+            "type": "integer",
+            "description": "Contact-sheet grid columns; requires contactSheet and tileRows."
+          },
+          "tileRows": {
+            "type": "integer",
+            "description": "Contact-sheet grid rows; requires contactSheet and tileColumns."
+          },
+          "region": {
+            "type": "object",
+            "description": "Optional Board region to capture.",
+            "additionalProperties": false,
+            "properties": {
+              "left": {
+                "type": "number"
+              },
+              "top": {
+                "type": "number"
+              },
+              "width": {
+                "type": "number"
+              },
+              "height": {
+                "type": "number"
+              }
+            },
+            "required": [
+              "left",
+              "top",
+              "width",
+              "height"
+            ]
+          },
+          "elementIds": {
+            "type": "array",
+            "description": "Optional Board element IDs to capture.",
+            "items": {
+              "type": "string"
+            }
+          },
+          "padding": {
+            "type": "number",
+            "description": "Board content padding; requires region or elementIds."
+          },
+          "scale": {
+            "type": "number",
+            "description": "Render scale from 0.1 to 4 for any Unit."
+          }
+        },
+        "required": [
+          "file",
+          "unitId",
+          "output"
+        ]
+      }
+    },
+    {
+      "name": "univer_status",
+      "description": "List trunk Units and worktrees for a .univer file, or inspect one worktree scope. Call this before choosing unitId or continuing prior work.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Optional worktree whose Units should be returned."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Optional Unit filter."
+          }
+        },
+        "required": [
+          "file"
+        ]
+      }
+    },
+    {
+      "name": "univer_unit",
+      "description": "Create or remove a top-level Sheet, Doc, Slide, Base, or Board Unit inside an explicit draft worktree. Use univer_status to list Units.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Unit lifecycle action.",
+            "enum": [
+              "create",
+              "remove"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Writable draft worktree id."
+          },
+          "kind": {
+            "type": "string",
+            "description": "Required for create.",
+            "enum": [
+              "sheet",
+              "doc",
+              "slide",
+              "base",
+              "board"
+            ]
+          },
+          "name": {
+            "type": "string",
+            "description": "Required non-empty Unit name for create."
+          },
+          "unitId": {
+            "type": "string",
+            "description": "Required for remove."
+          }
+        },
+        "required": [
+          "action",
+          "file",
+          "worktreeId"
+        ]
+      }
+    },
+    {
+      "name": "univer_worktree",
+      "description": "Create or transition an isolated Univer worktree. Actions: create, ready, reopen, merge, or discard. Merge and discard require user approval.",
+      "parameters": {
+        "type": "object",
+        "properties": {
+          "action": {
+            "type": "string",
+            "description": "Lifecycle action.",
+            "enum": [
+              "create",
+              "ready",
+              "reopen",
+              "merge",
+              "discard"
+            ]
+          },
+          "file": {
+            "type": "string",
+            "description": "Workspace-relative or absolute .univer path."
+          },
+          "worktreeId": {
+            "type": "string",
+            "description": "Required for every action except create."
+          },
+          "name": {
+            "type": "string",
+            "description": "Optional human-readable name for create."
+          }
+        },
+        "required": [
+          "action",
+          "file"
         ]
       }
     }

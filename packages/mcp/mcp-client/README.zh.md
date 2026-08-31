@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-mcp-client` 把外部 MCP（Model Context Protocol）服务器挂载到 harness 上，让它们的工具像原生工具一样可用。每台服务器一条配置项，模型就能调用该服务器的工具——文件系统、GitHub、数据库或记忆服务器——名称稳定，例如 `mcp__github__create_issue`。当模型需要使用外部工具服务器时添加它；默认不启用任何服务器，因此由你开启。主要成本是这些工具定义给每次请求增加的 token，而且缓慢或崩溃的服务器可能延迟启动，或在恢复前让它的工具一直调用失败。只桥接工具能力：MCP resources 与 prompts 不受支持。
+`dsh-mcp-client` 把外部 MCP（Model Context Protocol）服务器挂载到 harness 上，让它们的工具像原生工具一样可用。每台服务器一条配置项，模型就能调用该服务器的工具——文件系统、GitHub、数据库或记忆服务器——名称稳定，例如 `mcp__github__create_issue`。当模型需要使用外部工具服务器时添加它；默认不启用任何服务器，因此由你开启。主要成本是这些工具定义给每次请求增加的 token，而且缓慢或崩溃的服务器可能延迟启动，或在恢复前让它的工具一直调用失败。与工具调用关联的文本 sampling 需要显式开启；MCP resources 与 prompts 不受支持。
 
 ## 目录
 
@@ -59,6 +59,7 @@ kind: "package-reference"
 | `command` / `args` / `env` / `cwd` | — | stdio：可执行文件、参数、合并到清洗过的环境之上的额外环境变量、工作目录 |
 | `url` / `headers` | — | streamable-http：端点 URL 与额外请求标头 |
 | `includeTools` | `[]` | 对原始工具名进行精确、区分大小写的 allowlist；空数组表示全部已发布工具 |
+| `sampling` | 无 | 可选文本 sampling 策略，必须提供 `includeTools`、`maxInputBytes` 与 `maxOutputTokens`；要求 LLM 服务 |
 | `toolCallTimeoutMs` | `60,000` | 每次 `tools/call` 调用的超时 |
 | `failOnStartupError` | `false` | 初始连接或工具同步失败时拒绝插件激活 |
 | `reconnect.enabled` | `true` | 连接丢失后自动重新连接 |
@@ -87,6 +88,13 @@ kind: "package-reference"
 模型调用 MCP 工具时，调用会以每次调用超时（默认 60 秒）发往远程服务器，并像其他工具调用一样可以取消。结果按块顺序以普通文本返回；资源链接以文本形式显示名称与 URI。如果服务器报告错误，调用会明确失败——模型不会看到虚假的成功。
 
 当前模型接受图片输入且 harness 启用了附件功能时支持图片；图片会像其他图片一样出现在对话中。不支持图片时——以及服务器返回音频或嵌入资源时——模型会看到清晰的诊断消息，而不是什么都没有。
+
+<a id="tool-correlated-sampling"></a>
+### 与工具调用关联的 sampling
+
+只有服务器会把 `tools/call` 的 `_meta` 中私有 `deepseek-harness/sampling-token` 原样放入 `sampling/createMessage` 的 `metadata` 时，才应设置 `sampling`。客户端只在获准工具进入会话执行阶段后发放令牌；每个令牌只允许一次文本补全。主动发起、重复使用、过期或无法关联的请求会在调用模型前失败。未提供该策略时，普通服务器不会获得 sampling 能力。
+
+补全使用调用方最新记录的提供方与模型路由，不包含对话历史、额外工具，也不接受服务器指定其他模型。`maxInputBytes` 限制 JSON 参数的 UTF-8 字节数，`maxOutputTokens` 限制请求的 token 预算。取消、工具超时与连接关闭都会中止嵌套补全；连接世代会等补全完全停稳后再重连。请求与响应事件保留实际准备的输入和原始输出分片以供回放，但不记录私有令牌。
 
 ### 启动、工具更新与重连
 
@@ -119,8 +127,9 @@ kind: "package-reference"
 | [`src/index.ts`](src/index.ts) | 插件入口：`Config` schema、`serverName` 预留、激活等待 |
 | [`src/connection.ts`](src/connection.ts) | 连接监督器：客户端世代、重连策略、尝试预算、dispose |
 | [`src/tools.ts`](src/tools.ts) | 工具桥接：发现、命名、注册交换、执行、图片投影 |
+| [`src/sampling.ts`](src/sampling.ts) | 显式开启的调用关联、有界模型调用、持久辅助记录与取消 |
 | [`src/transport.ts`](src/transport.ts) | 传输工厂：带清洗环境的 stdio spawn、Streamable HTTP |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；世代只能通过工具注册表观察） |
+| [`src/invariant.ts`](src/invariant.ts) | Sampling 请求与响应关联及终止分片不变式 |
 
 ### 生命周期与同步
 
@@ -185,6 +194,20 @@ kind: "package-reference"
 
 仅追加；新可见内容位于可复用请求前缀之后，不会使现有 KV-cache 条目失效。
 
+### 辅助 sampling 请求
+
+#### 模型看到什么
+
+辅助请求只包含服务器的文本消息和可选系统提示词。文本响应返回服务器；父对话接收普通工具结果。
+
+#### Token 影响
+
+每次获准调用最多增加一个独立计费、输入字节有界且输出 token 受限的补全请求。调用会话会记录输入与输出。
+
+#### KV Cache 影响
+
+Sampling 使用独立请求前缀。其记录不会替换父对话或工具定义前缀。
+
 ## 已知限制与延期工作
 
 <a id="known-limitations-and-deferred-work"></a>
@@ -192,7 +215,7 @@ kind: "package-reference"
 
 这些限制说明你无法用本插件做什么、以及何时需要运维注意。它们是当前包约束，不是与其他 MCP 客户端的对比，也不是任务积压。
 
-- **只桥接 MCP 的工具能力**——Resources 与 Prompts 没有 harness 消费机制，暂缓实现。
+- **不桥接 Resources 与 Prompts**——两者没有 harness 消费机制。Sampling 仅支持文本，要求关联令牌扩展，不授予额外上下文或工具。
 - **启动与发现超时继承自 MCP SDK**——插件不暴露连接或发现超时；每次 `initialize` 与分页 `tools/list` 请求都使用 SDK 默认的 60 秒请求超时，因此无响应的服务器或 cursor chain 在初始同步完成期间可能同时延迟激活与 teardown。
 - **重连在传输关闭时触发**——崩溃的 stdio 子进程会触发重连；Streamable HTTP 失败按请求经 SDK 传输自身的恢复机制暴露，因此不可达的 HTTP 服务器会按调用重试，而非由 supervisor 重新 spawn。
 - **图片是唯一的持久丰富结果桥接**——PNG、JPEG、WebP 与 GIF 在确切能力得到证明后进入 Native 上下文。音频与嵌入资源载荷仍只存在于执行局部并带明确诊断，资源链接只以文本保留名称与 URI。

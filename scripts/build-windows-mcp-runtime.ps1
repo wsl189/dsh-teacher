@@ -5,12 +5,19 @@ $RepositoryRoot = Split-Path -Parent $PSScriptRoot
 $MetadataPath = Join-Path $RepositoryRoot 'third-party/windows-mcp/runtime.json'
 $RequirementsPath = Join-Path $RepositoryRoot 'third-party/windows-mcp/requirements.lock'
 $SmokePath = Join-Path $RepositoryRoot 'third-party/windows-mcp/smoke.py'
+$SamplingSmokePath = Join-Path $RepositoryRoot 'third-party/windows-mcp/sampling_smoke.py'
+$SourceScript = Join-Path $RepositoryRoot 'third-party/windows-mcp/source.py'
 $RuntimeRoot = Join-Path $RepositoryRoot 'apps/desktop/runtime/windows-mcp'
 $Metadata = Get-Content $MetadataPath -Raw | ConvertFrom-Json
 
 $SetupPythonVersion = (& python -c 'import platform; print(platform.python_version())').Trim()
 if ($LASTEXITCODE -ne 0 -or $SetupPythonVersion -ne $Metadata.python.version) {
   throw "Windows-MCP runtime build requires setup Python $($Metadata.python.version); received '$SetupPythonVersion'"
+}
+
+& python $SourceScript verify
+if ($LASTEXITCODE -ne 0) {
+  throw 'Windows-MCP source inputs failed verification'
 }
 
 $TemporaryRoot = Join-Path ([IO.Path]::GetTempPath()) "dsh-windows-mcp-$([guid]::NewGuid().ToString('N'))"
@@ -55,31 +62,19 @@ try {
     throw "pip failed to assemble the Windows-MCP runtime (exit $LASTEXITCODE)"
   }
 
-  foreach ($Patch in $Metadata.patches) {
-    $PatchPath = Join-Path $RepositoryRoot $Patch.path
-    $PatchHash = (Get-FileHash $PatchPath -Algorithm SHA256).Hash.ToLowerInvariant()
-    if ($PatchHash -ne $Patch.sha256) {
-      throw "Windows-MCP patch SHA256 mismatch for '$($Patch.path)': expected $($Patch.sha256), received $PatchHash"
-    }
-
-    $PatchTargetPath = Join-Path $SitePackages $Patch.target
-    $Source = [IO.File]::ReadAllText($PatchTargetPath)
-    $Matches = ([regex]::Matches($Source, [regex]::Escape($Patch.before))).Count
-    if ($Matches -ne 1) {
-      throw "Windows-MCP patch target '$($Patch.target)' contains $Matches copies of the expected source text"
-    }
-    $PatchedSource = $Source.Replace($Patch.before, $Patch.after)
-    [IO.File]::WriteAllText(
-      $PatchTargetPath,
-      $PatchedSource,
-      [Text.UTF8Encoding]::new($false)
-    )
+  & python $SourceScript install
+  if ($LASTEXITCODE -ne 0) {
+    throw 'Windows-MCP reviewed source installation failed'
   }
 
   $EmbeddedPython = Join-Path $RuntimeRoot 'python.exe'
   & $EmbeddedPython $SmokePath
   if ($LASTEXITCODE -ne 0) {
     throw "Bundled Windows-MCP stdio smoke failed (exit $LASTEXITCODE)"
+  }
+  & $EmbeddedPython -B $SamplingSmokePath
+  if ($LASTEXITCODE -ne 0) {
+    throw "Bundled Windows-MCP sampling smoke failed (exit $LASTEXITCODE)"
   }
 } finally {
   if (Test-Path $TemporaryRoot) {

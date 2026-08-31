@@ -6,13 +6,19 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
+import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
+import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import { createScope } from '@deepseek-ai/dsh-scope'
+import SessionStore, { Session, SessionId } from '@deepseek-ai/dsh-session'
 import { SettingsProvider, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
+import ApprovalService, { setApprovalPolicy, type ApprovalOutcome } from '@deepseek-ai/dsh-user-approval'
 import type { Config as McpClientConfig } from '@deepseek-ai/dsh-mcp-client'
 import * as WindowsMcp from '../src/index.ts'
 import * as WindowsMcpInvariant from '../src/invariant.ts'
+import { installWindowsMcpPolicy } from '../src/permissions.ts'
 
 /** Writable in-memory settings provider used by the live-enable composition case. */
 class MemorySettings extends SettingsProvider {
@@ -70,17 +76,42 @@ function expectReconcileError(errors: readonly (readonly unknown[])[], detail?: 
   expect((error as Error).message).toContain(detail)
 }
 
+/** Register a scoped caller with a real session log; these tests do not run a model loop. */
+async function sessionAgent(ctx: Context, id: string): Promise<Agent> {
+  const session = ctx.sessions.create(SessionId(id))
+  const agent = { id: session.id, session } as Agent
+  await ctx.plugin({
+    inject: ['tools'],
+    apply(scope) { Object.assign(agent, { ctx: createScope(scope, agent).ctx }) },
+  })
+  ctx.agents.register(agent)
+  return agent
+}
+
+/** Execute through the real registry and permission chain. */
+function execute(ctx: Context, agent: Agent, name = 'mcp__windows__Snapshot') {
+  return ctx.tools.execute({
+    signal: new AbortController().signal,
+    callId: `windows-call-${String(agent.session.events.length)}` as never,
+    name,
+    arguments: {},
+    agent,
+  })
+}
+
 /** Boot the package from a real cordis.yml through the vendored Loader. */
-async function bootComposition(enabled: boolean, behavior: FakeMcpBehavior = {}): Promise<CompositionResult> {
+async function bootComposition(enabled?: boolean, behavior: FakeMcpBehavior = {}): Promise<CompositionResult> {
   root = await mkdtemp(join(tmpdir(), 'dsh-windows-mcp-'))
   const configPath = join(root, 'cordis.yml')
   await writeFile(configPath, [
     "- name: '@deepseek-ai/dsh-settings'",
     "- name: '@deepseek-ai/dsh-system-prompt'",
     "- name: '@deepseek-ai/dsh-tools'",
+    "- name: '@deepseek-ai/dsh-session'",
+    "- name: '@deepseek-ai/dsh-agent'",
     "- name: '@deepseek-ai/dsh-windows-mcp'",
     '  config:',
-    `    enabled: ${String(enabled)}`,
+    ...enabled === undefined ? [] : [`    enabled: ${String(enabled)}`],
     `    runtimeCommand: ${JSON.stringify(behavior.runtimeCommand ?? 'fake-python.exe')}`,
     '    runtimeCwd: C:/bundled/windows-mcp',
     '    toolCallTimeoutMs: 4321',
@@ -127,6 +158,8 @@ async function bootComposition(enabled: boolean, behavior: FakeMcpBehavior = {})
     ['@deepseek-ai/dsh-settings', MemorySettings],
     ['@deepseek-ai/dsh-system-prompt', SystemPrompt],
     ['@deepseek-ai/dsh-tools', ToolRuntime],
+    ['@deepseek-ai/dsh-session', SessionStore],
+    ['@deepseek-ai/dsh-agent', AgentRegistry],
     ['@deepseek-ai/dsh-windows-mcp', WindowsMcp],
     ['@deepseek-ai/dsh-mcp-client', fakeMcpClient],
   ])
@@ -162,15 +195,17 @@ describe('configuration and policy', () => {
 
   it('resolves defaults while treating runtime availability as deployment state', () => {
     expect(WindowsMcp.resolveWindowsMcpConfig({})).toMatchObject({
-      enabled: false,
+      enabled: true,
       runtimeCommand: '',
       runtimeCwd: '',
-      toolCallTimeoutMs: 60_000,
+      toolCallTimeoutMs: 180_000,
+      samplingMaxInputBytes: 1_048_576,
+      samplingMaxOutputTokens: 2_048,
     })
     expect(WindowsMcp.resolveWindowsMcpConfig({ enabled: false })).toMatchObject({
       enabled: false,
       runtimeCommand: '',
-      toolCallTimeoutMs: 60_000,
+      toolCallTimeoutMs: 180_000,
     })
     expect(WindowsMcp.resolveWindowsMcpConfig({ enabled: true })).toMatchObject({
       enabled: true,
@@ -180,6 +215,10 @@ describe('configuration and policy', () => {
       .toThrow('toolCallTimeoutMs must be a positive integer')
     expect(() => WindowsMcp.resolveWindowsMcpConfig({ toolCallTimeoutMs: 1.5 }))
       .toThrow('toolCallTimeoutMs must be a positive integer')
+    expect(() => WindowsMcp.resolveWindowsMcpConfig({ samplingMaxInputBytes: 0 }))
+      .toThrow('samplingMaxInputBytes must be a positive safe integer')
+    expect(() => WindowsMcp.resolveWindowsMcpConfig({ samplingMaxOutputTokens: 1.5 }))
+      .toThrow('samplingMaxOutputTokens must be a positive safe integer')
   })
 
   it('preserves downstream denial and rejects unreviewed reserved names', async () => {
@@ -197,9 +236,146 @@ describe('configuration and policy', () => {
       kind: 'ask', reason: 'deployment approval',
     }))).resolves.toEqual({ kind: 'ask', reason: 'deployment approval' })
   })
+
+  it('requires a recorded full-access mode, not disabled approval prompts', async () => {
+    const session = Session.create(SessionId('windows-policy'))
+    const decide = () => WindowsMcp.decideWindowsMcpCall('mcp__windows__Snapshot', async () => ({ kind: 'allow' }), session)
+    await expect(decide()).resolves.toMatchObject({ kind: 'ask' })
+    setApprovalPolicy(session, 'never')
+    await expect(decide()).resolves.toMatchObject({ kind: 'ask' })
+    setSandboxMode(session, 'read-only')
+    await expect(decide()).resolves.toMatchObject({ kind: 'ask' })
+    setSandboxMode(session, 'workspace-write')
+    await expect(decide()).resolves.toMatchObject({ kind: 'ask' })
+    setSandboxMode(session, 'danger-full-access')
+    await expect(decide()).resolves.toEqual({ kind: 'allow' })
+    setSandboxMode(session, 'workspace-write')
+    await expect(decide()).resolves.toMatchObject({ kind: 'ask' })
+  })
+
+  it('opens the complete pinned catalog in full access without bypassing downstream policy', async () => {
+    const session = Session.create(SessionId('windows-full-access'))
+    setSandboxMode(session, 'danger-full-access')
+    const denial = { kind: 'deny', reason: 'deployment denied' } as const
+    const approval = { kind: 'ask', reason: 'deployment approval' } as const
+    await expect(WindowsMcp.decideWindowsMcpCall('mcp__windows__Snapshot', async () => denial, session))
+      .resolves.toBe(denial)
+    await expect(WindowsMcp.decideWindowsMcpCall('mcp__windows__Snapshot', async () => approval, session))
+      .resolves.toBe(approval)
+    await expect(WindowsMcp.decideWindowsMcpCall('mcp__windows__PowerShell', async () => ({ kind: 'allow' }), session))
+      .resolves.toMatchObject({ kind: 'allow' })
+    await expect(WindowsMcp.decideWindowsMcpCall('mcp__windows__Unreviewed', async () => ({ kind: 'allow' }), session))
+      .resolves.toMatchObject({ kind: 'deny' })
+  })
+
+  it('reads a downgrade made while downstream policy is pending', async () => {
+    const session = Session.create(SessionId('windows-pending-policy'))
+    setSandboxMode(session, 'danger-full-access')
+    const gate = Promise.withResolvers<{ kind: 'allow' }>()
+    const deciding = WindowsMcp.decideWindowsMcpCall('mcp__windows__Snapshot', () => gate.promise, session)
+    setSandboxMode(session, 'workspace-write')
+    gate.resolve({ kind: 'allow' })
+    await expect(deciding).resolves.toMatchObject({ kind: 'ask' })
+  })
 })
 
 describe('real Loader composition', () => {
+  it('guards system tools and unknown names even if another listener returns allow', async () => {
+    const { ctx, executions } = await bootComposition(true)
+    const agent = await sessionAgent(ctx, 'windows-final-guard')
+    const tool = ctx.tools.get('mcp__windows__PowerShell')
+    if (tool === undefined) throw new Error('expected the pinned PowerShell tool')
+    agent.ctx.tools.register(tool)
+    ctx.tools.register({ ...tool, name: 'mcp__windows__Unreviewed' })
+    ctx.tools.register({ ...tool, name: 'ordinary-tool' })
+    ctx.on('tools/pre-execute', async () => ({ kind: 'allow' }), { prepend: true })
+
+    await expect(execute(ctx, agent, tool.name)).resolves.toMatchObject({ isError: true })
+    expect(executions.count).toBe(0)
+    setSandboxMode(agent.session, 'danger-full-access')
+    await expect(execute(ctx, agent, tool.name)).resolves.toMatchObject({ isError: false })
+    await expect(execute(ctx, agent, 'mcp__windows__Unreviewed')).resolves.toMatchObject({ isError: true })
+    await expect(execute(ctx, agent, 'ordinary-tool')).resolves.toMatchObject({ isError: false })
+    expect(executions.count).toBe(2)
+  })
+
+  it('updates existing scopes on enable, rediscovery, and re-enable', async () => {
+    const { ctx, captured } = await bootComposition(false)
+    const restricted = await sessionAgent(ctx, 'windows-existing-restricted')
+    const full = await sessionAgent(ctx, 'windows-existing-full')
+    setSandboxMode(full.session, 'danger-full-access')
+
+    await ctx.settings.update(WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE, { enabled: true })
+    await vi.waitFor(() => { expect(ctx.tools.schemas(full)).toHaveLength(20) })
+    expect(ctx.tools.schemas(restricted)).toHaveLength(13)
+    await ctx.settings.update(WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE, { enabled: false })
+    await vi.waitFor(() => { expect(ctx.tools.schemas(full)).toEqual([]) })
+    await ctx.settings.update(WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE, { enabled: true })
+    await vi.waitFor(() => { expect(ctx.tools.schemas(full)).toHaveLength(20) })
+    expect(ctx.tools.schemas(restricted)).toHaveLength(13)
+    expect(captured).toHaveLength(2)
+  })
+
+  it('cleans scoped restrictions before ignoring an already-dispatched discovery callback', async () => {
+    const { ctx } = await bootComposition(true)
+    const agent = await sessionAgent(ctx, 'windows-disposed-policy')
+    let stop = () => {}
+    await ctx.plugin({
+      inject: ['tools', 'agents'],
+      apply(scope) { stop = installWindowsMcpPolicy(scope) },
+    })
+    ctx.on('tools/change', () => { stop() }, { prepend: true })
+    const tool = ctx.tools.get('mcp__windows__PowerShell')
+    if (tool === undefined) throw new Error('expected the pinned PowerShell tool')
+    ctx.tools.register({ ...tool, name: 'ordinary-tool' })
+    setSandboxMode(agent.session, 'danger-full-access')
+    expect(ctx.tools.get(tool.name, agent)).toBeDefined()
+  })
+
+  it('follows live session modes without remounting or granting other sessions full access', async () => {
+    const { ctx, captured, executions } = await bootComposition(true)
+    await ctx.plugin(ApprovalService)
+    const agent = await sessionAgent(ctx, 'windows-switching')
+    const otherAgent = await sessionAgent(ctx, 'windows-restricted')
+    const session = agent.session
+    const other = otherAgent.session
+    session.append('turn/start', { turn: 1 })
+    other.append('turn/start', { turn: 1 })
+    const answer = vi.fn<() => Promise<ApprovalOutcome>>().mockResolvedValue('allowed-once')
+    ctx.on('approval/request', answer)
+
+    setSandboxMode(session, 'workspace-write')
+    setApprovalPolicy(session, 'ask')
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toEqual(WindowsMcp.WINDOWS_MCP_DESKTOP_TOOLS.map(tool => `mcp__windows__${tool}`))
+    await expect(execute(ctx, agent)).resolves.toMatchObject({ isError: false })
+    expect(answer).toHaveBeenCalledTimes(1)
+
+    setSandboxMode(session, 'danger-full-access')
+    setApprovalPolicy(session, 'never')
+    expect(ctx.tools.schemas(agent).map(tool => tool.name)).toEqual([...WindowsMcp.WINDOWS_MCP_PUBLIC_TOOLS])
+    await expect(execute(ctx, agent, 'mcp__windows__PowerShell')).resolves.toMatchObject({ isError: false })
+    expect(answer).toHaveBeenCalledTimes(1)
+    expect(session.events.filter(event => event.type === 'approval/asked')).toHaveLength(1)
+
+    setSandboxMode(other, 'read-only')
+    setApprovalPolicy(other, 'never')
+    expect(ctx.tools.get('mcp__windows__PowerShell', otherAgent)).toBeUndefined()
+    await expect(execute(ctx, otherAgent, 'mcp__windows__PowerShell')).resolves.toMatchObject({ isError: true })
+    await expect(execute(ctx, otherAgent)).resolves.toMatchObject({ isError: true })
+    expect(executions.count).toBe(2)
+    expect(other.events.filter(event => event.type === 'approval/decided'))
+      .toMatchObject([{ data: { outcome: 'rejected' } }])
+
+    setSandboxMode(session, 'workspace-write')
+    setApprovalPolicy(session, 'ask')
+    answer.mockResolvedValue('rejected')
+    expect(ctx.tools.get('mcp__windows__PowerShell', agent)).toBeUndefined()
+    await expect(execute(ctx, agent)).resolves.toMatchObject({ isError: true })
+    expect(answer).toHaveBeenCalledTimes(2)
+    expect(executions.count).toBe(2)
+    expect(captured).toHaveLength(1)
+  })
+
   it('mounts only the reviewed tools and live-disables the child through settings', async () => {
     const { ctx, captured, executions } = await bootComposition(true)
 
@@ -224,9 +400,10 @@ describe('real Loader composition', () => {
     ])
     expect(child.includeTools).toEqual([...WindowsMcp.WINDOWS_MCP_ALLOWED_TOOLS])
     expect([...WindowsMcp.WINDOWS_MCP_PUBLIC_TOOLS].every(tool => ctx.tools.get(tool) !== undefined)).toBe(true)
-    expect(ctx.tools.get('mcp__windows__PowerShell')).toBeUndefined()
-    expect(ctx.tools.get('mcp__windows__Registry')).toBeUndefined()
-    expect(ctx.tools.get('mcp__windows__FileSystem')).toBeUndefined()
+    const restricted = await sessionAgent(ctx, 'windows-desktop-only')
+    expect(ctx.tools.get('mcp__windows__PowerShell', restricted)).toBeUndefined()
+    expect(ctx.tools.get('mcp__windows__Registry', restricted)).toBeUndefined()
+    expect(ctx.tools.get('mcp__windows__FileSystem', restricted)).toBeUndefined()
 
     const denied = await ctx.tools.execute({
       signal: new AbortController().signal,
@@ -247,7 +424,26 @@ describe('real Loader composition', () => {
     })
   })
 
-  it('keeps the built-in child dormant by default', async () => {
+  it('starts the bundled runtime by default and preserves a saved opt-out across remounts', async () => {
+    const { ctx, captured } = await bootComposition()
+    expect(captured).toHaveLength(1)
+    expect(ctx.tools.get('mcp__windows__Snapshot')).toBeDefined()
+
+    await ctx.settings.update(WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE, { enabled: false })
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined() })
+    const entry = [...ctx.loader.entries()].find(row => row.options.name === '@deepseek-ai/dsh-windows-mcp')
+    if (entry === undefined) throw new Error('expected the Windows-MCP Loader entry')
+    await ctx.loader.update(entry.id, { disabled: true })
+    expect(ctx.settings.describe().some(row => row.ns === WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE))
+      .toBe(false)
+    await ctx.loader.update(entry.id, { disabled: false })
+    await ctx.loader.await()
+    expect(captured).toHaveLength(1)
+    expect(ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined()
+    expect(ctx.settings.get(WindowsMcp.WINDOWS_MCP_SETTINGS_NAMESPACE)).toMatchObject({ enabled: false })
+  })
+
+  it('keeps an explicitly disabled built-in child dormant', async () => {
     const { ctx, captured } = await bootComposition(false)
     expect(captured).toEqual([])
     expect([...ctx.loader.entries()].some(entry => entry.options.name === '@deepseek-ai/dsh-mcp-client')).toBe(false)
@@ -255,7 +451,7 @@ describe('real Loader composition', () => {
 
   it('keeps settings available when the bundled runtime is absent', async () => {
     const errors: unknown[][] = []
-    const result = await bootComposition(true, {
+    const result = await bootComposition(undefined, {
       runtimeCommand: '',
       beforeLoad: (ctx) => { collectErrors(ctx, errors) },
     })

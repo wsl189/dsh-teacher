@@ -33,9 +33,9 @@ The Cordis framework and its foundation libraries are source-vendored into this 
 
 ## Bundled Windows-MCP desktop runtime
 
-The Windows desktop installer embeds [CPython](https://www.python.org/) 3.14.7 under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5 under MIT. The CPython embedded archive is pinned to SHA-256 `d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15`; the Windows-MCP wheel is pinned to SHA-256 `a68dff0a493b620cf0febdb5b31cf140199e5d54fa8b737dfadb4aa73100630d`.
+The Windows desktop installer embeds [CPython](https://www.python.org/) 3.14.7 under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5 under MIT. The CPython embedded archive is pinned to SHA-256 `d297e5ff019966817ad8502465176139f2d3d840fa4ed84b13bed399a6ab1f15`; the dependency-base Windows-MCP wheel is pinned to SHA-256 `a68dff0a493b620cf0febdb5b31cf140199e5d54fa8b737dfadb4aa73100630d`. The executable Python package is replaced with the reviewed [source snapshot](third-party/windows-mcp/windows-mcp-source.zip), pinned to SHA-256 `400341b4c158eae478b8fad989d1d58faff99bca9e1b99c2bb84c5422abe3a42`.
 
-DSH applies [`third-party/windows-mcp/patches/use-thefuzz.patch`](third-party/windows-mcp/patches/use-thefuzz.patch) while assembling the runtime, replacing Windows-MCP's sole `fuzzywuzzy` import with the MIT-licensed `TheFuzz` API. The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [`third-party/windows-mcp/requirements.lock`](third-party/windows-mcp/requirements.lock), and its source identities, download URLs, digests, and patch digest are recorded in [`third-party/windows-mcp/runtime.json`](third-party/windows-mcp/runtime.json). The installed wheel `.dist-info` trees remain inside the packaged `resources/windows-mcp/Lib/site-packages` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
+DSH applies [`third-party/windows-mcp/patches/use-thefuzz.patch`](third-party/windows-mcp/patches/use-thefuzz.patch) while assembling the runtime, replacing Windows-MCP's sole `fuzzywuzzy` import with the MIT-licensed `TheFuzz` API. The [sampling patch](third-party/windows-mcp/patches/correlated-sampling.patch) echoes the initiating tool call's private correlation token when Scrape requests a model completion. The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [`third-party/windows-mcp/requirements.lock`](third-party/windows-mcp/requirements.lock), and its source identities, download URLs, digests, and patch digests are recorded in [`third-party/windows-mcp/runtime.json`](third-party/windows-mcp/runtime.json). The installed wheel `.dist-info` trees remain inside the packaged `resources/windows-mcp/Lib/site-packages` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
 
 
 ## Runtime npm dependencies
@@ -47,6 +47,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`@agentclientprotocol/sdk`](https://github.com/agentclientprotocol/typescript-sdk) | Apache-2.0 |
 | [`@anthropic-ai/claude-agent-sdk`](https://github.com/anthropics/claude-agent-sdk-typescript) | SEE LICENSE IN README.md |
 | [`@anthropic-ai/sdk`](https://github.com/anthropics/anthropic-sdk-typescript) | MIT |
+| [`@anysearch/anysearch-dsh`](https://github.com/anysearch-team/anysearch-dsh) | MIT |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
 | [`@dickpy/dsh-imagegen`](https://github.com/dickpy/dsh-imagegen) | Apache-2.0 |
 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | MIT |
@@ -151,6 +152,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
+- `@anysearch/anysearch-dsh@0.1.4` — [`patches/anysearch-anysearch-dsh@0.1.4.patch`](patches/anysearch-anysearch-dsh@0.1.4.patch)
 - `@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2` — [`patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch`](patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch)
 - `@xmanrui/dsh-im@1.0.3` — [`patches/xmanrui-dsh-im@1.0.3.patch`](patches/xmanrui-dsh-im@1.0.3.patch)
 - `dsh-better-sidebar@0.17.1` — [`patches/dsh-better-sidebar@0.17.1.patch`](patches/dsh-better-sidebar@0.17.1.patch)

@@ -1,0 +1,51 @@
+- list:
+  - listitem:
+    - article:
+      - heading "新建机器人" [level=3]
+      - paragraph: 102•••
+      - text: 连接未就绪
+      - term: 消息通道
+      - definition: 离线
+      - term: 最近检查
+      - definition: 尚未检查
+      - text: 机器人名称
+      - textbox "机器人名称": 新建机器人
+      - button "保存" [disabled]
+      - text: 当前工作区
+      - button "选择目录"
+      - code: {{cwd}}/OneDrive/Desktop
+      - text: Agent Preset
+      - combobox "Agent Preset":
+        - option "跟随 Host 默认" [selected]
+        - option "标准模式（standard）"
+        - option "PTC 模式（ptc）"
+        - option "极简模式（minimal）"
+        - option "创造模式（cordis）"
+      - text: 只影响新建会话；若当前聊天已有会话，先发送 /new，再发送普通消息生效。 QQ 连接当前离线
+      - button "重试连接"
+      - button "移除接入"
+  - listitem:
+    - article:
+      - heading "已有机器人" [level=3]
+      - paragraph: 564•••
+      - text: 连接未就绪
+      - term: 消息通道
+      - definition: 离线
+      - term: 最近检查
+      - definition: 尚未检查
+      - text: 机器人名称
+      - textbox "机器人名称": 已有机器人
+      - button "保存" [disabled]
+      - text: 当前工作区
+      - button "选择目录"
+      - code: {{cwd}}/saved-workspace
+      - text: Agent Preset
+      - combobox "Agent Preset":
+        - option "跟随 Host 默认" [selected]
+        - option "标准模式（standard）"
+        - option "PTC 模式（ptc）"
+        - option "极简模式（minimal）"
+        - option "创造模式（cordis）"
+      - text: 只影响新建会话；若当前聊天已有会话，先发送 /new，再发送普通消息生效。 QQ 连接当前离线
+      - button "重试连接"
+      - button "移除接入"

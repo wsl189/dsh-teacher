@@ -19,6 +19,12 @@ linkWorkspacePackages: true
 overrides:
   '@deepseek-ai/cosmokit': 'link:vendor/cosmokit'
   '@deepseek-ai/schemastery': 'link:vendor/schemastery'
+  # AnySearch's pre-1.0 peers share the application's tested web/tool services.
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-credentials': 'link:packages/credentials/credentials'
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-system-prompt': 'link:packages/core/system-prompt'
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': 'link:packages/web/tool-web'
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tools': 'link:packages/core/tools'
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': 'link:packages/web/web'
   # The bundled cron release pins the pre-ToolCallId tools package. Its public
   # defineTool use remains compatible with the current workspace implementation.
   'dsh-plugin-cron>@deepseek-ai/dsh-tools': 'link:packages/core/tools'
@@ -44,6 +50,10 @@ overrides:
 
 peerDependencyRules:
   allowedVersions:
+    '@anysearch/anysearch-dsh>@deepseek-ai/dsh-credentials': '>=1.0.7-rc3 <2'
+    '@anysearch/anysearch-dsh>@deepseek-ai/dsh-system-prompt': '>=1.0.7-rc3 <2'
+    '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': '>=1.0.7-rc3 <2'
+    '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': '>=1.0.7-rc3 <2'
     # Office 0.1.2 declares the original better-sidebar range, but its only
     # integration method, registerFileViewer(), is unchanged through 0.17 and is
     # exercised by the shipped-composition browser lane.
@@ -114,6 +124,7 @@ minimumReleaseAgeExclude:
   - '@openai/codex@0.149.1||0.149.1-darwin-arm64||0.149.1-darwin-x64||0.149.1-linux-arm64||0.149.1-linux-x64||0.149.1-win32-arm64||0.149.1-win32-x64'
 
 patchedDependencies:
+  '@anysearch/anysearch-dsh@0.1.4': patches/anysearch-anysearch-dsh@0.1.4.patch
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch
   '@xmanrui/dsh-im@1.0.3': patches/xmanrui-dsh-im@1.0.3.patch
   'dsh-better-sidebar@0.17.1': patches/dsh-better-sidebar@0.17.1.patch

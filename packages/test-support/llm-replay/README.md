@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-llm-replay` makes snapshot tests run without an API key: it installs a replay LLM adapter that serves model streams reconstructed from a recorded session JSONL fixture, so a test boots the real agent against a fixed transcript. The fixture is a projection of the persisted session log — `assistant/chunk` events group into per-call chunk sequences, and an explicitly marked local compaction call replays as one canonical stream. A `replay.override.json` sidecar covers what a log cannot reconstruct: a throw before any chunk, a cancel/hang, or an injected retry. Live sessions bind to recorded scripts by first-call order, so parent-and-subagent scenarios each get their own script. It is the model source behind the ACP and headless snapshot suites and the Web browser e2e lane.
+`dsh-llm-replay` makes snapshot tests run without an API key: it installs a replay LLM adapter that serves model streams reconstructed from a recorded session JSONL fixture, so a test boots the real agent against a fixed transcript. The fixture reproduces ordinary assistant streams, marked local compaction calls, and logged MCP sampling completions. A `replay.override.json` sidecar covers what a log cannot reconstruct: a throw before any chunk, a cancel/hang, or an injected retry. Live sessions bind to recorded scripts by first-call order, so parent-and-subagent scenarios each get their own script. It is the model source behind the ACP and headless snapshot suites and the Web browser e2e lane.
 
 ## Table of Contents
 
@@ -65,7 +65,9 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 ### How the fixture works
 
-The fixture is a projection of a persisted session log (`<scenario>/session.jsonl`) produced by running the real agent once — this plugin does not record. It keeps the header and every event payload but omits body `seq`/`time` envelopes (`seq0`/`time0` for packed rows); replay restores contiguous synthetic envelopes while parsing, and one file cannot mix projected and complete body rows. Runtime persistence continues to write complete logs. Replay derives each model call's chunk sequence from `assistant/chunk` events, so a recorded fixture replays the same logical stream the live model produced. A fixture may carry its `request/header` content tokenized to `{{system}}`/`{{tools}}`; replay is indifferent because derivation reads only the chunk and summary events plus the line-0 session header.
+The fixture is a projection of a persisted session log (`<scenario>/session.jsonl`) produced by running the real agent once — this plugin does not record. It keeps the header and every event payload but omits body `seq`/`time` envelopes (`seq0`/`time0` for packed rows); replay restores contiguous synthetic envelopes while parsing, and one file cannot mix projected and complete body rows. Runtime persistence continues to write complete logs. Replay derives each ordinary model call's chunk sequence from `assistant/chunk` events. A fixture may carry its `request/header` content tokenized to `{{system}}`/`{{tools}}`; derivation reads the chunk and auxiliary-completion events plus the line-0 session header, not that prompt content.
+
+An `mcp/sampling-request` and its `mcp/sampling-response` reproduce one auxiliary model stream in request order, even when concurrent responses arrive out of order. Missing or repeated responses and responses without a terminal finish fail derivation. The [MCP client](../../mcp/mcp-client/README.md#tool-correlated-sampling) owns recording these requests and their results.
 
 ### Nested agents
 
@@ -141,7 +143,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define when replay cannot stand in for a live model. They are current package constraints, not a task backlog.
 
 - **First-call-order script binding assumes sequential delegation** — a cut that runs sibling subagents concurrently would bind live sessions to recorded scripts non-deterministically; a stronger keying is deferred until such a scenario exists.
-- **Only ordinary loop chunks and marked local compaction outputs are derivable** — a pure pre-chunk throw, a cancel/hang, or an unmarked external summarizer call needs the `replay.override.json` sidecar; replacement and patch forms affect only the primary session, and child scripts still derive from their logs.
+- **Only ordinary loop chunks, marked local compaction, and logged MCP sampling are derivable** — a pure pre-chunk throw, a cancel/hang, or an unmarked external summarizer call needs the `replay.override.json` sidecar; replacement and patch forms affect only the primary session, and child scripts still derive from their logs.
 
 <a id="dev-note"></a>
 ### Dev Note

@@ -37,7 +37,7 @@ export interface WindowsMcpCardFace {
   discard(): void
 }
 
-/** Bridges the `windows-mcp` settings scope onto the staged opt-in control. */
+/** Bridges the `windows-mcp` settings scope onto the staged on/off control. */
 export class WindowsMcpCardController {
   private readonly form: CardForm<WindowsMcpSettings>
   private readonly store: SnapshotStore<WindowsMcpCardState>

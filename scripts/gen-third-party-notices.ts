@@ -177,6 +177,8 @@ interface WindowsMcpRuntimeDistribution {
   pythonSha256: string
   windowsMcpVersion: string
   windowsMcpWheelSha256: string
+  sourcePath: string
+  sourceSha256: string
   patchPath: string
 }
 
@@ -205,6 +207,12 @@ interface WindowsMcpRuntimeManifest {
     sourceSha256: string
   }
   patches: WindowsMcpPatch[]
+  source: {
+    archive: string
+    sha256: string
+    toolSignatures: string
+    toolSignaturesSha256: string
+  }
 }
 
 /**
@@ -252,24 +260,31 @@ function collectWindowsMcpRuntimeDistribution(): WindowsMcpRuntimeDistribution {
   if (forbidden.length > 0) {
     throw new Error(`gen-third-party-notices: Windows-MCP runtime includes forbidden GPL distributions: ${forbidden.join(', ')}.`)
   }
-  if (manifest.patches.length !== 1) {
-    throw new Error(`gen-third-party-notices: Windows-MCP runtime declares ${manifest.patches.length} patches; expected 1.`)
+  for (const [path, digest] of [
+    [manifest.source.archive, manifest.source.sha256],
+    [manifest.source.toolSignatures, manifest.source.toolSignaturesSha256],
+  ]) {
+    if (path === undefined || digest === undefined
+      || createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex') !== digest) {
+      throw new Error('gen-third-party-notices: Windows-MCP reviewed source or signature digest changed.')
+    }
   }
-  const patch = manifest.patches[0]
+  const patch = manifest.patches.find(item => item.target === 'windows_mcp/desktop/service.py'
+    && item.before === 'from fuzzywuzzy import process' && item.after === 'from thefuzz import process')
   if (patch === undefined) {
-    throw new Error('gen-third-party-notices: Windows-MCP runtime patch is missing.')
+    throw new Error('gen-third-party-notices: Windows-MCP TheFuzz patch is missing.')
   }
-  const patchSource = readFileSync(resolve(root, patch.path), 'utf8')
-  const patchHash = createHash('sha256').update(patchSource).digest('hex')
-  if (
-    patchHash !== patch.sha256
-    || !patchSource.includes(`-${patch.before}`)
-    || !patchSource.includes(`+${patch.after}`)
-  ) {
-    throw new Error('gen-third-party-notices: Windows-MCP patch content or digest changed.')
+  for (const item of manifest.patches) {
+    const patchSource = readFileSync(resolve(root, item.path), 'utf8')
+    const patchHash = createHash('sha256').update(patchSource).digest('hex')
+    if (patchHash !== item.sha256
+      || !item.before.split('\n').every(line => patchSource.includes(`-${line}`))
+      || !item.after.split('\n').every(line => patchSource.includes(`+${line}`))) {
+      throw new Error('gen-third-party-notices: Windows-MCP patch content or digest changed.')
+    }
   }
   const buildScript = readFileSync(resolve(root, 'scripts/build-windows-mcp-runtime.ps1'), 'utf8')
-  for (const required of ['$Metadata.patches', '--require-hashes', '--no-deps', '$EmbeddedPython $SmokePath']) {
+  for (const required of ['$SourceScript verify', '$SourceScript install', '--require-hashes', '--no-deps', '$EmbeddedPython $SmokePath']) {
     if (!buildScript.includes(required)) {
       throw new Error(`gen-third-party-notices: Windows-MCP build script no longer proves ${required}.`)
     }
@@ -279,6 +294,8 @@ function collectWindowsMcpRuntimeDistribution(): WindowsMcpRuntimeDistribution {
     pythonSha256: manifest.python.sha256,
     windowsMcpVersion: manifest.windowsMcp.version,
     windowsMcpWheelSha256: manifest.windowsMcp.wheelSha256,
+    sourcePath: manifest.source.archive,
+    sourceSha256: manifest.source.sha256,
     patchPath: patch.path,
   }
 }
@@ -1069,9 +1086,9 @@ function renderWindowsMcpRuntime(
   return `
 ## Bundled Windows-MCP desktop runtime
 
-The Windows desktop installer embeds [CPython](https://www.python.org/) ${distribution.pythonVersion} under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) ${distribution.windowsMcpVersion} under MIT. The CPython embedded archive is pinned to SHA-256 \`${distribution.pythonSha256}\`; the Windows-MCP wheel is pinned to SHA-256 \`${distribution.windowsMcpWheelSha256}\`.
+The Windows desktop installer embeds [CPython](https://www.python.org/) ${distribution.pythonVersion} under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) ${distribution.windowsMcpVersion} under MIT. The CPython embedded archive is pinned to SHA-256 \`${distribution.pythonSha256}\`; the dependency-base Windows-MCP wheel is pinned to SHA-256 \`${distribution.windowsMcpWheelSha256}\`. The executable Python package is replaced with the reviewed [source snapshot](${distribution.sourcePath}), pinned to SHA-256 \`${distribution.sourceSha256}\`.
 
-DSH applies [\`${distribution.patchPath}\`](${distribution.patchPath}) while assembling the runtime, replacing Windows-MCP's sole \`fuzzywuzzy\` import with the MIT-licensed \`TheFuzz\` API. The GPL \`fuzzywuzzy\`, \`Levenshtein\`, and \`python-Levenshtein\` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock), and its source identities, download URLs, digests, and patch digest are recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json\`](${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json). The installed wheel \`.dist-info\` trees remain inside the packaged \`resources/windows-mcp/Lib/site-packages\` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
+DSH applies [\`${distribution.patchPath}\`](${distribution.patchPath}) while assembling the runtime, replacing Windows-MCP's sole \`fuzzywuzzy\` import with the MIT-licensed \`TheFuzz\` API. The [sampling patch](${WINDOWS_MCP_RUNTIME_ROOT}/patches/correlated-sampling.patch) echoes the initiating tool call's private correlation token when Scrape requests a model completion. The GPL \`fuzzywuzzy\`, \`Levenshtein\`, and \`python-Levenshtein\` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock), and its source identities, download URLs, digests, and patch digests are recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json\`](${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json). The installed wheel \`.dist-info\` trees remain inside the packaged \`resources/windows-mcp/Lib/site-packages\` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
 `
 }
 

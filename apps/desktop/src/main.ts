@@ -59,6 +59,7 @@ function startBackend(): Promise<string> {
         env: process.env,
         packaged: app.isPackaged,
         resourcesPath: process.resourcesPath,
+        desktopPath: app.getPath('desktop'),
       }),
       ELECTRON_RUN_AS_NODE: '1',
     },

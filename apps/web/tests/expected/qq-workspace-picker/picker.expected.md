@@ -1,0 +1,20 @@
+- dialog "选择机器人工作区目录":
+  - banner:
+    - heading "选择机器人工作区目录" [level=3]
+    - combobox "选择磁盘":
+      - option "C:\\"
+      - option "D:\\"
+      - option / [selected]
+    - navigation "当前目录":
+      - button /
+      - button "tmp"
+      - button "{{workspace}}"
+      - button "saved-workspace"
+  - list:
+    - listitem:
+      - button "课程资料"
+  - contentinfo:
+    - button "显示隐藏文件夹"
+    - paragraph: 切换后会清除这个机器人的旧会话映射。
+    - button "取消"
+    - button "选择此目录"

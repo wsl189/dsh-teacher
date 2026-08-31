@@ -1,0 +1,24 @@
+--- a/src/viewer-app/main.tsx
++++ b/src/viewer-app/main.tsx
+@@ -44,4 +44,3 @@
+     !('license' in value) ||
+-    typeof value.license !== 'string' ||
+-    value.license.trim().length === 0
++    typeof value.license !== 'string'
+   ) {
+@@ -49,2 +48,3 @@
+   }
++  // Univer owns license validation and the limits of its unlicensed evaluation mode.
+   return value.license.trim()
+--- a/README.md
++++ b/README.md
+@@ -178,2 +178,3 @@
+ - DeepSeek Harness and Node.js `>=22.19.0`.
++- Without `UNIVER_LICENSE`, the Viewer uses Univer's limited evaluation mode. Supply a valid license through that environment variable for licensed features; the package contains no embedded license.
+ - Some Slide layout checks and SVG text measurement require a local Chrome/Chromium executable. Set `UNIVER_RENDER_BROWSER` to use a specific browser path.
+--- a/README.zh-CN.md
++++ b/README.zh-CN.md
+@@ -178,2 +178,3 @@
+ - DeepSeek Harness，以及 Node.js `>=22.19.0`。
++- 未设置 `UNIVER_LICENSE` 时，Viewer 使用 Univer 的受限试用模式。需要授权功能时，通过该环境变量提供有效许可证；包内不含内嵌许可证。
+ - 部分 Slide 布局检查和 SVG 文字度量需要本机 Chrome/Chromium；也可以通过 `UNIVER_RENDER_BROWSER` 指定浏览器路径。

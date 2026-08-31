@@ -1,0 +1,113 @@
+- tablist:
+  - tab "Start" [selected]
+  - tab "Insert"
+  - tab "Formulas"
+  - tab "Data"
+  - tab "View"
+- status "Synced"
+- toolbar "Start":
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button "Paint format" [disabled]:
+    - img
+    - text: Paint format
+  - button "Clear All" [disabled]:
+    - img
+    - text: Clear All
+  - textbox [disabled]: Arial
+  - img
+  - textbox [disabled]: "11"
+  - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - img
+  - button [disabled]:
+    - img
+  - img
+  - img
+  - img
+  - img
+  - text: General
+  - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button [disabled]:
+    - img
+  - button "Protection" [disabled]:
+    - img
+    - text: Protection
+  - img
+  - text: Print
+  - img
+  - button:
+    - img
+  - button:
+    - img
+- complementary
+- textbox: A1
+- img
+- img
+- img
+- img
+- img
+- complementary:
+  - complementary "Sidebar panel":
+    - button "Close sidebar":
+      - img
+- button [disabled]:
+  - img
+- button:
+  - img
+- tablist "Sheet tabs":
+  - tab "Sheet1" [selected]
+- img
+- img
+- button [disabled]:
+  - img
+- button:
+  - img
+- button
+- slider
+- button:
+  - img
+- textbox: 100%
+- button:
+  - img
+- region "Notifications alt+T"
+- region "Notifications alt+T"
+- button "Delete" [disabled]
+- button "Copy" [disabled]
+- button "Rename" [disabled]
+- button "Hide" [disabled]
+- button "Unhide" [disabled]
+- button "Protect Worksheet" [disabled]
+- button "Unprotect Worksheet" [disabled]
+- button "Change Worksheet Permissions" [disabled]
+- button "View All Protection Ranges"

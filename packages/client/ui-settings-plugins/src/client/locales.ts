@@ -139,13 +139,13 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
   windowsMcpTitle: 'Windows desktop control',
-  windowsMcpDescription: 'Operate visible Windows applications through the bundled Windows-MCP runtime.',
+  windowsMcpDescription: 'Control Windows applications and system tools through the bundled Windows-MCP runtime.',
   windowsMcpToggle: 'Enable Windows desktop tools',
   windowsMcpRuntimeReady: 'The bundled runtime is available in this installation.',
   windowsMcpRuntimeUnavailable: 'The bundled runtime is unavailable. Install and run the Windows desktop build to enable this plugin.',
   windowsMcpEnabledHint: 'Enabled; the reviewed desktop tools appear after the bundled runtime connects successfully.',
   windowsMcpDisabledHint: 'Desktop tools stay absent from model requests until this setting is saved.',
-  windowsMcpApprovalWarning: 'Every desktop call requires your approval because it can observe or control applications outside the DSH sandbox.',
+  windowsMcpApprovalWarning: 'Full access unlocks all 20 tools, including PowerShell, files, registry, processes, and clipboard, without extra desktop approval. Other modes expose 13 desktop tools and require approval. These actions run outside the DSH sandbox; Windows permissions and other DSH policies still apply.',
 }
 
 /** Simplified Chinese copy. */
@@ -252,11 +252,11 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
   windowsMcpTitle: 'Windows 桌面控制',
-  windowsMcpDescription: '通过安装包内置的 Windows-MCP 运行时操作可见的 Windows 应用。',
+  windowsMcpDescription: '通过安装包内置的 Windows-MCP 运行时控制 Windows 应用并使用系统工具。',
   windowsMcpToggle: '启用 Windows 桌面工具',
   windowsMcpRuntimeReady: '当前安装已包含可用的内置运行时。',
   windowsMcpRuntimeUnavailable: '内置运行时不可用；请安装并运行 Windows 桌面版后再启用。',
   windowsMcpEnabledHint: '已启用；内置运行时连接成功后，审查过的桌面工具会出现在后续模型请求中。',
   windowsMcpDisabledHint: '保存启用设置前，桌面工具不会出现在模型请求中。',
-  windowsMcpApprovalWarning: '每次桌面调用都需要你的批准，因为它可以观察或控制 DSH 沙箱外的应用。',
+  windowsMcpApprovalWarning: 'Full access 会开放全部 20 项工具，包括 PowerShell、文件、注册表、进程和剪贴板，且不额外请求桌面操作批准。其他模式只提供 13 项桌面工具并要求批准。这些操作在 DSH 沙箱外执行，仍受 Windows 权限和其他 DSH 策略约束。',
 }

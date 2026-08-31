@@ -7,6 +7,11 @@ settings:
 overrides:
   '@deepseek-ai/cosmokit': link:vendor/cosmokit
   '@deepseek-ai/schemastery': link:vendor/schemastery
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-credentials': link:packages/credentials/credentials
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': link:packages/web/tool-web
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tools': link:packages/core/tools
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': link:packages/web/web
   dsh-plugin-cron>@deepseek-ai/dsh-tools: link:packages/core/tools
   dsh-skill-mcp-panel>@deepseek-ai/dsh-home-paths: link:packages/util/home-paths
   dsh-skill-mcp-panel>@deepseek-ai/dsh-subprocess: link:packages/subprocess/subprocess
@@ -21,8 +26,9 @@ overrides:
   app-builder-lib>@electron/get: 3.1.0
 
 patchedDependencies:
+  '@anysearch/anysearch-dsh@0.1.4': 2281e457d15534ae7f6570bc4caabe01cb8933e273aebbea9511114a39839d4e
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': 34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd
-  '@xmanrui/dsh-im@1.0.3': 8f5b47a1e9cc901ba526bd13c0befd583b334bfc49ed50a381a24d12dd22198e
+  '@xmanrui/dsh-im@1.0.3': 016cdf80cc5fe8c6aeae0879c8b0e0ada66b87b21087026c505951663a6d8c8d
   dsh-better-sidebar@0.17.1: 78d35a900c83a83e141ae27f8a225bf8c579859814f5be0e4cd145531efa71ef
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.1: 5d0df683dd92b21df2238f151ed5c3700e2dc73158c2e58e2fd77f361a1ec835
@@ -1569,6 +1575,9 @@ importers:
 
   packages/bundle/web-app:
     dependencies:
+      '@anysearch/anysearch-dsh':
+        specifier: file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz
+        version: file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=2281e457d15534ae7f6570bc4caabe01cb8933e273aebbea9511114a39839d4e)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
@@ -1728,6 +1737,9 @@ importers:
       '@deepseek-ai/dsh-cordis-host-runner':
         specifier: workspace:^
         version: link:../../extensions/cordis-host-runner
+      '@deepseek-ai/dsh-credentials':
+        specifier: workspace:^
+        version: link:../../credentials/credentials
       '@deepseek-ai/dsh-file-reference':
         specifier: workspace:^
         version: link:../../context/file-reference
@@ -1806,9 +1818,15 @@ importers:
       '@deepseek-ai/dsh-tool-teacher-workbench':
         specifier: workspace:^
         version: link:../../host/tool-teacher-workbench
+      '@deepseek-ai/dsh-tool-web':
+        specifier: workspace:^
+        version: link:../../web/tool-web
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+      '@deepseek-ai/dsh-web':
+        specifier: workspace:^
+        version: link:../../web/web
       '@deepseek-ai/dsh-web-frontend':
         specifier: workspace:^
         version: link:../../../apps/web
@@ -1829,7 +1847,7 @@ importers:
         version: 0.1.2(patch_hash=34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd)(bcb238876ae0845a34599176906e0d4a)
       '@xmanrui/dsh-im':
         specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
-        version: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=8f5b47a1e9cc901ba526bd13c0befd583b334bfc49ed50a381a24d12dd22198e)
+        version: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=016cdf80cc5fe8c6aeae0879c8b0e0ada66b87b21087026c505951663a6d8c8d)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -1843,8 +1861,8 @@ importers:
         specifier: file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.1.tgz
         version: file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.1.tgz(patch_hash=5d0df683dd92b21df2238f151ed5c3700e2dc73158c2e58e2fd77f361a1ec835)
       dsh-univer-office:
-        specifier: file:../../../third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz
-        version: file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)
+        specifier: file:../../../third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz
+        version: file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)
       open:
         specifier: ^11.0.0
         version: 11.0.1
@@ -7100,6 +7118,9 @@ importers:
       '@deepseek-ai/dsh-attachment-local':
         specifier: workspace:^
         version: link:../../attachment/attachment-local
+      '@deepseek-ai/dsh-brand':
+        specifier: workspace:^
+        version: link:../../util/brand
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
@@ -7109,6 +7130,9 @@ importers:
       '@deepseek-ai/dsh-scope':
         specifier: workspace:^
         version: link:../../core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:^
         version: link:../../subprocess/subprocess
@@ -7140,12 +7164,27 @@ importers:
       '@deepseek-ai/cordis-plugin-loader':
         specifier: workspace:^
         version: link:../../../vendor/loader
+      '@deepseek-ai/dsh-agent':
+        specifier: workspace:^
+        version: link:../../core/agent
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
       '@deepseek-ai/dsh-mcp-client':
         specifier: workspace:^
         version: link:../mcp-client
+      '@deepseek-ai/dsh-permission-presets':
+        specifier: workspace:^
+        version: link:../../interaction/permission-presets
+      '@deepseek-ai/dsh-sandbox-policy':
+        specifier: workspace:^
+        version: link:../../sandbox/sandbox-policy
+      '@deepseek-ai/dsh-scope':
+        specifier: workspace:^
+        version: link:../../core/scope
+      '@deepseek-ai/dsh-session':
+        specifier: workspace:^
+        version: link:../../core/session
       '@deepseek-ai/dsh-settings':
         specifier: workspace:^
         version: link:../../settings/settings
@@ -7155,6 +7194,12 @@ importers:
       '@deepseek-ai/dsh-tools':
         specifier: workspace:^
         version: link:../../core/tools
+      '@deepseek-ai/dsh-user-approval':
+        specifier: workspace:^
+        version: link:../../interaction/user-approval
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.0
+        version: 1.29.0(zod@4.4.3)
 
   packages/ocr/ocr:
     dependencies:
@@ -9808,6 +9853,9 @@ importers:
       '@deepseek-ai/dsh-llm':
         specifier: workspace:^
         version: link:../../llm/llm
+      '@deepseek-ai/dsh-mcp-client':
+        specifier: workspace:^
+        version: link:../../mcp/mcp-client
       '@deepseek-ai/dsh-session':
         specifier: workspace:^
         version: link:../../core/session
@@ -11234,6 +11282,18 @@ packages:
     peerDependenciesMeta:
       zod:
         optional: true
+
+  '@anysearch/anysearch-dsh@file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz':
+    resolution: {integrity: sha512-nAXXTIVdKul0DpJXjIupfenLO8zQwI8CJCRCb6AuQygMyTqLatv5BPqf4n7NyVorEYPR+JmDU/M98Ltana6Frw==, tarball: file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz}
+    version: 0.1.4
+    engines: {node: ^22.19.0 || >=24.0.0}
+    peerDependencies:
+      '@deepseek-ai/cordis': '>=4.0.1-rc.1 <5'
+      '@deepseek-ai/dsh-credentials': '>=0.1.0-rc.6 <0.1.1 || >=0.1.1-rc.1 <0.1.2'
+      '@deepseek-ai/dsh-system-prompt': '>=0.1.0-rc.6 <0.1.1 || >=0.1.1-rc.1 <0.1.2'
+      '@deepseek-ai/dsh-tool-web': '>=0.1.0-rc.6 <0.1.1 || >=0.1.1-rc.1 <0.1.2'
+      '@deepseek-ai/dsh-tools': '>=0.1.0-rc.6 <0.1.1 || >=0.1.1-rc.1 <0.1.2'
+      '@deepseek-ai/dsh-web': '>=0.1.0-rc.6 <0.1.1 || >=0.1.1-rc.1 <0.1.2'
 
   '@asamuzakjp/css-color@5.1.11':
     resolution: {integrity: sha512-KVw6qIiCTUQhByfTd78h2yD1/00waTmm9uy/R7Ck/ctUyAPj+AEDLkQIdJW0T8+qGgj3j5bpNKK7Q3G+LedJWg==}
@@ -16373,8 +16433,8 @@ packages:
     version: 2.0.1
     hasBin: true
 
-  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz:
-    resolution: {integrity: sha512-rn9jtHIYEmdI5/4s3BLSaWxb2bLqGz+zfpqpgqutRhOuyfMKX2nBOR1dLw3lITmigLOd4HA55CB98eX45u4/cw==, tarball: file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz}
+  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz:
+    resolution: {integrity: sha512-2zdwy8l/aN9f+qitYqfrHpl3I/oLjpoMXZCP7nrIhNYTIfYGhMBxv6kUDmnBvufwKeBxuHn8LnnXSWjRid0Y1g==, tarball: file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz}
     version: 0.2.12
     engines: {node: '>=22.19.0'}
     peerDependencies:
@@ -19828,6 +19888,16 @@ snapshots:
       json-schema-to-ts: 3.1.1
     optionalDependencies:
       zod: 4.4.3
+
+  '@anysearch/anysearch-dsh@file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=2281e457d15534ae7f6570bc4caabe01cb8933e273aebbea9511114a39839d4e)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)':
+    dependencies:
+      '@deepseek-ai/cordis': link:vendor/cordis
+      '@deepseek-ai/dsh-credentials': link:packages/credentials/credentials
+      '@deepseek-ai/dsh-system-prompt': link:packages/core/system-prompt
+      '@deepseek-ai/dsh-tool-web': link:packages/web/tool-web
+      '@deepseek-ai/dsh-tools': link:packages/core/tools
+      '@deepseek-ai/dsh-web': link:packages/web/web
+      '@deepseek-ai/schemastery': link:vendor/schemastery
 
   '@asamuzakjp/css-color@5.1.11':
     dependencies:
@@ -24733,7 +24803,7 @@ snapshots:
     optionalDependencies:
       react: 18.3.1
 
-  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=8f5b47a1e9cc901ba526bd13c0befd583b334bfc49ed50a381a24d12dd22198e)':
+  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=016cdf80cc5fe8c6aeae0879c8b0e0ada66b87b21087026c505951663a6d8c8d)':
     dependencies:
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4
@@ -25697,7 +25767,7 @@ snapshots:
       - '@cfworker/json-schema'
       - supports-color
 
-  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.1.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery):
+  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery):
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-attachment': link:packages/attachment/attachment

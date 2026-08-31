@@ -1,0 +1,12 @@
+version: 1
+scenario: windows-mcp-capabilities
+profile: sdk
+composition: windows-mcp-capabilities
+recording: authored
+platform: posix
+permission: danger-full-access
+header:
+  class: windows-mcp-capabilities
+  pin: true
+workspace:
+  final: true

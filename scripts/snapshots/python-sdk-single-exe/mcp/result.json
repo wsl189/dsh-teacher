@@ -1,0 +1,82 @@
+{
+  "session_id": "mcp-smoke",
+  "final_response": "MCP client smoke ok",
+  "finish_reason": "completed",
+  "sampling_events": [
+    {
+      "type": "mcp/sampling-request",
+      "seq": 19,
+      "time": 0,
+      "data": {
+        "serverName": "fixture",
+        "callId": "mcp-add",
+        "rootCallId": "mcp-add",
+        "config": {
+          "provider": "deepseek-official",
+          "model": "smoke-model",
+          "maxTokens": 128,
+          "reasoningEffort": "high"
+        },
+        "messages": [
+          {
+            "source": {
+              "kind": "plugin",
+              "plugin": "mcp-client"
+            },
+            "content": [
+              {
+                "type": "text",
+                "text": "MCP sampling: add 19 and 23; return only the number."
+              }
+            ],
+            "role": "user",
+            "id": "{{messageId}}"
+          }
+        ]
+      }
+    },
+    {
+      "type": "mcp/sampling-response",
+      "seq": 20,
+      "time": 0,
+      "data": {
+        "requestSeq": 19,
+        "chunks": [
+          {
+            "type": "block-start",
+            "index": 0,
+            "blockType": "text"
+          },
+          {
+            "type": "text-delta",
+            "index": 0,
+            "text": "42"
+          },
+          {
+            "type": "block-end",
+            "index": 0,
+            "block": {
+              "type": "text",
+              "text": "42"
+            }
+          },
+          {
+            "type": "usage",
+            "usage": {
+              "inputTokens": 3,
+              "outputTokens": 3,
+              "totalTokens": 6
+            }
+          },
+          {
+            "type": "finish",
+            "reason": {
+              "kind": "stop"
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "sampling_notification_count": 2
+}

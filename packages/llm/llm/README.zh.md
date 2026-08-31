@@ -27,6 +27,8 @@ kind: "package-reference"
 
 任何调用模型提供方的组合——agent loop、会话标题生成器、压缩（compaction）摘要器——都会通过本服务流式发起请求。与至少一个提供方适配器一起挂载它；服务本身没有任何配置，也不包含提供方协议代码。
 
+[与工具调用关联的 MCP 采样](../../mcp/mcp-client/README.zh.md#tool-correlated-sampling)使用 `purpose: 'mcp-sampling'`。调用方将辅助输入与输出记录在普通 assistant 流之外。
+
 ### 何时选择
 
 当插件或组合需要调用模型时选择本包：它是进入提供方适配器的唯一受支持路径，并在 loop、会话日志与每个消费方之间保持同一套词汇。当需要提供方特定的协议行为（那属于 `dsh-llm-deepseek` 或 `dsh-llm-pi-ai` 之类的适配器）或重试执行（那属于 `dsh-llm-retry`）时，不要选择它。

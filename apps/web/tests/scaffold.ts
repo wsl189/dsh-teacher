@@ -285,12 +285,12 @@ export interface LaunchOptions {
    */
   deepSeekMissingCredential?: boolean
   /**
-   * Patch the shipped DeepSeek search row to a deterministic endpoint and
+   * Patch the shipped AnySearch row to a deterministic endpoint and
    * credential reference. Browser search scenarios keep the real provider and
    * credentials seam while avoiding external search traffic and ambient keys.
    */
-  deepSeekSearch?: {
-    /** Anthropic-compatible base URL; the provider appends `/messages`. */
+  anySearch?: {
+    /** AnySearch-compatible base URL; the client appends `/v1/` API paths. */
     baseURL: string
     /** Credential reference resolved by the shipped search provider. */
     apiKeyEnv: string
@@ -528,13 +528,13 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
         { id: 'tool-cordis', name: '@deepseek-ai/dsh-tool-cordis' },
       ] }]
       : [],
-    ...options.deepSeekSearch === undefined
+    ...options.anySearch === undefined
       ? []
       : [{
-        id: 'web-search-deepseek',
+        id: 'web-search-anysearch',
         config: {
-          apiKeyEnv: options.deepSeekSearch.apiKeyEnv,
-          baseURL: options.deepSeekSearch.baseURL,
+          apiKeyEnv: options.anySearch.apiKeyEnv,
+          baseURL: options.anySearch.baseURL,
         },
       }],
     ...options.ocrEndpoint === undefined

@@ -61,6 +61,19 @@ dsh --profile web --no-open --port 8080
 
 每个浏览器会话都从随发行版交付的 preset（默认 `standard`）组合自己的 agent（智能体），而不是共享一套进程级工具集。你可以更改默认 preset，或在 `$DSH_HOME/.agent-presets` 下添加自己的 preset。
 
+内置的 [Univer Office](../../../third-party/README.zh.md#configuration-and-migration) Viewer 无需许可证即可按上游受限试用模式打开。运行时的 `UNIVER_LICENSE` 会启用该许可证覆盖的功能。
+
+### 内置 Windows 桌面控制
+
+Windows 桌面启动器会提供私有 Windows-MCP 运行时。该 profile 在命令存在时默认启动它；未提供命令时，Windows 桌面控制保持关闭。**设置 → 插件 → Windows 桌面控制**中已保存的选择优先于默认值。启用不会修改会话权限预设；[Windows-MCP 权限](../../mcp/windows-mcp/README.zh.md#tools-and-permission-modes)决定每个会话可用的工具与需要批准的调用。
+
+<a id="built-in-web-search"></a>
+### 内置网页搜索
+
+Web profile 与 Windows 桌面版内置 `@anysearch/anysearch-dsh` 0.1.4。标准 `web_search` 与 `web_fetch` 使用 AnySearch；`anysearch_capabilities`、`anysearch_search` 与 `anysearch_batch_search` 分别补充能力发现、垂直搜索和最多五项请求的批量搜索。无需单独安装插件。headless 与 SDK profile 保持原有默认值。
+
+未配置 `ANYSEARCH_API_KEY` 时，插件发送匿名请求，受服务端配额与速率限制。可选密钥由 DSH credentials 在每次操作时解析，包括继承的环境变量值；安装器既不内嵌密钥或账户，也不自动申请。查询与正文提取 URL 会发送到 `https://api.anysearch.com`，因此需要联网。认证与配额失败会直接报告，不会自动切换提供方或把无效密钥请求改成匿名重试。`web-search-anysearch` 配置项接受 `apiKeyEnv`、`baseURL` 与 `maxRenderedContentChars`；`web` 配置项选择搜索与抓取提供方。
+
 -----
 
 <a id="understand-the-implementation"></a>
@@ -99,6 +112,8 @@ URL 行与浏览器交接都是就绪信号：监督方一观察到该行就发�
 ### 不变式归属
 
 不变式伴生插件注册一个空安装器，因为每项贡献——frontend-static 子插件、提示词段落与 bash 变量注册——都会随 fiber 由 registry 释放，且每个所属 registry 的包负责该关系的不变式。
+
+AnySearch 是直接生产依赖。其[经过审阅的产物与兼容补丁](../../../third-party/README.zh.md#artifact-notes)保留会话 preset 对 `web_search` 与 `web_fetch` 的所有权；插件在 Host 作用域注册提供方与自身的三项高级工具。
 
 </details>
 

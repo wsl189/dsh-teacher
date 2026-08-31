@@ -1,4 +1,4 @@
-# Agent Note：内置扩展、生图、PPT Master、Univer Office 与 QQ 语音输入
+# Agent Note：内置扩展、AnySearch、生图、PPT Master、Univer Office 与 QQ 语音输入
 
 状态：已实现
 
@@ -11,6 +11,8 @@
 输入框与教师工作台语音控件也各自使用浏览器原生语音识别，没有复用 QQ 集成中可配置的 ASR 服务。这条重复路径使同一安装存在两个语音提供方、两个语言配置所有者、依赖浏览器的网络行为，并且缺少 Host 侧校验与资源上限。
 
 ## 决策
+
+Web 与桌面组合包含从用户提供的源码构建、固定在 `third-party/` 下的 MIT `@anysearch/anysearch-dsh` 0.1.4 产物。它为 `web_search` 与 `web_fetch` 选择 AnySearch，base、headless 与 SDK 的默认值保持不变。插件的三项高级工具全局注册；经过审阅的兼容补丁移除其全局 `web_fetch` 回退注册，使各会话 preset 继续持有标准工具的可用性与指导。限定范围的 peer 覆盖让经过测试的 workspace 服务保持为唯一实现。每次操作都会解析可选的 `ANYSEARCH_API_KEY`；缺失时使用匿名远程访问，不代表离线服务或安装器自动申请账户。查询与正文提取 URL 会离开本机并发往配置端点，该端点的配额与认证失败会直接显示，不会自动切换提供方。
 
 `@deepseek-ai/dsh-web-app` 直接依赖并挂载保存在 `third-party/` 下、经过审查的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1 与 `dsh-univer-office` 0.2.12 DSH 重构建版 tarball，以及已发布的 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2。生图插件提供浏览器工作室与四项 Host 工具；预览包配置项位于内置 better-sidebar 配置项之后，因此会向现有文件预览注册表登记 DOCX、XLSX 与 PPTX 预览器；Univer 则另外提供 agent 编辑工具、内置技能、Gateway、Viewer 与对话审阅卡片。这些包属于普通 Web 生产依赖闭包，也因此属于 [Windows 桌面安装器](2026-08-25-windows-desktop-updates.zh.md)；用户无需再把它们安装到 profile。生图服务配置与密钥、IM 配置与凭据、cron 记录、机器人路由状态、技能文件、MCP 配置、Univer 内容、工作树、资源缓存及其他可变数据均留在可执行依赖闭包之外，因此需要迁移这些状态时，应单独复制。生图设置使用本机设置文档，历史、画廊与模板缓存则位于 `~/.dsh/dsh-imagegen`。
 
@@ -28,7 +30,7 @@ QQ 适配器只接受 HTTPS 端点与回环 HTTP。它拒绝内嵌凭据、query
 
 ## 考虑过的替代方案
 
-**继续把六个扩展与 PPT Master 作为 profile 安装项。** 这样可以缩小应用依赖闭包，但会让新安装的 EXE 不完整，使 profile 状态能够静默改变发行界面、工具列表与 skill 目录，并要求每台电脑执行第二套安装流程。
+**继续把内置扩展与 PPT Master 作为 profile 安装项。** 这样可以缩小应用依赖闭包，但会让新安装的 EXE 不完整，使 profile 状态能够静默改变发行界面、工具列表与 skill 目录，并要求每台电脑执行第二套安装流程。
 
 **把「设置 → 模型」中的图像输入能力视为生图能力。** 该注册表描述对话模型输入，并不会注册生成协议、服务渠道、生图工具、画廊或结果 renderer。应由专用插件持有这些操作及其设置。
 
@@ -57,9 +59,11 @@ QQ 适配器只接受 HTTPS 端点与回环 HTTP。它拒绝内嵌凭据、query
 - 在支持 MediaRecorder 的浏览器中，输入框与日常管理语音输入保持一致。Web Audio 宿主还会在发送 Host 前缓冲解码后的 PCM 与一份 16 kHz 单声道 WAV；20 MiB 音频上限与操作截止时间限制传输录音的成本，仍不支持流式或部分转写。
 - QQ 平台转写文本可以在不访问已配置 ASR 服务的情况下满足机器人语音消息。浏览器麦克风输入是直接端点检查；已配置模型不可用时会显示设置或请求提示，而不是网络提示。
 - Office 预览引入 AGPL-3.0 运行时依赖。仓库与下游发行必须保留其声明并遵守许可证；为了让所需预览成为默认安装的一部分，本决策接受该后果。
-- Univer Office 需要运行时 `UNIVER_LICENSE`、商业分发权，以及供浏览器渲染的 Slide 操作使用的本机 Chrome／Chromium。安装器不会包含许可证值或浏览器可执行文件，内置组合会关闭 Univer 遥测。
+- Univer Office 的授权部署与浏览器渲染 Slide 操作仍分别以商业分发权和本机 Chrome／Chromium 为前置条件。[Viewer 试用决策](../bug-fix/2026-09-01-univer-viewer-evaluation.zh.md)允许在未设置 `UNIVER_LICENSE` 时按上游限制启动。安装器不包含许可证值或浏览器可执行文件，内置组合会关闭 Univer 遥测。
 - 集成依赖已发布的第三方插件接口与固定 artifact 版本。升级这些 artifact 时必须重新执行兼容性、许可证、工具列表与发行客户端审计。
 
 ## 测试
+
+AnySearch 集成测试针对本地 HTTP fixture 启动真实发行 Web Loader 组合，覆盖匿名搜索与正文提取、两类能力目录、高级搜索、逐次读取凭据、无效密钥处理、配额与限流下的批量部分成功，以及携带凭据的重定向。已记录的 Web 搜索会话使用真实 AnySearch 提供方，固定持久化且限制数量的来源列表与浏览器卡片，并且无需 API 密钥即可回放。载荷测试逐项拒绝 AnySearch 运行文件缺失；发布检查仅接受已审阅的压缩包路径。固定压缩包前还会运行所提供源码自带的类型检查、测试、构建与包内容检查。
 
 能力测试覆盖提供方选择与释放、实时读取 QQ 配置与凭据、端点限制、取消、multipart 字段、支持的媒体、大小与响应上限、传输与 HTTP 失败分类、JSON 失败及安全诊断。客户端测试覆盖 MediaRecorder 支持与清理、SSR、PCM WAV header、立体声混合、重采样、解码器选择与清理、输入框手势与提交门控、工作台命令、可编辑转写，以及不同的连接失败与请求拒绝通知。一条无外部依赖的已组装 Web 场景会在输入框与日常管理中录制确定性音频，在真实浏览器 bundle 中转换，要求通过生成的 Remote 向本地 QQ 兼容 ASR 服务上传 WAV multipart，并在不调用模型的情况下固定成功转写与模型拒绝提示。PPT Master 包测试会加载真实提供方，并固定上游版本、许可证摘要、完整性门禁标记、文件数量与逻辑字节数。发行组合场景要求存在四项生图工具、IM 与 cron Host 工具、全部十三项 Univer 工具、六个内置客户端模块，以及可加载的 `ppt-master` 目录条目。桌面载荷测试要求生图 Host 与 Client bundle、模板快照与许可证、技能／MCP 包、PPT Master 完整分发各类资源的代表文件，以及 Univer Viewer、Gateway、worker、技能、商业资源与 Windows x64 原生 binding，之后 Windows workflow 才会把同一生产依赖闭包构建进 NSIS artifact。

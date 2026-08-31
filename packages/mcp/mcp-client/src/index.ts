@@ -19,11 +19,14 @@ import { scopeOf } from '@deepseek-ai/dsh-scope'
 import { MAX_TIMER_DELAY_MS } from '@deepseek-ai/dsh-timeout'
 import { RECONNECT_DEFAULTS, resolveReconnectPolicy, startConnection } from './connection.ts'
 import type { ReconnectConfig } from './connection.ts'
+import { resolveSamplingConfig } from './sampling.ts'
+import type { SamplingConfig } from './sampling.ts'
 // Side-effect type import: declaration-merges `ctx.tools` onto Context.
 import type {} from '@deepseek-ai/dsh-tools'
 
 export type { McpResult } from './tools.ts'
 export type { ReconnectConfig, ResolvedReconnectPolicy } from './connection.ts'
+export type { SamplingConfig, McpSamplingRequestData, McpSamplingResponseData } from './sampling.ts'
 
 /** Cordis plugin name used by loader diagnostics. */
 export const name = 'mcp-client'
@@ -72,6 +75,8 @@ export interface StdioConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Explicit, tool-correlated text sampling policy; omitted means no server model access. */
+  sampling?: SamplingConfig
 }
 
 /** Config for connecting to an MCP server over Streamable HTTP (SSE). */
@@ -96,6 +101,8 @@ export interface StreamableHttpConfig {
   failOnStartupError: boolean
   /** Automatic reconnect policy after a lost connection; omission uses the defaults. */
   reconnect?: ReconnectConfig
+  /** Explicit, tool-correlated text sampling policy; omitted means no server model access. */
+  sampling?: SamplingConfig
 }
 
 /** Configuration for one stdio or Streamable HTTP MCP server. */
@@ -114,6 +121,15 @@ const Reconnect: z<ReconnectConfig> = z.object({
   maxAttempts: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).default(RECONNECT_DEFAULTS.maxAttempts),
 })
 
+const Sampling = z.union([
+  z.object({
+    includeTools: z.array(String).required(),
+    maxInputBytes: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
+    maxOutputTokens: z.number().step(1).min(1).max(Number.MAX_SAFE_INTEGER).required(),
+  }),
+  z.const(undefined),
+])
+
 export const Config = z.union([
   z.object({
     transport: z.const('stdio'),
@@ -126,6 +142,7 @@ export const Config = z.union([
     includeTools: z.array(String).default([]),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    sampling: Sampling,
   }),
   z.object({
     transport: z.const('streamable-http'),
@@ -136,6 +153,7 @@ export const Config = z.union([
     includeTools: z.array(String).default([]),
     failOnStartupError: z.boolean().default(false),
     reconnect: Reconnect,
+    sampling: Sampling,
   }),
 ]) as unknown as z<ConfigInput, Config>
 
@@ -177,6 +195,10 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // effect registers.
   const reconnect = resolveReconnectPolicy(config.reconnect, `mcp-client(${config.serverName}): reconnect`)
   const includeTools = resolveIncludedTools(config.includeTools, `mcp-client(${config.serverName}): includeTools`)
+  const sampling = resolveSamplingConfig(config.sampling)
+  if (sampling !== undefined && ctx.get('llm') === undefined) {
+    throw new Error(`mcp-client(${config.serverName}): sampling requires the llm service`)
+  }
 
   // Reserve the namespace next: a duplicate `serverName` fails THIS instance
   // at load with an actionable error and leaves the earlier instance intact.
@@ -199,7 +221,7 @@ export async function apply(ctx: Context, config: Config): Promise<void> {
   // The supervisor owns the client/transport generations, the reconnect
   // loop, and the live tool registrations; disposal stops reconnection,
   // quiesces in-flight work, and unregisters the current generation.
-  const connection = startConnection(ctx, config, reconnect, includeTools)
+  const connection = startConnection(ctx, config, reconnect, includeTools, sampling)
 
   ctx.effect(() => {
     return () => connection.dispose()

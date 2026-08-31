@@ -8,14 +8,20 @@ import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import LlmRuntime, { LlmAdapter, ToolCallId } from '@deepseek-ai/dsh-llm'
+import type { GenerateOptions, StreamChunk } from '@deepseek-ai/dsh-llm'
+import { Session, SessionId } from '@deepseek-ai/dsh-session'
+import type { ToolExecution } from '@deepseek-ai/dsh-tools'
+import type { CreateMessageRequest } from '@modelcontextprotocol/sdk/types.js'
 import type { Config } from '@deepseek-ai/dsh-mcp-client'
 
 // ---- Mock MCP SDK ----
 
 // vi.mock factories are hoisted above every import/const, so the mock fns and
 // class must be created inside vi.hoisted to exist when the factories run.
-const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances } = vi.hoisted(() => {
+const {
+  mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, mockSetRequestHandler, MockClient, instances,
+} = vi.hoisted(() => {
   const mockConnect = vi.fn<() => Promise<void>>()
   const mockClose = vi.fn<() => Promise<void>>()
   const mockListTools = vi.fn<(_params?: Record<string, unknown>) => Promise<unknown>>()
@@ -23,6 +29,7 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
     _params?: Record<string, unknown>, _compatibilitySchema?: unknown, _options?: unknown,
   ) => Promise<unknown>>()
   const mockSetNotificationHandler = vi.fn()
+  const mockSetRequestHandler = vi.fn()
   const mockRequest = vi.fn(async (
     request: { method: string; params?: Record<string, unknown> },
     _schema: unknown,
@@ -38,10 +45,11 @@ const { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotification
     close = mockClose
     request = mockRequest
     setNotificationHandler = mockSetNotificationHandler
+    setRequestHandler = mockSetRequestHandler
     constructor() { instances.push(this) }
   }
   const instances: MockClient[] = []
-  return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, MockClient, instances }
+  return { mockConnect, mockClose, mockListTools, mockCallTool, mockSetNotificationHandler, mockSetRequestHandler, MockClient, instances }
 })
 
 vi.mock('@modelcontextprotocol/sdk/client/index.js', () => ({
@@ -135,6 +143,52 @@ describe('reconnect supervisor', () => {
     mockListTools.mockResolvedValue(listing('remote'))
     mockCallTool.mockResolvedValue({ content: [{ type: 'text', text: 'ok' }] })
     ctx = await mountRegistry()
+  })
+
+  it('joins a disconnected generation\'s sampling before reconnecting', async () => {
+    const entered: PromiseWithResolvers<void> = Promise.withResolvers()
+    const aborted: PromiseWithResolvers<void> = Promise.withResolvers()
+    const release: PromiseWithResolvers<void> = Promise.withResolvers()
+    class SlowModel extends LlmAdapter {
+      async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+        entered.resolve()
+        await new Promise<void>((resolve) => { options.signal!.addEventListener('abort', () => { resolve() }, { once: true }) })
+        aborted.resolve()
+        await release.promise
+        yield { type: 'finish', reason: { kind: 'stop' } }
+      }
+    }
+    await ctx.plugin(LlmRuntime)
+    ctx.llm.registerAdapter(['test'], new SlowModel())
+    mockListTools.mockResolvedValue(listing('Scrape'))
+    await apply(ctx, {
+      ...stdioConfig({ initialDelayMs: 5, maxDelayMs: 40, maxAttempts: 5 }),
+      sampling: { includeTools: ['Scrape'], maxInputBytes: 4096, maxOutputTokens: 2048 },
+    })
+    await vi.waitFor(() => { expect(ctx.tools.get('mcp__srv__Scrape')).toBeDefined() })
+    const handler = mockSetRequestHandler.mock.calls[0]![1] as (
+      request: CreateMessageRequest, extra: { signal: AbortSignal },
+    ) => Promise<unknown>
+    mockCallTool.mockImplementation(params => handler({
+      method: 'sampling/createMessage',
+      params: { messages: [{ role: 'user', content: { type: 'text', text: 'page' } }], maxTokens: 128, metadata: params!._meta as object },
+    }, { signal: testToolSignal }))
+    const session = Session.create(SessionId('reconnecting-sampling'))
+    session.append('request/header', { reason: 'initial', header: { config: { provider: 'test', model: 'test-model' } } })
+    const invocation = ctx.tools.execute({
+      name: 'mcp__srv__Scrape', callId: nextCallId(), arguments: {}, signal: testToolSignal,
+      agent: { id: session.id, session } as NonNullable<ToolExecution['agent']>,
+    })
+    await entered.promise
+    instances[0]!.onclose?.()
+    await aborted.promise
+    await sleep(20)
+    expect(instances).toHaveLength(1)
+    release.resolve()
+    expect((await invocation).isError).toBe(true)
+    await vi.waitFor(() => { expect(instances).toHaveLength(2) })
+    expect(session.events.at(-1)?.data).toMatchObject({ chunks: [{ type: 'finish', reason: { kind: 'aborted' } }] })
+    await ctx.fiber.dispose()
   })
 
   it('reconnects after a transport close, re-syncs tools through the new generation, and serves calls', async () => {

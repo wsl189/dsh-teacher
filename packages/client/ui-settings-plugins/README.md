@@ -37,7 +37,7 @@ A card stages what the user types and writes it only when they save. Each contro
 
 The Subagent card stages its permission switch and exact model checkboxes together. Enabling requires at least one selected adapter route. Saving submits `enabled` and `allowedModels` in one mutation fenced by the revision where that draft began; a newer Host revision marks the draft failed instead of restoring a revoked route. Disabling retains the selected routes for later reuse. Available models are grouped by provider, while saved routes absent from the current catalog appear last and remain removable. Adapter names and model descriptions remain live directory metadata and are not stored, and the card refreshes them after adapter changes, settings commits, and reconnects.
 
-The Windows desktop card stages a single `enabled` switch. It reports whether the Host received a trusted bundled runtime path and prevents enabling when that payload is unavailable; an already-enabled value can still be turned off. Its warning remains visible because every desktop call requires approval and executes outside the DSH sandbox.
+The Windows desktop card stages a single `enabled` switch and reflects the Host's runtime-aware default and saved user choice. It reports whether the Host received a trusted bundled runtime path and prevents enabling when that payload is unavailable; an already-enabled value can still be turned off. Its warning explains that Full access unlocks all twenty Windows-MCP tools without extra desktop approval, while other modes expose thirteen desktop tools with approval. Windows process privileges and other DSH policies still apply; these operations execute outside the DSH sandbox.
 
 ### Secret-role fields
 

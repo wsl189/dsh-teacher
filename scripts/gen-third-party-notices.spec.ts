@@ -40,6 +40,8 @@ describe('THIRD_PARTY_NOTICES.md', () => {
     expect(generated).toContain('## Bundled Windows-MCP desktop runtime')
     expect(generated).toContain('CPython](https://www.python.org/) 3.14.7')
     expect(generated).toContain('Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5')
+    expect(generated).toContain('[source snapshot](third-party/windows-mcp/windows-mcp-source.zip)')
+    expect(generated).toContain('[sampling patch](third-party/windows-mcp/patches/correlated-sampling.patch)')
     expect(generated).toContain('The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded.')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })

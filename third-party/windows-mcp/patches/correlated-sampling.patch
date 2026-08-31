@@ -1,0 +1,18 @@
+--- a/windows_mcp/tools/scrape.py
++++ b/windows_mcp/tools/scrape.py
+@@ -3 +3 @@
+-from mcp.types import ToolAnnotations
++from mcp.types import ToolAnnotations, SamplingMessage, TextContent
+@@ -51,2 +51,7 @@
+-                result = await ctx.sample(
+-                    messages=f"Raw scraped content from {url}:\n\n{content}",
++                token = getattr(ctx.request_context.meta, 'deepseek-harness/sampling-token', None)
++                result = await ctx.session.create_message(
++                    messages=[SamplingMessage(role='user', content=TextContent(
++                        type='text', text=f"Raw scraped content from {url}:\n\n{content}",
++                    ))],
++                    metadata={'deepseek-harness/sampling-token': token} if token is not None else None,
++                    related_request_id=ctx.request_context.request_id,
+@@ -61 +66 @@
+-                return f"URL: {url}\nContent:\n{result.text}"
++                return f"URL: {url}\nContent:\n{result.content.text}"

@@ -104,6 +104,8 @@ describe('web e2e: plugin configuration section', () => {
     await toggle.waitFor({ timeout: 10_000 })
     expect(await toggle.isDisabled()).toBe(true)
     expect(await dialog.getByText('内置运行时不可用；请安装并运行 Windows 桌面版后再启用。').count()).toBe(1)
+    expect(await dialog.getByText('Full access 会开放全部 20 项工具', { exact: false }).count()).toBe(1)
+    expect(await dialog.getByText('仍受 Windows 权限和其他 DSH 策略约束', { exact: false }).count()).toBe(1)
     expect(await settingsDocument()).not.toContain('windows-mcp')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

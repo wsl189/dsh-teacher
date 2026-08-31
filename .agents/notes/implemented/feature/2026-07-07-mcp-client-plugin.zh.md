@@ -24,6 +24,8 @@ harness 此前无法消费 MCP（Model Context Protocol）生态中的工具。M
 
 仅 MCP Client（不含 server 端——ACP 已承担「将 harness 暴露为 agent」的角色）。仅桥接 **Tools**——Resources 和 Prompts 延后处理（它们需要 harness 侧尚不存在的消费机制，且设计空间较大）。
 
+[工具关联采样](2026-09-01-windows-mcp-source-parity.zh.md)为显式启用的工具调用添加有上限的辅助模型访问。Resources 和 Prompts 仍不在桥接范围内。
+
 ### 插件形态
 
 命名空间插件（具名导出 `name`/`inject`/`Config`/`apply`，无 `export default`）。`inject: ['tools']`。每个 MCP 服务器对应 `cordis.yml` 中的一个插件实例——同一个包以不同配置加载 N 次，与 `dsh-tool-subagent` 相同。

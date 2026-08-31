@@ -1,5 +1,5 @@
 ---
-description: "Built-in, opt-in Windows desktop automation backed by the Windows-MCP stdio server packaged with the DSH desktop installer."
+description: "Built-in Windows desktop automation, enabled by default with the Windows-MCP runtime packaged in the DSH desktop installer."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-windows-mcp` makes the reviewed desktop-control subset of Windows-MCP available as native DSH tools. The Windows desktop installer carries its own pinned CPython and Python dependency runtime, so users do not install Python, `uv`, Windows-MCP, or a separate MCP row. The plugin is disabled by default; enable **Settings → Plugins → Windows Desktop Control** when desktop automation is needed. Every call still requires user approval because the child process can observe and control applications outside the DSH sandbox.
+`dsh-windows-mcp` provides Windows desktop and system automation as native DSH tools. The Windows desktop installer carries its own pinned CPython and Python dependency runtime, so users do not install Python, `uv`, Windows-MCP, or a separate MCP row. The plugin starts by default when that runtime is available, unless the user has saved a disabled setting. Full access unlocks all twenty tools without this plugin's extra approval; other modes expose thirteen desktop tools with per-call approval. These actions operate outside the DSH sandbox.
 
 ## Table of Contents
 
@@ -25,34 +25,39 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Install the Windows desktop EXE, open **Settings → Plugins**, and turn on **Windows Desktop Control**. The desktop launcher supplies the packaged runtime path; the settings card stays unavailable when that trusted payload is absent. Enabling starts a private stdio MCP child and disabling stops it and removes its tools without restarting DSH.
+Install and launch the Windows desktop EXE to start Windows desktop control automatically. Use **Settings → Plugins → Windows Desktop Control** to turn it off or back on; saved choices override the startup default. The desktop launcher supplies the packaged runtime path; deployments without that trusted payload remain disabled and the settings card stays unavailable. Enabling starts a private stdio MCP child and disabling stops it and removes its tools without restarting DSH.
 
-### Reviewed tool set
+<a id="tools-and-permission-modes"></a>
+### Tools and permission modes
 
-The model receives exactly these thirteen tools under the `mcp__windows__` namespace: `App`, `Click`, `DisplayInventory`, `Move`, `MultiEdit`, `MultiSelect`, `Screenshot`, `Scroll`, `Shortcut`, `Snapshot`, `Type`, `Wait`, and `WaitFor`. PowerShell, Registry, Process, Clipboard, FileSystem, Notification, and Scrape are not discovered or registered. An unexpected name in the reserved namespace is denied.
+The desktop set contains thirteen tools under the `mcp__windows__` namespace: `App`, `Click`, `DisplayInventory`, `Move`, `MultiEdit`, `MultiSelect`, `Screenshot`, `Scroll`, `Shortcut`, `Snapshot`, `Type`, `Wait`, and `WaitFor`. A session in Full access (`danger-full-access`) also receives `PowerShell`, `Registry`, `Process`, `Clipboard`, `FileSystem`, `Notification`, and `Scrape`: the complete twenty-tool catalog of the pinned runtime. Switching to `read-only` or `workspace-write` hides and denies those seven system tools and restores approval for desktop calls. The switch affects that session, not other sessions, and requires no runtime restart. Unknown names remain denied in every mode.
 
 ### Configuration
 
-The shipped Web profile already contains the plugin row. These fields are primarily for composition authors and source development; installed desktop users normally change only `enabled` through Settings.
+The shipped Web profile already contains the plugin row and overrides `enabled` to false when no runtime command is supplied. These fields are primarily for composition authors and source development; installed desktop users normally change only `enabled` through Settings.
 
 | Field | Default | Meaning |
 |---|---|---|
-| `enabled` | `false` | Start the bundled server and publish its reviewed tools |
+| `enabled` | `true` | Start the bundled server and publish its reviewed tools when a runtime command is supplied |
 | `runtimeCommand` | empty | Absolute Python executable supplied by the trusted desktop launcher; empty means this deployment cannot mount the runtime |
 | `runtimeCwd` | empty | Working directory for the bundled Python runtime |
-| `toolCallTimeoutMs` | `60,000` | Deadline for each MCP desktop call |
+| `toolCallTimeoutMs` | `180,000` | Deadline for each MCP call, including nested sampling; covers `WaitFor`'s 120-second wait |
+| `samplingMaxInputBytes` | `1,048,576` | Maximum UTF-8 bytes of Scrape sampling parameters |
+| `samplingMaxOutputTokens` | `2,048` | Maximum output tokens for one Scrape completion |
 
 ```yaml
 - id: windows-mcp
   name: '@deepseek-ai/dsh-windows-mcp'
   config:
-    enabled: false
+    enabled: !!js (process.env.DSH_WINDOWS_MCP_COMMAND ?? '').trim().length > 0
     runtimeCommand: !!js process.env.DSH_WINDOWS_MCP_COMMAND ?? ''
     runtimeCwd: !!js process.env.DSH_WINDOWS_MCP_RUNTIME_ROOT ?? ''
-    toolCallTimeoutMs: 60000
+    toolCallTimeoutMs: 180000
 ```
 
-Every reviewed call reaches the ordinary DSH tool-policy chain first. A downstream denial stays final; otherwise this plugin asks the user to approve the desktop action. Denying an approval prevents the call from reaching Windows-MCP.
+Every call reaches the ordinary DSH tool-policy chain. Full access waives only this plugin's extra approval; downstream denials and approval requests remain effective. Approval policy `never` still rejects requests that another policy requires. A missing calling session or recorded sandbox mode does not grant Full access. Denied or unavailable approval prevents desktop execution; system tools require Full access even if an answerer would approve them.
+
+`Snapshot` and `Screenshot` accept `region=[left, top, right, bottom]` in virtual-desktop pixels. `Scrape` uses the initiating session's model to extract webpage content, with `query` selecting the focus; `use_dom` selects the active browser DOM and `use_sampling=false` returns raw content. Sampling failure also falls back to raw content. The separate model call consumes the configured provider's tokens and records its input and output in that session; the server receives no conversation history or extra model tools.
 
 -----
 
@@ -62,13 +67,14 @@ Every reviewed call reaches the ordinary DSH tool-policy chain first. A downstre
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin is a composition layer over `dsh-mcp-client`, not a second MCP implementation. It creates and removes a real Loader child as settings change, passes the allowlist both to Windows-MCP's `--tools` option and to the DSH bridge's exact `includeTools` filter, and registers the approval policy only while that child is active. A missing runtime or failed child leaves all desktop tools absent and emits an error without failing DSH startup, so a persisted enabled value remains reachable from Settings and can be turned off.
+The plugin composes `dsh-mcp-client` through a real Loader child, with the pinned catalog passed to both Windows-MCP's `--tools` option and the bridge's exact `includeTools` filter. Session-scoped tool restrictions follow the latest recorded sandbox mode and MCP discovery; the pre-execute policy and a monotonic guard enforce execution. Policies remain installed until child removal succeeds. A missing runtime or failed child leaves all Windows tools absent and emits an error without failing DSH startup, so the enabled setting remains reachable and can be turned off.
 
-The desktop build downloads a hash-pinned official embedded CPython archive, installs a hash-pinned binary-only wheel closure, applies the recorded `use-thefuzz.patch`, and completes a real MCP initialize/list/call smoke before packaging. Packaged launches ignore ambient runtime overrides and accept only `resources/windows-mcp/python.exe`; source launches may provide explicit developer paths.
+The desktop build installs a hash-pinned CPython and wheel closure, then replaces the complete Windows-MCP Python package with the reviewed source snapshot. Source hashes and all twenty tool signatures are verified before the recorded TheFuzz and sampling-correlation patches are applied. Packaging requires real MCP discovery, an inert `Wait` call, and a Scrape sampling smoke. Packaged launches ignore ambient runtime overrides and accept only `resources/windows-mcp/python.exe`; source launches may provide explicit developer paths.
 
 | File | Role |
 |---|---|
-| [`src/index.ts`](src/index.ts) | Settings reconciliation, child configuration, allowlist, and approval policy |
+| [`src/index.ts`](src/index.ts) | Settings reconciliation and child configuration |
+| [`src/permissions.ts`](src/permissions.ts) | Pinned catalog, session-scoped discovery, and execution policy |
 | [`src/invariant.ts`](src/invariant.ts) | Runtime invariant companion |
 | [`../../../scripts/build-windows-mcp-runtime.ps1`](../../../scripts/build-windows-mcp-runtime.ps1) | Reproducible Windows runtime assembly and smoke |
 | [`../../../third-party/windows-mcp/runtime.json`](../../../third-party/windows-mcp/runtime.json) | Upstream versions, URLs, hashes, and local patch identity |
@@ -82,6 +88,9 @@ The desktop build downloads a hash-pinned official embedded CPython archive, ins
 
 - [MCP client bridge](../mcp-client/README.md) — discovery, naming, execution, and reconnection behavior inherited by this plugin.
 - [Windows-MCP integration Agent Note](../../../.agents/notes/implemented/feature/2026-08-31-bundled-windows-mcp.md) — the distribution, activation, and security decisions.
+- [Full-access policy Agent Note](../../../.agents/notes/implemented/feature/2026-09-01-windows-mcp-full-access.md) — complete-system authority and per-session isolation.
+- [Default activation Agent Note](../../../.agents/notes/implemented/feature/2026-09-01-windows-mcp-default-on.md) — runtime availability and preservation of saved choices.
+- [Source parity and sampling Agent Note](../../../.agents/notes/implemented/feature/2026-09-01-windows-mcp-source-parity.md) — source identity, correlated model access, and replay.
 - [Desktop application](../../../apps/desktop/README.md) — installer layout and packaged startup.
 - [Third-party runtime inventory](../../../third-party/README.md) — upstream provenance and local modifications.
 
@@ -94,15 +103,15 @@ The desktop build downloads a hash-pinned official embedded CPython archive, ins
 
 #### What the model sees
 
-While enabled and connected, the model sees thirteen `mcp__windows__*` tools with Windows-MCP's descriptions and JSON schemas. Calls can inspect visible UI state, capture screenshots, and send mouse or keyboard input only after user approval. Disabling the feature removes every tool from subsequent requests.
+While enabled and connected, the model sees thirteen desktop tools such as `mcp__windows__Snapshot`, or all twenty tools in Full access, with Windows-MCP's descriptions and JSON schemas. Desktop calls require approval outside Full access; the additional system tools are hidden and rejected there. Disabling the feature removes every Windows tool from subsequent requests.
 
 #### Token effect
 
-The thirteen tool names, descriptions, and schemas add tokens to every model request while the plugin is enabled. Tool arguments and returned text or images remain in conversation history until compaction.
+The visible thirteen or twenty tool names, descriptions, and schemas add tokens to model requests while the plugin is enabled. Tool arguments and returned text or images remain in conversation history until compaction. Scrape sampling adds one separately logged text request; only its resulting summary or raw fallback enters the main conversation.
 
 #### KV Cache effect
 
-The tool-definition prefix remains stable while the pinned runtime advertises the same reviewed schemas. Enabling, disabling, or changing an advertised schema changes the tool prefix and can invalidate cache reuse from that point.
+The tool-definition prefix remains stable while the runtime and session permissions expose the same schemas. Enabling, disabling, switching into or out of Full access, or changing an advertised schema changes the tool prefix and can invalidate cache reuse from that point.
 
 ## Known Limitations and Deferred Work
 
@@ -112,9 +121,10 @@ These limits define the supported host, trust, and tool surface for the bundled 
 
 - **Windows x64 desktop only** — the packaged runtime is the official CPython AMD64 embedded distribution and is not included in non-Windows builds.
 - **Visible-session automation** — desktop actions require an unlocked interactive Windows session; services, disconnected sessions, and secure desktops are outside the supported path.
-- **Outside the DSH sandbox** — Windows-MCP is a native Python child and UI Automation client; DSH approval reduces accidental calls but is not OS containment.
-- **No arbitrary upstream tools** — expanding the thirteen-tool allowlist requires code, tests, security review, runtime smoke updates, and a new installer.
+- **Outside the DSH sandbox** — Windows-MCP operates with its Windows process privileges. Full access grants no administrator token and cannot bypass UAC or secure desktops. Already-started actions are not undone by a permission downgrade.
+- **Pinned catalog only** — admitting tools beyond the pinned twenty requires code, tests, security review, runtime smoke updates, and a new installer.
 - **One runtime per enabled profile** — this package owns one `windows` namespace and does not expose user-defined Windows-MCP servers.
+- **Local stdio integration** — the built-in feature does not expose upstream HTTP/SSE listeners or remote OAuth configuration. Screenshots reach the model only when the current route explicitly supports image input and durable attachments are available.
 
 <a id="dev-note"></a>
 ### Dev Note

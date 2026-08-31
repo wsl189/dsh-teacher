@@ -4,6 +4,8 @@
 
 [English](2026-08-31-bundled-windows-mcp.md) | 中文
 
+下文的工具目录与无条件批准决策由[按会话控制的 Full access](2026-09-01-windows-mcp-full-access.zh.md)取代；默认关闭的启用方式由[默认开启桌面控制](2026-09-01-windows-mcp-default-on.zh.md)取代。[源码对齐与采样](2026-09-01-windows-mcp-source-parity.zh.md)拥有已审阅源码覆盖和辅助模型请求。运行时分发、许可与 Loader 生命周期决策继续作为当前依据。
+
 ## 问题
 
 Windows-MCP 可以自动操作可见 Windows 应用，但若把用户提供的 Python 仓库当作普通用户配置 MCP 服务器，就无法形成安装即用的桌面能力。用户仍需安装和维护 Python、包环境、Windows-MCP 与匹配的 MCP 配置项。桌面安装包也无法证明其中的 Python 依赖闭包、原生 wheel 或上游工具表面与已审阅版本一致。
@@ -22,7 +24,7 @@ Windows-MCP 可以自动操作可见 Windows 应用，但若把用户提供的 P
 
 Windows x64 桌面构建会从官方 CPython 3.14.7 AMD64 嵌入式压缩包和 Windows-MCP 0.8.5 wheel 装配 `apps/desktop/runtime/windows-mcp`。`third-party/windows-mcp/runtime.json` 记录版本、源码身份、URL、SHA-256 摘要与本地补丁摘要。`requirements.lock` 会按哈希固定完整且仅含二进制 wheel 的闭包；pip 使用 `--require-hashes`、`--only-binary=:all:` 与 `--no-deps`。构建会应用 `patches/use-thefuzz.patch`，把唯一的 `from fuzzywuzzy import process` 导入替换为 `from thefuzz import process`，并排除 `fuzzywuzzy`、`Levenshtein` 与 `python-Levenshtein`。若这些包重新出现、TheFuzz 消失，或固定补丁在未更新元数据时发生变化，第三方声明生成器会失败。
 
-运行时构建会完成真实 FastMCP stdio initialize/list/call 冒烟，要求工具集恰好为这十三项，并成功执行无副作用的 `Wait` 调用。Electron-builder 把生成目录复制到 `resources/windows-mcp`；载荷门禁要求存在 CPython、标准库压缩包及许可证、Windows-MCP 元数据和代表性的 Python 原生模块。安装版桌面启动会忽略环境中的 `DSH_WINDOWS_MCP_*` 覆盖，并且只在 `resources/windows-mcp/python.exe` 存在时提供环境路径。源码启动保留显式开发覆盖。
+运行时构建会完成真实 FastMCP stdio initialize/list/call 冒烟，要求工具集恰好匹配固定目录，并成功执行无副作用的 `Wait` 调用。Electron-builder 把生成目录复制到 `resources/windows-mcp`；载荷门禁要求存在 CPython、标准库压缩包及许可证、Windows-MCP 元数据和代表性的 Python 原生模块。安装版桌面启动会忽略环境中的 `DSH_WINDOWS_MCP_*` 覆盖，并且只在 `resources/windows-mcp/python.exe` 存在时提供环境路径。源码启动保留显式开发覆盖。
 
 「插件」设置页拥有 Windows 桌面卡片。只有 Host 报告非空内置运行时命令时，它才能启用能力；已经启用的值始终可以关闭；沙箱外批准警告持续可见。安装版 UI 不提供可编辑 Python 路径。
 
@@ -47,4 +49,4 @@ Windows x64 桌面构建会从官方 CPython 3.14.7 AMD64 嵌入式压缩包和 
 
 ## 测试
 
-通用 MCP 测试覆盖过滤器校验、精确且区分大小写的选择、发现更新，以及过滤前的重复项拒绝。Windows 组合测试会通过 Loader 启动真实 `cordis.yml`，捕获子项配置，证明只注册十三项公开名称、未审阅名称保持缺失、批准门禁阻止执行，通过设置实时关闭子项，并证明运行时缺失或失败时设置命名空间仍然可用。客户端测试覆盖布尔字段 controller、运行时不可用状态、卡片渲染、locale 所有的文案与七卡片注册顺序。桌面环境测试证明安装版只信任 `resources/windows-mcp` 下的路径，而源码覆盖保持可用。Windows workflow 会在打包前装配并冒烟真实固定运行时，桌面载荷测试则固定其必需文件。
+通用 MCP 测试覆盖过滤器校验、精确且区分大小写的选择、发现更新，以及过滤前的重复项拒绝。Windows 组合测试会通过 Loader 启动真实 `cordis.yml`，捕获子项配置，通过设置实时关闭子项，并证明运行时缺失或失败时设置命名空间仍然可用。Full access 记录拥有工具目录与权限测试。客户端测试覆盖布尔字段 controller、运行时不可用状态、卡片渲染、locale 所有的文案与七卡片注册顺序。桌面环境测试证明安装版只信任 `resources/windows-mcp` 下的路径，而源码覆盖保持可用。Windows workflow 会在打包前装配并冒烟真实固定运行时，桌面载荷测试则固定其必需文件。
