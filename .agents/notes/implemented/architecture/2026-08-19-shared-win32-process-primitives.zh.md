@@ -10,7 +10,7 @@ Windows ACL sandbox 拥有 restricted token、SID、DACL、grant 与 workspace p
 
 ## Decision
 
-`@deepseek-ai/dsh-win32-process` 拥有 `sandbox-windows-acl` 当前消费的可复用 Win32 process ABI 与 native resource 操作。该包惰性加载 `kernel32.dll` 和 `advapi32.dll`，核验 x64 `STARTUPINFOW` 与 `PROCESS_INFORMATION` 布局，为 `CreateProcessAsUserW` 引用 argv，并提供带检查的 restricted-token pipe 与 inherited-stdio Job 操作。
+`@deepseek-ai/dsh-win32-process` 拥有 `sandbox-windows-acl` 当前消费的可复用 Win32 process ABI 与 native resource 操作。该包惰性加载 `kernel32.dll` 和 `advapi32.dll`，核验 x64 `STARTUPINFOW` 与 `PROCESS_INFORMATION` 布局，为 `CreateProcessAsUserW` 引用 argv，并提供带检查的 restricted-token pipe 与 inherited-stdio Job 操作。spawn 选项可以请求隐藏初始窗口；两条进程路径都会在 `STARTUPINFOW` 中编码 `STARTF_USESHOWWINDOW` 与 `SW_HIDE`，且不添加控制台创建标志。
 
 Windows ACL sandbox 继续唯一拥有 restricted-token 创建、SID 与 DACL policy、grants、可写路径裁定、临时目录 policy 和公共 sandbox child result。它通过共享 binding context 扩展 policy-specific API，提供 primary token，组合 pipe drain 与 wait，并在自己的生命周期边界关闭调用方拥有的 Job。
 
@@ -20,7 +20,7 @@ Windows ACL sandbox 继续唯一拥有 restricted-token 创建、SID 与 DACL po
 
 ## Verification
 
-shared suite 覆盖 x64 ABI 值、命令行引用、binding extension、pipe EOF 与 drain allocation 复用、restricted-token process 创建、suspended 创建后的 Job 分配与恢复、wait 与 exit-code 读取、native allocation 释放，以及已取得资源的失败路径。sandbox 测试保留 restricted-token、fail-closed、pipe/inherit、result 与 disposal 组合行为，不重复低层矩阵。已提交的 header probe 与 Windows package 测试覆盖迁移后的 ABI 和 native 路径；Wine 提供模拟 Windows package 与组合信号。
+shared suite 覆盖 x64 ABI 值、命令行引用、binding extension、pipe EOF 与 drain allocation 复用、restricted-token process 创建、隐藏与继承的初始窗口字段、suspended 创建后的 Job 分配与恢复、wait 与 exit-code 读取、native allocation 释放，以及已取得资源的失败路径。sandbox 测试保留 restricted-token、fail-closed、pipe/inherit、result 与 disposal 组合行为，不重复低层矩阵。已提交的 header probe 与 Windows package 测试覆盖迁移后的 ABI 和 native 路径；Wine 提供模拟 Windows package 与组合信号。
 
 ## Alternatives considered
 

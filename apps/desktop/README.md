@@ -6,7 +6,7 @@ Windows desktop distribution for this repository. Electron opens the existing We
 
 ## Install and update
 
-Download `DSH-Teacher-<version>-x64-Setup.exe` from this repository's [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases). The NSIS installer supports a per-user installation directory, Start menu entry, and desktop shortcut. At startup an installed build checks the same Release feed. A newer version makes the “Update” action appear to the right of Settings; the action downloads the installer, verifies electron-builder's `latest.yml` SHA-512 metadata, then offers “Restart to update”.
+Download `DSH-Teacher-<version>-x64-Setup.exe` from this repository's [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases). The NSIS installer supports a per-user installation directory, Start menu entry, and desktop shortcut. At startup an installed build checks the same Release feed. The footer shows the installed version when no newer release is available. A newer version replaces that status with the “Update” action to the right of Settings; the action downloads the installer, verifies electron-builder's `latest.yml` SHA-512 metadata, then offers “Restart to update”.
 
 The application stores sessions, settings, credentials, and teacher-workbench data under the ordinary DSH home (`%USERPROFILE%\.dsh` unless `DSH_HOME` is set). Reinstalling the app does not replace that directory. Copy it separately when migrating user data to another computer.
 

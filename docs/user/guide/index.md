@@ -28,15 +28,9 @@ Use the file button in the composer to upload PDF, DOCX, XLSX, PPTX, or a suppor
 
 ## Preview workspace files
 
-The standard Web profile includes the better-sidebar workbench. Open its handle at the right edge, choose **Files**, and open a workspace file. Markdown, images, and PDF render inline without another installation.
+The standard Web profile includes the better-sidebar workbench. Open its handle at the right edge and choose **Files** to browse and edit workspace files. The workbench also provides source control, terminals, and a loopback browser; right-click a tab and choose **Move to Free Window** when it needs its own movable surface.
 
-Previewing modern Word, Excel, and PowerPoint files from the workspace requires the external Office viewer plugin:
-
-```sh
-dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.0
-```
-
-The Office viewer is an AGPL-3.0 package installed into the user's Web profile rather than distributed with the MIT-licensed Harness runtime. Restart `dsh web` and hard-refresh the browser after installation. It previews `.docx`, `.xlsx`, and `.pptx`; legacy `.doc`, `.xls`, and `.ppt` files remain download-only.
+Markdown previews render local images, sanitized inline HTML, and a table of contents. Images and PDF render inline, and the bundled Office viewer previews `.docx`, `.xlsx`, and `.pptx`; legacy `.doc`, `.xls`, and `.ppt` files remain download-only. The Office viewer is AGPL-3.0, so downstream distributions must preserve its license obligations.
 
 ## Continue
 

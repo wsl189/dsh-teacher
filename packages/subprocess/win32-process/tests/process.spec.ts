@@ -6,20 +6,28 @@ import {
   spawnInheritedJobProcess,
   spawnPipedProcess,
 } from '../src/index.ts'
-import { CREATE_SUSPENDED } from '../src/abi.ts'
-import { PROCESS_INFORMATION } from '../src/ffi.ts'
+import {
+  CREATE_SUSPENDED,
+  STARTF_USESHOWWINDOW,
+  STARTF_USESTDHANDLES,
+  SW_HIDE,
+} from '../src/abi.ts'
+import { PROCESS_INFORMATION, STARTUPINFOW } from '../src/ffi.ts'
 import type { NativePtr, Win32ProcessBindings } from '../src/index.ts'
 
 const PVOID = koffi.pointer('void')
+type StartupInfoOutput = { dwFlags: number; wShowWindow: number }
 
 function inheritedApi(overrides: Partial<Win32ProcessBindings> = {}): {
   api: Win32ProcessBindings
   events: string[]
+  startupInfos: StartupInfoOutput[]
   createProcessAsUserW: ReturnType<typeof vi.fn>
   assignProcessToJobObject: ReturnType<typeof vi.fn>
   resumeThread: ReturnType<typeof vi.fn>
 } {
   const events: string[] = []
+  const startupInfos: StartupInfoOutput[] = []
   const createProcessAsUserWImpl: Win32ProcessBindings['createProcessAsUserW'] =
     overrides.createProcessAsUserW
     ?? ((_token, _app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, _startup, info) => {
@@ -32,7 +40,26 @@ function inheritedApi(overrides: Partial<Win32ProcessBindings> = {}): {
       })
       return 1
     })
-  const createProcessAsUserW = vi.fn(createProcessAsUserWImpl)
+  const capturingCreateProcessAsUserW: Win32ProcessBindings['createProcessAsUserW'] = (
+    token, applicationName, commandLine, processAttributes, threadAttributes,
+    inheritHandles, creationFlags, environment, currentDirectory, startupInfo, processInfo,
+  ) => {
+    startupInfos.push(koffi.decode(startupInfo, STARTUPINFOW) as StartupInfoOutput)
+    return createProcessAsUserWImpl(
+      token,
+      applicationName,
+      commandLine,
+      processAttributes,
+      threadAttributes,
+      inheritHandles,
+      creationFlags,
+      environment,
+      currentDirectory,
+      startupInfo,
+      processInfo,
+    )
+  }
+  const createProcessAsUserW = vi.fn(capturingCreateProcessAsUserW)
   const assignProcessToJobObject = vi.fn(() => {
     events.push('assign')
     return 1
@@ -61,6 +88,7 @@ function inheritedApi(overrides: Partial<Win32ProcessBindings> = {}): {
   return {
     api,
     events,
+    startupInfos,
     createProcessAsUserW,
     assignProcessToJobObject,
     resumeThread,
@@ -74,6 +102,7 @@ describe('spawnInheritedJobProcess', () => {
     const {
       api,
       events,
+      startupInfos,
       createProcessAsUserW,
       assignProcessToJobObject,
       resumeThread,
@@ -102,6 +131,23 @@ describe('spawnInheritedJobProcess', () => {
       expect.anything(),
       expect.anything(),
     )
+    expect(startupInfos[0]?.dwFlags).toBe(STARTF_USESTDHANDLES)
+  })
+
+  it('requests a hidden initial window without changing process creation flags', () => {
+    const { api, createProcessAsUserW, startupInfos } = inheritedApi()
+    spawnInheritedJobProcess(api, {
+      command: 'pwsh.exe',
+      args: ['-NoProfile'],
+      cwd: 'C:\\work',
+      token,
+      hideWindow: true,
+    })
+    expect(createProcessAsUserW.mock.calls[0]![6]).toBe(CREATE_SUSPENDED)
+    const startupInfo = startupInfos[0]
+    if (startupInfo === undefined) throw new Error('CreateProcessAsUserW did not receive STARTUPINFOW')
+    expect(startupInfo.dwFlags).toBe(STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW)
+    expect(startupInfo.wShowWindow).toBe(SW_HIDE)
   })
 
   it('restores already-enabled stdio and closes the Job when inheritance setup fails', () => {
@@ -190,6 +236,44 @@ describe('spawnInheritedJobProcess', () => {
 
 describe('wait and pipe cleanup', () => {
   const token = 70n as NativePtr
+
+  it('applies the hidden-window startup request to piped children', () => {
+    let nextPipe = 10n
+    let startupInfo: StartupInfoOutput | undefined
+    const createProcessAsUserWImpl: Win32ProcessBindings['createProcessAsUserW'] = (
+      _token, _app, _line, _pa, _ta, _inherit, _flags, _env, _cwd, startup, info,
+    ) => {
+      startupInfo = koffi.decode(startup, STARTUPINFOW) as StartupInfoOutput
+      koffi.encode(info, PROCESS_INFORMATION, {
+        hProcess: 60n,
+        hThread: 61n,
+        dwProcessId: 1234,
+        dwThreadId: 5678,
+      })
+      return 1
+    }
+    const createProcessAsUserW = vi.fn(createProcessAsUserWImpl)
+    const api = {
+      createPipe: vi.fn((readSlot: NativePtr, writeSlot: NativePtr) => {
+        koffi.encode(readSlot, PVOID, nextPipe++)
+        koffi.encode(writeSlot, PVOID, nextPipe++)
+        return 1
+      }),
+      setHandleInformation: vi.fn(() => 1),
+      createProcessAsUserW,
+      closeHandle: vi.fn(() => 1),
+    } as unknown as Win32ProcessBindings
+    expect(spawnPipedProcess(api, {
+      command: 'pwsh.exe',
+      args: ['-NoProfile'],
+      cwd: 'C:\\work',
+      token,
+      hideWindow: true,
+    })).toMatchObject({ pid: 1234, process: 60n })
+    if (startupInfo === undefined) throw new Error('CreateProcessAsUserW did not receive STARTUPINFOW')
+    expect(startupInfo.dwFlags).toBe(STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW)
+    expect(startupInfo.wShowWindow).toBe(SW_HIDE)
+  })
 
   it('waits when a pipe is temporarily empty before observing EOF', async () => {
     const closeHandle = vi.fn(() => 1)

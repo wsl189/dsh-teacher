@@ -164,6 +164,13 @@ Host service backing the generated `ctx.remote.directoryPicker` namespace. The s
 @Remote('pick') async pick(signal: AbortSignal): Promise<string | null>
 
 /**
+ * List filesystem roots for a Remote caller's in-app browser.
+ * @param signal - caller lifetime; abort stops the backend's discovery.
+ * @returns available absolute root jump targets.
+ */
+@Remote('listRoots') async listRoots(signal: AbortSignal): Promise<DirectoryEntry[]>
+
+/**
  * List one directory level for a Remote caller's in-app browser.
  * @param path - absolute directory to list; absent lists the home directory.
  * @param signal - caller lifetime; abort stops the backend's scan instead of

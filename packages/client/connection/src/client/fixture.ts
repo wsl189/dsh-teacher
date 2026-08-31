@@ -30,7 +30,10 @@ import type { TodoItem } from '@deepseek-ai/dsh-tool-todo/client'
 import type { CommandId } from '@deepseek-ai/dsh-commands/brand'
 import type { CommandDescriptor, CommandExecution, CommandResult } from '@deepseek-ai/dsh-commands/types'
 import type { CredentialInfo } from '@deepseek-ai/dsh-credentials/types'
-import type { DirectoryListing as FixtureDirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+import type {
+  DirectoryEntry as FixtureDirectoryEntry,
+  DirectoryListing as FixtureDirectoryListing,
+} from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { SettingsDescribeValue, SettingsNamespaceView } from '@deepseek-ai/dsh-settings/types'
 import { deriveEventMessage, foldSurface } from '@deepseek-ai/dsh-session/surface'
 import type { RpcResult } from './api.ts'
@@ -2267,6 +2270,9 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
     pick(): ConnectionRpcResult<string | null> {
       return { ok: true, value: `${FIXTURE_HOME}/Documents/project` }
     },
+    listRoots(): ConnectionRpcResult<FixtureDirectoryEntry[]> {
+      return { ok: true, value: [{ name: '/', path: '/', hidden: false }] }
+    },
     list(path?: string): ConnectionRpcResult<FixtureDirectoryListing> {
       const target = path ?? FIXTURE_HOME
       const children = childrenOf(target)
@@ -3426,6 +3432,7 @@ function createFixtureWorld(options: FixtureOptions): FixtureWorld {
         case 'fileReferences/list': return Promise.resolve(referenceRemotes.files(sessionId, args.query ?? ''))
         case 'sessionReferenceResolver/candidates': return Promise.resolve(referenceRemotes.sessions(sessionId, args.query ?? ''))
         case 'directoryPicker/pick': return Promise.resolve(directoryPickerRemotes.pick())
+        case 'directoryPicker/listRoots': return Promise.resolve(directoryPickerRemotes.listRoots())
         case 'directoryPicker/list': return Promise.resolve(directoryPickerRemotes.list(args.path))
         case 'directoryPicker/createDirectory':
           return Promise.resolve(directoryPickerRemotes.createDirectory(args.path ?? '', args.name ?? ''))

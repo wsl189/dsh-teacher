@@ -23,9 +23,10 @@
  * Known boundaries (inherent to restricted tokens, not this port):
  *  - writes are restricted; reads, network, and process visibility are NOT
  *    (WRITE_RESTRICTED intersects only write accesses);
- *  - console isolation is unavailable — children share the host console
- *    (CREATE_NO_WINDOW / CREATE_NEW_CONSOLE children die with
- *    STATUS_DLL_INIT_FAILED under the restriction);
+ *  - console creation-flag isolation is unavailable (CREATE_NO_WINDOW /
+ *    CREATE_NEW_CONSOLE children die with STATUS_DLL_INIT_FAILED under the
+ *    restriction). Children share an existing host console; a consoleless
+ *    host requests a hidden initial child window through STARTUPINFOW;
  *  - the private temp directory and every writable directory must be owned by the
  *    caller (owner-implicit WRITE_DAC);
  *  - grants are standing ACE mutations on real directories. WORKSPACE grants

@@ -1,7 +1,7 @@
 /** Workspace archive and directory UI capability. */
 
 import { Service, type Context } from '@deepseek-ai/cordis'
-import type { ClientRemote, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote, DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
 import type {
   ISessions,
@@ -35,6 +35,12 @@ export interface UiWorkspace {
    * @returns the selected directory, or null when cancelled.
    */
   pickDirectory(): Promise<string | null>
+  /**
+   * List Host filesystem roots available to the directory browser.
+   * @param signal - cancellation for root discovery.
+   * @returns absolute root jump targets.
+   */
+  listDirectoryRoots(signal?: AbortSignal): Promise<DirectoryEntry[]>
   /**
    * List one Host directory level.
    * @param path - directory path; absent selects the Host home.
@@ -140,6 +146,12 @@ class UiWorkspaceService extends Service implements UiWorkspace {
   async pickDirectory(): Promise<string | null> {
     const result = await this.directoryPicker.pick()
     if (!result.ok) throw new Error(`directory picker failed: ${result.error.message}`)
+    return result.value
+  }
+
+  async listDirectoryRoots(signal?: AbortSignal): Promise<DirectoryEntry[]> {
+    const result = await this.directoryPicker.listRoots(signal)
+    if (!result.ok) throw new DirectoryBrowseError(result.error)
     return result.value
   }
 

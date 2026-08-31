@@ -12,8 +12,10 @@ import {
 import { saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/desktop-update', import.meta.url))
+const CURRENT_EXPECTED = join(SNAPSHOT_DIR, 'current.expected.md')
 const AVAILABLE_EXPECTED = join(SNAPSHOT_DIR, 'available.expected.md')
 const MODE = webSnapshotMode()
+const CURRENT_VERSION = '1.0.7-rc1'
 const VERSION = '9.9.9'
 
 describe('web e2e: desktop update action', () => {
@@ -26,13 +28,13 @@ describe('web e2e: desktop update action', () => {
     scaffold = await launchWebScaffold({})
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
-    await page.addInitScript(() => {
+    await page.addInitScript((currentVersion) => {
       type State =
-        | { status: 'up-to-date' }
+        | { status: 'up-to-date'; version: string }
         | { status: 'available'; version: string }
         | { status: 'downloading'; version: string; percent: number }
         | { status: 'downloaded'; version: string }
-      let state: State = { status: 'up-to-date' }
+      let state: State = { status: 'up-to-date', version: currentVersion }
       let nextId = 1
       const listeners = new Map<number, (next: State) => void>()
       const publish = (next: State): void => {
@@ -57,7 +59,7 @@ describe('web e2e: desktop update action', () => {
       })
       window.__desktopUpdateInstalls = 0
       window.__publishDesktopUpdate = publish
-    })
+    }, CURRENT_VERSION)
     tripwire = watchConsole(page)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await page.waitForSelector('[data-sidebar-root]', { timeout: 30_000 })
@@ -68,18 +70,28 @@ describe('web e2e: desktop update action', () => {
     await scaffold?.close()
   })
 
-  it('stays hidden when current and exposes the available Release beside Settings', async () => {
+  it('shows the current version and exposes the available Release beside Settings', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-desktop-update-available'))
     const settings = page.getByRole('button', { name: '设置', exact: true })
     await settings.waitFor({ timeout: 10_000 })
-    expect(await page.locator('[data-desktop-update-status]').count()).toBe(0)
+    const current = page.getByRole('status', { name: `当前版本 ${CURRENT_VERSION}` })
+    await current.waitFor({ timeout: 10_000 })
+    expect(await current.textContent()).toBe(`v${CURRENT_VERSION}`)
+    const settingsBox = await settings.boundingBox()
+    const currentBox = await current.boundingBox()
+    if (settingsBox === null || currentBox === null) throw new Error('sidebar footer status has no layout box')
+    expect(currentBox.x).toBeGreaterThanOrEqual(settingsBox.x + settingsBox.width)
+    await compareOrRefreshGolden(
+      CURRENT_EXPECTED,
+      await captureStableAria(page, '[data-desktop-update-status="up-to-date"]', scaffold.workspaceCwd),
+      MODE,
+    )
 
     await page.evaluate((version) => {
       window.__publishDesktopUpdate({ status: 'available', version })
     }, VERSION)
     const update = page.getByRole('button', { name: `发现新版本 ${VERSION}，下载更新` })
     await update.waitFor({ timeout: 10_000 })
-    const settingsBox = await settings.boundingBox()
     const updateBox = await update.boundingBox()
     if (settingsBox === null || updateBox === null) throw new Error('sidebar footer actions have no layout box')
     expect(updateBox.x).toBeGreaterThanOrEqual(settingsBox.x + settingsBox.width)
@@ -110,7 +122,7 @@ describe('web e2e: desktop update action', () => {
   })
 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['available.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['available.expected.md', 'current.expected.md'])
   })
 })
 
@@ -118,7 +130,7 @@ declare global {
   interface Window {
     __desktopUpdateInstalls: number
     __publishDesktopUpdate: (state:
-      | { status: 'up-to-date' }
+      | { status: 'up-to-date'; version: string }
       | { status: 'available'; version: string }
       | { status: 'downloading'; version: string; percent: number }
       | { status: 'downloaded'; version: string },

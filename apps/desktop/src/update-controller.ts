@@ -80,7 +80,7 @@ export class DesktopUpdateController {
     })
     updater.on('update-not-available', () => {
       this.targetVersion = undefined
-      this.set({ status: 'up-to-date' })
+      this.set({ status: 'up-to-date', version: options.currentVersion })
     })
     updater.on('download-progress', (progress) => {
       if (this.targetVersion === undefined) return
@@ -99,7 +99,7 @@ export class DesktopUpdateController {
   /** Start the one automatic check performed at app startup. */
   async start(): Promise<void> {
     if (!this.options.enabled) {
-      this.set({ status: 'up-to-date' })
+      this.set({ status: 'up-to-date', version: this.options.currentVersion })
       return
     }
     this.set({ status: 'checking' })
@@ -140,7 +140,7 @@ export class DesktopUpdateController {
     const message = reason instanceof Error ? reason.message : String(reason)
     if (this.targetVersion === undefined) {
       this.options.logger.warn(`desktop update check failed: ${message}`)
-      this.set({ status: 'up-to-date' })
+      this.set({ status: 'up-to-date', version: this.options.currentVersion })
       return
     }
     this.options.logger.warn(`desktop update for ${this.targetVersion} failed: ${message}`)

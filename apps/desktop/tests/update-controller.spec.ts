@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import {
   DesktopUpdateController, type AutoUpdaterEventMap, type AutoUpdaterLike,
 } from '../src/update-controller.ts'
-import type { DesktopUpdateState } from '../src/update-protocol.ts'
+import { isDesktopUpdateState, type DesktopUpdateState } from '../src/update-protocol.ts'
 
 class FakeUpdater implements AutoUpdaterLike {
   autoDownload = true
@@ -62,7 +62,7 @@ describe('DesktopUpdateController', () => {
     expect(b.updater.allowPrerelease).toBe(true)
     await b.controller.start()
     expect(b.updater.checkForUpdates).not.toHaveBeenCalled()
-    expect(b.controller.getState()).toEqual({ status: 'up-to-date' })
+    expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0-rc.1' })
   })
 
   it('projects availability, progress, download completion, and the restart install', async () => {
@@ -86,7 +86,7 @@ describe('DesktopUpdateController', () => {
     const b = setup()
     b.updater.checkForUpdates.mockRejectedValueOnce(new Error('no releases'))
     await b.controller.start()
-    expect(b.controller.getState()).toEqual({ status: 'up-to-date' })
+    expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
     expect(b.logger.warn).toHaveBeenCalledWith('desktop update check failed: no releases')
 
     b.updater.emitAvailable('2.0.0')
@@ -100,10 +100,17 @@ describe('DesktopUpdateController', () => {
     await expect(b.controller.download()).rejects.toThrow('no desktop update is available')
     await expect(b.controller.install()).rejects.toThrow('desktop update is not downloaded')
     b.updater.emitError(new Error('provider unavailable'))
-    expect(b.controller.getState()).toEqual({ status: 'up-to-date' })
+    expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
     b.updater.emitUnavailable('1.0.0')
-    expect(b.controller.getState()).toEqual({ status: 'up-to-date' })
+    expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
     b.updater.emitChecking()
     expect(b.controller.getState()).toEqual({ status: 'checking' })
+  })
+})
+
+describe('desktop update IPC protocol', () => {
+  it('requires the installed version in an up-to-date snapshot', () => {
+    expect(isDesktopUpdateState({ status: 'up-to-date', version: '1.0.0' })).toBe(true)
+    expect(isDesktopUpdateState({ status: 'up-to-date' })).toBe(false)
   })
 })

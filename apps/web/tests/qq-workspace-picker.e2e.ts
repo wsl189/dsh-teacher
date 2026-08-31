@@ -68,6 +68,54 @@ describe('web e2e: QQ bot workspace directory picker', () => {
 
   it('lists Host directories instead of invoking an operating-system dialog', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-qq-workspace-picker'))
+    let rootRequests = 0
+    await page.route('**/api/directoryPicker/listRoots', async (route) => {
+      const envelope = route.request().postDataJSON() as { rpcId: string }
+      rootRequests += 1
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          type: 'server-response',
+          rpcId: envelope.rpcId,
+          result: {
+            ok: true,
+            value: [
+              { name: 'C:\\', path: 'C:\\', hidden: false },
+              { name: 'D:\\', path: 'D:\\', hidden: false },
+            ],
+          },
+        }),
+      })
+    })
+    await page.route('**/api/directoryPicker/list', async (route) => {
+      const envelope = route.request().postDataJSON() as {
+        rpcId: string
+        payload: { args: { path?: string } }
+      }
+      if (envelope.payload.args.path !== 'D:\\') {
+        await route.fallback()
+        return
+      }
+      await route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({
+          type: 'server-response',
+          rpcId: envelope.rpcId,
+          result: {
+            ok: true,
+            value: {
+              path: 'D:\\',
+              home: 'C:\\Users\\teacher',
+              crumbs: [{ name: 'D:\\', path: 'D:\\', hidden: false }],
+              entries: [{ name: '跨盘课程', path: 'D:\\跨盘课程', hidden: false }],
+              truncated: false,
+            },
+          },
+        }),
+      })
+    })
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const settings = page.getByRole('dialog', { name: '设置' })
     await settings.waitFor({ timeout: 10_000 })
@@ -81,12 +129,18 @@ describe('web e2e: QQ bot workspace directory picker', () => {
 
     const picker = page.getByRole('dialog', { name: '选择机器人工作区目录' })
     await picker.getByRole('button', { name: '选择此目录' }).waitFor({ timeout: 10_000 })
+    await picker.getByRole('button', { name: '课程资料' }).waitFor({ timeout: 10_000 })
+    const drive = picker.getByRole('combobox', { name: '选择磁盘' })
+    await drive.waitFor({ timeout: 10_000 })
     await compareOrRefreshGolden(
       PICKER_EXPECTED,
       await captureStableAria(page, '.dim-directoryPicker', scaffold.workspaceCwd),
       MODE,
     )
-    expect(await picker.getByRole('button', { name: '课程资料' }).count()).toBe(1)
+    await drive.selectOption('D:\\')
+    await picker.getByRole('button', { name: '跨盘课程' }).waitFor({ timeout: 10_000 })
+    expect(await drive.inputValue()).toBe('D:\\')
+    expect(rootRequests).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

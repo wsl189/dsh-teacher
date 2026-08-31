@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Users who cannot reach an OS chooser still pick a workspace directory through `dsh-host-directory-picker-browse`: it provides one-level directory listing and child-directory creation over Node's standard library, and nothing renders on the host display — so it serves the remote clients the native backend cannot reach. Listings return directories only, name-sorted, with symlink-to-directory following and a host-owned `hidden` flag; creation is non-recursive and validates a single path segment. One composition row also fills the workspace flow's directory holes with the in-app **Select Workspace Directory** dialog.
+Users who cannot reach an OS chooser still pick a workspace directory through `dsh-host-directory-picker-browse`: it provides filesystem-root discovery, one-level directory listing, and child-directory creation over Node's standard library, and nothing renders on the host display — so it serves the remote clients the native backend cannot reach. Listings return directories only, name-sorted, with symlink-to-directory following and a host-owned `hidden` flag; creation is non-recursive and validates a single path segment. One composition row also fills the workspace flow's directory holes with the in-app **Select Workspace Directory** dialog.
 
 ## Table of Contents
 
@@ -25,7 +25,11 @@ Users who cannot reach an OS chooser still pick a workspace directory through `d
 <a id="use-this-package"></a>
 ## Use this package
 
-Compose this backend when a workspace directory must be chosen without an OS chooser — remote browsers, SSH-forwarded sessions, or unattended hosts. The workspace flow drives `directoryPicker/list` and `directoryPicker/createDirectory`; both primitives answer from the host filesystem.
+Compose this backend when a workspace directory must be chosen without an OS chooser — remote browsers, SSH-forwarded sessions, or unattended hosts. The workspace flow drives `directoryPicker/listRoots`, `directoryPicker/list`, and `directoryPicker/createDirectory`; all three primitives answer from the host filesystem.
+
+### Discovering filesystem roots
+
+`listRoots(signal)` returns the absolute roots the browser can jump between. POSIX answers `/`. Windows probes the drive-qualified roots `A:\` through `Z:\` concurrently, omits absent or inaccessible drives, and retains the home directory's root as the known listing anchor; a UNC-based home adds its share root after the drive letters. Discovery is lazy and cancellable, so clients call it once per dialog opening while the initial home listing renders independently.
 
 ### Listing a directory
 
@@ -37,7 +41,7 @@ Compose this backend when a workspace directory must be chosen without an OS cho
 
 ### Observable failures
 
-Both primitives refuse a path that is not fully qualified — relative forms, and on Windows the rooted drive-less forms (`\foo`, `/foo`) and incomplete UNC prefixes that `isAbsolute` accepts — with `directory-unreadable` or `directory-create-failed`, instead of resolving it under the host process working directory. Creation of an existing child answers `directory-exists`. A caller's `AbortSignal` stops an in-flight scan, so a disconnect or timeout does not leave the scan outliving the caller.
+The listing and creation primitives refuse a path that is not fully qualified — relative forms, and on Windows the rooted drive-less forms (`\foo`, `/foo`) and incomplete UNC prefixes that `isAbsolute` accepts — with `directory-unreadable` or `directory-create-failed`, instead of resolving it under the host process working directory. Creation of an existing child answers `directory-exists`. A caller's `AbortSignal` rejects an in-flight level or root request promptly; an unavailable root probe is omitted rather than failing the whole root list.
 
 ### Configuration
 
@@ -65,7 +69,7 @@ The backend streams one directory level through a bounded name-sorted window so 
 
 ### Abort and probing
 
-Every filesystem await races the caller's signal (`raceAbort`), so a stalled network filesystem cannot keep a departed caller's request alive; an abandoned read's late settlement is swallowed. Symlink enterability is decided by a `stat` probe — failure means not enterable — and a windowed broken symlink is not backfilled from beyond the window, because an eviction already marked the level truncated.
+Every filesystem await races the caller's signal (`raceAbort`), so a stalled network filesystem cannot keep a departed caller's request alive; an abandoned read's late settlement is swallowed. Root discovery uses the same raced `stat` probe over Windows drive letters. Symlink enterability is also decided by `stat` — failure means not enterable — and a windowed broken symlink is not backfilled from beyond the window, because an eviction already marked the level truncated.
 
 ### Source map
 
@@ -108,7 +112,7 @@ None; this package neither assembles nor sends a provider request.
 These limits define where the browse interaction is incomplete or intentionally unscoped. They are current package constraints, not a task backlog.
 
 - **Windows hidden attribute is not read** — Node dirents do not expose `FILE_ATTRIBUTE_HIDDEN`, so `hidden` means dot-prefixed on every platform until a native probe is worth its cost.
-- **No drive-root enumeration** — on Windows the ancestry stops at the drive root; crossing drives waits for the browser UI's path-entry affordance rather than an enumeration primitive here.
+- **No arbitrary network-share discovery** — Windows discovery covers drive letters and a UNC home share; it cannot enumerate unrelated UNC servers or shares without a configured source.
 - **Whole-filesystem scope** — there is no per-deployment browse-root restriction; `workspace.create` accepts arbitrary paths, so a root here would be UX scoping rather than a security boundary.
 
 <a id="dev-note"></a>

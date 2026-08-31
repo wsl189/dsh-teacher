@@ -1,6 +1,6 @@
-/* Compact desktop-only action paired with the Settings trigger at the sidebar foot. */
+/* Compact desktop-only update status and actions beside Settings at the sidebar foot. */
 
-.button {
+.entry {
   position: relative;
   flex: none;
   display: inline-flex;
@@ -16,18 +16,27 @@
   overflow: hidden;
   background: var(--dsw-alias-interactive-bg-hover);
   color: var(--dsw-alias-label-primary);
-  cursor: pointer;
+  cursor: default;
   font-family: inherit;
   font-size: 14px;
   line-height: 22px;
 }
 
-.button:hover:not(:disabled) {
+.action {
+  cursor: pointer;
+}
+
+.action:hover:not(:disabled) {
   background: var(--dsw-specific-sidebar-nav-item-active);
 }
 
-.button:disabled {
+.action:disabled {
   cursor: default;
+  color: var(--dsw-alias-label-secondary);
+}
+
+.current {
+  background: transparent;
   color: var(--dsw-alias-label-secondary);
 }
 

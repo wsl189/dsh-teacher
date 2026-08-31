@@ -6,7 +6,7 @@ import type {
 import type {
   IWorkspaces, WorkspaceId, WorkspaceSnapshot, WorkspaceView,
 } from '@deepseek-ai/dsh-api-workspace-controller/client'
-import type { ClientRemote, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { ClientRemote, DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { SessionId } from '@deepseek-ai/dsh-session/types'
 import { DirectoryBrowseError, UiWorkspaceService } from '../src/client/navigation.ts'
@@ -160,12 +160,15 @@ class FakeDirectoryPicker {
   readonly calls: { method: string; payload: unknown }[] = []
 
   onPick: () => Promise<RemoteResult<string | null>> = () => Promise.resolve({ ok: true, value: null })
+  onListRoots: () => Promise<RemoteResult<DirectoryEntry[]>> =
+    () => Promise.resolve({ ok: true, value: [{ name: '/', path: '/', hidden: false }] })
   onList: () => Promise<RemoteResult<DirectoryListing>> = () => Promise.resolve({ ok: true, value: listing })
   onCreateDirectory: () => Promise<RemoteResult<string>> =
     () => Promise.resolve({ ok: true, value: '/home/u/new' })
 
   readonly remote: ClientRemote['directoryPicker'] = {
     pick: () => this.record('pick', {}, this.onPick()),
+    listRoots: () => this.record('listRoots', {}, this.onListRoots()),
     list: (path?: string) => this.record('list', { path }, this.onList()),
     createDirectory: (path: string, name: string) =>
       this.record('createDirectory', { path, name }, this.onCreateDirectory()),
@@ -429,6 +432,10 @@ describe('UiWorkspaceService', () => {
     await expect(b.uiWorkspace.pickDirectory()).resolves.toBeNull()
     expect(b.directoryPicker.callsOf('pick')).toEqual([{}, {}])
 
+    await expect(b.uiWorkspace.listDirectoryRoots()).resolves.toEqual([
+      { name: '/', path: '/', hidden: false },
+    ])
+    expect(b.directoryPicker.callsOf('listRoots')).toEqual([{}])
     await expect(b.uiWorkspace.listDirectory()).resolves.toEqual(listing)
     await expect(b.uiWorkspace.listDirectory('/home/u')).resolves.toEqual(listing)
     expect(b.directoryPicker.callsOf('list')).toEqual([{ path: undefined }, { path: '/home/u' }])
@@ -438,6 +445,12 @@ describe('UiWorkspaceService', () => {
       ok: false, error: { code: 'internal', message: 'no chooser', details: {} },
     })
     await expect(b.uiWorkspace.pickDirectory()).rejects.toThrow('directory picker failed: no chooser')
+    b.directoryPicker.onListRoots = () => Promise.resolve({
+      ok: false, error: { code: 'internal', message: 'drive scan failed', details: {} },
+    })
+    await expect(b.uiWorkspace.listDirectoryRoots()).rejects.toMatchObject({
+      rpcError: { code: 'internal' },
+    })
     b.directoryPicker.onList = () => Promise.resolve({
       ok: false, error: { code: 'directory-unreadable', message: 'denied', details: { path: '/private' } },
     })

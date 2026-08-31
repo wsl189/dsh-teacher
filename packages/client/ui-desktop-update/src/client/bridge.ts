@@ -3,7 +3,7 @@
 /** Update lifecycle projected by the desktop main process. */
 export type DesktopUpdateState =
   | { status: 'checking' }
-  | { status: 'up-to-date' }
+  | { status: 'up-to-date'; version: string }
   | { status: 'available'; version: string }
   | { status: 'downloading'; version: string; percent: number }
   | { status: 'downloaded'; version: string }
@@ -19,8 +19,8 @@ export function isDesktopUpdateState(value: unknown): value is DesktopUpdateStat
   const candidate = value as Record<string, unknown>
   switch (candidate.status) {
     case 'checking':
-    case 'up-to-date':
       return true
+    case 'up-to-date':
     case 'available':
     case 'downloaded':
       return typeof candidate.version === 'string' && candidate.version.length > 0

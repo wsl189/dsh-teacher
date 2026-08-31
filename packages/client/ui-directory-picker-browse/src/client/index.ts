@@ -2,7 +2,8 @@
  * Browser half of the browse directory-picker backend: fills ui-workspace's
  * two directory-flow holes with the in-app Select Workspace Directory dialog
  * (figma `Harness` 813-23126 family), driving the node half's
- * `directoryPicker/list`/`directoryPicker/createDirectory` primitives.
+ * `directoryPicker/listRoots`/`directoryPicker/list`/
+ * `directoryPicker/createDirectory` primitives.
  * Mounting this package therefore composes both sides of the browse
  * interaction with one cordis.yml row; no client code branches on a
  * capability kind. The dialog's copy is locale-registered here — the flow
@@ -37,6 +38,7 @@ export function apply(ctx: ClientContext): void {
     const dictionaries: [locale: string, dict: Record<string, string>][] = [
       ['zh', {
         'browser.title': '选择工作区目录',
+        'browser.root': '磁盘',
         'browser.home': '主目录',
         'browser.newFolder': '新建文件夹',
         'browser.folderName': '文件夹名称',
@@ -52,6 +54,7 @@ export function apply(ctx: ClientContext): void {
       }],
       ['en', {
         'browser.title': 'Select Workspace Directory',
+        'browser.root': 'Drive',
         'browser.home': 'Home',
         'browser.newFolder': 'New folder',
         'browser.folderName': 'Folder name',
@@ -76,6 +79,7 @@ export function apply(ctx: ClientContext): void {
   }, 'directory-picker-browse: dialog dictionaries')
 
   const injected = (): BrowseFlowInjected => ({
+    listDirectoryRoots: signal => ctx.uiWorkspace.listDirectoryRoots(signal),
     listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
     createDirectory: (path, name) => ctx.uiWorkspace.createDirectory(path, name),
     t: ctx.locale.bind(LOCALE_NS),

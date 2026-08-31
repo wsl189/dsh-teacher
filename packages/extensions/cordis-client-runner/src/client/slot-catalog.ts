@@ -2118,11 +2118,11 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     key: 'sidebar.update',
     kind: 'single',
     scope: 'root',
-    summary: 'Optional desktop-update action to the right of Settings in the expanded footer row.',
-    doc: 'Optional desktop-update action to the right of Settings in the expanded\nfooter row. Browser-only deployments leave the seat empty.',
+    summary: 'Optional desktop-update status or action to the right of Settings in the expanded footer row.',
+    doc: 'Optional desktop-update status or action to the right of Settings in the expanded\nfooter row. Browser-only deployments leave the seat empty.',
     registerOptions: [],
     ownerProps: [
-      '/** Owner share of the optional desktop-update action beside Settings. */\nexport interface SidebarUpdateOwnerProps {\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
+      '/** Owner share of the optional desktop-update surface beside Settings. */\nexport interface SidebarUpdateOwnerProps {\n  /** Whether the sidebar renders wide content (false = 56px rail). */\n  wide: boolean\n}',
     ],
     ownerPropsReferences: [],
     standardProps: [

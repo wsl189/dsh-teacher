@@ -1,13 +1,26 @@
 /** Built-in better-sidebar workbench through the shipped Web composition. */
 
 import { readFile } from 'node:fs/promises'
+import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
-import { launchWebScaffold, seedSession, watchConsole, type WebScaffold } from './scaffold.ts'
+import {
+  assertFixtureInventory,
+  captureStableAria,
+  compareOrRefreshGolden,
+  launchWebScaffold,
+  seedSession,
+  watchConsole,
+  webSnapshotMode,
+  type WebScaffold,
+} from './scaffold.ts'
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
+const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/better-sidebar', import.meta.url))
+const FREE_WINDOW_MENU_EXPECTED = join(SNAPSHOT_DIR, 'free-window-menu.expected.md')
+const MODE = webSnapshotMode()
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.jsonl', import.meta.url))
 const PDF_FIXTURE = fileURLToPath(new URL(
   '../../cli/tests/profiles/acp/tests/snapshots/read-document/workspace/roster.pdf',
@@ -61,6 +74,36 @@ describe('web e2e: built-in better-sidebar workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('moves the Files tab into a free window and docks it back', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-better-sidebar-free-window'))
+    const workbench = page.locator('[data-dsh-better-sidebar]')
+    const filesTab = workbench.locator('[title="Files"][draggable="true"]').first()
+    await filesTab.waitFor({ timeout: 15_000 })
+    await filesTab.click({ button: 'right' })
+
+    const menu = page.locator('[role="menu"]')
+    await menu.getByRole('menuitem', { name: 'Move to Free Window' }).waitFor({ timeout: 15_000 })
+    await compareOrRefreshGolden(
+      FREE_WINDOW_MENU_EXPECTED,
+      await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await menu.getByRole('menuitem', { name: 'Move to Free Window' }).click()
+
+    const freeWindow = page.locator('[data-dsh-float-window]')
+    await freeWindow.waitFor({ timeout: 15_000 })
+    const freeContent = freeWindow.locator('[class*="floatContent"]')
+    expect((await freeContent.boundingBox())?.width).toBeGreaterThan(200)
+
+    await freeWindow.locator('[class*="floatHeader"]').click({ button: 'right' })
+    const dock = page.getByRole('menuitem', { name: 'Dock Back to Sidebar' })
+    await dock.waitFor({ timeout: 15_000 })
+    await dock.click()
+    await freeWindow.waitFor({ state: 'detached', timeout: 15_000 })
+    await workbench.locator('[title="Files"][draggable="true"]').first().waitFor({ timeout: 15_000 })
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('opens a browser-held composer upload in the right sidebar', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-better-sidebar-upload-preview'))
     const toggles = page.locator('[data-dsh-toggle-cluster]')
@@ -105,4 +148,7 @@ describe('web e2e: built-in better-sidebar workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('keeps its snapshot inventory closed', async () => {
+    await assertFixtureInventory(SNAPSHOT_DIR, ['free-window-menu.expected.md'])
+  })
 })

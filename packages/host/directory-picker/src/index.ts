@@ -12,7 +12,7 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
-import type { DirectoryListing } from './types.ts'
+import type { DirectoryEntry, DirectoryListing } from './types.ts'
 
 export type { DirectoryEntry, DirectoryListing } from './types.ts'
 
@@ -34,6 +34,15 @@ export interface DirectoryPickerNativeCapability {
  */
 export interface DirectoryPickerBrowseCapability {
   kind: 'browse'
+  /**
+   * List the host filesystem roots an in-app browser may navigate to.
+   * @param signal - caller lifetime; abort stops root discovery and rejects
+   * with the abort reason.
+   * @returns available filesystem roots as absolute jump targets. POSIX has
+   * one `/` root; Windows includes available drive roots and the Host home
+   * share when it is UNC-based.
+   */
+  listRoots(signal?: AbortSignal): Promise<DirectoryEntry[]>
   /**
    * List one directory level.
    * @param path - absolute directory to list; absent lists the home directory.

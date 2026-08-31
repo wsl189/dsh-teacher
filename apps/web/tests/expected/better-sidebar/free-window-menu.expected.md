@@ -1,0 +1,6 @@
+- menu:
+  - menuitem "Move to Free Window"
+  - menuitem "Close"
+  - menuitem "Close Other Tabs" [disabled]
+  - menuitem "Close Tabs to the Left" [disabled]
+  - menuitem "Close Tabs to the Right" [disabled]

@@ -2,6 +2,10 @@
 
 /** STARTUPINFOW uses the standard input, output, and error handles. */
 export const STARTF_USESTDHANDLES = 0x00000100
+/** STARTUPINFOW carries the child's initial window-display request. */
+export const STARTF_USESHOWWINDOW = 0x00000001
+/** ShowWindow selector that keeps a newly created window hidden. */
+export const SW_HIDE = 0
 /** HandleInformation flag that permits child inheritance. */
 export const HANDLE_FLAG_INHERIT = 0x1
 /** Infinite WaitForSingleObject timeout. */

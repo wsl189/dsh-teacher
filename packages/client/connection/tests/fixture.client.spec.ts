@@ -17,7 +17,7 @@ import {
 import type {
   ClientConnectionRpc, ConnectionRpcResult,
 } from '../src/rpc.ts'
-import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 import type { ModelCatalog } from '@deepseek-ai/dsh-api-session-controller/types'
 import type { ModelSelection } from '@deepseek-ai/dsh-api-session-controller/types'
 
@@ -291,6 +291,7 @@ type FixtureTestApi = {
   /** The directory-picking Remote namespace as the fixture serves it. */
   readonly directoryPickerRemote: {
     pick: () => Promise<ConnectionRpcResult<string | null>>
+    listRoots: () => Promise<ConnectionRpcResult<DirectoryEntry[]>>
     list: (path?: string) => Promise<ConnectionRpcResult<DirectoryListing>>
     createDirectory: (path: string, name: string) => Promise<ConnectionRpcResult<string>>
   }
@@ -311,6 +312,8 @@ function createFixtureApi(options: FixtureOptions = {}): FixtureTestApi {
     directoryPickerRemote: {
       pick: () => rpc.call('/api', 'directoryPicker/pick', { args: {} }) as
         Promise<ConnectionRpcResult<string | null>>,
+      listRoots: () => rpc.call('/api', 'directoryPicker/listRoots', { args: {} }) as
+        Promise<ConnectionRpcResult<DirectoryEntry[]>>,
       list: (path?: string) => rpc.call('/api', 'directoryPicker/list', { args: { path } }) as
         Promise<ConnectionRpcResult<DirectoryListing>>,
       createDirectory: (path: string, name: string) =>
@@ -1104,6 +1107,10 @@ describe('createFixtureApi', () => {
 
   it('createDirectory under the root mints /name whose listing and crumbs share the identity', async () => {
     const api = createFixtureApi()
+    await expect(api.directoryPickerRemote.listRoots()).resolves.toEqual({
+      ok: true,
+      value: [{ name: '/', path: '/', hidden: false }],
+    })
     const created = await api.directoryPickerRemote.createDirectory('/', 'srv')
     if (!created.ok) throw new Error('create failed')
     expect(created.value).toBe('/srv')

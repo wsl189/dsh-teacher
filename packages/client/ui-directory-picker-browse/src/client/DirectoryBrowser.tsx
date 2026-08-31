@@ -48,6 +48,8 @@ import css from './DirectoryBrowser.module.css'
 export interface DirectoryBrowserProps {
   /** Dialog visibility (owner-local; closed unmounts nothing but resets on reopen). */
   open: boolean
+  /** List Host filesystem roots; Windows answers its available drive roots. */
+  listDirectoryRoots: (signal?: AbortSignal) => Promise<DirectoryEntry[]>
   /**
    * List one directory level (absent path = the Host home directory); the
    * signal aborts a superseded scan on the wire. A rejection may carry
@@ -131,6 +133,11 @@ function displayCrumbs(listing: DirectoryListing, homeLabel: string): DirectoryE
  */
 function separatorOf(listing: DirectoryListing): '\\' | '/' {
   return listing.home.includes('\\') ? '\\' : '/'
+}
+
+/** Case-fold Windows roots while keeping POSIX paths byte-sensitive. */
+function rootKey(path: string): string {
+  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path
 }
 
 /** The listed level as a directory part: its own path, separator-terminated (the root already is). */
@@ -270,12 +277,16 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
  * @param props - owner-controlled browser props.
  * @returns the dialog element (null while closed, via Modal).
  */
-export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen, onClose, busy, t }: DirectoryBrowserProps) {
+export function DirectoryBrowser({
+  open, listDirectoryRoots, listDirectory, createDirectory, onOpen, onClose, busy, t,
+}: DirectoryBrowserProps) {
   // Miller state: the listed level, the selected row in it, and the selected
   // folder's own listing (the right column; null while nothing is selected).
   const [parent, setParent] = useState<DirectoryListing | null>(null)
   const [selected, setSelected] = useState<DirectoryEntry | null>(null)
   const [child, setChild] = useState<DirectoryListing | null>(null)
+  const [roots, setRoots] = useState<DirectoryEntry[]>([])
+  const [rootError, setRootError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   // Derived from `loading` and `scanWindow` by the slow-scan effect below:
   // true only once the current listing call has been in flight for
@@ -298,6 +309,8 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   // request too — the Host stops scanning — instead of only discarding the
   // eventual result while the scan keeps consuming host resources.
   const scanController = useRef<AbortController | null>(null)
+  const rootsController = useRef<AbortController | null>(null)
+  const rootsRequestSeq = useRef(0)
   // Bumped on every open/close edge: settlements from a previous open (a
   // pending creation included) must never mutate a reopened dialog.
   const openGeneration = useRef(0)
@@ -314,6 +327,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     requestSeq.current += 1
     openGeneration.current += 1
     scanController.current?.abort()
+    rootsController.current?.abort()
   }, [])
   const compositionGuard = {
     onCompositionStart: () => { composingRef.current = true },
@@ -483,6 +497,34 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
   const navigate = useCallback((path?: string) => {
     land(path, { closeEditor: true, announce: true })
   }, [land])
+
+  // Root discovery is independent of level navigation: the home listing can
+  // render immediately while Windows drive probes settle in parallel. One
+  // discovery runs per dialog opening and closes with that opening.
+  useEffect(() => {
+    const request = ++rootsRequestSeq.current
+    rootsController.current?.abort()
+    rootsController.current = null
+    setRoots([])
+    setRootError(null)
+    if (!open) return
+    const controller = new AbortController()
+    rootsController.current = controller
+    void listDirectoryRoots(controller.signal).then(
+      (next) => {
+        if (request !== rootsRequestSeq.current) return
+        setRoots(next)
+      },
+      (reason: unknown) => {
+        if (request !== rootsRequestSeq.current) return
+        setRootError(failureText(reason))
+      },
+    )
+    return () => {
+      rootsRequestSeq.current += 1
+      controller.abort()
+    }
+  }, [open, listDirectoryRoots])
 
   // Editor-close focus parking (consumed by the refocus effect below the
   // miller-row ref): a pick parks on the selection's row, Enter and an
@@ -696,6 +738,14 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
     ? null
     : readDraft(crumbSource, pathDraft, scanned.current).tail
   const crumbs = crumbSource === null ? [] : displayCrumbs(crumbSource, t('browser.home'))
+  const currentRoot = crumbSource?.crumbs[0] ?? null
+  const matchedRoot = currentRoot === null
+    ? undefined
+    : roots.find(root => rootKey(root.path) === rootKey(currentRoot.path))
+  const rootOptions = currentRoot !== null && matchedRoot === undefined
+    ? [...roots, currentRoot]
+    : roots
+  const activeRootPath = matchedRoot?.path ?? currentRoot?.path ?? ''
   const crumbTail = crumbs.at(-1)?.path
   useEffect(() => {
     const trail = crumbTrailRef.current
@@ -816,7 +866,24 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
         }}
       >
         <div className={css.header}>
-          <h2 className={css.title}>{t('browser.title')}</h2>
+          <div className={css.titleRow}>
+            <h2 className={css.title}>{t('browser.title')}</h2>
+            {rootOptions.length > 1 && currentRoot !== null && (
+              <select
+                className={css.rootSelect}
+                aria-label={t('browser.root')}
+                value={activeRootPath}
+                disabled={parentInert}
+                onChange={(event) => {
+                  if (rootKey(event.target.value) === rootKey(currentRoot.path)) return
+                  setPathDraft(null)
+                  navigate(event.target.value)
+                }}
+              >
+                {rootOptions.map(root => <option key={root.path} value={root.path}>{root.name}</option>)}
+              </select>
+            )}
+          </div>
           <div className={css.crumbBar}>
             {pathDraft === null
               ? (
@@ -959,6 +1026,7 @@ export function DirectoryBrowser({ open, listDirectory, createDirectory, onOpen,
           * on every navigation away from it. */}
           {(parent?.truncated === true || child?.truncated === true)
           && <div className={css.status} role="status">{t('browser.truncated')}</div>}
+          {rootError !== null && <div className={css.error} role="alert">{rootError}</div>}
           {error !== null && <div className={css.error} role="alert">{error}</div>}
         </div>
         <div className={css.footerBar}>

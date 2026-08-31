@@ -30,15 +30,9 @@ Agent（智能体）可以读取和编辑工作区文件、运行命令、委派
 
 ## 预览工作区文件
 
-标准 Web profile 内置 better-sidebar 工作台。打开页面右侧边缘的入口，选择 **Files**，然后打开工作区文件。Markdown、图片和 PDF 无需额外安装即可内联预览。
+标准 Web profile 内置 better-sidebar 工作台。打开页面右侧边缘的入口并选择 **Files**，即可浏览和编辑工作区文件。工作台还提供源代码管理、终端与本机回环地址浏览器；需要独立移动某个界面时，可以右键点击标签页并选择 **Move to Free Window**。
 
-从工作区预览新版 Word、Excel 与 PowerPoint 文件需要安装外部 Office 预览插件：
-
-```sh
-dsh plugin --profile web add @huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.0
-```
-
-Office 预览插件使用 AGPL-3.0，因此安装在用户的 Web profile 中，不随 MIT 许可证的 Harness 运行时一起分发。安装后请重启 `dsh web` 并硬刷新浏览器。该插件支持 `.docx`、`.xlsx` 与 `.pptx`；旧版 `.doc`、`.xls` 与 `.ppt` 文件仍只能下载。
+Markdown 预览支持本地图片、经过净化的内联 HTML 与目录。图片和 PDF 可以内联显示，内置 Office 预览插件还支持 `.docx`、`.xlsx` 与 `.pptx`；旧版 `.doc`、`.xls` 与 `.ppt` 文件仍只能下载。Office 预览插件使用 AGPL-3.0，下游分发者必须保留其许可证义务。
 
 ## 继续使用
 

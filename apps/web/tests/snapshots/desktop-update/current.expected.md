@@ -1,0 +1,3 @@
+- status "当前版本 1.0.7-rc1":
+  - img
+  - text: v1.0.7-rc1

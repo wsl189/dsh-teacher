@@ -1,5 +1,5 @@
 /**
- * Desktop update action, browser half: when Electron exposes its isolated
+ * Desktop update surface, browser half: when Electron exposes its isolated
  * updater bridge, occupy `sidebar.update` with the GitHub Releases state and
  * actions. Ordinary browser deployments register no occupant.
  */
@@ -19,7 +19,7 @@ export type { UpdateButtonInjected, UpdateButtonProps } from './UpdateButton.tsx
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
-    /** Desktop update action copy. */
+    /** Desktop update status and action copy. */
     'desktop-update': DesktopUpdateKey
   }
 }

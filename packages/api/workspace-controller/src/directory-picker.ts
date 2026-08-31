@@ -9,7 +9,7 @@ import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerCapabilities } from '@deepseek-ai/dsh-host-directory-picker'
 // The seam owns the listing declaration; the generator requires the reference
 // site to name that package rather than this package's re-export of it.
-import type { DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
+import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-host-directory-picker/types'
 import { Remote, TypertRemoteFailure, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { DirectoryPickerErrorDetailsMap } from './types.ts'
 
@@ -56,6 +56,21 @@ export class DirectoryPickerController extends TypertRemoteService {
       return await capability.pick(signal)
     } catch (error: unknown) {
       throw cancellableFailure(error, signal, 'directory picker was aborted', 'directory picker failed')
+    }
+  }
+
+  /**
+   * List filesystem roots for a Remote caller's in-app browser.
+   * @param signal - caller lifetime; abort stops the backend's discovery.
+   * @returns available absolute root jump targets.
+   */
+  @Remote('listRoots')
+  async listRoots(signal: AbortSignal): Promise<DirectoryEntry[]> {
+    const capability = this.requireCapability('browse', 'listRoots')
+    try {
+      return await capability.listRoots(signal)
+    } catch (error: unknown) {
+      throw cancellableFailure(error, signal, 'directory root listing was aborted', 'directory root listing failed')
     }
   }
 

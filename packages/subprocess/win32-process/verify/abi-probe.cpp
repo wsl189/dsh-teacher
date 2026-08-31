@@ -19,6 +19,8 @@ int wmain()
   P(offsetof(PROCESS_INFORMATION, dwProcessId));
   P(CREATE_SUSPENDED);
   P(STARTF_USESTDHANDLES);
+  P(STARTF_USESHOWWINDOW);
+  P(SW_HIDE);
   P(HANDLE_FLAG_INHERIT);
   P(INFINITE);
   P(STD_INPUT_HANDLE);
@@ -38,6 +40,8 @@ int wmain()
   static_assert(sizeof(PROCESS_INFORMATION) == 24, "PROCESS_INFORMATION size");
   static_assert(CREATE_SUSPENDED == 0x4, "suspended process flag");
   static_assert(STARTF_USESTDHANDLES == 0x100, "std handles flag");
+  static_assert(STARTF_USESHOWWINDOW == 0x1, "show window flag");
+  static_assert(SW_HIDE == 0, "hidden show state");
   static_assert(HANDLE_FLAG_INHERIT == 0x1, "inherit flag");
   static_assert(sizeof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION) == 144, "job extended limit size");
   static_assert(offsetof(JOBOBJECT_EXTENDED_LIMIT_INFORMATION, BasicLimitInformation) + offsetof(JOBOBJECT_BASIC_LIMIT_INFORMATION, LimitFlags) == 16, "job LimitFlags offset");

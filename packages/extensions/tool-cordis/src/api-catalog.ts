@@ -800,6 +800,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the chosen absolute path, or null when the operator cancels.',
       },
       {
+        signature: '@Remote(\'listRoots\') async listRoots(signal: AbortSignal): Promise<DirectoryEntry[]>',
+        description: 'List filesystem roots for a Remote caller\'s in-app browser.',
+        parameters: [{ name: 'signal', description: 'caller lifetime; abort stops the backend\'s discovery.' }],
+        returns: 'available absolute root jump targets.',
+      },
+      {
         signature: '@Remote(\'list\') async list(path: string | undefined, signal: AbortSignal): Promise<DirectoryListing>',
         description: 'List one directory level for a Remote caller\'s in-app browser.',
         parameters: [{ name: 'path', description: 'absolute directory to list; absent lists the home directory.' }, { name: 'signal', description: 'caller lifetime; abort stops the backend\'s scan instead of letting it outlive a disconnected caller.' }],
@@ -4099,7 +4105,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'DirectoryPickerBrowseCapability',
-    declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
+    declaration: 'export interface DirectoryPickerBrowseCapability {\n    kind: \'browse\';\n    listRoots(signal?: AbortSignal): Promise<DirectoryEntry[]>;\n    list(path?: string, signal?: AbortSignal): Promise<DirectoryListing>;\n    createDirectory(path: string, name: string): Promise<string>;\n}',
   },
   {
     name: 'DirectoryPickerCapabilities',

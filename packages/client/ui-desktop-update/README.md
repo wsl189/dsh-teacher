@@ -1,5 +1,5 @@
 ---
-description: "Desktop update action: the browser surface for checking, downloading, and installing verified Windows releases through the isolated Electron bridge."
+description: "Desktop update status and actions: the browser surface for showing the installed version and installing verified Windows releases through the isolated Electron bridge."
 kind: "package-reference"
 ---
 
@@ -25,7 +25,7 @@ This package fills the sidebar's `sidebar.update` seat when the context-isolated
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount the plugin in the packaged desktop Web composition alongside `ui-sidebar`. Checking and up-to-date states render nothing. A newer GitHub Release renders **Update** beside Settings; download progress replaces the label, completion renders **Restart to update**, and failure remains visible as **Retry update**. The collapsed sidebar presents the same operation as an icon-only rail action.
+Mount the plugin in the packaged desktop Web composition alongside `ui-sidebar`. Checking renders nothing; an up-to-date state renders the installed version beside Settings. A newer GitHub Release replaces that status with **Update**; download progress replaces the label, completion renders **Restart to update**, and failure remains visible as **Retry update**. The collapsed sidebar presents the version as a check icon and each operation as an icon-only rail action.
 
 The browser only requests download or installation through the preload allowlist. The Electron main process owns release access, integrity verification, backend shutdown, and installer restart.
 

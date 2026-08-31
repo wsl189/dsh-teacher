@@ -18,7 +18,7 @@ JavaScript 应用与本地 AI 服务依赖有不同的可移植性要求。Elect
 
 renderer session 只向经过校验的后端 origin 上、属于当前窗口的主 frame 授予麦克风音频与剪贴板写入权限。摄像头、子 frame、外来 WebContents、其他 origin 与无关权限类型都会被拒绝。Electron 的权限检查与权限请求 handler 使用同一规则，并随窗口一同清除。
 
-侧边栏在 `sidebar.settings` 旁声明独立的 `sidebar.update` single seat。只有 Electron preload 暴露窄 updater bridge 时，`ui-desktop-update` 才会占用它。检查中与已是最新版的快照不渲染；发现版本、下载进度、下载完成与可重试失败会分别显示对应操作。preload 只复制经过校验的可辨识联合更新状态，并暴露状态订阅、下载与安装动词。GitHub 访问、SemVer 选择、checksum、文件存储与安装器重启都通过 electron-updater 留在主进程中。
+侧边栏在 `sidebar.settings` 旁声明独立的 `sidebar.update` single seat。只有 Electron preload 暴露窄 updater bridge 时，`ui-desktop-update` 才会占用它。检查中的快照不渲染；已是最新版的快照会把已安装版本渲染为静态底部状态。发现版本、下载进度、下载完成与可重试失败会分别显示对应操作。preload 只复制经过校验的可辨识联合更新状态，并暴露状态订阅、下载与安装动词。GitHub 访问、SemVer 选择、checksum、文件存储与安装器重启都通过 electron-updater 留在主进程中。
 
 ESM 主 bundle 将 electron-updater 保留为外部依赖，并通过 CommonJS 默认导出读取其惰性 `autoUpdater` getter。这里不使用 ESM 命名导入，因为 Node 无法把这个 getter 静态识别为 CommonJS 命名导出。
 
@@ -51,6 +51,6 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时抑制、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、无更新时隐藏、展开与轨道操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认已是最新版时没有按钮、可用操作位于设置右侧，驱动下载与重启状态，并捕获无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。桌面载荷校验器 fixture 会接受完整 workspace 依赖、缺失的可选 peer、运行时 JavaScript、资源与原生 addon，同时拒绝缺失的必需 workspace 包、嵌套 Source Map 与编译器状态。Windows workflow 构建真实 NSIS target，校验 `resources/app` 中的依赖闭包，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口、交换启动令牌并成功调用已认证的 `directoryPicker/list` Remote；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
+桌面 update-controller 测试覆盖未打包时的当前版本投影、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、展开与轨道当前版本状态、更新操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认当前版本位于「设置」旁，检查可用操作会在同一位置替换该状态，驱动下载与重启状态，并捕获两份无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。桌面载荷校验器 fixture 会接受完整 workspace 依赖、缺失的可选 peer、运行时 JavaScript、资源与原生 addon，同时拒绝缺失的必需 workspace 包、嵌套 Source Map 与编译器状态。Windows workflow 构建真实 NSIS target，校验 `resources/app` 中的依赖闭包，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口、交换启动令牌并成功调用已认证的 `directoryPicker/list` Remote；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
 
 renderer 权限测试会执行两种 Electron handler，并要求仅为当前回环主 frame 放行音频麦克风、保留剪贴板写入，拒绝视频、子 frame、外来 renderer、外来或畸形 origin 与无关权限，同时验证 handler 清理可重复调用。

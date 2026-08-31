@@ -3,11 +3,13 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
 import { basename, join } from 'node:path'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerBrowseCapability } from '@deepseek-ai/dsh-host-directory-picker'
-import BrowseDirectoryPicker, { boundedInsert, fullyQualified, raceAbort } from '../src/index.ts'
+import BrowseDirectoryPicker, {
+  boundedInsert, filesystemRoots, fullyQualified, raceAbort,
+} from '../src/index.ts'
 import type { ListingCandidate } from '../src/index.ts'
 
 let root: string
@@ -45,6 +47,49 @@ afterAll(async () => {
 })
 
 describe('BrowseDirectoryPicker', () => {
+  it('reports the POSIX filesystem root without probing drive candidates', async () => {
+    const probe = vi.fn(async () => true)
+    await expect(filesystemRoots('linux', '/home/u', probe)).resolves.toEqual([
+      { name: '/', path: '/', hidden: false },
+    ])
+    expect(probe).not.toHaveBeenCalled()
+    await expect(capability.listRoots()).resolves.toEqual([
+      { name: '/', path: '/', hidden: false },
+    ])
+  })
+
+  it('discovers available Windows drives and retains a drive or UNC home root', async () => {
+    const available = new Set(['C:\\', 'D:\\'])
+    const probe = vi.fn(async (candidate: string) => {
+      if (candidate === 'E:\\') throw new Error('drive is inaccessible')
+      return available.has(candidate)
+    })
+    await expect(filesystemRoots('win32', 'C:\\Users\\u', probe)).resolves.toEqual([
+      { name: 'C:\\', path: 'C:\\', hidden: false },
+      { name: 'D:\\', path: 'D:\\', hidden: false },
+    ])
+    // The known-good home root is retained; the other 25 drive letters are probed.
+    expect(probe).toHaveBeenCalledTimes(25)
+    expect(probe).not.toHaveBeenCalledWith('C:\\')
+
+    const unc = '\\\\server\\share\\users\\u'
+    await expect(filesystemRoots('win32', unc, async () => false)).resolves.toEqual([
+      { name: '\\\\server\\share\\', path: '\\\\server\\share\\', hidden: false },
+    ])
+  })
+
+  it('aborts Windows root discovery with the caller reason', async () => {
+    const controller = new AbortController()
+    const pending = filesystemRoots(
+      'win32',
+      'C:\\Users\\u',
+      () => new Promise<boolean>(() => {}),
+      controller.signal,
+    )
+    controller.abort(new Error('root caller left'))
+    await expect(pending).rejects.toThrow('root caller left')
+  })
+
   it('lists directories only, flags hidden rows, follows symlinks, skips broken links, sorts by name', async () => {
     const listing = await capability.list(root)
     expect(listing.path).toBe(root)

@@ -63,6 +63,8 @@ export interface RestrictedProcessSpawnOptions {
   cwd: string
   /** Restricted primary token supplied by sandbox policy. */
   token: NativePtr
+  /** Request a hidden initial window without changing console creation flags. */
+  hideWindow?: boolean
 }
 
 /** Piped child resources whose process and read handles remain caller-owned. */
@@ -188,7 +190,9 @@ export function spawnPipedProcess(
     startupInfo = allocStartupInfo()
     encodeStartupInfo(startupInfo, {
       cb: abi.STARTUPINFOW_SIZE,
-      dwFlags: abi.STARTF_USESTDHANDLES,
+      dwFlags: abi.STARTF_USESTDHANDLES
+        | (options.hideWindow === true ? abi.STARTF_USESHOWWINDOW : 0),
+      wShowWindow: abi.SW_HIDE,
       hStdInput: stdIn.read,
       hStdOutput: stdOut.write,
       hStdError: stdErr.write,
@@ -360,7 +364,9 @@ export function spawnInheritedJobProcess(
     startupInfo = allocStartupInfo()
     encodeStartupInfo(startupInfo, {
       cb: abi.STARTUPINFOW_SIZE,
-      dwFlags: abi.STARTF_USESTDHANDLES,
+      dwFlags: abi.STARTF_USESTDHANDLES
+        | (options.hideWindow === true ? abi.STARTF_USESHOWWINDOW : 0),
+      wShowWindow: abi.SW_HIDE,
       hStdInput: stdIn,
       hStdOutput: stdOut,
       hStdError: stdErr,

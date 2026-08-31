@@ -12,8 +12,16 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { Win32Error } from '@deepseek-ai/dsh-win32-process'
-import { ERROR_BROKEN_PIPE } from '@deepseek-ai/dsh-win32-process/src/abi.ts'
-import { PROCESS_INFORMATION } from '@deepseek-ai/dsh-win32-process/src/ffi.ts'
+import {
+  ERROR_BROKEN_PIPE,
+  STARTF_USESHOWWINDOW,
+  STARTF_USESTDHANDLES,
+  SW_HIDE,
+} from '@deepseek-ai/dsh-win32-process/src/abi.ts'
+import {
+  PROCESS_INFORMATION,
+  STARTUPINFOW,
+} from '@deepseek-ai/dsh-win32-process/src/ffi.ts'
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import koffi from 'koffi'
 
@@ -24,16 +32,20 @@ import * as abi from '../src/win32-abi.ts'
 const PVOID = koffi.pointer('void')
 
 type MockFn = ReturnType<typeof vi.fn>
+type StartupInfoOutput = { dwFlags: number; wShowWindow: number }
 
 /** The stub binding table plus the mocks the assertions inspect directly. */
 interface HappyStubs {
   api: Win32Bindings
+  getConsoleWindow: MockFn
   setNamedSecurityInfoW: MockFn
   convertStringSidToSidW: MockFn
   closeHandle: MockFn
   localFree: MockFn
   createRestrictedToken: MockFn
   createJobObjectW: MockFn
+  createProcessAsUserW: MockFn
+  startupInfos: StartupInfoOutput[]
   getNamedSecurityInfoW: MockFn
 }
 
@@ -123,16 +135,19 @@ function happyStubs(): HappyStubs {
     return 1
   })
   const setTokenInformation = vi.fn(() => 1)
+  const getConsoleWindow = vi.fn(() => 0n)
   const createPipe = vi.fn((readSlot: NativePtr, writeSlot: NativePtr) => {
     koffi.encode(readSlot, PVOID, fresh())
     koffi.encode(writeSlot, PVOID, fresh())
     return 1
   })
   const setHandleInformation = vi.fn(() => 1)
+  const startupInfos: StartupInfoOutput[] = []
   const createProcessAsUserW = vi.fn((
     _token: unknown, _app: unknown, _cmd: unknown, _pa: unknown, _ta: unknown,
-    _inherit: unknown, _flags: unknown, _env: unknown, _cwd: unknown, _si: unknown, processInfo: NativePtr,
+    _inherit: unknown, _flags: unknown, _env: unknown, _cwd: unknown, startupInfo: NativePtr, processInfo: NativePtr,
   ) => {
+    startupInfos.push(koffi.decode(startupInfo, STARTUPINFOW) as StartupInfoOutput)
     koffi.encode(processInfo, PROCESS_INFORMATION, { hProcess: fresh(), hThread: fresh(), dwProcessId: 1234, dwThreadId: 5678 })
     return 1
   })
@@ -155,7 +170,7 @@ function happyStubs(): HappyStubs {
   const formatMessageW = vi.fn(() => 0)
 
   const api = {
-    openProcess, openProcessToken, convertStringSidToSidW, getTempPathW, createFileW,
+    getConsoleWindow, openProcess, openProcessToken, convertStringSidToSidW, getTempPathW, createFileW,
     lockFileEx: vi.fn(() => 1), unlockFileEx: vi.fn(() => 1),
     getNamedSecurityInfoW, setEntriesInAclW, setNamedSecurityInfoW, getTokenInformation,
     getLengthSid, copySid, createWellKnownSid, isValidSid, createRestrictedToken,
@@ -166,9 +181,15 @@ function happyStubs(): HappyStubs {
     localFree, closeHandle, getLastError, formatMessageW,
   } as unknown as Win32Bindings
   return {
-    api, setNamedSecurityInfoW, convertStringSidToSidW, closeHandle, localFree,
-    createRestrictedToken, createJobObjectW, getNamedSecurityInfoW,
+    api, getConsoleWindow, setNamedSecurityInfoW, convertStringSidToSidW, closeHandle, localFree,
+    createRestrictedToken, createJobObjectW, createProcessAsUserW, startupInfos, getNamedSecurityInfoW,
   }
+}
+
+function lastStartupInfo(stubs: HappyStubs): { dwFlags: number; wShowWindow: number } {
+  const startupInfo = stubs.startupInfos.at(-1)
+  if (startupInfo === undefined) throw new Error('CreateProcessAsUserW was not called')
+  return startupInfo
 }
 
 beforeEach(() => {
@@ -365,11 +386,16 @@ describe('AclSandbox spawn', () => {
   })
 
   it('pipe spawn drains empty pipes and settles with the child exit code', async () => {
+    const stubs = state.stubs as HappyStubs
     const workspace = scratch()
     const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-12', mode: 'workspace-write' })
     await sandbox.init()
     const child = sandbox.spawn({ command: 'probe.exe', args: ['--flag'], cwd: workspace })
     expect(child.pid).toBe(1234)
+    expect(lastStartupInfo(stubs)).toMatchObject({
+      dwFlags: STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW,
+      wShowWindow: SW_HIDE,
+    })
     const expected = { stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), exitCode: 42 }
     await expect(child.wait()).resolves.toEqual(expected)
     // The second wait reuses the settled exit-code promise instead of re-waiting.
@@ -377,13 +403,29 @@ describe('AclSandbox spawn', () => {
   })
 
   it('inherit spawn settles with empty stdio and closes the kill-on-close job', async () => {
-    const { closeHandle } = state.stubs as HappyStubs
+    const stubs = state.stubs as HappyStubs
+    const { closeHandle } = stubs
     const workspace = scratch()
     const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-13', mode: 'workspace-write' })
     await sandbox.init()
     const child = sandbox.spawn({ command: 'probe.exe', stdio: 'inherit' })
+    expect(lastStartupInfo(stubs)).toMatchObject({
+      dwFlags: STARTF_USESTDHANDLES | STARTF_USESHOWWINDOW,
+      wShowWindow: SW_HIDE,
+    })
     await expect(child.wait()).resolves.toEqual({ stdout: Buffer.alloc(0), stderr: Buffer.alloc(0), exitCode: 42 })
     expect(closeHandle).toHaveBeenCalled()
+  })
+
+  it('preserves the shared console when the sandbox host has one', async () => {
+    const stubs = state.stubs as HappyStubs
+    stubs.getConsoleWindow.mockReturnValue(500n)
+    const workspace = scratch()
+    const sandbox = new AclSandbox({ writableDirs: [workspace], tempDir: null, writeSid: 'S-1-4-9000-13-1', mode: 'workspace-write' })
+    await sandbox.init()
+    const child = sandbox.spawn({ command: 'probe.exe' })
+    expect(lastStartupInfo(stubs).dwFlags).toBe(STARTF_USESTDHANDLES)
+    await child.wait()
   })
 
   it('inherit spawn reports a failed close of the kill-on-close job', async () => {

@@ -6,7 +6,7 @@
 
 ## 安装与更新
 
-从本仓库的 [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases) 下载 `DSH-Teacher-<版本>-x64-Setup.exe`。NSIS 安装器支持选择当前用户的安装目录，并创建开始菜单项与桌面快捷方式。安装版每次启动都会检查同一个 Release feed。出现更高版本后，「设置」右侧会显示「更新」；点击后下载安装器，通过 electron-builder 的 `latest.yml` SHA-512 元数据校验文件，完成后显示「重启更新」。
+从本仓库的 [GitHub Releases](https://github.com/wsl189/dsh-teacher/releases) 下载 `DSH-Teacher-<版本>-x64-Setup.exe`。NSIS 安装器支持选择当前用户的安装目录，并创建开始菜单项与桌面快捷方式。安装版每次启动都会检查同一个 Release feed。没有更高版本时，界面底部会显示已安装版本。出现更高版本后，该状态会替换为「设置」右侧的「更新」操作；点击后下载安装器，通过 electron-builder 的 `latest.yml` SHA-512 元数据校验文件，完成后显示「重启更新」。
 
 会话、设置、凭据与教师工作台数据仍保存在普通 DSH home 下（未设置 `DSH_HOME` 时为 `%USERPROFILE%\.dsh`）。重新安装应用不会替换该目录。迁移到另一台电脑时，需要另行复制这个数据目录。
 

@@ -32,15 +32,16 @@ async function bench() {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry).await()
   ctx.provide('locale', new LocaleRuntime(ctx))
+  const listDirectoryRoots = vi.fn(async () => [{ name: '/', path: '/', hidden: false }])
   const listDirectory = vi.fn(async (): Promise<DirectoryListing> => homeListing)
   const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
-  ctx.provide('uiWorkspace', { listDirectory, createDirectory } as never)
+  ctx.provide('uiWorkspace', { listDirectoryRoots, listDirectory, createDirectory } as never)
   const slots = ctx.get('slots') as SlotRegistry
   const declare = () => slots.register({
     name: 'root',
     children: Object.fromEntries(HOLES.map(name => [name, { kind: 'single', scope: 'root' }])),
   } as never, () => null)
-  return { ctx, slots, listDirectory, createDirectory, declare }
+  return { ctx, slots, listDirectoryRoots, listDirectory, createDirectory, declare }
 }
 
 function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowOwnerProps {
@@ -169,6 +170,7 @@ describe('directory-picker-browse client half', () => {
     const injected = (entry.inject as () => { t: (key: string) => string })()
     // zh is the shipped default locale.
     expect(injected.t('browser.title')).toBe('选择工作区目录')
+    expect(injected.t('browser.root')).toBe('磁盘')
     expect(injected.t('browser.newFolder')).toBe('新建文件夹')
     expect(injected.t('browser.showHidden')).toBe('显示隐藏文件')
   })
@@ -179,11 +181,14 @@ describe('directory-picker-browse client half', () => {
     await b.ctx.plugin({ inject: [...inject], apply }).await()
     const entry = b.slots.entries(HOLES[1])[0]!
     const injected = (entry.inject as () => {
+      listDirectoryRoots: () => Promise<unknown>
       listDirectory: (path?: string) => Promise<DirectoryListing>
       createDirectory: (path: string, name: string) => Promise<string>
     })()
+    await expect(injected.listDirectoryRoots()).resolves.toEqual([{ name: '/', path: '/', hidden: false }])
     await expect(injected.listDirectory()).resolves.toBe(homeListing)
     await expect(injected.createDirectory(HOME, 'fresh')).resolves.toBe(`${HOME}/fresh`)
+    expect(b.listDirectoryRoots).toHaveBeenCalledOnce()
     expect(b.listDirectory).toHaveBeenCalledOnce()
     expect(b.createDirectory).toHaveBeenCalledWith(HOME, 'fresh')
   })
@@ -195,6 +200,7 @@ describe('directory-picker-browse client half', () => {
     render(
       <BrowseDirectoryFlow
         {...props}
+        listDirectoryRoots={vi.fn(async () => [{ name: '/', path: '/', hidden: false }])}
         listDirectory={listDirectory}
         createDirectory={vi.fn(async () => '')}
         t={t}
@@ -214,6 +220,7 @@ describe('directory-picker-browse client half', () => {
     const view = render(
       <BrowseDirectoryFlow
         {...owner({ open: false })}
+        listDirectoryRoots={vi.fn(async () => [{ name: '/', path: '/', hidden: false }])}
         listDirectory={vi.fn(async () => homeListing)}
         createDirectory={vi.fn(async () => '')}
         t={key => key}

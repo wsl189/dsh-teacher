@@ -32,11 +32,12 @@ class FakeBridge implements DesktopUpdateBridge {
 describe('desktop update preload source', () => {
   it('validates every discriminated state at the isolation boundary', () => {
     expect(isDesktopUpdateState({ status: 'checking' })).toBe(true)
-    expect(isDesktopUpdateState({ status: 'up-to-date' })).toBe(true)
+    expect(isDesktopUpdateState({ status: 'up-to-date', version: '1.2.0' })).toBe(true)
     expect(isDesktopUpdateState({ status: 'available', version: '1.2.0' })).toBe(true)
     expect(isDesktopUpdateState({ status: 'downloading', version: '1.2.0', percent: 4 })).toBe(true)
     expect(isDesktopUpdateState({ status: 'downloaded', version: '1.2.0' })).toBe(true)
     expect(isDesktopUpdateState({ status: 'error', version: '1.2.0', message: 'offline' })).toBe(true)
+    expect(isDesktopUpdateState({ status: 'up-to-date' })).toBe(false)
     expect(isDesktopUpdateState({ status: 'available' })).toBe(false)
     expect(isDesktopUpdateState({ status: 'downloading', version: '1.2.0', percent: Number.NaN })).toBe(false)
     expect(isDesktopUpdateState({ status: 'other' })).toBe(false)

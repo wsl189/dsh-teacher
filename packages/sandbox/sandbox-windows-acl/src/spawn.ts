@@ -1,6 +1,7 @@
 /** Restricted-token adapters over the shared Win32 process owner. */
 
 import {
+  isNullPtr,
   spawnInheritedJobProcess,
   spawnPipedProcess,
   waitForProcessExit,
@@ -19,6 +20,11 @@ export interface SpawnedNative extends SpawnedPipedProcess {}
 /** Restricted-token child assigned to a kill-on-close Job. */
 export interface SpawnedInherited extends SpawnedJobProcess {}
 
+/** Hide a new child window only when the host has no console window to share. */
+function hideChildWindow(api: Win32Bindings): boolean {
+  return isNullPtr(api.getConsoleWindow())
+}
+
 /**
  * Spawn a restricted-token child with piped stdout/stderr.
  * @param api - ACL/token binding table.
@@ -31,7 +37,7 @@ export function spawnSandboxed(
   token: NativePtr,
   options: { command: string; args: readonly string[]; cwd: string },
 ): SpawnedNative {
-  return spawnPipedProcess(api, { ...options, token })
+  return spawnPipedProcess(api, { ...options, token, hideWindow: hideChildWindow(api) })
 }
 
 /**
@@ -46,7 +52,7 @@ export function spawnSandboxedInherited(
   token: NativePtr,
   options: { command: string; args: readonly string[]; cwd: string },
 ): SpawnedInherited {
-  return spawnInheritedJobProcess(api, { ...options, token })
+  return spawnInheritedJobProcess(api, { ...options, token, hideWindow: hideChildWindow(api) })
 }
 
 /**

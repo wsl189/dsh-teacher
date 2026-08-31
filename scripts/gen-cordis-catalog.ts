@@ -668,6 +668,7 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   ProjectionSnapshot: 'session-projection.md',
   ProjectionCheckpoint: 'session-projection.md',
   DirectoryPickerCapability: 'workspace.md',
+  DirectoryEntry: 'workspace.md',
   DirectoryListing: 'workspace.md',
   TypertContribution: 'invariants.md',
   TypertRemoteEventSource: 'typert.md',

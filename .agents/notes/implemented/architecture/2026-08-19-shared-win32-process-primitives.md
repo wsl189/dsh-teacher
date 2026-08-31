@@ -10,7 +10,7 @@ The Windows ACL sandbox owns restricted-token, SID, DACL, grant, and workspace p
 
 ## Decision
 
-`@deepseek-ai/dsh-win32-process` owns the reusable Win32 process ABI and native resource operations currently consumed by `sandbox-windows-acl`. The package lazily loads `kernel32.dll` and `advapi32.dll`, verifies the x64 `STARTUPINFOW` and `PROCESS_INFORMATION` layouts, quotes argv for `CreateProcessAsUserW`, and exposes checked restricted-token pipe and inherited-stdio Job operations.
+`@deepseek-ai/dsh-win32-process` owns the reusable Win32 process ABI and native resource operations currently consumed by `sandbox-windows-acl`. The package lazily loads `kernel32.dll` and `advapi32.dll`, verifies the x64 `STARTUPINFOW` and `PROCESS_INFORMATION` layouts, quotes argv for `CreateProcessAsUserW`, and exposes checked restricted-token pipe and inherited-stdio Job operations. Spawn options can request a hidden initial window; both process paths encode `STARTF_USESHOWWINDOW` with `SW_HIDE` in `STARTUPINFOW` without adding console creation flags.
 
 The Windows ACL sandbox remains the only owner of restricted-token creation, SID and DACL policy, grants, writable-path decisions, temporary-directory policy, and the public sandbox child result. It extends the shared binding context with policy-specific APIs, supplies the primary token, combines pipe drains and waits, and closes the caller-owned Job at its lifecycle boundary.
 
@@ -20,7 +20,7 @@ The package exports only operations used by the sandbox production path. Ordinar
 
 ## Verification
 
-The shared suite covers x64 ABI values, command-line quoting, binding extension, pipe EOF and drain allocation reuse, restricted-token process creation, suspended creation followed by Job assignment and resume, wait and exit-code reads, native allocation release, and the acquired-resource failure paths. Sandbox tests retain restricted-token, fail-closed, pipe/inherit, result, and disposal composition without duplicating the low-level matrix. The committed header probes and Windows package tests cover the migrated ABI and native paths; Wine supplies the emulated Windows package and composition signal.
+The shared suite covers x64 ABI values, command-line quoting, binding extension, pipe EOF and drain allocation reuse, restricted-token process creation, hidden and inherited initial-window fields, suspended creation followed by Job assignment and resume, wait and exit-code reads, native allocation release, and the acquired-resource failure paths. Sandbox tests retain restricted-token, fail-closed, pipe/inherit, result, and disposal composition without duplicating the low-level matrix. The committed header probes and Windows package tests cover the migrated ABI and native paths; Wine supplies the emulated Windows package and composition signal.
 
 ## Alternatives considered
 

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
-import type { DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
+import type { DirectoryEntry, DirectoryListing } from '@deepseek-ai/dsh-api-remotes/client'
 import { DirectoryBrowser } from '../src/client/DirectoryBrowser.tsx'
 
 afterEach(cleanup)
@@ -86,12 +86,14 @@ function listingFor(path?: string): DirectoryListing {
 }
 
 function mount(overrides: Partial<Parameters<typeof DirectoryBrowser>[0]> = {}) {
+  const listDirectoryRoots = vi.fn(async () => [{ name: '/', path: '/', hidden: false }])
   const listDirectory = vi.fn(async (path?: string) => listingFor(path))
   const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
   const onOpen = vi.fn()
   const onClose = vi.fn()
   const props = {
     open: true,
+    listDirectoryRoots,
     listDirectory,
     createDirectory,
     onOpen,
@@ -101,7 +103,7 @@ function mount(overrides: Partial<Parameters<typeof DirectoryBrowser>[0]> = {}) 
     ...overrides,
   }
   const view = render(<DirectoryBrowser {...props} />)
-  return { view, props, listDirectory, createDirectory, onOpen, onClose }
+  return { view, props, listDirectoryRoots, listDirectory, createDirectory, onOpen, onClose }
 }
 
 /** The rendered level columns, left-to-right. */
@@ -130,6 +132,70 @@ describe('DirectoryBrowser', () => {
     expect(screen.queryByText('.config')).toBeNull()
     expect(screen.getByRole('button', { name: 'browser.home' })).toBeTruthy()
     expect(screen.queryByRole('button', { name: '/' })).toBeNull()
+    expect(screen.queryByRole('combobox', { name: 'browser.root' })).toBeNull()
+  })
+
+  it('switches Windows drives through roots discovered once per opening', async () => {
+    const C_ROOT = 'C:\\'
+    const D_ROOT = 'D:\\'
+    const C_HOME = 'C:\\Users\\u'
+    const cHome: DirectoryListing = {
+      path: C_HOME,
+      home: C_HOME,
+      crumbs: [
+        { name: C_ROOT, path: C_ROOT, hidden: false },
+        { name: 'Users', path: 'C:\\Users', hidden: false },
+        { name: 'u', path: C_HOME, hidden: false },
+      ],
+      entries: [{ name: 'Documents', path: `${C_HOME}\\Documents`, hidden: false }],
+      truncated: false,
+    }
+    const dRoot: DirectoryListing = {
+      path: D_ROOT,
+      home: C_HOME,
+      crumbs: [{ name: D_ROOT, path: D_ROOT, hidden: false }],
+      entries: [{ name: 'Courses', path: 'D:\\Courses', hidden: false }],
+      truncated: false,
+    }
+    const listDirectoryRoots = vi.fn(async () => [
+      { name: C_ROOT, path: C_ROOT, hidden: false },
+      { name: D_ROOT, path: D_ROOT, hidden: false },
+    ])
+    const listDirectory = vi.fn(async (path?: string) => path === D_ROOT ? dRoot : cHome)
+    mount({ listDirectoryRoots, listDirectory })
+
+    const drives = await screen.findByRole<HTMLSelectElement>('combobox', { name: 'browser.root' })
+    expect(drives.value).toBe(C_ROOT)
+    fireEvent.change(drives, { target: { value: C_ROOT } })
+    expect(listDirectory).toHaveBeenCalledTimes(1)
+    fireEvent.change(drives, { target: { value: D_ROOT } })
+    await waitFor(() => { expect(screen.getByText('Courses')).toBeTruthy() })
+    expect(listDirectory).toHaveBeenCalledWith(D_ROOT, expect.any(AbortSignal))
+    expect(drives.value).toBe(D_ROOT)
+    expect(listDirectoryRoots).toHaveBeenCalledOnce()
+  })
+
+  it('surfaces an active root-discovery failure without hiding the current directory', async () => {
+    mount({ listDirectoryRoots: vi.fn(async () => { throw new Error('drive scan failed') }) })
+    await screen.findByText('Documents')
+    expect((await screen.findByRole('alert')).textContent).toBe('drive scan failed')
+  })
+
+  it.each(['resolution', 'rejection'] as const)('drops a late root %s after close', async (outcome) => {
+    let settle!: () => void
+    const listDirectoryRoots = vi.fn((_signal?: AbortSignal) => new Promise<DirectoryEntry[]>((resolve, reject) => {
+      settle = () => {
+        if (outcome === 'resolution') resolve([{ name: '/', path: '/', hidden: false }])
+        else reject(new Error('late drive scan failure'))
+      }
+    }))
+    const b = mount({ listDirectoryRoots })
+    await waitFor(() => { expect(listDirectoryRoots).toHaveBeenCalledOnce() })
+    const signal = listDirectoryRoots.mock.calls[0]![0]
+    b.view.rerender(<DirectoryBrowser {...b.props} open={false} />)
+    expect(signal?.aborted).toBe(true)
+    await act(async () => { settle() })
+    expect(screen.queryByRole('dialog')).toBeNull()
   })
 
   it('shows hidden entries when the toggle is on and hides them again on close', async () => {

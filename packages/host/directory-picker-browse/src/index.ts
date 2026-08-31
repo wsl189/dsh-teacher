@@ -1,8 +1,9 @@
 /**
  * Browse backend of the directory-picker seam: registers `ctx.directoryPicker`
- * with the `browse` capability — one-level directory listing and child-directory
- * creation over the host filesystem via Node's stdlib (which already carries
- * the per-OS adaptation). Nothing renders on the host display, so this backend
+ * with the `browse` capability — filesystem-root discovery, one-level directory
+ * listing, and child-directory creation over the host filesystem through
+ * Node's stdlib, which already carries the per-OS adaptation. Nothing renders
+ * on the host display, so this backend
  * serves remote clients the dialog backend cannot. Policy decisions (hidden
  * entries flagged but returned, symlinks followed, whole-filesystem scope) are
  * recorded in the directory-picker seam Agent Note.
@@ -133,6 +134,50 @@ export function raceAbort<T>(operation: Promise<T>, signal: AbortSignal | undefi
   })
 }
 
+/**
+ * Discover filesystem roots with Node-standard-library probes. POSIX exposes
+ * its single `/` root. Windows has no stdlib drive-enumeration call, so every
+ * drive-qualified root is probed concurrently; inaccessible or absent drives
+ * are omitted, while the Host home root remains available as the browser's
+ * known-good anchor (including a UNC home share).
+ * @param platform - Host platform; injectable for deterministic tests.
+ * @param home - Host home directory used to retain its filesystem root.
+ * @param probe - whether one candidate root is an enterable directory.
+ * @param signal - caller lifetime; abort wins over every pending probe.
+ * @returns absolute root jump targets in drive-letter order, followed by a
+ * UNC home root when present.
+ */
+export async function filesystemRoots(
+  platform: NodeJS.Platform,
+  home: string,
+  probe: (root: string) => Promise<boolean>,
+  signal?: AbortSignal,
+): Promise<DirectoryEntry[]> {
+  signal?.throwIfAborted()
+  if (platform !== 'win32') return [{ name: '/', path: '/', hidden: false }]
+
+  const homeRoot = win32.parse(home).root
+  const homeKey = homeRoot.toLowerCase()
+  const candidates = Array.from({ length: 26 }, (_, index) => `${String.fromCharCode(65 + index)}:\\`)
+  if (fullyQualified(homeRoot, 'win32')
+    && !candidates.some(candidate => candidate.toLowerCase() === homeKey)) candidates.push(homeRoot)
+
+  const roots = await Promise.all(candidates.map(async (root): Promise<DirectoryEntry | null> => {
+    // `homedir()` is already the default listing anchor. Retain its root even
+    // when a concurrent availability probe loses a transient race, and probe
+    // every other candidate so absent/removable drive letters stay hidden.
+    if (root.toLowerCase() === homeKey) return { name: root, path: root, hidden: false }
+    try {
+      if (await raceAbort(probe(root), signal)) return { name: root, path: root, hidden: false }
+    } catch {
+      if (signal?.aborted) throw asError(signal.reason)
+      // An absent, empty, or inaccessible drive is not a root the browser can enter.
+    }
+    return null
+  }))
+  return roots.filter((root): root is DirectoryEntry => root !== null)
+}
+
 /** The thrown value as an Error (wire/abort reasons may be anything). */
 function asError(reason: unknown): Error {
   return reason instanceof Error ? reason : new Error(String(reason))
@@ -198,6 +243,7 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
 
   private readonly browseCapability: DirectoryPickerCapability = {
     kind: 'browse',
+    listRoots: signal => this.listRoots(signal),
     list: (path, signal) => this.list(path, signal),
     createDirectory: (path, name) => this.createDirectory(path, name),
   }
@@ -212,6 +258,16 @@ export default class BrowseDirectoryPicker extends DirectoryPicker {
    */
   capability(): DirectoryPickerCapability {
     return this.browseCapability
+  }
+
+  private async listRoots(signal?: AbortSignal): Promise<DirectoryEntry[]> {
+    return filesystemRoots(
+      process.platform,
+      homedir(),
+      /* v8 ignore next -- POSIX returns before this Windows-only callback; filesystemRoots tests inject its probe. */
+      async root => (await stat(root)).isDirectory(),
+      signal,
+    )
   }
 
   private async list(path?: string, signal?: AbortSignal): Promise<DirectoryListing> {

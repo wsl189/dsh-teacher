@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-23-built-in-better-sidebar.md
-2026-08-23-built-in-better-sidebar.md: 9567fc377c5e66ff948e777993aa57dab157572e
-2026-08-23-built-in-better-sidebar.zh.md: 15fd07bbb70e698a60035b15c8facf31c4cbd9e3
+2026-08-23-built-in-better-sidebar.md: cc4aa578c6c4a8207c5ff430880afc5fdad48aad
+2026-08-23-built-in-better-sidebar.zh.md: 0939e12c5f5f69e4a6519609c40beb36a7cf3a51

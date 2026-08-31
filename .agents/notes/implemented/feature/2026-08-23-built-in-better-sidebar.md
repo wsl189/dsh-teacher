@@ -10,7 +10,9 @@ The standard Web profile exposes workspace files through the chat and workspace 
 
 ## Decision
 
-`@deepseek-ai/dsh-web-app` declares `dsh-better-sidebar` as a runtime dependency and mounts it under the `web-better-sidebar` row. The upstream plugin remains an independently versioned MIT package; DSH consumes its published package instead of copying its source into this repository. The plugin's default keeps the workbench closed until the user opens it.
+`@deepseek-ai/dsh-web-app` declares `dsh-better-sidebar@^0.17.1` as a runtime dependency and mounts it under the `web-better-sidebar` row. The upstream plugin remains an independently versioned MIT package; DSH consumes its published package instead of copying its source into this repository. A package patch only rewires the client injection list to the current DSH API, connection, renderer, and settings plugins. The plugin's default keeps the workbench closed until the user opens it.
+
+The `0.17.1` baseline uses the authenticated Remote gateway and current rich-text labels. Its workbench includes movable free windows, bounded multi-repository Git discovery, terminal and loopback-browser surfaces, expanded editor language support, and Markdown previews with local images, sanitized inline HTML, and a table of contents. The model-facing `sidebar_open` tool remains disabled by default.
 
 The built-in row uses a different id from the standalone bundle's `better-sidebar` row. Because `dsh-web-app` precedes profile-installed bundles, the standalone bundle's duplicate-mount guard observes the built-in package row and disables its redundant instance. Existing profiles may therefore retain the standalone bundle while migrating to a DSH release that includes the workbench.
 
@@ -18,7 +20,7 @@ The [bundled extensions and QQ speech decision](2026-08-25-bundled-extensions-an
 
 ## Verification
 
-The assembled built-client snapshot requires the workbench host marker and better-sidebar's plugin-owned stylesheet. The dedicated `better-sidebar.e2e.ts` scenario boots the shipped Web composition in Chromium, selects a seeded session, proves that exactly one workbench is mounted and closed by default, and opens its Files surface. Cordis config validation checks that the Web bundle can resolve the bare plugin name, shipped-composition tests require the Office client module, and generated third-party notices record both the MIT workbench and AGPL Office runtime dependencies.
+The assembled built-client snapshot requires the workbench host marker and better-sidebar's plugin-owned stylesheet. The dedicated `better-sidebar.e2e.ts` scenario boots the shipped Web composition in Chromium, selects a seeded session, proves that exactly one workbench is mounted and closed by default, opens its Files surface, and moves the Files tab into a free window before docking it back. Its context-menu snapshot records the user-visible command. Cordis config validation checks that the Web bundle can resolve the bare plugin name, shipped-composition tests require the Office client module, and generated third-party notices record both the MIT workbench and AGPL Office runtime dependencies.
 
 ## Alternatives considered
 
@@ -26,8 +28,10 @@ The assembled built-client snapshot requires the workbench host marker and bette
 
 **Copy the upstream source into a workspace package.** A local fork would make upstream fixes and dependency changes a repository maintenance obligation without changing the extension interface or runtime behavior. Consuming the published MIT package keeps ownership and release cadence explicit.
 
+**Build from the upstream main branch.** A mutable branch includes changes that have not passed the upstream package release boundary and cannot be reproduced from the npm lockfile. The latest stable package provides a reviewable version, integrity hash, and release notes while retaining the same integration model.
+
 **Keep the Office viewer as an external profile dependency.** This avoids distributing an AGPL-3.0 runtime dependency, but makes a standard installation incomplete and makes machine migration depend on undocumented profile state. The later bundled-extensions decision accepts the license consequence explicitly and pins the dependency and notice generation.
 
 ## Consequences
 
-Every standard Web installation includes better-sidebar's host and client artifacts plus its runtime dependency closure, including `node-pty`; repository installs already authorize the required native build script. The workbench is present but closed by default, and deployments can disable or replace its `web-better-sidebar` row with a later patch. Workspace Office preview is present without user installation, and downstream distributors must preserve the Office viewer's AGPL-3.0 obligations.
+Every standard Web installation includes better-sidebar's host and client artifacts plus its runtime dependency closure, including `node-pty`, DOMPurify, and the editor language packages; repository installs already authorize the required native build script. The workbench is present but closed by default, and deployments can disable or replace its `web-better-sidebar` row with a later patch. Workspace Office preview is present without user installation, and downstream distributors must preserve the Office viewer's AGPL-3.0 obligations.

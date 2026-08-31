@@ -1,5 +1,5 @@
 ---
-description: "桌面更新操作：通过隔离的 Electron bridge 检查、下载并安装经校验 Windows Release 的浏览器表层。"
+description: "桌面更新状态与操作：通过隔离的 Electron bridge 显示已安装版本，并安装经校验的 Windows Release。"
 kind: "package-reference"
 ---
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-在打包桌面版的 Web 组合中，将本插件与 `ui-sidebar` 一同挂载。检查中与已是最新版本时不渲染任何内容。发现新的 GitHub Release 后，会在「设置」旁显示**更新**；下载时标签显示进度，完成后显示**重启更新**，失败后保留**重试更新**。侧边栏收起时，同一操作显示为纯图标轨道按钮。
+在打包桌面版的 Web 组合中，将本插件与 `ui-sidebar` 一同挂载。检查中不渲染任何内容；已是最新版本时，会在「设置」旁显示已安装版本。发现新的 GitHub Release 后，该状态会替换为**更新**；下载时标签显示进度，完成后显示**重启更新**，失败后保留**重试更新**。侧边栏收起时，版本显示为勾选图标，各项操作则显示为纯图标轨道按钮。
 
 浏览器只能通过 preload allowlist 请求下载或安装。Release 访问、完整性校验、后端关闭与安装器重启都由 Electron 主进程负责。
 

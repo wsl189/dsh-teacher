@@ -32,11 +32,14 @@ function setup(state: DesktopUpdateState, wide = true) {
 }
 
 describe('UpdateButton', () => {
-  it('renders nothing while checking or up to date', () => {
+  it('renders nothing while checking and shows the current version when up to date', () => {
     const checking = setup({ status: 'checking' })
     expect(checking.view.container.innerHTML).toBe('')
-    act(() => { checking.store.set({ status: 'up-to-date' }) })
-    expect(checking.view.container.innerHTML).toBe('')
+    act(() => { checking.store.set({ status: 'up-to-date', version: '1.2.0' }) })
+    const current = screen.getByRole('status', { name: '当前版本 1.2.0' })
+    expect(current.textContent).toBe('v1.2.0')
+    expect(checking.download).not.toHaveBeenCalled()
+    expect(checking.install).not.toHaveBeenCalled()
   })
 
   it('downloads from the visible update action and projects progress', async () => {
@@ -68,5 +71,11 @@ describe('UpdateButton', () => {
     setup({ status: 'available', version: '1.2.0' }, false)
     const button = screen.getByRole('button', { name: '发现新版本 1.2.0，下载更新' })
     expect(button.textContent).toBe('')
+  })
+
+  it('uses an icon-only current-version status in the rail', () => {
+    setup({ status: 'up-to-date', version: '1.2.0' }, false)
+    const current = screen.getByRole('status', { name: '当前版本 1.2.0' })
+    expect(current.textContent).toBe('')
   })
 })

@@ -25,21 +25,244 @@ diff --git a/plugin-src/client/index.js b/plugin-src/client/index.js
 
  const CHANNELS = Object.freeze([
    { id: 'weixin', label: '微信' },
-@@ -254,8 +254,8 @@
+@@ -254,8 +254,9 @@
    const officeRpcCall = (endpoint, payload, signal) =>
      ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
    const workspaceDirectoryPicker = Object.freeze({
 -    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
 -    pickDirectory: () => ctx.workspaces.pickDirectory(),
++    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
 +    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
 +    pickDirectory: () => ctx.uiWorkspace.pickDirectory(),
    });
 
    ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+diff --git a/plugin-src/client/styles.js b/plugin-src/client/styles.js
+--- a/plugin-src/client/styles.js
++++ b/plugin-src/client/styles.js
+@@ -154,7 +154,10 @@
+ .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
+ .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
+ .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
+-.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
++.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
++.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
+ .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
+ .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+ .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+diff --git a/plugin-src/client/workspace-directory-picker.js b/plugin-src/client/workspace-directory-picker.js
+--- a/plugin-src/client/workspace-directory-picker.js
++++ b/plugin-src/client/workspace-directory-picker.js
+@@ -36,6 +36,10 @@
+   return listing.crumbs.slice(homeIndex);
+ }
+
++function rootKey(path) {
++  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
++}
++
+ export function WorkspaceDirectoryPicker({
+   open,
+   startPath,
+@@ -46,12 +50,15 @@
+   onCancel,
+ }) {
+   const [listing, setListing] = React.useState(null);
++  const [roots, setRoots] = React.useState([]);
++  const [rootError, setRootError] = React.useState(null);
+   const [loading, setLoading] = React.useState(false);
+   const [error, setError] = React.useState(null);
+   const [showHidden, setShowHidden] = React.useState(false);
+   const [retryKey, setRetryKey] = React.useState(0);
+   const requestRef = React.useRef(0);
+   const controllerRef = React.useRef(null);
++  const rootsControllerRef = React.useRef(null);
+   const dialogRef = React.useRef(null);
+   const bodyRef = React.useRef(null);
+   const titleId = React.useId();
+@@ -93,6 +100,8 @@
+     if (!open) return undefined;
+     let active = true;
+     setListing(null);
++    setRoots([]);
++    setRootError(null);
+     setError(null);
+     setShowHidden(false);
+     dialogRef.current?.focus?.();
+@@ -101,6 +110,17 @@
+     };
+     if (typeof document !== 'undefined') document.addEventListener('keydown', handleKeyDown);
+
++    const rootsController = new AbortController();
++    rootsControllerRef.current?.abort();
++    rootsControllerRef.current = rootsController;
++    if (typeof picker.listDirectoryRoots === 'function') {
++      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
++        if (active && !rootsController.signal.aborted) setRoots(next);
++      }, (cause) => {
++        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
++      });
++    }
++
+     const start = async () => {
+       const initialPath = initialPathRef.current;
+       const initial = await loadDirectory(initialPath || undefined, { reportError: false });
+@@ -138,13 +158,21 @@
+       if (typeof document !== 'undefined') document.removeEventListener('keydown', handleKeyDown);
+       requestRef.current += 1;
+       controllerRef.current?.abort();
++      rootsController.abort();
+     };
+   }, [loadDirectory, open, picker, retryKey]);
+
+   if (!open) return null;
+   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
+   const crumbs = listing ? displayCrumbs(listing) : [];
+-  const presentedError = saveError ?? error;
++  const currentRoot = listing?.crumbs?.[0] ?? null;
++  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path))
++    ? [...roots, currentRoot]
++    : roots;
++  const activeRootPath = currentRoot
++    ? (rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path)
++    : '';
++  const presentedError = saveError ?? error ?? rootError;
+
+   const content = h('div', {
+     className: 'dim-directoryPickerBackdrop',
+@@ -162,7 +190,20 @@
+     tabIndex: -1,
+   },
+   h('header', { className: 'dim-directoryPickerHeader' },
+-    h('h3', { id: titleId }, '选择机器人工作区目录'),
++    h('div', { className: 'dim-directoryPickerTitleRow' },
++      h('h3', { id: titleId }, '选择机器人工作区目录'),
++      rootOptions.length > 1 && currentRoot
++        ? React.createElement('select', {
++            className: 'dim-directoryRootSelect',
++            'aria-label': '选择磁盘',
++            value: activeRootPath,
++            disabled: loading || busy,
++            onChange: (event) => void loadDirectory(event.target.value),
++          }, rootOptions.map((root) => React.createElement('option', {
++            key: root.path,
++            value: root.path,
++          }, root.name)))
++        : null),
+     listing
+       ? h('nav', { className: 'dim-directoryCrumbs', 'aria-label': '当前目录' },
+           crumbs.map((crumb, index) => h(React.Fragment, { key: crumb.path },
 diff --git a/lib/client.js b/lib/client.js
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -10367,7 +10367,7 @@
+@@ -1375,6 +1375,9 @@
+   if (homeIndex < 0) return listing.crumbs;
+   return listing.crumbs.slice(homeIndex);
+ }
++function rootKey(path) {
++  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
++}
+ function WorkspaceDirectoryPicker({
+   open,
+   startPath,
+@@ -1385,12 +1388,15 @@
+   onCancel
+ }) {
+   const [listing, setListing] = React5.useState(null);
++  const [roots, setRoots] = React5.useState([]);
++  const [rootError, setRootError] = React5.useState(null);
+   const [loading, setLoading] = React5.useState(false);
+   const [error, setError] = React5.useState(null);
+   const [showHidden, setShowHidden] = React5.useState(false);
+   const [retryKey, setRetryKey] = React5.useState(0);
+   const requestRef = React5.useRef(0);
+   const controllerRef = React5.useRef(null);
++  const rootsControllerRef = React5.useRef(null);
+   const dialogRef = React5.useRef(null);
+   const bodyRef = React5.useRef(null);
+   const titleId = React5.useId();
+@@ -1429,6 +1435,8 @@
+     if (!open) return void 0;
+     let active = true;
+     setListing(null);
++    setRoots([]);
++    setRootError(null);
+     setError(null);
+     setShowHidden(false);
+     dialogRef.current?.focus?.();
+@@ -1436,6 +1444,16 @@
+       if (event.key === "Escape" && !busyRef.current) onCancelRef.current?.();
+     };
+     if (typeof document !== "undefined") document.addEventListener("keydown", handleKeyDown);
++    const rootsController = new AbortController();
++    rootsControllerRef.current?.abort();
++    rootsControllerRef.current = rootsController;
++    if (typeof picker.listDirectoryRoots === "function") {
++      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
++        if (active && !rootsController.signal.aborted) setRoots(next);
++      }, (cause) => {
++        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
++      });
++    }
+     const start = async () => {
+       const initialPath = initialPathRef.current;
+       const initial = await loadDirectory(initialPath || void 0, { reportError: false });
+@@ -1470,12 +1488,16 @@
+       if (typeof document !== "undefined") document.removeEventListener("keydown", handleKeyDown);
+       requestRef.current += 1;
+       controllerRef.current?.abort();
++      rootsController.abort();
+     };
+   }, [loadDirectory, open, picker, retryKey]);
+   if (!open) return null;
+   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
+   const crumbs = listing ? displayCrumbs(listing) : [];
+-  const presentedError = saveError ?? error;
++  const currentRoot = listing?.crumbs?.[0] ?? null;
++  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path)) ? [...roots, currentRoot] : roots;
++  const activeRootPath = currentRoot ? rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path : "";
++  const presentedError = saveError ?? error ?? rootError;
+   const content = h2(
+     "div",
+     {
+@@ -1498,7 +1520,21 @@
+       h2(
+         "header",
+         { className: "dim-directoryPickerHeader" },
+-        h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
++        h2(
++          "div",
++          { className: "dim-directoryPickerTitleRow" },
++          h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
++          rootOptions.length > 1 && currentRoot ? React5.createElement("select", {
++            className: "dim-directoryRootSelect",
++            "aria-label": "\u9009\u62E9\u78C1\u76D8",
++            value: activeRootPath,
++            disabled: loading || busy,
++            onChange: (event) => void loadDirectory(event.target.value)
++          }, rootOptions.map((root) => React5.createElement("option", {
++            key: root.path,
++            value: root.path
++          }, root.name))) : null
++        ),
+         listing ? h2(
+           "nav",
+           { className: "dim-directoryCrumbs", "aria-label": "\u5F53\u524D\u76EE\u5F55" },
+@@ -10241,7 +10277,10 @@
+ .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
+ .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
+ .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
+-.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
++.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
++.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
+ .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
+ .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+ .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+@@ -10367,7 +10406,7 @@
 
  // plugin-src/client/index.js
  var name = "im-settings";
@@ -48,12 +271,13 @@ diff --git a/lib/client.js b/lib/client.js
  var CHANNELS = Object.freeze([
    { id: "weixin", label: "\u5FAE\u4FE1" },
    { id: "feishu", label: "\u98DE\u4E66" },
-@@ -10581,8 +10581,8 @@
+@@ -10581,8 +10620,9 @@
    const slackRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
    const officeRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
    const workspaceDirectoryPicker = Object.freeze({
 -    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
 -    pickDirectory: () => ctx.workspaces.pickDirectory()
++    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
 +    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
 +    pickDirectory: () => ctx.uiWorkspace.pickDirectory()
    });

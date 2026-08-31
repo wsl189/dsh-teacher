@@ -1,8 +1,8 @@
-/** Desktop update action rendered beside Settings only while an update exists. */
+/** Desktop update status and actions rendered beside Settings. */
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  IconDownloadOutline16, IconRefreshOutline16,
+  IconCheckOutline16, IconDownloadOutline16, IconRefreshOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DesktopUpdateKey } from './locales.ts'
@@ -27,15 +27,14 @@ export type UpdateButtonProps = PropsRuntime<'sidebar.update'>
   & InjectFace<UpdateButtonInjected>
   & PropsLocale<'desktop-update'>
 
-/** Human-readable button projection for one visible update state. */
+type ActionUpdateState = Exclude<DesktopUpdateState, { status: 'checking' | 'up-to-date' }>
+
+/** Human-readable button projection for one actionable update state. */
 function buttonView(
-  state: DesktopUpdateState,
+  state: ActionUpdateState,
   t: (key: DesktopUpdateKey, params?: Record<string, unknown>) => string,
-): { label: string; aria: string; disabled: boolean; install: boolean; percent?: number } | undefined {
+): { label: string; aria: string; disabled: boolean; install: boolean; percent?: number } {
   switch (state.status) {
-    case 'checking':
-    case 'up-to-date':
-      return undefined
     case 'available':
       return {
         label: t('action.available'),
@@ -69,18 +68,17 @@ function buttonView(
       }
     default:
       state satisfies never
-      return undefined
+      throw new Error('unreachable desktop update state')
   }
 }
 
 /**
- * Render the desktop update action while the updater has a newer version.
+ * Render the installed version or the action for a newer desktop release.
  * @param props - slot owner state, bound updater source, actions, and locale.
- * @returns the update button, or null while checking/up to date.
+ * @returns the current-version status, an update button, or null while checking.
  */
 export function UpdateButton({ wide, useUpdate, download, install, t }: UpdateButtonProps) {
   const state = useUpdate(value => value)
-  const view = buttonView(state, t)
   const [invoking, setInvoking] = useState(false)
   const [actionFailure, setActionFailure] = useState<string | undefined>(undefined)
   const mounted = useRef(true)
@@ -89,7 +87,24 @@ export function UpdateButton({ wide, useUpdate, download, install, t }: UpdateBu
     return () => { mounted.current = false }
   }, [])
   useEffect(() => { setActionFailure(undefined) }, [state])
-  if (view === undefined) return null
+  if (state.status === 'checking') return null
+  if (state.status === 'up-to-date') {
+    const aria = t('aria.current', { version: state.version })
+    return (
+      <span
+        className={`${css.entry} ${css.current} ${wide ? css.wide : css.rail}`}
+        data-desktop-update-status={state.status}
+        role="status"
+        aria-label={aria}
+        title={aria}
+      >
+        <IconCheckOutline16 size={wide ? 16 : 18} />
+        {wide && <span className={css.label}>{t('status.current', { version: state.version })}</span>}
+      </span>
+    )
+  }
+
+  const view = buttonView(state, t)
 
   const invoke = (): void => {
     if (view.disabled || invoking) return
@@ -107,7 +122,7 @@ export function UpdateButton({ wide, useUpdate, download, install, t }: UpdateBu
   return (
     <button
       type="button"
-      className={`${css.button} ${wide ? css.wide : css.rail}`}
+      className={`${css.entry} ${css.action} ${wide ? css.wide : css.rail}`}
       data-desktop-update-status={state.status}
       aria-label={view.aria}
       title={actionFailure ?? (state.status === 'error' ? state.message : view.aria)}

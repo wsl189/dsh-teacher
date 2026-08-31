@@ -5,7 +5,7 @@
  * primary sections register between the brand row and the workspace browser;
  * `sidebar.workspaces` owns the browser below them, and the foot is the
  * `sidebar.settings` registrant's (ui-settings), paired with the optional
- * `sidebar.update` desktop action, while additive footer actions remain in
+ * `sidebar.update` desktop update surface, while additive footer actions remain in
  * `sidebar.footer.action` above that bottom row.
  */
 import type { PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -46,7 +46,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'sidebar.settings': { kind: 'single'; scope: 'root'; owner: SidebarSettingsOwnerProps }
     /**
-     * Optional desktop-update action to the right of Settings in the expanded
+     * Optional desktop-update status or action to the right of Settings in the expanded
      * footer row. Browser-only deployments leave the seat empty.
      */
     'sidebar.update': { kind: 'single'; scope: 'root'; owner: SidebarUpdateOwnerProps }
@@ -98,7 +98,7 @@ export interface SidebarSettingsOwnerProps {
   wide: boolean
 }
 
-/** Owner share of the optional desktop-update action beside Settings. */
+/** Owner share of the optional desktop-update surface beside Settings. */
 export interface SidebarUpdateOwnerProps {
   /** Whether the sidebar renders wide content (false = 56px rail). */
   wide: boolean

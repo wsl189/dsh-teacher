@@ -1,3 +1,4 @@
+import { spawn as spawnChild } from 'node:child_process'
 import { mkdtempSync, readFileSync, statSync, unlinkSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
@@ -6,6 +7,7 @@ import {
   childEnv,
   killGroup,
   OutputCollector,
+  type SpawnInternals,
   spawnSubprocess,
   taskkillProcessTree,
 } from '../src/spawn.ts'
@@ -177,6 +179,21 @@ describe('spawnSubprocess', () => {
     expect(result.stdout.text).toBe('hello\n')
     expect(result.stdout.truncated).toBe(false)
     expect(result.stderr.text).toBe('')
+  })
+
+  it('requests hidden child windows for win32 launches', async () => {
+    let launchOptions: Parameters<NonNullable<SpawnInternals['spawnProcess']>>[2] | undefined
+    const spawnProcess: NonNullable<SpawnInternals['spawnProcess']> = (program, args, options) => {
+      launchOptions = options
+      return spawnChild(program, args, options)
+    }
+    const result = await finish(spawnSubprocess(spec('true'), {
+      spillDir,
+      platform: 'win32',
+      spawnProcess,
+    }))
+    expect(result.exitCode).toBe(0)
+    expect(launchOptions).toMatchObject({ windowsHide: true, detached: false })
   })
 
   it('captures stderr separately', async () => {

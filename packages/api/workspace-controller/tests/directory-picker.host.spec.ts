@@ -24,6 +24,10 @@ const NATIVE_STUB: DirectoryPickerCapability = { kind: 'native', pick: async () 
 
 const BROWSE_STUB: DirectoryPickerCapability = {
   kind: 'browse',
+  listRoots: async () => [
+    { name: 'C:\\', path: 'C:\\', hidden: false },
+    { name: 'D:\\', path: 'D:\\', hidden: false },
+  ],
   list: async (path) => {
     if (path === '/denied') {
       throw new DirectoryPickerError('directory-unreadable', '/denied', 'cannot list /denied')
@@ -106,6 +110,10 @@ describe('directoryPicker browse Remotes', () => {
   it('serves listings and creation, defaulting to the home directory', async () => {
     const picker = await harness(BROWSE_STUB)
     const signal = new AbortController().signal
+    expect(await picker.listRoots(signal)).toEqual([
+      { name: 'C:\\', path: 'C:\\', hidden: false },
+      { name: 'D:\\', path: 'D:\\', hidden: false },
+    ])
     expect(await picker.list(undefined, signal)).toMatchObject({ path: '/home/user', home: '/home/user' })
     expect(await picker.list('/home/user/projects', signal))
       .toMatchObject({ path: '/home/user/projects' })
@@ -127,6 +135,7 @@ describe('directoryPicker browse Remotes', () => {
     const createDirectory = vi.fn(async (path: string, name: string) => `${path}/${name}`)
     const picker = await harness({
       kind: 'browse',
+      listRoots: signal => BROWSE_STUB.listRoots(signal),
       list: (path, signal) => BROWSE_STUB.list(path, signal),
       createDirectory,
     })
@@ -145,6 +154,7 @@ describe('directoryPicker browse Remotes', () => {
   it('reports an aborted listing as cancelled', async () => {
     const picker = await harness({
       kind: 'browse',
+      listRoots: async () => [],
       list: (_path, signal) => new Promise((_resolve, reject) => {
         signal?.addEventListener('abort', () => { reject(new Error('scan aborted')) }, { once: true })
       }),
@@ -156,8 +166,34 @@ describe('directoryPicker browse Remotes', () => {
     expect((await pending).code).toBe('cancelled')
   })
 
+  it('reports aborted root discovery as cancelled and other failures as internal', async () => {
+    const picker = await harness({
+      kind: 'browse',
+      listRoots: signal => new Promise((_resolve, reject) => {
+        signal?.addEventListener('abort', () => { reject(new Error('root scan aborted')) }, { once: true })
+      }),
+      list: (path, signal) => BROWSE_STUB.list(path, signal),
+      createDirectory: async () => '/never',
+    })
+    const abort = new AbortController()
+    const pending = refused(picker.listRoots(abort.signal))
+    abort.abort()
+    expect((await pending).code).toBe('cancelled')
+
+    const broken = await harness({
+      kind: 'browse',
+      listRoots: async () => { throw new Error('drive scan failed') },
+      list: (path, signal) => BROWSE_STUB.list(path, signal),
+      createDirectory: async () => '/never',
+    })
+    const failure = await refused(broken.listRoots(new AbortController().signal))
+    expect(failure).toMatchObject({ code: 'internal', message: 'directory root listing failed: drive scan failed' })
+  })
+
   it('refuses the browse verbs under a native composition', async () => {
     const picker = await harness()
+    expect(await refused(picker.listRoots(new AbortController().signal)))
+      .toMatchObject({ code: 'directory-picker-unavailable', details: { capability: 'native' } })
     expect(await refused(picker.list(undefined, new AbortController().signal)))
       .toMatchObject({ code: 'directory-picker-unavailable', details: { capability: 'native' } })
     expect(await refused(picker.createDirectory('/x', 'y')))
