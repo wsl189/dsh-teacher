@@ -13,7 +13,8 @@ const SCHEMA = {
     1: { type: 'const', value: 'read-only' },
     2: { type: 'const', meta: { description: 'Workspace' }, value: 'workspace-write' },
     3: { type: 'union', list: [1, 2] },
-    6: { type: 'object', dict: { defaultPreset: 3 } },
+    4: { type: 'boolean' },
+    6: { type: 'object', dict: { defaultPreset: 3, confirmFullAccess: 4 } },
   },
 }
 
@@ -23,12 +24,17 @@ function resolveDefault(view: SettingsNamespaceView) {
   return permissionDefaultOf(view, schema)
 }
 
-function view(defaultPreset: string, revision = 0, schema: SettingsNamespaceView['schema'] = SCHEMA): SettingsNamespaceView {
+function view(
+  defaultPreset: string,
+  revision = 0,
+  schema: SettingsNamespaceView['schema'] = SCHEMA,
+  confirmFullAccess = true,
+): SettingsNamespaceView {
   return {
     ns: 'permission',
     schema,
-    value: { defaultPreset },
-    base: { defaultPreset: 'read-only' },
+    value: { defaultPreset, confirmFullAccess },
+    base: { defaultPreset: 'read-only', confirmFullAccess: true },
     applies: 'live',
     secrets: [],
     revision,
@@ -55,6 +61,7 @@ describe('permission settings store', () => {
         { id: 'read-only', label: 'Read Only' },
         { id: 'workspace-write', label: 'Workspace' },
       ],
+      confirmFullAccess: true,
     })
     const single = {
       uid: 2,
@@ -66,6 +73,7 @@ describe('permission settings store', () => {
     expect(resolveDefault(view('read-only', 0, single))).toEqual({
       currentValue: 'read-only',
       options: [{ id: 'read-only', label: 'Read Only' }],
+      confirmFullAccess: true,
     })
     const undescribed = {
       uid: 2,
@@ -80,6 +88,9 @@ describe('permission settings store', () => {
 
   it('rejects malformed values and dynamic enums at the wire boundary', () => {
     expect(() => resolveDefault({ ...view('read-only'), value: {} })).toThrow(/no defaultPreset value/)
+    expect(() => resolveDefault({
+      ...view('read-only'), value: { defaultPreset: 'read-only', confirmFullAccess: 'yes' },
+    })).toThrow(/no confirmFullAccess value/)
     expect(() => resolveDefault(view('read-only', 0, {
       uid: 1, refs: { 1: { type: 'object', dict: {} } },
     }))).toThrow(/no defaultPreset field/)
@@ -111,6 +122,7 @@ describe('permission settings store', () => {
     const mutate = vi.fn(() => Promise.resolve(ok(view('workspace-write', 5))))
     const { controller } = permissionController({ describe, mutate })
     await controller.load()
+    await controller.load()
     expect(controller.store.getSnapshot()).toMatchObject({
       status: 'ready',
       writable: true,
@@ -130,6 +142,30 @@ describe('permission settings store', () => {
     })
     // The write answer folded into the mirror; no re-read followed.
     expect(describe).toHaveBeenCalledTimes(1)
+  })
+
+  it('persists suppression alone or atomically with a confirmed Full access default', async () => {
+    const mutate = vi.fn()
+      .mockResolvedValueOnce(ok(view('read-only', 2, SCHEMA, false)))
+      .mockResolvedValueOnce(ok(view('danger-full-access', 3, SCHEMA, false)))
+    const { controller } = permissionController({
+      describe: () => Promise.resolve(ok({
+        writable: true, hasDocument: false, namespaces: [view('read-only', 1)],
+      })),
+      mutate,
+    })
+    await controller.load()
+    await controller.suppressFullAccessConfirmation()
+    expect(mutate).toHaveBeenNthCalledWith(1, 'permission', [
+      { op: 'set', path: ['confirmFullAccess'], value: false },
+    ], 1)
+    expect(controller.store.getSnapshot().confirmFullAccess).toBe(false)
+
+    await controller.select('danger-full-access', true)
+    expect(mutate).toHaveBeenNthCalledWith(2, 'permission', [
+      { op: 'set', path: ['defaultPreset'], value: 'danger-full-access' },
+      { op: 'set', path: ['confirmFullAccess'], value: false },
+    ], 2)
   })
 
   it('hides the row when the namespace is absent and contains write failures', async () => {

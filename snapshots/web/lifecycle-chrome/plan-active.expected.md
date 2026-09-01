@@ -5,6 +5,7 @@
   - img
   - text: Workbench
   - img
+- button "Scheduled Tasks": Scheduled Tasks 0
 - text: Workspaces
 - button "Search sessions":
   - img

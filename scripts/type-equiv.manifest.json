@@ -1827,6 +1827,11 @@
       "source": "packages/interaction/permission-presets/src/types.ts"
     },
     {
+      "doc": "docs/subsystems/permission-presets.md",
+      "symbol": "PermissionSettings",
+      "source": "packages/interaction/permission-presets/src/types.ts"
+    },
+    {
       "doc": "docs/subsystems/plan.md",
       "symbol": "PlanModeConfig",
       "source": "packages/plan/plan-mode/src/index.ts"

@@ -58,18 +58,17 @@
 }
 
 /* Panel (figma Settings 501:29947): r24, white, lv3 shadow (figma effects
-   match --dsw-shadow-lv3 exactly); figma's 1080x700 is shrunk to 800 wide.
-   One height for every section, taken from the viewport rather than the
-   content: sections differ by hundreds of pixels (a settings list against the
-   composition editor), and a content-sized panel would resize under the
-   pointer on every nav click. Whatever does not fit scrolls in `.options`. */
+   match --dsw-shadow-lv3 exactly). One height for every section, taken from
+   the viewport rather than the content: sections differ by hundreds of
+   pixels, and a content-sized panel would resize under the pointer on every
+   nav click. Whatever does not fit scrolls in `.options`. */
 .panel {
   position: relative;
   z-index: 1;
   display: flex;
-  width: 800px;
-  height: min(800px, calc(100vh - 48px));
-  max-width: calc(100vw - 48px);
+  width: 1080px;
+  height: min(800px, calc(100vh - 24px));
+  max-width: calc(100vw - 24px);
   border-radius: 24px;
   overflow: hidden;
   background: var(--dsw-alias-bg-layer-2);
@@ -216,4 +215,44 @@
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (max-width: 860px) {
+  .nav {
+    width: 72px;
+    padding: 22px 8px 0;
+  }
+
+  .navTitle,
+  .navLabel {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+  }
+
+  .navCell {
+    justify-content: center;
+    padding: 9px;
+  }
+}
+
+@media (max-width: 560px) {
+  .panel {
+    width: 100vw;
+    height: 100vh;
+    max-width: none;
+    border-radius: 0;
+  }
+
+  .nav {
+    width: 60px;
+    padding-inline: 6px;
+  }
+
+  .options {
+    padding: 0 16px 16px;
+  }
 }

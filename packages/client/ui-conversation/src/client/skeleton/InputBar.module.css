@@ -334,11 +334,6 @@
   white-space: nowrap;
 }
 
-.voiceActive {
-  background: var(--dsw-alias-state-business-primary);
-  color: #fff;
-}
-
 /* Plan / Read-only / model — native <select>, chip-like closed chrome
    (figma ToggleButton: 13/20 medium secondary, 12px chevron). */
 .select {

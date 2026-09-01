@@ -71,13 +71,15 @@ export interface PopupState {
   readonly confirming: SelectOption | null
   /** Caller-controlled checkbox state for the pending confirmation. */
   readonly acknowledged: boolean
+  /** Whether the pending gate should be suppressed after this confirmation. */
+  readonly suppressFuture: boolean
   /** Surfaced settlement failure (options load or onSelect); null when none. */
   readonly error: string | null
 }
 
 const CLOSED: PopupState = {
   open: false, command: null, status: 'pending', options: [], search: '', active: 0,
-  submitting: false, confirming: null, acknowledged: false, error: null,
+  submitting: false, confirming: null, acknowledged: false, suppressFuture: false, error: null,
 }
 
 /**
@@ -218,7 +220,7 @@ export class PopupSelectController<TCtx = unknown> {
     const option = filterOptions(s.options, s.search)[index]
     if (option === undefined) return
     if (option.confirmation !== undefined) {
-      this.state.set({ ...s, confirming: option, acknowledged: false, error: null })
+      this.state.set({ ...s, confirming: option, acknowledged: false, suppressFuture: false, error: null })
       return
     }
     await this.settle(binding, option)
@@ -234,11 +236,22 @@ export class PopupSelectController<TCtx = unknown> {
     this.state.set({ ...s, acknowledged })
   }
 
+  /**
+   * Update the optional suppression choice for the currently pending gate.
+   * @param suppressFuture - whether future appearances should be suppressed after confirmation.
+   */
+  suppressFuture(suppressFuture: boolean): void {
+    const s = this.state.getSnapshot()
+    if (!s.open || s.submitting || s.confirming?.confirmation?.onSuppressFuture === undefined
+      || s.suppressFuture === suppressFuture) return
+    this.state.set({ ...s, suppressFuture })
+  }
+
   /** Cancel only the risk gate and return to the still-open option picker. */
   cancelConfirmation(): void {
     const s = this.state.getSnapshot()
     if (!s.open || s.submitting || s.confirming === null) return
-    this.state.set({ ...s, confirming: null, acknowledged: false })
+    this.state.set({ ...s, confirming: null, acknowledged: false, suppressFuture: false })
   }
 
   /** Settle the gated option only after the checkbox is acknowledged. */
@@ -246,18 +259,30 @@ export class PopupSelectController<TCtx = unknown> {
     const binding = this.binding
     const s = this.state.getSnapshot()
     if (binding === null || !s.open || s.submitting || s.confirming === null || !s.acknowledged) return
-    await this.settle(binding, s.confirming)
+    await this.settle(binding, s.confirming, s.suppressFuture)
   }
 
   /** Run the business settlement for an already admitted option. */
-  private async settle(binding: OpenBinding<TCtx>, option: SelectOption): Promise<void> {
+  private async settle(
+    binding: OpenBinding<TCtx>,
+    option: SelectOption,
+    suppressFuture = false,
+  ): Promise<void> {
     const s = this.state.getSnapshot()
     if (this.binding !== binding || !s.open || s.submitting) return
-    this.state.set({ ...s, submitting: true, confirming: null, acknowledged: false, error: null })
+    this.state.set({
+      ...s,
+      submitting: true,
+      confirming: null,
+      acknowledged: false,
+      suppressFuture: false,
+      error: null,
+    })
     try {
+      if (suppressFuture) await option.confirmation?.onSuppressFuture?.()
       await binding.spec.onSelect(option, binding.context)
     } catch (error) {
-      console.error(`[ui-commands] popupSelect onSelect failed for /${binding.command}:`, error)
+      console.error(`[ui-commands] popupSelect settlement failed for /${binding.command}:`, error)
       if (this.binding !== binding) return // dismissed/reopened/disposed while onSelect flew
       this.state.set({ ...this.state.getSnapshot(), submitting: false, error: errorText(error) })
       return

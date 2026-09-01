@@ -53,10 +53,8 @@ const CHILD_SPECS = {
 } as const
 
 describe('ui-settings apply', () => {
-  it('declares only the slot registry (a pure composition face, no locale)', () => {
-    expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'remote.settings', 'settingsScope',
-    ])
+  it('declares only the slot registry and locale services', () => {
+    expect(inject).toEqual(['slots', 'locale'])
   })
 
   it('registers the shell and declares every child slot, before or after the declaration', async () => {

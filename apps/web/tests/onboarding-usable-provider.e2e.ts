@@ -42,7 +42,7 @@ describe.skipIf(MODE === 'record')('web e2e: another usable provider ends first-
     await scaffold?.close()
   })
 
-  it('closes the setup card without discarding the add card beside it', async () => {
+  it('dismisses onboarding and opens another supplier access route', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-onboarding-setup-card-cancel'))
     const credentialStep = page.getByRole('dialog', { name: CREDENTIAL_STEP })
     await credentialStep.waitFor({ timeout: 15_000 })
@@ -52,32 +52,15 @@ describe.skipIf(MODE === 'record')('web e2e: another usable provider ends first-
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const settings = page.getByRole('dialog', { name: '设置' })
     await settings.waitFor({ timeout: 10_000 })
-    // Dismissing the onboarding step leaves Settings closed, so enter the
-    // Models section explicitly before exercising its normal cards.
-    await settings.getByRole('button', { name: '模型' }).click()
-    const setupKey = settings.getByRole('textbox', { name: 'API 密钥', exact: true })
-    await setupKey.waitFor({ timeout: 10_000 })
-
-    const add = settings.getByRole('button', { name: '添加提供方' })
-    await expect.poll(async () => add.isEnabled(), { timeout: 10_000 }).toBe(true)
-    await add.click()
-    const pick = settings.getByLabel('提供方')
-    await pick.waitFor({ timeout: 10_000 })
-    await pick.selectOption('minimax-cn')
-    await expect.poll(
-      async () => settings.getByRole('textbox', { name: 'API 密钥', exact: true }).count(),
-      { timeout: 10_000 },
-    ).toBe(2)
-
-    // Cancelling the setup card must not close the independent add-provider
-    // draft beside it.
-    await settings.getByRole('button', { name: '取消', exact: true }).first().click()
-    expect(await settings.getByLabel('提供方').count()).toBe(1)
+    // Dismissing the onboarding step leaves Settings closed. MiniMax is now
+    // configured from its supplier workspace rather than a generic add card.
+    await settings.getByRole('button', { name: '模型', exact: true }).click()
+    await settings.getByRole('button', { name: /MiniMax 标准 API 与 Token Plan/u }).click()
+    await settings.getByRole('button', { name: /配置 .*minimax-cn/u }).click()
     await expect.poll(
       async () => settings.getByRole('textbox', { name: 'API 密钥', exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(1)
-    await settings.getByRole('button', { name: '编辑 DeepSeek (deepseek-official)' }).waitFor({ timeout: 10_000 })
     const dismissed = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DISMISSED_EXPECTED, dismissed, MODE)
 
@@ -111,12 +94,13 @@ describe.skipIf(MODE === 'record')('web e2e: another usable provider ends first-
     ).toBe(0)
     expect(await page.locator('#root').evaluate(root => (root as HTMLElement).inert)).toBe(false)
 
-    // The Models page agrees: DeepSeek stays a row rather than reopening its
-    // setup card over a user who already has somewhere to send a request.
+    // The Models page agrees: DeepSeek remains available to configure without
+    // reopening onboarding over a user who already has a request route.
     await page.getByRole('button', { name: '设置', exact: true }).click()
     await settings.waitFor({ timeout: 10_000 })
-    await settings.getByRole('button', { name: '模型' }).click()
-    await settings.getByRole('button', { name: '编辑 DeepSeek (deepseek-official)' }).waitFor({ timeout: 10_000 })
+    await settings.getByRole('button', { name: '模型', exact: true }).click()
+    await settings.getByRole('button', { name: /DeepSeek 官方直连接口/u }).click()
+    await settings.getByRole('button', { name: '配置 DeepSeek (deepseek-official)' }).waitFor({ timeout: 10_000 })
     expect(await settings.getByRole('textbox', { name: 'API 密钥', exact: true }).count()).toBe(0)
 
     expect((await page.content()).includes('sk-e2e-minimax')).toBe(false)

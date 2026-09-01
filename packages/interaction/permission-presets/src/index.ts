@@ -25,7 +25,7 @@ import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-sett
 // Type-only: resolves ctx.sessionProjections / ctx.commands for the optional children.
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-commands'
-import type { PermissionSelect, PresetOption } from './types.ts'
+import type { PermissionSelect, PermissionSettings, PresetOption } from './types.ts'
 
 // The `permissions` projection-key declaration lives in src/types.ts (its one
 // home); this re-export projects the type face onto the package root AND
@@ -146,12 +146,6 @@ function foldKnobs(events: readonly SessionEvent[]): KnobState {
   return state
 }
 
-/** User setting resolved when a new session receives its initial permission. */
-export interface PermissionSettings {
-  /** Preset pinned into a newly created session. */
-  defaultPreset: string
-}
-
 /** The {@link PermissionPresetService} config: preset table and composition default. */
 export interface Config {
   /**
@@ -214,7 +208,7 @@ export class PermissionPresetService extends Service {
       throw new Error('permission: composed sandbox and approval defaults match no preset; configure defaultPreset explicitly')
     }
     this.resolve(defaultPreset)
-    const baseSettings: PermissionSettings = { defaultPreset }
+    const baseSettings: PermissionSettings = { defaultPreset, confirmFullAccess: true }
     this.defaultSettings = () => baseSettings
     const presetChoices = this.names.map((name) => {
       const choice = z.const(name)
@@ -223,6 +217,7 @@ export class PermissionPresetService extends Service {
     })
     const settingsSchema: z<PermissionSettings> = z.object({
       defaultPreset: z.union(presetChoices).required(),
+      confirmFullAccess: z.boolean().default(true),
     })
     installSettingsSection(ctx, PERMISSION_SETTINGS_NAMESPACE, settingsSchema, baseSettings, {
       setSource: (current) => {

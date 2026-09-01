@@ -221,15 +221,38 @@ describe('select', () => {
     expect(popup.state.getSnapshot().open).toBe(false)
   })
 
+  it('runs an admitted suppression callback before settling the gated option', async () => {
+    const onSuppressFuture = vi.fn()
+    const onSelect = vi.fn()
+    const gated: SelectOption = {
+      ...GATED,
+      confirmation: {
+        ...GATED.confirmation!,
+        suppressFutureLabel: "Don't remind me again",
+        onSuppressFuture,
+      },
+    }
+    const { popup } = await readyPopup({ options: () => Promise.resolve([gated]), onSelect })
+    await popup.select(0)
+    popup.suppressFuture(true)
+    popup.acknowledge(true)
+    await popup.confirm()
+    expect(onSuppressFuture).toHaveBeenCalledOnce()
+    expect(onSelect).toHaveBeenCalledExactlyOnceWith(gated, CTX_A)
+    expect(onSuppressFuture.mock.invocationCallOrder[0])
+      .toBeLessThan(onSelect.mock.invocationCallOrder[0]!)
+  })
+
   it('cancels a confirmation back to the picker without selecting or consuming', async () => {
     const onSelect = vi.fn()
     const deps = makeDeps()
     const { popup } = await readyPopup({ options: () => Promise.resolve([GATED]), onSelect }, deps)
     await popup.select(0)
     popup.acknowledge(true)
+    popup.suppressFuture(true)
     popup.cancelConfirmation()
     expect(popup.state.getSnapshot()).toMatchObject({
-      open: true, confirming: null, acknowledged: false, submitting: false,
+      open: true, confirming: null, acknowledged: false, suppressFuture: false, submitting: false,
     })
     expect(onSelect).not.toHaveBeenCalled()
     expect(deps.consume).not.toHaveBeenCalled()

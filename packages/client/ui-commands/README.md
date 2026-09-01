@@ -29,7 +29,7 @@ Mount this plugin alongside `ui-input-trigger` and `ui-conversation`; the `/` so
 
 ### Kinds and decorations
 
-A contribution is a client-owned command — a host-name collision fails loud. A decoration adds a bare-invocation popup to an EXISTING host command: the host command keeps its catalog row, its argument claim, and its lifecycle logging, and a decorated name with no host row in the session's directory never fires. Menu queries fuzzy-match ordered, case-insensitive subsequences of command names; prefixes rank first.
+A contribution is a client-owned command — a host-name collision fails loud. A decoration adds a bare-invocation popup to an EXISTING host command: the host command keeps its catalog row, its argument claim, and its lifecycle logging, and a decorated name with no host row in the session's directory never fires. A popup option may carry a shared risk confirmation; its optional lower-left suppression choice calls the business-owned persistence callback only after acknowledgement and confirmation, before the option settles. Menu queries fuzzy-match ordered, case-insensitive subsequences of command names; prefixes rank first.
 
 ### Image-carrying submissions
 

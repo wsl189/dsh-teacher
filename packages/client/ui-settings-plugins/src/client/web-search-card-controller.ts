@@ -13,7 +13,7 @@ import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
-  CardForm, textField,
+  CardForm, numberField, textField,
   type CardActions, type CardFieldState, type CardShell,
 } from './card-form.ts'
 
@@ -35,6 +35,8 @@ export interface WebSearchSettings {
   apiKeyEnv?: string
   /** Provider endpoint; blank inherits the provider default. */
   baseURL?: string
+  /** Maximum results returned by one AnySearch request. */
+  maxResults?: number
 }
 
 /** The credentials Remote methods this card reads and writes through. */
@@ -52,6 +54,8 @@ interface CredentialState {
 
 /** What the web-search card renders. */
 export interface WebSearchCardState extends CardShell {
+  /** Maximum results returned by one search. */
+  maxResults: CardFieldState
   /** Provider endpoint. */
   baseURL: CardFieldState
   /** The staged credential, which starts blank on every load. */
@@ -86,7 +90,7 @@ export class WebSearchCardController {
   ) {
     this.form = new CardForm(
       scope,
-      [textField('baseURL')],
+      [numberField('maxResults'), textField('baseURL')],
       [{ field: API_KEY_FIELD, write: text => this.writeKey(text) }],
     )
     this.store = this.form.bind(() => this.projection())
@@ -97,6 +101,7 @@ export class WebSearchCardController {
   private projection(): WebSearchCardState {
     return {
       ...this.form.shell(),
+      maxResults: this.form.field('maxResults'),
       baseURL: this.form.field('baseURL'),
       apiKey: this.form.field(API_KEY_FIELD),
       apiKeyConfigured: this.credential.configured,

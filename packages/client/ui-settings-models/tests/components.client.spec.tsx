@@ -33,6 +33,12 @@ function expandRow(position: number): void {
   fireEvent.click(screen.getByLabelText(`${en.modelAdvanced} ${String(position)}`))
 }
 
+/** Reveal generic-provider details; product presets keep the same fields visible. */
+function revealAdvancedFields(): void {
+  const disclosure = screen.queryByText(en.customized)
+  if (disclosure !== null) fireEvent.click(disclosure)
+}
+
 /** The capacity inputs of every open row, in row order. */
 function capacityInputs(label: string): HTMLInputElement[] {
   return screen.getAllByLabelText<HTMLInputElement>(new RegExp(label))
@@ -254,7 +260,7 @@ async function mountFirstRun(overrides: Parameters<typeof scriptedFace>[0] = {})
  */
 async function mountDeepSeekCard(overrides: Parameters<typeof scriptedFace>[0] = {}) {
   const mounted = await mountSection(overrides)
-  fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+  fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.configureAccess) }))
   return mounted
 }
 
@@ -279,7 +285,9 @@ describe('ModelsSection', () => {
     ])
     const dispatchedNames = renderSlot.mock.calls.map(call => call[0])
     expect(dispatchedNames.indexOf('settings.models.specialized-model'))
-      .toBeLessThan(dispatchedNames.indexOf('settings.models.provider-card'))
+      .toBeGreaterThan(dispatchedNames.lastIndexOf('settings.models.provider-card'))
+    expect(dispatchedNames.indexOf('settings.models.specialized-model'))
+      .toBeLessThan(dispatchedNames.indexOf('settings.models.footer'))
   })
 
   it('dispatches the provider-card seat inside the first-run setup card', async () => {
@@ -328,11 +336,12 @@ describe('ModelsSection', () => {
     await mountFirstRun()
     // Nothing is reachable yet, and DeepSeek has no configured credential and
     // no stored apiKey → setup card.
-    expect(screen.getByText('DeepSeek')).toBeTruthy()
+    expect(screen.getAllByText('DeepSeek').length).toBeGreaterThan(0)
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
     expect(screen.getByText('openai')).toBeTruthy()
     expect(screen.queryByText('Active')).toBeNull()
     expect(screen.queryByText('Inactive')).toBeNull()
+    expect(screen.getByText(en.accessNeedsSetup)).toBeTruthy()
     expect(screen.getByText(en.add)).toBeTruthy()
   })
 
@@ -347,9 +356,173 @@ describe('ModelsSection', () => {
     expect(configured.closest('li')?.textContent).toContain('openai')
     const missing = screen.getByRole('img', { name: en.credentialMissing })
     expect(missing.closest('li')?.textContent).toContain('DeepSeek')
-    // The card is still one click away.
-    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    // The incomplete route is still one click away.
+    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.configureAccess) }))
     expect(screen.getByLabelText(en.keyInput)).toBeTruthy()
+  })
+
+  it('switches a supplier plan and couples protocol changes to the official endpoint', async () => {
+    await mountSection()
+    const suppliers = screen.getByLabelText(en.supplierListLabel)
+    expect(within(suppliers).getAllByRole('button')).toHaveLength(5)
+    fireEvent.click(within(suppliers).getByRole('button', { name: /Alibaba Model Studio \/ Qwen/ }))
+
+    const access = screen.getByLabelText<HTMLSelectElement>(en.accessMethod)
+    expect([...access.options].map(option => option.value)).toEqual([
+      'qwen-cn',
+      'qwen-coding-cn',
+      'qwen-token-plan-cn',
+    ])
+    fireEvent.change(access, { target: { value: 'qwen-coding-cn' } })
+    fireEvent.click(screen.getByRole('button', { name: /Configure .*qwen-coding-cn/ }))
+
+    const protocol = screen.getByLabelText<HTMLSelectElement>(en.customApi)
+    const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
+    const fullURL = screen.getByLabelText<HTMLInputElement>(en.fullRequestUrl)
+    expect(protocol.value).toBe('openai-completions')
+    expect(baseURL.value).toBe('https://coding.dashscope.aliyuncs.com/v1')
+    expect(fullURL.value).toBe('https://coding.dashscope.aliyuncs.com/v1/chat/completions')
+    expandRow(1)
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
+
+    fireEvent.change(protocol, { target: { value: 'anthropic-messages' } })
+    expect(baseURL.value).toBe('https://coding.dashscope.aliyuncs.com/apps/anthropic')
+    expect(fullURL.value).toBe('https://coding.dashscope.aliyuncs.com/apps/anthropic/v1/messages')
+  })
+
+  it('chooses the default conversation model from usable service routes', async () => {
+    const scripted = scriptedFace()
+    const defaultModelNamespace: SettingsNamespaceView = {
+      ns: 'agent-default-model',
+      schema: JSON.parse(JSON.stringify(Schema.object({
+        provider: Schema.string(),
+        model: Schema.string(),
+        reasoningEffort: Schema.string(),
+        toolProvider: Schema.string(),
+        toolModel: Schema.string(),
+      }).toJSON())) as JsonValue,
+      value: { provider: 'openai', model: 'old-model', reasoningEffort: 'high' },
+      user: { provider: 'openai', model: 'old-model', reasoningEffort: 'high' },
+      applies: 'live',
+      secrets: [],
+      revision: 9,
+    }
+    scripted.face.settings.describe.mockImplementation(() => Promise.resolve(remoteOk({
+      writable: true,
+      hasDocument: false,
+      namespaces: [...wireNamespaces(), defaultModelNamespace],
+    })))
+    Object.assign(scripted.face, {
+      session: {
+        modelCatalog: vi.fn(() => Promise.resolve(remoteOk({
+          groups: [{ id: 'openai', name: 'OpenAI', models: [{ id: 'gpt-next', name: 'GPT Next' }] }],
+          failures: [],
+        }))),
+      },
+    })
+    const { mutate } = await mountFace(scripted)
+
+    fireEvent.click(screen.getByRole('tab', { name: en.usageTab }))
+    const picker = screen.getByLabelText<HTMLSelectElement>(en.defaultModelTitle)
+    fireEvent.change(picker, { target: { value: JSON.stringify(['openai', 'gpt-next']) } })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'agent-default-model',
+        [
+          { op: 'set', path: ['provider'], value: 'openai' },
+          { op: 'set', path: ['model'], value: 'gpt-next' },
+          { op: 'unset', path: ['reasoningEffort'] },
+        ],
+        9,
+      )
+    })
+  })
+
+  it('chooses image and speech models directly from a configured supplier route', async () => {
+    const scripted = scriptedFace()
+    const piAiNamespace = wireNamespaces().find(view => view.ns === 'llm-pi-ai')!
+    const defaultModelNamespace: SettingsNamespaceView = {
+      ns: 'agent-default-model',
+      schema: JSON.parse(JSON.stringify(Schema.object({
+        provider: Schema.string(),
+        model: Schema.string(),
+        imageProvider: Schema.string(),
+        imageModel: Schema.string(),
+        speechProvider: Schema.string(),
+        speechModel: Schema.string(),
+      }).toJSON())) as JsonValue,
+      value: { provider: 'qwen-cn', model: 'qwen3.7-plus' },
+      user: { provider: 'qwen-cn', model: 'qwen3.7-plus' },
+      applies: 'live',
+      secrets: [],
+      revision: 11,
+    }
+    const qwenProfile = {
+      apiKeyEnv: 'DASHSCOPE_API_KEY',
+      api: 'openai-completions',
+      baseURL: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    }
+    const qwenNamespace: SettingsNamespaceView = {
+      ...piAiNamespace,
+      value: {
+        providers: {
+          ...(piAiNamespace.value as { providers: Record<string, unknown> }).providers,
+          'qwen-cn': qwenProfile,
+        },
+      },
+      user: {
+        providers: {
+          ...((piAiNamespace.user as { providers: Record<string, unknown> }).providers),
+          'qwen-cn': qwenProfile,
+        },
+      },
+    }
+    scripted.face.settings.describe.mockImplementation(() => Promise.resolve(remoteOk({
+      writable: true,
+      hasDocument: false,
+      namespaces: wireNamespaces().map(view => view.ns === 'llm-pi-ai' ? qwenNamespace : view)
+        .concat(defaultModelNamespace),
+    })))
+    scripted.face.llm.listProviders.mockImplementation(() => Promise.resolve(remoteOk([
+      { id: 'deepseek-official', name: 'DeepSeek' },
+      { id: 'openai', name: 'openai' },
+      { id: 'qwen-cn', name: 'Qwen Standard API' },
+    ])))
+    scripted.face.llm.listConfigurableProviders.mockImplementation(() => Promise.resolve(remoteOk([
+      { provider: 'deepseek-official', displayName: 'DeepSeek', settingsNs: 'llm-deepseek', settingsPath: [] },
+      { provider: 'openai', displayName: 'openai', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'openai'] },
+      { provider: 'qwen-cn', displayName: 'Qwen Standard API', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'qwen-cn'], declared: true },
+    ])))
+    scripted.face.credentials.describe.mockImplementation((refs: string[]) => Promise.resolve(remoteOk(
+      Object.fromEntries(refs.map(ref => [ref, { configured: true, source: 'file', writable: true }])),
+    )))
+    const { mutate } = await mountFace(scripted)
+
+    fireEvent.click(screen.getByRole('tab', { name: en.usageTab }))
+    const imagePicker = screen.getByLabelText<HTMLSelectElement>(en.imageModelTitle)
+    const speechPicker = screen.getByLabelText<HTMLSelectElement>(en.speechModelTitle)
+    expect([...imagePicker.options].map(option => option.value)).toEqual([
+      '',
+      JSON.stringify(['qwen-cn', 'qwen-image-3.0-pro']),
+      JSON.stringify(['qwen-cn', 'qwen-image-3.0']),
+    ])
+    expect([...speechPicker.options].map(option => option.value)).toEqual([
+      '',
+      JSON.stringify(['qwen-cn', 'qwen3-asr-flash-filetrans']),
+    ])
+    fireEvent.change(imagePicker, {
+      target: { value: JSON.stringify(['qwen-cn', 'qwen-image-3.0-pro']) },
+    })
+    await waitFor(() => {
+      expect(mutate).toHaveBeenCalledWith(
+        'agent-default-model',
+        [
+          { op: 'set', path: ['imageProvider'], value: 'qwen-cn' },
+          { op: 'set', path: ['imageModel'], value: 'qwen-image-3.0-pro' },
+        ],
+        11,
+      )
+    })
   })
 
   it('marks only a confirmed missing reference and leaves native or unavailable state unmarked', async () => {
@@ -517,7 +690,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     // The deepseek placeholder is pinned to the public endpoint, not the
     // effective value (which may reflect a launch-environment override).
@@ -538,7 +711,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expect(screen.getByText(en.modelsInherited)).toBeTruthy()
     expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
       .toEqual(['deepseek-v4-flash', 'deepseek-v4-pro'])
@@ -570,7 +743,7 @@ describe('ModelsSection', () => {
 
   it('rejects duplicate DeepSeek model ids before writing', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     fireEvent.click(screen.getByText(en.addModel))
     const ids = screen.getAllByLabelText(new RegExp(en.modelId))
     fireEvent.change(ids[2] as HTMLInputElement, { target: { value: 'deepseek-v4-flash' } })
@@ -642,7 +815,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -680,7 +853,7 @@ describe('ModelsSection', () => {
 
   it('keeps unreadable context-window text on screen and refuses the write', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -727,7 +900,7 @@ describe('ModelsSection', () => {
       readOnly={false}
       onClose={() => {}}
     />)
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expect(screen.getByText(en.modelsCustomized)).toBeTruthy()
     expect(screen.getAllByLabelText(new RegExp(en.modelId)).map(input => (input as HTMLInputElement).value))
       .toEqual(['user-only-model'])
@@ -744,7 +917,7 @@ describe('ModelsSection', () => {
     // the first, which then fell back to rendering its stored NaN as `NaN` —
     // losing the text the user was told they could still correct.
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expandRow(1)
     expandRow(2)
     const windows = capacityInputs(en.contextWindow)
@@ -758,7 +931,7 @@ describe('ModelsSection', () => {
 
   it('re-keys the typed text around a removed row', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const windows = (): HTMLInputElement[] => capacityInputs(en.contextWindow)
     const removeRow = (at: number): void => {
       fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[at] as HTMLElement)
@@ -794,7 +967,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expandRow(1)
     const windows = capacityInputs(en.contextWindow)
     fireEvent.change(windows[0] as HTMLInputElement, { target: { value: 'garbage' } })
@@ -817,7 +990,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expandRow(1)
     expandRow(2)
     // The profile's own cap is the placeholder both rows inherit.
@@ -849,7 +1022,7 @@ describe('ModelsSection', () => {
 
   it('settles a pasted id and refuses whitespace that would never match', async () => {
     await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const ids = screen.getAllByLabelText<HTMLInputElement>(new RegExp(en.modelId))
     fireEvent.change(ids[0] as HTMLInputElement, { target: { value: '  deepseek-v4-flash  ' } })
     fireEvent.blur(ids[0] as HTMLInputElement)
@@ -888,7 +1061,7 @@ describe('ModelsSection', () => {
     const { mutate } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteOk(wireNamespaces()[0]))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     fireEvent.click(screen.getAllByLabelText(new RegExp(en.removeModel))[0] as HTMLElement)
     fireEvent.click(screen.getByLabelText(new RegExp(en.removeModel)))
     expect(screen.getByText(en.modelsEmpty)).toBeTruthy()
@@ -920,7 +1093,7 @@ describe('ModelsSection', () => {
   it('clears an inherited override with an unset op, never a whole-section replace', async () => {
     // A whole-section replace would clobber sibling overrides to clear one field.
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     expect(url.value).toBe('https://base')
     fireEvent.change(url, { target: { value: '' } })
@@ -957,7 +1130,7 @@ describe('ModelsSection', () => {
       readOnly={false}
       onClose={() => {}}
     />)
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const baseURL = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     expect(baseURL.placeholder).toBe('https://api.deepseek.com')
     fireEvent.change(baseURL, { target: { value: 'https://x' } })
@@ -968,7 +1141,7 @@ describe('ModelsSection', () => {
 
   it('rejects an invalid draft before writing', async () => {
     const { mutate } = await mountDeepSeekCard()
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'not-a-url' } })
     fireEvent.click(screen.getByText(en.apply))
     await screen.findByText(/baseURL/)
@@ -983,7 +1156,7 @@ describe('ModelsSection', () => {
     await waitFor(() => { expect(editorKey.placeholder).toBe(en.keyStored) })
     // pi-ai carries Base URL too: the stored override shows as the value and
     // the effective profile endpoint as its placeholder source.
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     const url = screen.getByLabelText<HTMLInputElement>(en.baseUrl)
     expect(url.value).toBe('https://proxy')
     fireEvent.change(url, { target: { value: 'https://proxy/v2' } })
@@ -1006,7 +1179,7 @@ describe('ModelsSection', () => {
     expect(pick.value).toBe('anthropic')
     // A dormant profile has no endpoint anywhere: the pi-ai placeholder
     // falls back to the provider-default wording.
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).placeholder).toBe(en.baseUrlDefault)
     const addKey = screen.getByLabelText<HTMLInputElement>(en.keyInput)
     expect(addKey.placeholder).toBe(en.keyPlaceholderNative)
@@ -1138,7 +1311,7 @@ describe('ModelsSection', () => {
     const { set } = await mountDeepSeekCard({
       mutate: vi.fn(() => Promise.resolve(remoteFail('changed since it was read', 'settings-conflict'))),
     })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(en.baseUrl), { target: { value: 'https://mine' } })
     fireEvent.click(screen.getByText(en.apply))
     await screen.findByText(en.conflict)
@@ -1150,7 +1323,7 @@ describe('ModelsSection', () => {
     // gets on the whole configuration plane) rejects rather than returning a
     // failed envelope: without a catch the card would stay busy forever.
     await mountDeepSeekCard({ mutate: vi.fn(() => Promise.reject(new Error('connection lost'))) })
-    fireEvent.click(screen.getByText(en.customized))
+    revealAdvancedFields()
     fireEvent.change(screen.getByLabelText<HTMLInputElement>(en.baseUrl), { target: { value: 'https://next' } })
     fireEvent.click(screen.getByText(en.apply))
     await screen.findByText('connection lost')
@@ -1331,8 +1504,8 @@ describe('ModelsSection', () => {
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     expect(screen.getAllByRole('img', { name: en.credentialMissing })
       .some(dot => dot.closest('li')?.textContent?.includes('DeepSeek') === true)).toBe(true)
-    // Its card reopens through Edit, which closes the add card as any row does.
-    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.editProvider) }))
+    // Its card reopens through Configure, which closes the add card as any row does.
+    fireEvent.click(screen.getByRole('button', { name: deepSeekCopy(en.configureAccess) }))
     expect(screen.getAllByLabelText(en.keyInput)).toHaveLength(1)
     expect(screen.queryByLabelText(en.provider)).toBeNull()
   })
@@ -1348,7 +1521,7 @@ describe('ModelsSection', () => {
       t={t}
       renderSlot={() => null}
     />)
-    await screen.findByText('DeepSeek')
+    expect((await screen.findAllByText('DeepSeek')).length).toBeGreaterThan(0)
   })
 
   it('removes by unsetting the profile path, never by rebuilding the section', async () => {

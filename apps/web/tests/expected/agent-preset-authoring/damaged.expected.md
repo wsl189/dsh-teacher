@@ -10,11 +10,12 @@
     - button "插件":
       - img
       - text: 插件
+    - button "技能"
+    - button "MCP"
     - button "Agent 预设":
       - img
       - text: Agent 预设
     - button "侧边卡片"
-  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭

@@ -13,6 +13,23 @@ const PREFERRED_MEDIA_TYPES = [
   'audio/mp4',
 ] as const
 
+/** Silence window that finishes an active browser recording. */
+export const VOICE_SILENCE_TIMEOUT_MS = 3_000
+
+const VOICE_LEVEL_SAMPLE_MS = 50
+const VOICE_ACTIVITY_RMS = 0.02
+const VOICE_LEVEL_FLOOR_RMS = 0.006
+const VOICE_LEVEL_CEILING_RMS = 0.18
+const VOICE_LEVEL_UPDATE_STEP = 0.015
+
+interface VoiceMeterSession {
+  readonly context: AudioContext
+  readonly source: MediaStreamAudioSourceNode
+  readonly analyser: AnalyserNode
+  readonly samples: Uint8Array<ArrayBuffer>
+  readonly cancelTimers: () => void
+}
+
 /** Browser microphone state and controls. */
 export interface VoiceRecorderController {
   /** Whether recording and the configured transcription callback are available. */
@@ -23,6 +40,8 @@ export interface VoiceRecorderController {
   readonly starting: boolean
   /** Whether the completed recording is being prepared or awaiting its transcript. */
   readonly transcribing: boolean
+  /** Current microphone level from zero (silent) to one (loud). */
+  readonly level: number
   /** Begin a new microphone recording. */
   start(this: void): Promise<void>
   /** Finish the active recording and start transcription. */
@@ -50,8 +69,10 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
   const [listening, setListening] = useState(false)
   const [starting, setStarting] = useState(false)
   const [transcribing, setTranscribing] = useState(false)
+  const [level, setLevel] = useState(0)
   const recorder = useRef<MediaRecorder | null>(null)
   const stream = useRef<MediaStream | null>(null)
+  const meter = useRef<VoiceMeterSession | null>(null)
   const chunks = useRef<Blob[]>([])
   const generation = useRef(0)
   const transcribeHandler = useRef(options.transcribe)
@@ -64,12 +85,13 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
   const browser = globalThis as unknown as {
     readonly navigator?: { readonly mediaDevices?: MediaDevices }
     readonly MediaRecorder?: typeof MediaRecorder
-    readonly AudioContext?: AudioDecoderConstructor
-    readonly webkitAudioContext?: AudioDecoderConstructor
+    readonly AudioContext?: typeof AudioContext
+    readonly webkitAudioContext?: typeof AudioContext
   }
   const mediaDevices = browser.navigator?.mediaDevices
   const Recorder = browser.MediaRecorder
-  const Decoder = browser.AudioContext ?? browser.webkitAudioContext
+  const AudioContextConstructor = browser.AudioContext ?? browser.webkitAudioContext
+  const Decoder: AudioDecoderConstructor | undefined = AudioContextConstructor
   const supported = Recorder !== undefined
     && typeof mediaDevices?.getUserMedia === 'function'
     && options.transcribe !== undefined
@@ -79,11 +101,71 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
     stream.current = null
   }, [])
 
+  const releaseMeter = useCallback((resetLevel = true): void => {
+    const current = meter.current
+    meter.current = null
+    if (current !== null) {
+      current.cancelTimers()
+      current.source.disconnect()
+      closeMeterContext(current.context)
+    }
+    if (resetLevel) setLevel(0)
+  }, [])
+
   const stop = useCallback((): void => {
     setStarting(false)
+    releaseMeter()
     const current = recorder.current
     if (current !== null && current.state !== 'inactive') current.stop()
-  }, [])
+  }, [releaseMeter])
+
+  const startMeter = useCallback((nextStream: MediaStream): void => {
+    if (AudioContextConstructor === undefined) return
+    let context: AudioContext
+    try {
+      context = new AudioContextConstructor()
+    } catch {
+      return
+    }
+    try {
+      const source = context.createMediaStreamSource(nextStream)
+      const analyser = context.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.45
+      source.connect(analyser)
+      const samples = new Uint8Array(analyser.fftSize)
+      let silenceTimer = setTimeout(stop, VOICE_SILENCE_TIMEOUT_MS)
+      const armSilenceTimer = (): void => {
+        clearTimeout(silenceTimer)
+        silenceTimer = setTimeout(stop, VOICE_SILENCE_TIMEOUT_MS)
+      }
+      const sampleTimer = setInterval(() => {
+        analyser.getByteTimeDomainData(samples)
+        const rms = rootMeanSquare(samples)
+        const nextLevel = voiceLevel(rms)
+        setLevel(previous => Math.abs(previous - nextLevel) >= VOICE_LEVEL_UPDATE_STEP
+          ? nextLevel
+          : previous)
+        if (rms >= VOICE_ACTIVITY_RMS) armSilenceTimer()
+      }, VOICE_LEVEL_SAMPLE_MS)
+      const current: VoiceMeterSession = {
+        context,
+        source,
+        analyser,
+        samples,
+        cancelTimers: () => {
+          clearInterval(sampleTimer)
+          clearTimeout(silenceTimer)
+        },
+      }
+      meter.current = current
+      void context.resume().catch(() => {
+        if (meter.current === current) releaseMeter()
+      })
+    } catch {
+      closeMeterContext(context)
+    }
+  }, [AudioContextConstructor, releaseMeter, stop])
 
   const start = useCallback(async (): Promise<void> => {
     if (!supported || recorder.current !== null || starting || transcribing) return
@@ -110,6 +192,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
         generation.current += 1
         recorder.current = null
         chunks.current = []
+        releaseMeter()
         releaseStream()
         setListening(false)
         setStarting(false)
@@ -118,6 +201,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
       next.onstop = () => {
         if (generation.current !== currentGeneration) return
         recorder.current = null
+        releaseMeter()
         releaseStream()
         setListening(false)
         const parts = chunks.current
@@ -147,6 +231,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
       recorder.current = next
       next.start()
       setListening(true)
+      startMeter(nextStream)
     } catch (error) {
       if (generation.current === currentGeneration) {
         recorder.current = null
@@ -157,7 +242,7 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
     } finally {
       if (generation.current === currentGeneration) setStarting(false)
     }
-  }, [Decoder, Recorder, mediaDevices, releaseStream, starting, supported, transcribing])
+  }, [Decoder, Recorder, mediaDevices, releaseMeter, releaseStream, startMeter, starting, supported, transcribing])
 
   const toggle = useCallback((): void => {
     if (listening || starting) stop()
@@ -175,10 +260,11 @@ export function useVoiceRecorder(options: VoiceRecorderOptions): VoiceRecorderCo
     }
     recorder.current = null
     chunks.current = []
+    releaseMeter(false)
     releaseStream()
-  }, [releaseStream])
+  }, [releaseMeter, releaseStream])
 
-  return { supported, listening, starting, transcribing, start, stop, toggle }
+  return { supported, listening, starting, transcribing, level, start, stop, toggle }
 }
 
 /**
@@ -209,4 +295,25 @@ function errorName(error: unknown, fallback: string): string {
 
 function recorderErrorName(event: Event): string {
   return 'error' in event ? errorName(event.error, 'recording-failed') : 'recording-failed'
+}
+
+function closeMeterContext(context: AudioContext): void {
+  void context.close().catch(() => {
+    // Meter cleanup is best-effort and cannot change the recording result.
+  })
+}
+
+function rootMeanSquare(samples: Uint8Array): number {
+  let sum = 0
+  for (const sample of samples) {
+    const normalized = (sample - 128) / 128
+    sum += normalized * normalized
+  }
+  return Math.sqrt(sum / samples.length)
+}
+
+function voiceLevel(rms: number): number {
+  if (rms <= VOICE_LEVEL_FLOOR_RMS) return 0
+  return Math.min(1, (rms - VOICE_LEVEL_FLOOR_RMS)
+    / (VOICE_LEVEL_CEILING_RMS - VOICE_LEVEL_FLOOR_RMS))
 }

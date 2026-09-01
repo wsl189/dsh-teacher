@@ -65,36 +65,13 @@ describe('web e2e: settings modal and General preferences', () => {
     await dialog.getByRole('button', { name: '帮我批准' }).waitFor({ timeout: 10_000 })
     await expect.poll(() => dialog.getByText('语言', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
     await expect.poll(() => dialog.getByText('外观', { exact: true }).count(), { timeout: 5_000 }).toBe(1)
-    const openDocument = dialog.getByRole('button', { name: '打开配置文件' })
-    await openDocument.waitFor({ timeout: 10_000 })
-    let openRequests = 0
-    await page.route('**/api/settings/openSettingsDocument', async (route) => {
-      const envelope = route.request().postDataJSON() as {
-        rpcId: string
-        payload: { args: Record<string, never> }
-      }
-      expect(envelope.payload).toEqual({ args: {} })
-      openRequests += 1
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          type: 'server-response',
-          rpcId: envelope.rpcId,
-          result: { ok: true, value: { opened: true } },
-        }),
-      })
-    })
-    await openDocument.click()
-    await expect.poll(() => openRequests, { timeout: 5_000 }).toBe(1)
-    await expect.poll(() => openDocument.isEnabled(), { timeout: 5_000 }).toBe(true)
-    await page.unroute('**/api/settings/openSettingsDocument')
+    expect(await dialog.getByRole('button', { name: '打开配置文件' }).count()).toBe(0)
     // Golden of the freshly opened dialog (default zh, General active).
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DIALOG_EXPECTED, snapshot, MODE)
     // Section switch: aria-current moves (the Models page itself has its own scenario file).
-    await dialog.getByRole('button', { name: '模型' }).click()
-    await expect.poll(() => dialog.getByRole('button', { name: '模型' }).getAttribute('aria-current'), { timeout: 5_000 }).toBe('true')
+    await dialog.getByRole('button', { name: '模型', exact: true }).click()
+    await expect.poll(() => dialog.getByRole('button', { name: '模型', exact: true }).getAttribute('aria-current'), { timeout: 5_000 }).toBe('true')
     expect(await dialog.getByRole('button', { name: '通用设置' }).getAttribute('aria-current')).toBeNull()
     // Plugins is a read-only projection of the same assembled Loader tree.
     // Capture one stable shipped row rather than the whole inventory so adding
@@ -113,7 +90,7 @@ describe('web e2e: settings modal and General preferences', () => {
       .toBe(String(expectedPluginCount))
     expect(await dialog.getByRole('button', { name: '插件', exact: true }).getAttribute('aria-current')).toBe('true')
     expect(await dialog.getByRole('tab', { name: '插件列表', exact: true }).getAttribute('aria-selected')).toBe('true')
-    expect(await dialog.getByRole('button', { name: '模型' }).getAttribute('aria-current')).toBeNull()
+    expect(await dialog.getByRole('button', { name: '模型', exact: true }).getAttribute('aria-current')).toBeNull()
     const pluginsSnapshot = await captureStableAria(
       page,
       PLUGIN_ROW_SELECTOR,
@@ -165,11 +142,13 @@ describe('web e2e: settings modal and General preferences', () => {
     const confirmation = page.getByRole('dialog', { name: '确认启用完全访问权限？' })
     const enable = confirmation.getByRole('button', { name: '启用完全访问权限' })
     expect(await enable.isDisabled()).toBe(true)
-    await confirmation.getByRole('checkbox').click()
+    await confirmation.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).click()
+    await confirmation.getByRole('checkbox', { name: '不再提醒' }).click()
     await enable.click()
     await dialog.getByRole('button', { name: '完全访问权限' }).waitFor({ timeout: 10_000 })
     const confirmedDocument = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(confirmedDocument).toContain('defaultPreset: danger-full-access')
+    expect(confirmedDocument).toContain('confirmFullAccess: false')
     const confirmed = scaffold.ctx.sessions.create(SessionId('settings-permission-confirmed'))
     expect(confirmed.events.map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'danger-full-access' }],

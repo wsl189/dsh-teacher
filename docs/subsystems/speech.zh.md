@@ -2,7 +2,7 @@
 
 [English](speech.md) | 中文
 
-语音能力把提供方无关转写（[dsh-speech](../../packages/speech/speech)）与 QQ 配置实现（[dsh-speech-qq](../../packages/speech/speech-qq)）及浏览器消费方分离。`ctx.speech` 在操作时选择一个提供方，并通过 Typert `speech.transcribe` Remote 或同进程可取消操作开放归一化最终文本。浏览器录音与返回文本保持瞬时状态，直到消费方把文本插入自身可编辑状态。
+语音能力把提供方无关转写（[dsh-speech](../../packages/speech/speech)）与 QQ 配置实现（[dsh-speech-qq](../../packages/speech/speech-qq)）及浏览器消费方分离。`ctx.speech` 在操作时选择一个提供方，并通过 Typert `speech.transcribe` Remote 或同进程可取消操作开放归一化最终文本。浏览器录音与返回文本保持瞬时状态，直到消费方把文本插入自身可编辑状态。共享浏览器录音器会开放采样所得麦克风音量，并通过 Web Audio 活动在连续静音三秒后结束一次录音；消费方仍保留显式停止操作。
 
 源码：[`packages/speech/speech/src/types.ts`](../../packages/speech/speech/src/types.ts)
 

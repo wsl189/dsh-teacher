@@ -10,80 +10,111 @@
     - button "插件":
       - img
       - text: 插件
+    - button "技能"
+    - button "MCP"
     - button "Agent 预设":
       - img
       - text: Agent 预设
     - button "侧边卡片"
-  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭
   - heading "模型" [level=2]
-  - paragraph: 填入各提供方的 API 密钥即可使用其模型。
-  - text: 工具模型
-  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
-  - combobox "工具模型"
-  - list:
-    - listitem:
-      - text: DeepSeek
-      - img "API 密钥已配置"
-      - button "编辑 DeepSeek (deepseek-official)": 编辑
-      - text: DeepSeek deepseek-official API 密钥
-      - textbox "API 密钥":
-        - /placeholder: 已配置——输入新值可替换
-      - group:
-        - text: 自定义设置 API 地址
-        - textbox "API 地址":
-          - /placeholder: https://api.deepseek.com
-        - region "模型目录":
-          - text: 模型目录 已自定义模型目录
-          - button "恢复默认模型"
-          - textbox "模型 ID 1":
-            - /placeholder: 模型 ID
-            - text: deepseek-v4-pro
-          - textbox "显示名称 1":
-            - /placeholder: 显示名称
-            - text: DeepSeek-V4-Pro
-          - button "模型详情 1":
-            - img
-          - button "删除模型 1":
-            - img
-          - textbox "模型 ID 2":
-            - /placeholder: 模型 ID
-            - text: deepseek-v4-flash-vision-exp
-          - textbox "显示名称 2":
-            - /placeholder: 显示名称
-            - text: DeepSeek-V4-Flash-Vision-Exp
-          - button "模型详情 2":
-            - img
-          - button "删除模型 2":
-            - img
-          - textbox "模型 ID 3":
-            - /placeholder: 模型 ID
-            - text: private-preview
-          - textbox "显示名称 3":
-            - /placeholder: 显示名称
-            - text: Private Preview
-          - button "模型详情 3" [expanded]:
-            - img
-          - button "删除模型 3":
-            - img
-          - text: 上下文窗口
-          - textbox "上下文窗口 3":
-            - /placeholder: 1M
-            - text: "131072"
-          - text: 最大输出 token 数
-          - textbox "最大输出 token 数 3":
-            - /placeholder: 256K
-            - text: 64K
-          - button "添加模型":
-            - img
-            - text: 添加模型
-      - button "取消"
-      - button "保存"
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每种接入方式独立保存 API 密钥、协议、地址和模型目录。
+  - region "国内供应商预设":
+    - complementary "供应商":
+      - text: 供应商
+      - button "智谱 GLM 标准 API 与 GLM Coding Plan"
+      - button "Kimi / 月之暗面 Kimi 开放平台与 Kimi Code"
+      - button "DeepSeek 官方直连接口" [pressed]
+      - button "阿里云百炼 / Qwen 标准 API、Coding Plan 与 Token Plan"
+      - button "MiniMax 标准 API 与 Token Plan"
+    - article:
+      - text: DeepSeek 官方直连接口 官方预设
+      - list:
+        - listitem:
+          - text: 接入方式
+          - combobox "接入方式":
+            - option "标准 API" [selected]
+          - text: DeepSeek 可用
+          - img "API 密钥已配置"
+          - button "编辑 DeepSeek (deepseek-official)": 编辑
+          - paragraph: DeepSeek 没有独立的 Coding Plan 线路；当前原生适配器使用其 OpenAI Chat 端点。
+          - text: DeepSeek deepseek-official 接入凭证 API 协议与密钥都属于当前接入方式。 API 协议
+          - combobox "API 协议" [disabled]:
+            - option "OpenAI Chat Completions" [selected]
+          - text: API 密钥
+          - textbox "API 密钥":
+            - /placeholder: 已配置——输入新值可替换
+          - text: 请求路由 切换模型类型后会自动套用供应商对应的官方请求地址。 模型类型
+          - combobox "模型类型":
+            - option "对话 / 推理" [selected]
+            - option "视觉理解"
+            - option "编程模型"
+          - text: API 地址
+          - textbox "API 地址":
+            - /placeholder: https://api.deepseek.com
+          - text: 完整请求地址 只读预览
+          - textbox "完整请求地址": https://api.deepseek.com/chat/completions
+          - paragraph: 对话与推理模型使用当前 LLM 请求端点。
+          - region "模型目录":
+            - text: 模型目录 已自定义模型目录
+            - button "恢复默认模型"
+            - textbox "模型 ID 1":
+              - /placeholder: 模型 ID
+              - text: deepseek-v4-pro
+            - textbox "显示名称 1":
+              - /placeholder: 显示名称
+              - text: DeepSeek-V4-Pro
+            - button "容量 1":
+              - img
+            - button "删除模型 1":
+              - img
+            - textbox "模型 ID 2":
+              - /placeholder: 模型 ID
+              - text: deepseek-v4-flash-vision-exp
+            - textbox "显示名称 2":
+              - /placeholder: 显示名称
+              - text: DeepSeek-V4-Flash-Vision-Exp
+            - button "容量 2":
+              - img
+            - button "删除模型 2":
+              - img
+            - textbox "模型 ID 3":
+              - /placeholder: 模型 ID
+              - text: private-preview
+            - textbox "显示名称 3":
+              - /placeholder: 显示名称
+              - text: Private Preview
+            - button "容量 3" [expanded]:
+              - img
+            - button "删除模型 3":
+              - img
+            - text: 上下文窗口
+            - textbox "上下文窗口 3":
+              - /placeholder: 1M
+              - text: "131072"
+            - text: 最大输出 token 数
+            - textbox "最大输出 token 数 3":
+              - /placeholder: 256K
+              - text: 64K
+            - button "添加模型":
+              - img
+              - text: 添加模型
+          - button "取消"
+          - button "保存"
+  - list
   - button "添加提供方":
     - img
     - text: 添加提供方
   - button "添加自定义提供方":
     - img
     - text: 添加自定义提供方
+  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
+  - 'button "展开设置: 语音模型"':
+    - strong: 语音模型
+    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。

@@ -1,4 +1,4 @@
-/** Keyless assembled-Web snapshot for semantic PDF question segmentation. */
+/** Keyless assembled-Web test for semantic PDF question segmentation. */
 
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'

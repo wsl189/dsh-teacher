@@ -81,9 +81,15 @@ function mountBar(shell: SessionInputShell, over?: { running?: boolean; disabled
     useLexicon: bindSnapshotSelector(shell.lexicon),
     useMenuLauncher: bindSnapshotSelector(createSnapshotStore<string | null>(null)),
     useDocuments: bindSnapshotSelector(createSnapshotStore([])),
+    useFullAccessConfirmation: bindSnapshotSelector(createSnapshotStore({
+      status: 'ready' as const,
+      value: { defaultPreset: 'workspace-write', confirmFullAccess: true },
+      base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+    })),
     renderSlot: (() => null) as InputBarProps['renderSlot'],
     stop: vi.fn(),
     command: () => Promise.resolve(true),
+    setConfirmFullAccess: () => Promise.resolve(),
     t: makeTranslate(zh, commonZh),
     variant: 'composer',
   }

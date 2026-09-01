@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-permission-presets` 为部署提供一个面向用户的 Permissions 选择器，把两个独立的执行旋钮——沙箱模式与审批策略——捆绑为具名预设。选择预设会同时应用沙箱模式与审批策略，而每个旋钮各自保留自己的值，因此沙箱执行、审批、提示词叙述与回放都读取各自的设置。默认表提供 `workspace-write`（workspace-write ＋ ask）与 `danger-full-access`（danger-full-access ＋ never）；不匹配任何预设的旋钮组合会读回推导出的 `custom`，客户端可以显示它，但不能选择它。该服务还拥有 `permission` 设置命名空间，其默认值只在之后创建会话时生效；两个可选子功能——`permissions` 会话投影单元与 `/permission` 命令——向 Web 客户端暴露同一表面。挂载它需要具有约束能力的 bash 执行器与审批服务；它自身不拥有任何执行权。
+`dsh-permission-presets` 为部署提供一个面向用户的 Permissions 选择器，把两个独立的执行旋钮——沙箱模式与审批策略——捆绑为具名预设。选择预设会同时应用沙箱模式与审批策略，而每个旋钮各自保留自己的值，因此沙箱执行、审批、提示词叙述与回放都读取各自的设置。默认表提供 `workspace-write`（workspace-write ＋ ask）与 `danger-full-access`（danger-full-access ＋ never）；不匹配任何预设的旋钮组合会读回推导出的 `custom`，客户端可以显示它，但不能选择它。该服务还拥有 `permission` 设置命名空间，用于保存未来会话的默认值与 Web GUI 的 Full access 确认偏好；两个可选子功能——`permissions` 会话投影单元与 `/permission` 命令——向 Web 客户端暴露同一表面。挂载它需要具有约束能力的 bash 执行器与审批服务；它自身不拥有任何执行权。
 
 ## 目录
 
@@ -62,6 +62,8 @@ kind: "package-reference"
 ### 会话默认值
 
 `permission` 设置命名空间为未来会话持有 `defaultPreset`：创建会话时读取它，将其应用于沙箱模式与审批策略，并把应用的预设记录为一次 `permission/preset` 选择。之后的设置变更绝不会改变现有会话。恢复的 seed（包括由 `session/end-seed` 明确标记的空 seed）会保留其有效权限，并只接收缺失的持久事实，而不会接收最新用户默认值。
+
+同一命名空间还持有默认为 `true` 的 `confirmFullAccess`。Web GUI 的权限选择器据此决定选择 Full access 时是否打开风险对话框。用户勾选“不再提醒”并确认后会存储 `false`；关闭或取消对话框不会写入任何内容。该偏好只改变浏览器确认流程：直接执行 `/permission danger-full-access` 以及宿主权限写入路径仍然可用。
 
 -----
 

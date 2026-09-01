@@ -3,8 +3,8 @@
  * distributed outside this repository adds UI to the Models settings section
  * without editing it.
  *
- * `settings.models.specialized-model` is an ordered area immediately below
- * the tool-model selector for product-owned model configurations that do not
+ * `settings.models.specialized-model` is an ordered Service access area after
+ * the generic provider workspace for product-owned configurations that do not
  * belong to an LLM provider row.
  *
  * `settings.models.provider-card` is keyed by the row's owning settings
@@ -27,8 +27,8 @@ import type { ProviderDirectoryEntry } from './store.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
-     * Ordered specialized-model area immediately below the tool-model card.
-     * Without a registrant the area renders nothing.
+     * Ordered product-owned configuration area in Service access. Without a
+     * registrant the area renders nothing.
      */
     'settings.models.specialized-model': { kind: 'list'; scope: 'root'; owner: SpecializedModelOwnerProps }
     /**
@@ -48,9 +48,9 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   }
 }
 
-/** Owner share of the specialized-model area (the section supplies nothing). */
+/** Owner share of the product-owned Service access area. */
 export interface SpecializedModelOwnerProps {
-  /** Marker field: specialized-model owner props are intentionally empty. */
+  /** Marker field: owner props are intentionally empty. */
   children?: never
 }
 

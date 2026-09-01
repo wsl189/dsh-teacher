@@ -354,6 +354,18 @@ currentSelection(): ModelSelection
 currentToolSelection(): ToolModelSelection
 
 /**
+ * Read the model selected for product-owned image-generation surfaces.
+ * @returns a detached provider and model selection, or undefined when unset.
+ */
+currentImageSelection(): ToolModelSelection | undefined
+
+/**
+ * Read the model selected for product-owned speech-recognition surfaces.
+ * @returns a detached provider and model selection, or undefined when unset.
+ */
+currentSpeechSelection(): ToolModelSelection | undefined
+
+/**
  * Save the complete default model selection. A deployment without a settings
  * provider keeps its composition entry.
  * @param next - resolved selection accepted by an entry point.

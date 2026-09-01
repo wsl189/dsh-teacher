@@ -22,7 +22,13 @@ const SOURCE = { title: 'AnySearch fixture', url: SOURCE_URL, snippet: 'Search i
 interface CapturedRequest {
   path: string
   authorization: string | undefined
-  body: { query?: string; url?: string; tag?: string; params?: Record<string, unknown> }
+  body: {
+    query?: string
+    url?: string
+    max_results?: number
+    tag?: string
+    params?: Record<string, unknown>
+  }
 }
 
 function textContent(result: ToolResult): string {
@@ -148,6 +154,7 @@ describe('bundled AnySearch', () => {
     expect(textContent(fetched)).toContain(SOURCE.content)
     expect(fetched.meta).toMatchObject({ url: SOURCE_URL, statusCode: 200, truncated: false })
     expect(requests.map(request => request.path)).toEqual(['/v1/search', '/v1/extract'])
+    expect(requests[0]?.body.max_results).toBe(8)
     expect(requests.every(request => request.authorization === undefined)).toBe(true)
     expect(await scaffold.ctx.credentials.resolve(KEY_REF)).toBeUndefined()
   })
@@ -182,32 +189,58 @@ describe('bundled AnySearch', () => {
     ])
   })
 
-  it('applies endpoint and credential-reference settings to the next operation', async () => {
+  it('applies endpoint, credential, and result-cap settings to the next operations', async () => {
     await scaffold.ctx.credentials.set(SETTINGS_KEY_REF, 'fixture-settings-key')
     await scaffold.ctx.settings.update(SETTINGS_NS, {
       apiKeyEnv: ` ${SETTINGS_KEY_REF} `,
       baseURL: `${serviceBaseURL}/configured`,
+      maxResults: 3,
     })
 
     const descriptor = scaffold.ctx.settings.describe().find(row => row.ns === SETTINGS_NS)
     expect(descriptor).toMatchObject({
       ns: SETTINGS_NS,
-      value: { apiKeyEnv: ` ${SETTINGS_KEY_REF} `, baseURL: `${serviceBaseURL}/configured` },
-      user: { apiKeyEnv: ` ${SETTINGS_KEY_REF} `, baseURL: `${serviceBaseURL}/configured` },
+      value: {
+        apiKeyEnv: ` ${SETTINGS_KEY_REF} `,
+        baseURL: `${serviceBaseURL}/configured`,
+        maxResults: 3,
+      },
+      user: {
+        apiKeyEnv: ` ${SETTINGS_KEY_REF} `,
+        baseURL: `${serviceBaseURL}/configured`,
+        maxResults: 3,
+      },
     })
-    const result = await execute('anysearch_search', { query: 'configured' })
-    expect(result.isError, textContent(result)).toBe(false)
-    expect(requests).toMatchObject([{
-      path: '/configured/v1/search',
-      authorization: 'Bearer fixture-settings-key',
-    }])
+    expect((await execute('web_search', { queries: ['configured-standard'] })).isError).toBe(false)
+    expect((await execute('anysearch_search', { query: 'configured-large', maxResults: 12 })).isError).toBe(false)
+    expect((await execute('anysearch_search', { query: 'configured-small', maxResults: 2 })).isError).toBe(false)
+    expect(requests).toMatchObject([
+      {
+        path: '/configured/v1/search',
+        authorization: 'Bearer fixture-settings-key',
+        body: { query: 'configured-standard', max_results: 3 },
+      },
+      {
+        path: '/configured/v1/search',
+        authorization: 'Bearer fixture-settings-key',
+        body: { query: 'configured-large', max_results: 3 },
+      },
+      {
+        path: '/configured/v1/search',
+        authorization: 'Bearer fixture-settings-key',
+        body: { query: 'configured-small', max_results: 2 },
+      },
+    ])
     await expect(scaffold.ctx.settings.update(SETTINGS_NS, { baseURL: 'file:///not-http' }))
       .rejects.toThrow('baseURL must use HTTP or HTTPS')
+    await expect(scaffold.ctx.settings.update(SETTINGS_NS, { maxResults: 21 }))
+      .rejects.toThrow('expected number <= 20')
   })
 
   it('keeps batch successes alongside quota and rate-limit failures', async () => {
+    await scaffold.ctx.settings.update(SETTINGS_NS, { maxResults: 4 })
     const result = await execute('anysearch_batch_search', {
-      items: [{ query: 'success' }, { query: 'quota' }, { query: 'limited' }],
+      items: [{ query: 'success', maxResults: 20 }, { query: 'quota' }, { query: 'limited' }],
     })
     expect(result.isError, textContent(result)).toBe(false)
     expect(textContent(result)).toContain('1 succeeded, 2 failed')
@@ -215,6 +248,7 @@ describe('bundled AnySearch', () => {
     expect(textContent(result)).toContain('402')
     expect(textContent(result)).toContain('429')
     expect(requests).toHaveLength(3)
+    expect(requests.map(request => request.body.max_results)).toEqual([4, 4, 4])
   })
 
   it('does not follow credential-bearing redirects', async () => {

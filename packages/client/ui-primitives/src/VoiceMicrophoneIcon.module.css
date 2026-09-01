@@ -1,0 +1,44 @@
+.root,
+.active {
+  display: block;
+  overflow: visible;
+}
+
+.active {
+  animation: voice-microphone-pulse 1.05s ease-in-out infinite;
+}
+
+.fill path,
+.outline path,
+.outline rect {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.4;
+}
+
+.fill path {
+  stroke-width: 1.7;
+}
+
+.outline {
+  opacity: 0.88;
+}
+
+@keyframes voice-microphone-pulse {
+  0%,
+  100% {
+    opacity: 0.58;
+  }
+
+  50% {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .active {
+    animation: none;
+  }
+}

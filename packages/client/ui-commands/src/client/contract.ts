@@ -7,13 +7,28 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type { ClientSessionContext } from '@deepseek-ai/dsh-client-ui-input-trigger/client'
 
 /** Copy for an option that must be acknowledged before onSelect can run. */
-export interface SelectConfirmation {
+interface SelectConfirmationBase {
   readonly title: string
   readonly description: string
   readonly acknowledgeLabel: string
   readonly cancelLabel: string
   readonly confirmLabel: string
 }
+
+/** Optional lower-left choice that suppresses this gate after confirmation. */
+type SelectConfirmationSuppression =
+  | {
+    readonly suppressFutureLabel: string
+    /** Persist the caller-owned suppression preference before selecting. */
+    readonly onSuppressFuture: () => void | Promise<void>
+  }
+  | {
+    readonly suppressFutureLabel?: never
+    readonly onSuppressFuture?: never
+  }
+
+/** Copy and optional suppression behavior for a gated popup option. */
+export type SelectConfirmation = SelectConfirmationBase & SelectConfirmationSuppression
 
 /** One option row of a popupSelect shell. */
 export interface SelectOption {

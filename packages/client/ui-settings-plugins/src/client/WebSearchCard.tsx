@@ -1,7 +1,7 @@
 /**
- * The web-search provider's card: its endpoint and key. The key is written
- * through the credentials domain, never into
- * the settings section, so the literal never rides a response.
+ * The web-search provider's card: its result cap, endpoint, and key. The key
+ * is written through the credentials domain, never into the settings section,
+ * so the literal never rides a response.
  */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
@@ -47,6 +47,20 @@ export function WebSearchCard(props: WebSearchCardProps) {
         configured={state.apiKeyConfigured}
         stateLabel={state.apiKeyConfigured ? t('webSearchApiKeySet') : t('webSearchApiKeyUnset')}
         onEdit={(text) => { props.edit('apiKey', text) }}
+      />
+      <ValueField
+        id="plugin-config-web-search-max-results"
+        label={t('webSearchMaxResults')}
+        hint={t('webSearchMaxResultsHint')}
+        overriddenLabel={t('overridden')}
+        resetLabel={t('reset')}
+        invalidLabel={t('invalidNumber')}
+        disabled={disabled}
+        numeric
+        placeholder="8"
+        {...state.maxResults}
+        onEdit={(text) => { props.edit('maxResults', text) }}
+        onReset={() => { props.resetField('maxResults') }}
       />
       <ValueField
         id="plugin-config-web-search-endpoint"

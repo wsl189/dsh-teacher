@@ -4,6 +4,7 @@
 // permission projection, client command path, HTTP RPC, and pushed update.
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
+import { readFile } from 'node:fs/promises'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -46,35 +47,32 @@ describe('web e2e: Full access confirmation', () => {
     await scaffold?.close()
   })
 
-  it('offers only localized Goal and Plan modes and inserts a command with a trailing space', async () => {
+  it('lists the shipped commands from the composer launcher', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-mode-menu'))
-    const input = page.locator('textarea').first()
-    await page.getByRole('button', { name: '命令' }).click()
+    await page.getByRole('button', { name: '指令' }).click()
     const menu = page.getByRole('listbox', { name: '触发候选建议' })
     await menu.waitFor({ timeout: 10_000 })
-    expect(await menu.getByRole('option').allTextContents()).toEqual([
-      '目标模式设置或查看长期任务目标',
-      '计划模式进入或退出计划模式',
-    ])
+    const options = await menu.getByRole('option').allTextContents()
+    expect(options).toContain('goalset or view the goal for a long-running task')
+    expect(options).toContain('planEnter or leave plan mode')
     const snapshot = await captureStableAria(page, '[role="listbox"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(MODE_MENU_EXPECTED, snapshot, MODE)
-    await menu.getByRole('option', { name: '目标模式 设置或查看长期任务目标' }).click()
-    await expect.poll(() => input.inputValue()).toBe('/goal ')
-    await input.fill('')
+    await page.keyboard.press('Escape')
+    await menu.waitFor({ state: 'detached', timeout: 5_000 })
   })
 
-  it('requires acknowledgement before the composer picker can enable Full access', async () => {
+  it('persists an admitted suppression choice and skips the next Full access dialog', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-full-access-confirmation'))
     const access = page.locator('button[aria-label^="访问模式"]').first()
     await access.waitFor({ timeout: 10_000 })
 
-    expect(await access.getAttribute('aria-label')).toBe('访问模式，当前：帮我批准')
+    expect(await access.getAttribute('aria-label')).toBe('访问模式，当前：Workspace Write')
 
     await access.click()
-    await page.getByText('完全访问权限', { exact: true }).click()
-    const dialog = page.getByRole('dialog', { name: '确认启用完全访问权限？' })
+    await page.getByText('Full access', { exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '确认启用 Full access？' })
     await dialog.waitFor({ timeout: 10_000 })
-    const enable = dialog.getByRole('button', { name: '启用完全访问权限' })
+    const enable = dialog.getByRole('button', { name: '启用 Full access' })
     expect(await enable.isDisabled()).toBe(true)
 
     // The modal is in this page's body (not a native/new window) and escapes
@@ -84,11 +82,26 @@ describe('web e2e: Full access confirmation', () => {
     await compareOrRefreshGolden(UI_EXPECTED, snapshot, MODE)
 
     await dialog.getByRole('checkbox', { name: '我已了解风险，并愿意继续' }).check()
+    await dialog.getByRole('checkbox', { name: '不再提醒' }).check()
     expect(await enable.isEnabled()).toBe(true)
     await enable.click()
     await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })
-      .toBe('访问模式，当前：完全访问权限')
+      .toBe('访问模式，当前：Full access')
     expect(await dialog.count()).toBe(0)
+    await expect.poll(
+      async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'),
+      { timeout: 5_000 },
+    ).toContain('confirmFullAccess: false')
+
+    await access.click()
+    await page.getByText('Workspace Write', { exact: true }).click()
+    await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })
+      .toBe('访问模式，当前：Workspace Write')
+    await access.click()
+    await page.getByText('Full access', { exact: true }).click()
+    expect(await page.getByRole('dialog', { name: '确认启用 Full access？' }).count()).toBe(0)
+    await expect.poll(() => access.getAttribute('aria-label'), { timeout: 10_000 })
+      .toBe('访问模式，当前：Full access')
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

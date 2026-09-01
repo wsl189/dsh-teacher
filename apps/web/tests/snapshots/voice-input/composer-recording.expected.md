@@ -1,0 +1,11 @@
+- textbox "描述你想要构建的内容… / 调用指令 @ 文件或对话"
+- button "指令":
+  - img
+- button "上传文件并用 MinerU OCR 识别"
+- button "Choose File"
+- button "停止语音输入" [pressed]
+- button "访问模式，当前：Workspace Write": Workspace Write
+- button "选择模型，当前 DeepSeek-V4-Flash":
+  - text: DeepSeek-V4-Flash
+  - img
+- button "发送消息" [disabled]

@@ -44,7 +44,7 @@
     "tests/voice-input.e2e.ts",
     "tests/teacher-workbench.e2e.ts",
     "tests/better-sidebar.e2e.ts",
-    "tests/question-segmentation.snapshot.ts",
+    "tests/question-segmentation.e2e.ts",
     "tests/settings-chrome.e2e.ts",
     "tests/models-settings.e2e.ts",
     "tests/default-model.e2e.ts",

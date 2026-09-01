@@ -181,6 +181,29 @@ describe('PopupSelectView', () => {
     expect(popup.state.getSnapshot().open).toBe(false)
   })
 
+  it('renders the optional lower-left suppression choice and commits it only on confirm', async () => {
+    const onSuppressFuture = vi.fn()
+    const gated: SelectOption = {
+      ...GATED,
+      confirmation: {
+        ...GATED.confirmation!,
+        suppressFutureLabel: "Don't remind me again",
+        onSuppressFuture,
+      },
+    }
+    await mountOpen({ options: () => Promise.resolve([gated]) })
+    await act(async () => { fireEvent.click(screen.getByRole('option', { name: 'Full access' })) })
+    fireEvent.click(screen.getByRole('checkbox', { name: "Don't remind me again" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(onSuppressFuture).not.toHaveBeenCalled()
+
+    await act(async () => { fireEvent.click(screen.getByRole('option', { name: 'Full access' })) })
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand the risks' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: "Don't remind me again" }))
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Enable Full access' })) })
+    expect(onSuppressFuture).toHaveBeenCalledOnce()
+  })
+
   it('canceling a gated option returns to the picker with acknowledgement reset', async () => {
     await mountOpen({ options: () => Promise.resolve([GATED]) })
     await act(async () => { fireEvent.click(screen.getByRole('option', { name: 'Full access' })) })

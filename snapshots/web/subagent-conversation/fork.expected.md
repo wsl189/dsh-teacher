@@ -3,4 +3,4 @@
     - img
     - text: workspace
   - treeitem "Explain event sourcing in one (1) now" [selected]
-  - treeitem "Ask a research subagent to 1min"
+  - treeitem "Ask a research subagent to now"

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This package provides permission preset surfaces for two lifetimes in the Web GUI: a General-settings row chooses the default for later sessions without switching the current session. A picker on the host `/permission` command switches the current session through one flat preset list with the active value marked. Kebab-case names render as title-case labels, and `danger-full-access` is presented as `Full access`. Choosing full access requires an explicit risk acknowledgement before either surface writes it. Both surfaces read one host-computed projection and write through one path, so the pushed projection frame is the single confirmation both follow.
+This package provides permission preset surfaces for two lifetimes in the Web GUI: a General-settings row chooses the default for later sessions without switching the current session. A picker on the host `/permission` command switches the current session through one flat preset list with the active value marked. Kebab-case names render as title-case labels, and `danger-full-access` is presented as `Full access`. Full access requires an explicit risk acknowledgement by default; the dialog's lower-left “Don't remind me again” choice suppresses later GUI confirmations only after the user confirms the switch. The host-backed preference is shared with the composer picker. Current-session pickers read one host-computed projection and submit the host command, while the General row writes the future-session setting.
 
 ## Table of Contents
 
@@ -29,11 +29,11 @@ Mount this plugin alongside the settings and commands packages; the permission r
 
 ### The picker
 
-A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. Unknown kebab-case preset names render in title case, and `custom` is display state, never a target.
+A pick submits the `/permission <preset>` command line. The argued path (`/permission <preset>` typed directly) still switches directly; the decoration replaces only the bare invocation. Unknown kebab-case preset names render in title case, and `custom` is display state, never a target. When Full access confirmation is enabled, dismissing its dialog preserves both the current preset and the reminder preference. Checking “Don't remind me again” and completing the acknowledgement stores the suppression before the command is submitted.
 
 ### The Settings row
 
-The row derives its options from the host's dynamic `defaultPreset` enum and writes one settings mutation. The value applies only when a later session is created; changing it never switches or rewrites the current session.
+The row derives its options from the host's dynamic `defaultPreset` enum and writes one settings mutation. The value applies only when a later session is created; changing it never switches or rewrites the current session. A confirmed Full access choice can write `defaultPreset` and `confirmFullAccess: false` atomically, while cancel and close write neither field.
 
 -----
 
@@ -43,7 +43,7 @@ The row derives its options from the host's dynamic `defaultPreset` enum and wri
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The General row reads the explicitly exposed `permission` Settings descriptor through `ctx.settingsScope` and writes one `settings.mutate` path operation with the descriptor revision; its observable rides the slot system's `hooks` compartment, so the renderer owns React hook binding, and a push invalidation refetches the descriptor. The value is read only when a later session is created. The current-session surface is a popupSelect decoration hung on the host `/permission` command (`ctx.commandUi.decorate`): the host command keeps its slash-menu row, argued path, and durable lifecycle logging, while the decoration replaces only the bare invocation with the picker. Options and the active mark read the session's `permissions` projection — the same host-computed select the composer chip renders. The full-access option carries a `confirmation` payload the shared popup shell renders as the in-page risk gate.
+The General row reads the explicitly exposed `permission` Settings descriptor through `ctx.settingsScope` and writes revisioned `settings.mutate` path operations; its observable rides the slot system's `hooks` compartment, so the renderer owns React hook binding, and a push invalidation refetches the descriptor. `defaultPreset` is read only when a later session is created, while `confirmFullAccess` controls the browser gate across the General row, command popup, and composer picker. The current-session surface is a popupSelect decoration hung on the host `/permission` command (`ctx.commandUi.decorate`): the host command keeps its slash-menu row, argued path, and durable lifecycle logging, while the decoration replaces only the bare invocation with the picker. Options and the active mark read the session's `permissions` projection — the same host-computed select the composer chip renders. While confirmation remains enabled, the Full access option carries a `confirmation` payload with an optional suppression callback; the shared popup shell invokes that callback only from the acknowledged confirm path.
 
 </details>
 

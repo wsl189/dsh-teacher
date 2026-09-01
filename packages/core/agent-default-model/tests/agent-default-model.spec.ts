@@ -80,6 +80,28 @@ describe('AgentDefaultModelConfig', () => {
     await bench.ctx.fiber.dispose()
   })
 
+  it('keeps independent image and speech assignments when the default model changes', async () => {
+    const bench = await boot()
+    expect(bench.defaultModel.currentImageSelection()).toBeUndefined()
+    expect(bench.defaultModel.currentSpeechSelection()).toBeUndefined()
+    await bench.settingsFiber.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      imageProvider: 'qwen-cn',
+      imageModel: 'qwen-image-3.0-pro',
+      speechProvider: 'zhipu-cn',
+      speechModel: 'glm-asr-2512',
+    })
+    expect(bench.defaultModel.currentImageSelection()).toEqual({
+      provider: 'qwen-cn', model: 'qwen-image-3.0-pro',
+    })
+    expect(bench.defaultModel.currentSpeechSelection()).toEqual({
+      provider: 'zhipu-cn', model: 'glm-asr-2512',
+    })
+    await bench.defaultModel.saveSelection({ provider: 'acme-gateway', model: 'acme-large' })
+    expect(bench.defaultModel.currentImageSelection()?.model).toBe('qwen-image-3.0-pro')
+    expect(bench.defaultModel.currentSpeechSelection()?.model).toBe('glm-asr-2512')
+    await bench.ctx.fiber.dispose()
+  })
+
   it('layers a hand-written partial section over the entry', async () => {
     const bench = await boot()
     await bench.settingsFiber.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {

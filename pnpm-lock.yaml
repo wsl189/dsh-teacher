@@ -29,7 +29,7 @@ overrides:
 packageExtensionsChecksum: sha256-TY2j5lQxdkFZX2SZBnhquSRqKkdC0DEqsCVjyixLOzo=
 
 patchedDependencies:
-  '@anysearch/anysearch-dsh@0.1.4': 96fc86c5ff16a0e556076b796fbe7d9741281ed2b6cb40807fdffec4b15c0825
+  '@anysearch/anysearch-dsh@0.1.4': f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82
   '@dickpy/dsh-imagegen@1.5.1': 5d0b75d1226004286dbe33d5b69d45614ebd826bc9677c01f844271abb52f6f0
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': 34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd
   '@xmanrui/dsh-im@1.0.3': 21c334c8b068295daed9680c5b7b8084fe7f32f01e629e9434397d51a302e4fb
@@ -1590,7 +1590,7 @@ importers:
     dependencies:
       '@anysearch/anysearch-dsh':
         specifier: file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz
-        version: file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=96fc86c5ff16a0e556076b796fbe7d9741281ed2b6cb40807fdffec4b15c0825)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)
+        version: file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
@@ -3410,21 +3410,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
-      '@deepseek-ai/dsh-api-remotes':
-        specifier: workspace:^
-        version: link:../../api/remotes
-      '@deepseek-ai/dsh-client-connection':
-        specifier: workspace:^
-        version: link:../connection
       '@deepseek-ai/dsh-client-locale':
         specifier: workspace:^
         version: link:../locale
-      '@deepseek-ai/dsh-client-store':
-        specifier: workspace:^
-        version: link:../store
-      '@deepseek-ai/dsh-client-test-runtime':
-        specifier: workspace:^
-        version: link:../../test-support/client-runtime
       '@deepseek-ai/dsh-client-ui-primitives':
         specifier: workspace:^
         version: link:../ui-primitives
@@ -19957,7 +19945,7 @@ snapshots:
     optionalDependencies:
       zod: 4.4.3
 
-  '@anysearch/anysearch-dsh@file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=96fc86c5ff16a0e556076b796fbe7d9741281ed2b6cb40807fdffec4b15c0825)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)':
+  '@anysearch/anysearch-dsh@file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)':
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-credentials': link:packages/credentials/credentials

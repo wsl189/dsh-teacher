@@ -102,31 +102,41 @@ describe('web e2e: plugin configuration section', () => {
     expect(await dialog.getByText('AI 生图（dsh-imagegen）', { exact: true }).count()).toBe(0)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
+    await dialog.getByText('网页搜索', { exact: true }).click()
+    await dialog.getByLabel('单次搜索结果上限').waitFor({ timeout: 10_000 })
 
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(SECTION_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('stores the AnySearch key from the web-search card', async () => {
+  it('stores the AnySearch key and result cap from the web-search card', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-anysearch-key'))
     const dialog = await openPlugins()
-    await dialog.getByText('网页搜索', { exact: true }).click()
+    if (await dialog.getByLabel('单次搜索结果上限').count() === 0) {
+      await dialog.getByText('网页搜索', { exact: true }).click()
+    }
 
     const key = dialog.getByLabel('API Key（可选）')
     await key.waitFor({ timeout: 10_000 })
+    const maxResults = dialog.getByLabel('单次搜索结果上限')
+    expect(await maxResults.inputValue()).toBe('8')
     expect(await dialog.getByLabel('接口地址').inputValue()).toBe('https://api.anysearch.com')
     expect(await dialog.getByText('未配置密钥；当前使用匿名访问。').count()).toBe(1)
     await key.fill('fixture-anysearch-key')
+    await maxResults.fill('5')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
 
     await expect.poll(async () => (await credentialsDocument()).includes(ANYSEARCH_TEST_KEY_REF), { timeout: 10_000 })
+      .toBe(true)
+    await expect.poll(async () => (await settingsDocument()).includes('maxResults: 5'), { timeout: 10_000 })
       .toBe(true)
     expect(await credentialsDocument()).toContain('fixture-anysearch-key')
     expect(await settingsDocument()).not.toContain('fixture-anysearch-key')
     const expand = dialog.getByRole('button', { name: '展开设置: 网页搜索' })
     await expand.waitFor({ timeout: 5_000 })
     await expand.click()
+    expect(await maxResults.inputValue()).toBe('5')
     expect(await dialog.getByText('已配置密钥。').count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)

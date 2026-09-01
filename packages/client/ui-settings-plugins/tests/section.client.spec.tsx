@@ -505,6 +505,7 @@ describe('WebSearchCard', () => {
   function renderWebSearch(state: Partial<WebSearchCardState> = {}) {
     const store = createSnapshotStore<WebSearchCardState>({
       ...settled,
+      maxResults: field('8'),
       baseURL: field(''),
       apiKey: field(''),
       apiKeyConfigured: false,
@@ -531,6 +532,7 @@ describe('WebSearchCard', () => {
 
     const key = screen.getByLabelText(en.webSearchApiKey)
     expect(key).toHaveProperty('disabled', false)
+    expect(screen.getByLabelText(en.webSearchMaxResults)).toHaveProperty('disabled', true)
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', true)
 
     fireEvent.change(key, { target: { value: 'ds-secret' } })
@@ -545,21 +547,29 @@ describe('WebSearchCard', () => {
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
     expect(screen.getByLabelText(en.webSearchApiKey)).toHaveProperty('disabled', true)
+    expect(screen.getByLabelText(en.webSearchMaxResults)).toHaveProperty('disabled', false)
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', false)
   })
 
-  it('stages the endpoint and its reset', () => {
+  it('stages the result cap and endpoint with their resets', () => {
     const actions = renderWebSearch({
+      maxResults: field('5', { overridden: true }),
       baseURL: field('https://search.test/v1', { overridden: true }),
     })
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
+    const maxResults = screen.getByLabelText(en.webSearchMaxResults)
+    expect(maxResults).toHaveProperty('inputMode', 'numeric')
+    fireEvent.change(maxResults, { target: { value: '3' } })
     fireEvent.change(screen.getByLabelText(en.webSearchBaseUrl), { target: { value: 'https://other.test' } })
     const resets = screen.getAllByRole('button', { name: en.reset })
-    expect(resets).toHaveLength(1)
+    expect(resets).toHaveLength(2)
     for (const reset of resets) fireEvent.click(reset)
 
-    expect(actions.edit.mock.calls).toEqual([['baseURL', 'https://other.test']])
-    expect(actions.resetField.mock.calls).toEqual([['baseURL']])
+    expect(actions.edit.mock.calls).toEqual([
+      ['maxResults', '3'],
+      ['baseURL', 'https://other.test'],
+    ])
+    expect(actions.resetField.mock.calls).toEqual([['maxResults'], ['baseURL']])
   })
 })

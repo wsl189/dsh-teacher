@@ -43,6 +43,22 @@ interface Config {
 
 The service requires a confining `ctx.shell` executor and `ctx.approval`, and misconfiguration fails at plugin load: a table entry named `custom` throws (the name is reserved for the derived not-a-preset state), and composing over a bash executor that does not confine (no `sandboxMode` capability fact) throws, because presets bundle a sandbox mode.
 
+## User settings and GUI confirmation
+
+The service owns the `permission` settings namespace. `defaultPreset` is pinned only when a fresh session is created; changing it does not rewrite an existing session. `confirmFullAccess` defaults to `true` and controls whether Web GUI permission pickers open their Full access risk dialog.
+
+```ts type-equiv
+/** User preferences shared by permission policy and its browser surfaces. */
+interface PermissionSettings {
+  /** Preset pinned into a newly created session. */
+  defaultPreset: string
+  /** Whether browser permission pickers require the Full access risk dialog. */
+  confirmFullAccess: boolean
+}
+```
+
+The GUI stores `confirmFullAccess: false` only when the user selects the suppression option and completes the risk acknowledgement. Dismissing the dialog stores nothing. This preference does not gate the host setter or a directly argued `/permission danger-full-access` command.
+
 ## Current preset and the derived `custom`
 
 `current(events)` derives the effective preset from the knobs, not from its own event alone: it folds the session's effective sandbox mode (falling back to the executor's configured mode) and effective approval policy (falling back to the approval service config, then `ask`), prefers a still-matching recorded selection, then the first matching table entry in declaration order, and otherwise returns `CUSTOM_PRESET` (`'custom'`). `custom` is derived-only: clients may display it as the current value, but it is never a switch target or an event payload.

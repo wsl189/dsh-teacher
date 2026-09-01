@@ -2,7 +2,7 @@
 
 English | [中文](speech.zh.md)
 
-The speech capability separates provider-neutral transcription ([dsh-speech](../../packages/speech/speech)) from the QQ-configured implementation ([dsh-speech-qq](../../packages/speech/speech-qq)) and browser Consumers. `ctx.speech` selects one provider at operation time and exposes normalized final text through the Typert `speech.transcribe` Remote or the same-process abortable operation. Browser recordings and returned text remain transient until a Consumer inserts the text into its own editable state.
+The speech capability separates provider-neutral transcription ([dsh-speech](../../packages/speech/speech)) from the QQ-configured implementation ([dsh-speech-qq](../../packages/speech/speech-qq)) and browser Consumers. `ctx.speech` selects one provider at operation time and exposes normalized final text through the Typert `speech.transcribe` Remote or the same-process abortable operation. Browser recordings and returned text remain transient until a Consumer inserts the text into its own editable state. The shared browser recorder exposes the sampled microphone level and uses Web Audio activity to finish one recording after three seconds of silence; Consumers retain an explicit stop action.
 
 Source: [`packages/speech/speech/src/types.ts`](../../packages/speech/speech/src/types.ts)
 

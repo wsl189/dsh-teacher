@@ -10,11 +10,12 @@
     - button "Plugins":
       - img
       - text: Plugins
+    - button "Skills"
+    - button "MCP"
     - button "Agent presets":
       - img
       - text: Agent presets
     - button "Side card"
-  - button "Open configuration file"
   - button "Close":
     - img
     - text: Close
@@ -82,4 +83,4 @@
     - text: Crop quality scale
     - spinbutton "Crop quality scale": "2"
     - text: Crop padding
-    - spinbutton "Crop padding": "12"
+    - spinbutton "Crop padding": "4"

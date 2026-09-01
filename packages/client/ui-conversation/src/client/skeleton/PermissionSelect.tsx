@@ -68,22 +68,43 @@ export interface PermissionSelectProps {
   value: PermissionSelectValue | undefined
   locked: boolean
   command: (line: string) => Promise<boolean>
+  /** Whether a Full access pick still requires the risk dialog. */
+  confirmFullAccess: boolean
+  /** Whether this client can persist the suppression preference. */
+  canSuppressFullAccessConfirmation: boolean
+  /** Persist suppression before submitting the confirmed permission change. */
+  suppressFullAccessConfirmation: () => Promise<void>
   /** The owning bar's locale seat, passed down as a plain prop. */
   t: ComposerBarProps['t']
 }
 
-export function PermissionSelect({ value, locked, command, t }: PermissionSelectProps) {
+export function PermissionSelect({
+  value,
+  locked,
+  command,
+  confirmFullAccess,
+  canSuppressFullAccessConfirmation,
+  suppressFullAccessConfirmation,
+  t,
+}: PermissionSelectProps) {
   const [pick, setPick] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
   const [confirmation, setConfirmation] = useState<string | null>(null)
   const [acknowledged, setAcknowledged] = useState(false)
+  const [suppressFuture, setSuppressFuture] = useState(false)
 
   useEffect(() => {
     if (!locked && value !== undefined) return
     setOpen(false)
     setAcknowledged(false)
+    setSuppressFuture(false)
     setConfirmation(null)
   }, [locked, value])
+
+  useEffect(() => {
+    if (canSuppressFullAccessConfirmation) return
+    setSuppressFuture(false)
+  }, [canSuppressFullAccessConfirmation])
 
   if (value === undefined) return null
 
@@ -98,9 +119,15 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
       return { id: option.value, label: optionLabel(option, t), ...icon === undefined ? {} : { icon } }
     })
 
-  const submit = (id: string): void => {
+  const submit = (id: string, before?: Promise<void>): void => {
     setPick(id)
-    void command(`/permission ${id}`)
+    const runCommand = (): Promise<boolean> => command(`/permission ${id}`)
+    // Preference persistence is auxiliary: failure leaves the gate enabled
+    // next time but cannot revoke this acknowledged permission selection.
+    const submitted = before === undefined
+      ? runCommand()
+      : before.then(runCommand, runCommand)
+    void submitted
       .catch(() => false)
       .then(() => { setPick(null) })
   }
@@ -109,7 +136,12 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
     setOpen(false)
     if (id === value.currentValue) return
     if (id === FULL_ACCESS) {
+      if (!confirmFullAccess) {
+        submit(id)
+        return
+      }
       setAcknowledged(false)
+      setSuppressFuture(false)
       setConfirmation(id)
       return
     }
@@ -118,14 +150,16 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
 
   const closeConfirmation = (): void => {
     setAcknowledged(false)
+    setSuppressFuture(false)
     setConfirmation(null)
   }
 
-  const confirmFullAccess = (): void => {
+  const confirmSelection = (): void => {
     if (locked || !acknowledged || confirmation === null) return
     const id = confirmation
+    const before = suppressFuture ? suppressFullAccessConfirmation() : undefined
     closeConfirmation()
-    submit(id)
+    submit(id, before)
   }
 
   return (
@@ -165,10 +199,17 @@ export function PermissionSelect({ value, locked, command, t }: PermissionSelect
         closeLabel={t('close')}
         confirmLabel={t('access.confirm.enable')}
         acknowledged={acknowledged}
+        {...canSuppressFullAccessConfirmation
+          ? {
+            suppressFutureLabel: t('access.confirm.dontRemind'),
+            suppressFuture,
+            onSuppressFutureChange: setSuppressFuture,
+          }
+          : {}}
         disabled={locked}
         onAcknowledgedChange={setAcknowledged}
         onCancel={closeConfirmation}
-        onConfirm={confirmFullAccess}
+        onConfirm={confirmSelection}
       />
     </>
   )

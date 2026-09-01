@@ -16,47 +16,64 @@
       - img
       - text: Agent 预设
     - button "侧边卡片"
-  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭
   - heading "模型" [level=2]
-  - paragraph: 填入各提供方的 API 密钥即可使用其模型。
-  - text: 工具模型
-  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
-  - combobox "工具模型"
-  - status: 工具模型已保存。
-  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
-  - 'button "展开设置: 语音模型"':
-    - strong: 语音模型
-    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每种接入方式独立保存 API 密钥、协议、地址和模型目录。
+  - region "国内供应商预设":
+    - complementary "供应商":
+      - text: 供应商
+      - button "智谱 GLM 标准 API 与 GLM Coding Plan"
+      - button "Kimi / 月之暗面 Kimi 开放平台与 Kimi Code"
+      - button "DeepSeek 官方直连接口"
+      - button "阿里云百炼 / Qwen 标准 API、Coding Plan 与 Token Plan"
+      - button "MiniMax 标准 API 与 Token Plan" [pressed]
+    - article:
+      - text: MiniMax 标准 API 与 Token Plan 官方预设
+      - list:
+        - listitem:
+          - text: 接入方式
+          - combobox "接入方式":
+            - option "标准 API" [selected]
+            - option "MiniMax Token Plan"
+          - text: MiniMax 可用
+          - img "API 密钥已配置"
+          - button "编辑 minimax-cn": 编辑
+          - button "删除 minimax-cn": 删除
+  - heading "其他供应商" [level=3]
   - list:
-    - listitem:
-      - text: minimax-cn
-      - img "API 密钥已配置"
-      - button "编辑 minimax-cn": 编辑
-      - button "删除 minimax-cn": 删除
     - listitem:
       - text: Acme Gateway 自定义
       - button "编辑 Acme Gateway (acme-gateway)": 编辑
       - button "删除 Acme Gateway (acme-gateway)": 删除
-      - text: Acme Gateway acme-gateway API 密钥
+      - text: Acme Gateway acme-gateway 接入凭证 API 协议与密钥都属于当前接入方式。 API 协议
+      - combobox "API 协议":
+        - option "供应商默认"
+        - option "openai-completions" [selected]
+        - option "openai-responses"
+        - option "anthropic-messages"
+      - text: API 密钥
       - textbox "API 密钥":
         - /placeholder: 输入 API 密钥，或留空使用环境认证
       - group:
-        - text: 自定义设置 显示名称
+        - text: 模型目录与高级设置 显示名称
         - textbox "显示名称":
           - /placeholder: acme-gateway
           - text: Acme Gateway
+        - text: 请求路由 切换模型类型后会自动套用供应商对应的官方请求地址。 模型类型
+        - combobox "模型类型" [disabled]:
+          - option "对话 / 推理" [selected]
         - text: API 地址
         - textbox "API 地址":
           - /placeholder: https://gateway.acme.example/v1
           - text: https://gateway.acme.example/v1
-        - text: API 协议
-        - combobox "API 协议":
-          - option "openai-completions" [selected]
-          - option "openai-responses"
-          - option "anthropic-messages"
+        - text: 完整请求地址 只读预览
+        - textbox "完整请求地址": https://gateway.acme.example/v1/chat/completions
         - region "模型目录":
           - text: 模型目录 已自定义模型目录
           - button "恢复默认模型"
@@ -87,3 +104,7 @@
   - button "添加自定义提供方":
     - img
     - text: 添加自定义提供方
+  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
+  - 'button "展开设置: 语音模型"':
+    - strong: 语音模型
+    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。

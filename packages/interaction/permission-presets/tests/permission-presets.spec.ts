@@ -195,6 +195,10 @@ describe('PermissionPresetService', () => {
 describe('new-session default', () => {
   it('pins the current setting into each new session without changing earlier sessions', async () => {
     const ctx = await mountedStore()
+    expect(ctx.settings.get(PERMISSION_SETTINGS_NAMESPACE)).toEqual({
+      defaultPreset: 'workspace-write',
+      confirmFullAccess: true,
+    })
     const first = ctx.sessions.create(SessionId('first'))
     expect(first.events.map(event => [event.type, event.data])).toEqual([
       ['permission/preset', { preset: 'workspace-write' }],
@@ -204,6 +208,11 @@ describe('new-session default', () => {
 
     await ctx.settings.update(PERMISSION_SETTINGS_NAMESPACE, {
       defaultPreset: 'danger-full-access',
+      confirmFullAccess: false,
+    })
+    expect(ctx.settings.get(PERMISSION_SETTINGS_NAMESPACE)).toEqual({
+      defaultPreset: 'danger-full-access',
+      confirmFullAccess: false,
     })
     expect(ctx.permissionPresets.defaultPreset).toBe('danger-full-access')
     const second = ctx.sessions.create(SessionId('second'))

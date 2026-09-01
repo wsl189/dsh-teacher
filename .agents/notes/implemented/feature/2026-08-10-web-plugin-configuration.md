@@ -22,7 +22,7 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 **A section is a subset when the plugin config is bigger than what a user owns.** `agent-loop` exposes only `maxParallelToolCalls`; its `agents` array is consumed once when the service starts, so a stored change there could only look like it had an effect.
 
-**The provider projects, rather than captures.** The bundled AnySearch adapter reads one settings snapshot at each operation entry, so a changed credential reference and endpoint travel together on the next request without provider re-registration. The editable section is the `apiKeyEnv` and `baseURL` subset; `maxRenderedContentChars` remains composition-owned because the advanced tools capture that limit when they register.
+**The provider projects, rather than captures.** The bundled AnySearch adapter reads one settings snapshot at each operation entry, so a changed credential reference, endpoint, and result cap travel together on the next request without provider re-registration. A search sends the configured cap when the caller names no result limit and the smaller of the two when it does, so standard, advanced, and batch calls cannot exceed the user value. The editable section is the `apiKeyEnv`, `baseURL`, and `maxResults` subset; `maxRenderedContentChars` remains composition-owned because the advanced tools capture that limit when they register.
 
 **Exposure stays a Host allowlist.** The three namespaces join `WEB_SETTINGS_NAMESPACES`; registration alone still never crosses the transport, and a namespace absent from that list answers `settings-not-exposed` exactly as an unregistered one does.
 
@@ -43,7 +43,7 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 ## Consequences
 
-A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and AnySearch's optional key and endpoint from the settings page, with each field marking whether they set it and offering a reset.
+A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and AnySearch's optional key, endpoint, and per-search result cap from the settings page, with each field marking whether they set it and offering a reset.
 
 Two costs are real. Adding a fourth plugin still requires an entry in the apiproxy allowlist, so the page's reach is a Host decision rather than a plugin's. And the plugins the web deployment moved into the agent plane — the file tools, the skills, compaction, the todo tool — appear nowhere here, which is most of what a user might expect to find; their configuration remains the preset editor's.
 

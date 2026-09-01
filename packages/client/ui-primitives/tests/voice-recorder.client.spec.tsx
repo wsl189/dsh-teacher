@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   blobToBase64,
   useVoiceRecorder,
+  VOICE_SILENCE_TIMEOUT_MS,
   type VoiceRecorderOptions,
 } from '../src/useVoiceRecorder.ts'
 
@@ -46,6 +47,47 @@ class RecorderDouble {
 
   fail(name: string): void {
     this.onerror?.({ error: { name } } as never)
+  }
+}
+
+class AudioMeterDouble {
+  static instances: AudioMeterDouble[] = []
+  static failConstruction = false
+  static failSetup = false
+  static failClose = false
+  static resumeResult: Promise<void> | undefined
+
+  amplitude = 0
+  readonly analyser = {
+    fftSize: 256,
+    smoothingTimeConstant: 0,
+    getByteTimeDomainData: vi.fn((samples: Uint8Array) => {
+      for (let index = 0; index < samples.length; index += 1) {
+        samples[index] = 128 + (index % 2 === 0 ? this.amplitude : -this.amplitude)
+      }
+    }),
+  }
+  readonly source = {
+    connect: vi.fn(),
+    disconnect: vi.fn(),
+  }
+  readonly resume = vi.fn(() => AudioMeterDouble.resumeResult ?? Promise.resolve())
+  readonly close = vi.fn(() => AudioMeterDouble.failClose
+    ? Promise.reject(new Error('close failed'))
+    : Promise.resolve())
+
+  constructor() {
+    if (AudioMeterDouble.failConstruction) throw new Error('construction failed')
+    AudioMeterDouble.instances.push(this)
+  }
+
+  createMediaStreamSource(): MediaStreamAudioSourceNode {
+    if (AudioMeterDouble.failSetup) throw new Error('setup failed')
+    return this.source as unknown as MediaStreamAudioSourceNode
+  }
+
+  createAnalyser(): AnalyserNode {
+    return this.analyser as unknown as AnalyserNode
   }
 }
 
@@ -94,6 +136,11 @@ afterEach(() => {
   cleanup()
   vi.unstubAllGlobals()
   RecorderDouble.instances = []
+  AudioMeterDouble.instances = []
+  AudioMeterDouble.failConstruction = false
+  AudioMeterDouble.failSetup = false
+  AudioMeterDouble.failClose = false
+  AudioMeterDouble.resumeResult = undefined
   if (originalMediaDevices === undefined) Reflect.deleteProperty(window.navigator, 'mediaDevices')
   else Object.defineProperty(window.navigator, 'mediaDevices', originalMediaDevices)
 })
@@ -121,6 +168,92 @@ describe('useVoiceRecorder', () => {
     expect(props.transcribe).toHaveBeenCalledWith(expect.objectContaining({ type: 'audio/ogg;codecs=opus' }))
     expect(props.onTranscript).toHaveBeenCalledWith('transcript')
     expect(hook.result.current.transcribing).toBe(false)
+  })
+
+  it('tracks microphone level and stops after three seconds of silence', async () => {
+    vi.useFakeTimers()
+    try {
+      const { stopTrack } = installRecorder()
+      RecorderDouble.supported = new Set(['audio/wav'])
+      vi.stubGlobal('AudioContext', AudioMeterDouble)
+      const props = options()
+      const hook = renderHook(current => useVoiceRecorder(current), { initialProps: props })
+      const recorder = await start(hook.result)
+      const audioMeter = AudioMeterDouble.instances[0]!
+      expect(audioMeter.source.connect).toHaveBeenCalledWith(audioMeter.analyser)
+      expect(hook.result.current.level).toBe(0)
+
+      audioMeter.amplitude = 20
+      act(() => { vi.advanceTimersByTime(100) })
+      expect(hook.result.current.level).toBeGreaterThan(0.8)
+
+      audioMeter.amplitude = 0
+      act(() => { vi.advanceTimersByTime(VOICE_SILENCE_TIMEOUT_MS - 1) })
+      expect(recorder.stop).not.toHaveBeenCalled()
+      act(() => { vi.advanceTimersByTime(1) })
+      expect(recorder.stop).toHaveBeenCalledOnce()
+      expect(audioMeter.source.disconnect).toHaveBeenCalledOnce()
+      expect(audioMeter.close).toHaveBeenCalledOnce()
+      expect(hook.result.current.level).toBe(0)
+
+      await finish(recorder)
+      expect(stopTrack).toHaveBeenCalledOnce()
+      expect(props.transcribe).toHaveBeenCalledWith(expect.objectContaining({ type: 'audio/wav' }))
+      expect(props.onTranscript).toHaveBeenCalledWith('transcript')
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('keeps recording available when optional Web Audio metering fails', async () => {
+    installRecorder()
+    RecorderDouble.supported = new Set(['audio/wav'])
+    vi.stubGlobal('AudioContext', AudioMeterDouble)
+
+    AudioMeterDouble.failConstruction = true
+    const constructionProps = options()
+    const construction = renderHook(current => useVoiceRecorder(current), { initialProps: constructionProps })
+    const constructionRecorder = await start(construction.result)
+    expect(construction.result.current.listening).toBe(true)
+    act(() => { construction.result.current.stop() })
+    await finish(constructionRecorder)
+    expect(constructionProps.onTranscript).toHaveBeenCalledWith('transcript')
+    construction.unmount()
+
+    AudioMeterDouble.failConstruction = false
+    AudioMeterDouble.failSetup = true
+    AudioMeterDouble.failClose = true
+    const setupProps = options()
+    const setup = renderHook(current => useVoiceRecorder(current), { initialProps: setupProps })
+    const setupRecorder = await start(setup.result)
+    expect(AudioMeterDouble.instances.at(-1)?.close).toHaveBeenCalledOnce()
+    act(() => { setup.result.current.stop() })
+    await finish(setupRecorder)
+    expect(setupProps.onTranscript).toHaveBeenCalledWith('transcript')
+    setup.unmount()
+
+    AudioMeterDouble.failSetup = false
+    AudioMeterDouble.failClose = false
+    AudioMeterDouble.resumeResult = Promise.reject(new Error('resume failed'))
+    const rejected = renderHook(current => useVoiceRecorder(current), { initialProps: options() })
+    const rejectedRecorder = await start(rejected.result)
+    await act(async () => { await Promise.resolve() })
+    expect(AudioMeterDouble.instances.at(-1)?.source.disconnect).toHaveBeenCalledOnce()
+    act(() => { rejected.result.current.stop() })
+    await finish(rejectedRecorder)
+    rejected.unmount()
+
+    let rejectResume: ((error: unknown) => void) | undefined
+    AudioMeterDouble.resumeResult = new Promise<void>((_resolve, reject) => { rejectResume = reject })
+    const stale = renderHook(current => useVoiceRecorder(current), { initialProps: options() })
+    const staleRecorder = await start(stale.result)
+    const staleMeter = AudioMeterDouble.instances.at(-1)!
+    act(() => { stale.result.current.stop() })
+    rejectResume?.(new Error('late resume failure'))
+    await act(async () => { await Promise.resolve(); await Promise.resolve() })
+    expect(staleMeter.source.disconnect).toHaveBeenCalledOnce()
+    await finish(staleRecorder)
+    stale.unmount()
   })
 
   it('reports empty audio and honors a callback removed during recording', async () => {

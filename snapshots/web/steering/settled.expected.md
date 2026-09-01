@@ -3,9 +3,6 @@
     - button "Use the ask_user_question tool to" [disabled]
   - img
   - text: Standard mode
-  - button "Session log":
-    - text: Session log
-    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -35,6 +32,9 @@
 - textbox "Message or run a task... / commands, @ files or sessions"
 - button "Commands":
   - img
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

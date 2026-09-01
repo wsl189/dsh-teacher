@@ -32,7 +32,11 @@ export async function apply(ctx: Context, config: Config = {}): Promise<void> {
       }
     })
   }
-  await ctx.plugin(WindowsMcp, {
+  // Recorded one-shot profiles need discovery to settle with the Loader,
+  // while the packaged Web runtime deliberately starts this child after
+  // launcher readiness.
+  const runtimeCtx = ctx.isolate('appReady')
+  await runtimeCtx.plugin(WindowsMcp, {
     runtimeCommand: fileURLToPath(new URL(config.capabilities === true ? './capabilities-server.mjs' : './desktop-server.mjs', import.meta.url)),
     runtimeCwd: process.cwd(),
   })

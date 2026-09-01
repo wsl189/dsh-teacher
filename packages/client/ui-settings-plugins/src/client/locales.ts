@@ -10,7 +10,7 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
-  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint'
+  | 'webSearchMaxResults' | 'webSearchMaxResultsHint' | 'webSearchBaseUrl' | 'webSearchBaseUrlHint'
   | 'mineruTitle' | 'mineruDescription' | 'mineruEndpoint' | 'mineruEndpointHint'
   | 'mineruBackend' | 'mineruBackendHint' | 'mineruBackendPipeline' | 'mineruBackendVlm' | 'mineruBackendHybrid'
   | 'mineruEffort' | 'mineruEffortHint' | 'mineruEffortLow' | 'mineruEffortMedium' | 'mineruEffortHigh'
@@ -67,6 +67,8 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key; no key uses anonymous access.',
   webSearchApiKeySet: 'A key is configured.',
   webSearchApiKeyUnset: 'No key is configured; anonymous access is active.',
+  webSearchMaxResults: 'Results per search',
+  webSearchMaxResultsHint: 'Caps each AnySearch request at 1–20 results; a smaller tool request still applies.',
   webSearchBaseUrl: 'Endpoint',
   webSearchBaseUrlHint: 'Reset to use the public AnySearch API.',
   mineruTitle: 'Document extraction',
@@ -170,6 +172,8 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥；未配置时使用匿名访问。',
   webSearchApiKeySet: '已配置密钥。',
   webSearchApiKeyUnset: '未配置密钥；当前使用匿名访问。',
+  webSearchMaxResults: '单次搜索结果上限',
+  webSearchMaxResultsHint: '每次 AnySearch 请求最多返回 1–20 条；工具请求的更小值仍会生效。',
   webSearchBaseUrl: '接口地址',
   webSearchBaseUrlHint: '恢复默认后使用 AnySearch 公共接口。',
   mineruTitle: '文档提取',

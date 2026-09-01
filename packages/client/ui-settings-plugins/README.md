@@ -41,7 +41,7 @@ The Subagent card stages its permission switch and exact model checkboxes togeth
 
 A key control starts blank, reports only whether one is configured, and writes through the credentials domain rather than the settings section; a blank draft writes nothing and keeps the stored key.
 
-The Web search card binds the bundled AnySearch namespace. Its key control writes the reference named by the section (`ANYSEARCH_API_KEY` by default), while endpoint changes are stored in the settings document. Both changes reach the next operation, and an absent key keeps anonymous access active.
+The Web search card binds the bundled AnySearch namespace. Its key control writes the reference named by the section (`ANYSEARCH_API_KEY` by default), while endpoint and per-search result-cap changes are stored in the settings document. The cap accepts 1 through 20, defaults to 8, and still honors a smaller limit requested by an advanced tool call. All three changes reach the next operation, and an absent key keeps anonymous access active.
 
 -----
 

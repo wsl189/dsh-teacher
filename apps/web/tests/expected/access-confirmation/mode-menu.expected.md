@@ -1,3 +1,10 @@
 - listbox "触发候选建议":
-  - option "目标模式 设置或查看长期任务目标" [selected]
-  - option "计划模式 进入或退出计划模式"
+  - text: 指令
+  - option "compact Compact older conversation history" [selected]
+  - option "edit_image Edit the latest image in this conversation with the plugin image model"
+  - option "export Download this Session log as a ZIP archive"
+  - option "feedback record feedback about this session"
+  - option "goal set or view the goal for a long-running task"
+  - option "permission Switch the permission preset (sandbox mode + approval policy)"
+  - option "plan Enter or leave plan mode"
+  - option "model 选择本会话使用的模型"

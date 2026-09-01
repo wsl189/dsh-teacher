@@ -260,8 +260,14 @@ function mount(
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
           useDocuments={bindSnapshotSelector(createSnapshotStore([]))}
+          useFullAccessConfirmation={bindSnapshotSelector(createSnapshotStore({
+            status: 'ready' as const,
+            value: { defaultPreset: 'workspace-write', confirmFullAccess: true },
+            base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
+          }))}
           stop={stop}
           command={() => Promise.resolve(true)}
+          setConfirmFullAccess={() => Promise.resolve()}
           t={t}
           renderSlot={((key: string, seatOwner: object) => {
             // The bar's own seats: recorded so a case can assert what share

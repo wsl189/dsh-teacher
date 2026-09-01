@@ -57,7 +57,12 @@ function selectOf(session: SessionFace | undefined): PermissionSelect | undefine
 }
 
 /** Flatten the projection select into popup rows; `custom` is display state, never a target. */
-function optionsOf(value: PermissionSelect, t: (key: PermissionAccessKey) => string): SelectOption[] {
+function optionsOf(
+  value: PermissionSelect,
+  t: (key: PermissionAccessKey) => string,
+  confirmFullAccess: boolean,
+  suppressFuture: (() => Promise<void>) | undefined,
+): SelectOption[] {
   return value.options
     .filter(option => option.value !== 'custom')
     .map((option) => {
@@ -67,7 +72,7 @@ function optionsOf(value: PermissionSelect, t: (key: PermissionAccessKey) => str
         label: copy.label,
         ...(copy.description !== undefined ? { detail: copy.description } : {}),
         ...(option.value === value.currentValue ? { active: true } : {}),
-        ...(option.value === FULL_ACCESS_PRESET
+        ...(option.value === FULL_ACCESS_PRESET && confirmFullAccess
           ? {
             confirmation: {
               title: t('confirm.title'),
@@ -75,6 +80,12 @@ function optionsOf(value: PermissionSelect, t: (key: PermissionAccessKey) => str
               acknowledgeLabel: t('confirm.acknowledge'),
               cancelLabel: t('confirm.cancel'),
               confirmLabel: t('confirm.enable'),
+              ...(suppressFuture === undefined
+                ? {}
+                : {
+                  suppressFutureLabel: t('confirm.dontRemind'),
+                  onSuppressFuture: suppressFuture,
+                }),
             },
           }
           : {}),
@@ -108,7 +119,8 @@ export function apply(ctx: ClientContext): void {
   const controller = new PermissionPresetSettingsController(
     ctx.settingsScope.describe(), { settings: ctx.remote.settings }, ctx.settingsSchema)
   const load = (): Promise<void> => controller.load()
-  const select = (preset: string): Promise<void> => controller.select(preset)
+  const select = (preset: string, suppressFuture = false): Promise<void> =>
+    controller.select(preset, suppressFuture)
   const injected = (): PermissionRowInjected => ({
     hooks: { permission: controller.store },
     load,
@@ -133,10 +145,19 @@ export function apply(ctx: ClientContext): void {
     available: session => selectOf(sessionFor(session)) !== undefined,
     ui: {
       kind: 'popupSelect',
-      options: (session) => {
+      options: async (session) => {
         const value = selectOf(sessionFor(session))
         if (value === undefined) throw new Error('permission presets are not available on this host')
-        return Promise.resolve(optionsOf(value, t))
+        await controller.load()
+        const preference = controller.store.getSnapshot()
+        return optionsOf(
+          value,
+          t,
+          preference.confirmFullAccess,
+          preference.writable
+            ? () => controller.suppressFullAccessConfirmation()
+            : undefined,
+        )
       },
       onSelect: async (option, session) => {
         const live = sessionFor(session)

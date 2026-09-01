@@ -2,11 +2,13 @@
  * Permission default-settings controller. The permission descriptor comes
  * from the shared describe mirror (the dynamic preset enum lives in the
  * namespace schema, which per-namespace scopes do not carry); writes target
- * only `defaultPreset`, carry the descriptor revision, and fold their answer
- * back into the mirror.
+ * `defaultPreset` and the browser confirmation preference, carry the
+ * descriptor revision, and fold their answer back into the mirror.
  */
 
-import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type {
+  SettingsNamespaceView, SettingsPathOpView,
+} from '@deepseek-ai/dsh-api-remotes/client'
 import {
   createSnapshotStore, type SnapshotStore,
 } from '@deepseek-ai/dsh-client-store'
@@ -33,6 +35,8 @@ export interface PermissionSettingsState {
   writable: boolean
   currentValue: string
   options: readonly PermissionDefaultOption[]
+  /** Whether Full access choices still open the risk confirmation. */
+  confirmFullAccess: boolean
   revision: number
 }
 
@@ -46,14 +50,22 @@ interface ConstChoice {
  * Read the dynamic preset enum encoded by the host's `defaultPreset` schema.
  * @param view - permission namespace descriptor.
  * @param schema - settings schema operations.
- * @returns current value and selectable options.
+ * @returns current value, selectable options, and the confirmation preference.
  */
 export function permissionDefaultOf(view: SettingsNamespaceView, schema: SettingsSchemaService): {
   currentValue: string
   options: PermissionDefaultOption[]
+  confirmFullAccess: boolean
 } {
-  const value = (view.value as { defaultPreset?: unknown } | null)?.defaultPreset
+  const section = view.value as {
+    defaultPreset?: unknown
+    confirmFullAccess?: unknown
+  } | null
+  const value = section?.defaultPreset
   if (typeof value !== 'string') throw new Error('permission settings has no defaultPreset value')
+  if (typeof section?.confirmFullAccess !== 'boolean') {
+    throw new Error('permission settings has no confirmFullAccess value')
+  }
   const node = schema.nodeAtPath(schema.rehydrate(view.schema), ['defaultPreset'])
   if (node === undefined) throw new Error('permission settings schema has no defaultPreset field')
   const rawChoices = node.type === 'union'
@@ -73,7 +85,7 @@ export function permissionDefaultOf(view: SettingsNamespaceView, schema: Setting
   if (options.length === 0 || !options.some(option => option.id === value)) {
     throw new Error('permission settings schema does not advertise its current preset')
   }
-  return { currentValue: value, options }
+  return { currentValue: value, options, confirmFullAccess: section.confirmFullAccess }
 }
 
 /** Controller deriving the row from the shared mirror and writing the default through it. */
@@ -85,6 +97,7 @@ export class PermissionPresetSettingsController {
     writable: false,
     currentValue: '',
     options: [],
+    confirmFullAccess: true,
     revision: 0,
   })
 
@@ -94,7 +107,7 @@ export class PermissionPresetSettingsController {
 
   /**
    * @param describeFace - the shared mirror's read/fold face (descriptor and schema source).
-   * @param api - settings wire face for the `defaultPreset` write.
+   * @param api - settings wire face for permission-preference writes.
    * @param schema - settings-owned schema operations.
    */
   constructor(
@@ -109,11 +122,13 @@ export class PermissionPresetSettingsController {
    */
   async load(): Promise<void> {
     if (this.disposed) return
-    this.following ??= this.describeFace.subscribe(() => { this.derive() })
-    this.store.update((state) => {
-      state.status = 'loading'
-      state.error = null
-    })
+    if (this.following === undefined) {
+      this.following = this.describeFace.subscribe(() => { this.derive() })
+      this.store.update((state) => {
+        state.status = 'loading'
+        state.error = null
+      })
+    }
     await this.describeFace.ensure()
     this.derive()
   }
@@ -124,9 +139,29 @@ export class PermissionPresetSettingsController {
    * control is disabled during the save, so this only drops programmatic
    * double-submits rather than user intent.
    * @param preset - advertised preset key.
+   * @param suppressFuture - whether this confirmed choice also disables later risk dialogs.
    * @returns nothing; {@link store} carries success or failure.
    */
-  async select(preset: string): Promise<void> {
+  async select(preset: string, suppressFuture = false): Promise<void> {
+    const ops: SettingsPathOpView[] = [
+      { op: 'set', path: ['defaultPreset'], value: preset },
+    ]
+    if (suppressFuture) {
+      ops.push({ op: 'set', path: ['confirmFullAccess'], value: false })
+    }
+    await this.write(ops)
+  }
+
+  /**
+   * Disable later Full access dialogs without changing the default preset.
+   * @returns nothing; {@link store} carries success or failure.
+   */
+  async suppressFullAccessConfirmation(): Promise<void> {
+    await this.write([{ op: 'set', path: ['confirmFullAccess'], value: false }])
+  }
+
+  /** Persist one atomic permission-settings mutation through the shared mirror. */
+  private async write(ops: readonly SettingsPathOpView[]): Promise<void> {
     const state = this.store.getSnapshot()
     const view = this.describeFace.getSnapshot().view?.namespaces
       .find(entry => entry.ns === PERMISSION_SETTINGS_NS)
@@ -139,7 +174,7 @@ export class PermissionPresetSettingsController {
     try {
       const response = await this.api.settings.mutate(
         PERMISSION_SETTINGS_NS,
-        [{ op: 'set', path: ['defaultPreset'], value: preset }],
+        [...ops],
         view.revision,
       )
       if (!response.ok) throw new Error(response.error.message)
@@ -173,6 +208,7 @@ export class PermissionPresetSettingsController {
         state.writable = false
         state.currentValue = ''
         state.options = []
+        state.confirmFullAccess = true
       })
       return
     }
@@ -189,6 +225,7 @@ export class PermissionPresetSettingsController {
         state.writable = false
         state.currentValue = ''
         state.options = []
+        state.confirmFullAccess = true
       })
       return
     }
@@ -201,6 +238,7 @@ export class PermissionPresetSettingsController {
         state.writable = writable
         state.currentValue = resolved.currentValue
         state.options = resolved.options
+        state.confirmFullAccess = resolved.confirmFullAccess
         state.revision = view.revision
       })
     } catch (error) {

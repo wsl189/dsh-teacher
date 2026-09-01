@@ -20,7 +20,7 @@ Electron 为[新建 IM 机器人的工作区](../../third-party/README.zh.md)提
 
 安装包还包含一套仅供内置 Windows-MCP 集成使用、版本固定的私有 Python 运行时。桌面控制默认启动，但用户已保存的关闭设置会继续生效；运行时不会加入 `PATH`。通用**插件配置**标签页不展示 Windows 桌面控制配置项；无需另装 Python、`uv`、Windows-MCP 或配置 MCP。Full access 会开放固定运行时的全部二十项工具，不额外请求桌面操作批准；其他模式提供十三项桌面工具并逐次请求批准。[Windows-MCP 权限](../../packages/mcp/windows-mcp/README.zh.md#tools-and-permission-modes)定义会话隔离和仍然生效的策略检查。
 
-AnySearch 已内置，用于网页搜索与正文提取。可选密钥与服务地址在**设置 → 插件 → 插件配置 → 网页搜索**中配置；未配置密钥时使用匿名访问。[网页搜索配置](../../packages/bundle/web-app/README.zh.md#built-in-web-search)说明远程服务限制与向外发送的数据。桌面载荷门禁要求包含其编译插件与 MIT 许可证。
+AnySearch 已内置，用于网页搜索与正文提取。可选密钥、服务地址与单次搜索结果上限在**设置 → 插件 → 插件配置 → 网页搜索**中配置；未配置密钥时使用匿名访问。[网页搜索配置](../../packages/bundle/web-app/README.zh.md#built-in-web-search)说明可接受的结果范围、远程服务限制与向外发送的数据。桌面载荷门禁要求包含其编译插件与 MIT 许可证。
 
 ## 本机构建
 

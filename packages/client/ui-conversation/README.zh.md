@@ -38,11 +38,11 @@ target package 通过 declaration merge 扩展 snapshot 与 Location data map，
 
 View 选择规则固定：有效且已注册的持久化选择优先，其次是已注册的 `chat`，否则不渲染 View；绝不选择第一个已注册 View。Shell phase 只组合 Session lifecycle 与 active-target set，不读取任何 target-specific snapshot。
 
-常驻 composer 在无 Session 与有 Session 之间保持挂载。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 保持为带样式的行首文本，文件夹文本引用以图标前缀携带文件夹图形，草稿的剪贴板投影镜像到逐 Session Conversation store。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览经 `ui-primitives` 的共享行内引用投影渲染已发送文本（wire 会话形式折叠为其标签），编辑态则展示字面发送文本。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。
+常驻 composer 在无 Session 与有 Session 之间保持挂载。无 Session 时，同一个编辑器表面保持 inert，Workspace picker 连接 blank Session。该表面是 shell 所有的 Lexical 编辑器：引用 chip 是携带 owner 序列化身份的原子 decorator 节点（提交时经 owner codec 展开），已认领的 slash command 保持为带样式的行首文本，文件夹文本引用以图标前缀携带文件夹图形，草稿的剪贴板投影镜像到逐 Session Conversation store。Queue 操作通过 scoped `ctx.conversation` service 寻址准确的 queue occurrence；queue 预览经 `ui-primitives` 的共享行内引用投影渲染已发送文本（wire 会话形式折叠为其标签），编辑态则展示字面发送文本。繁忙时 Enter 行为保存在 Host-backed `ui-conversation` settings namespace。Permission chip 读取宿主持久化的 `permission.confirmFullAccess` 偏好：默认对 Full access 进行风险确认，在提交切换前存储已经确认的“不再提醒”选择，所有取消路径都不会改动该偏好。
 
 默认发送采用乐观提交：Enter 在同一事务里清空草稿、occurrence 表和撤销历史，composer 保持 `plain`，发送作为 detached attempt 运行，发送期间可以继续输入和提交。`sendSession` 在序列化之前注册 Session 提交回显（`session.beginSubmission`），让出一帧使回显在点击当帧渲染，图片经浏览器原生 `FileReader` data-URL 路径编码。多个并发发送失败时，在用户编辑还原内容之前按提交顺序合并还原；命令提交保持冻结的 `submitting` 阶段。Detached attempt 持有图片 id，直到 admission 完成或 Session scope 销毁。回显以 observed 退休时，durable 图片缓存立即公开预览 URL，同时读取 admitted 附件，随后用规范化 URL 替换预览，并在两个 URL 各自停止使用后撤销。直接 subagent continuation 不创建本地回显，因为其 transport 不保留浏览器 request id。
 
-文档上传会在后台提取，且绝不会把 OCR Markdown 复制到可见草稿。就绪行会按顺序随下一次发送成为隐藏 prompt 上下文；正在提取或失败的行会阻止提交，直到状态完成或文件被移除。浏览器会保留每个源文件以供草稿预览和工作台重新打开，直到该行被接纳、移除或销毁。麦克风通过已配置的 Host 语音 Remote 工作，并把识别文本插入 Lexical 的实时选区。短按空格仍是普通空格编辑；按住空格 500 毫秒后开始录音，松键结束，并与麦克风按钮共用同一个录音器。
+文档上传会在后台提取，且绝不会把 OCR Markdown 复制到可见草稿。就绪行会按顺序随下一次发送成为隐藏 prompt 上下文；正在提取或失败的行会阻止提交，直到状态完成或文件被移除。浏览器会保留每个源文件以供草稿预览和工作台重新打开，直到该行被接纳、移除或销毁。麦克风通过已配置的 Host 语音 Remote 工作，并把识别文本插入 Lexical 的实时选区。中性的麦克风图案会在收音时闪烁，并按采样音量向上填充；Web Audio 音量检测可用时，连续三秒没有有效声音会结束录音并开始识别。短按空格仍是普通空格编辑；按住空格 500 毫秒后会启动同一个录音器，松键仍可提前手动结束。
 
 普通 composer 运行时，如果草稿为空或输入不可用，主指针操作保持为 Stop。可提交的文字或附件会把同一位置切换为 Queue Send；清空或成功提交草稿后恢复 Stop。繁忙态 Enter 设置继续选择 Queue 或 Steer 键盘操作。可继续 subagent 保留独立的 Send 与 Stop 操作（[决策](../../../.agents/notes/implemented/bug-fix/2026-08-20-running-draft-primary-send.zh.md)）。
 

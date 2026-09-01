@@ -7,7 +7,7 @@ import { IconWarningOutline16 } from './icons/index.tsx'
 import { Modal } from './Modal.tsx'
 import css from './RiskConfirmation.module.css'
 
-export interface RiskConfirmationProps {
+interface RiskConfirmationBaseProps {
   open: boolean
   title: string
   description: string
@@ -21,6 +21,22 @@ export interface RiskConfirmationProps {
   onCancel: () => void
   onConfirm: () => void
 }
+
+/** Optional footer preference that suppresses this risk dialog after confirmation. */
+type RiskConfirmationSuppressionProps =
+  | {
+    suppressFutureLabel: string
+    suppressFuture: boolean
+    onSuppressFutureChange: (suppress: boolean) => void
+  }
+  | {
+    suppressFutureLabel?: never
+    suppressFuture?: never
+    onSuppressFutureChange?: never
+  }
+
+/** Controlled risk-dialog props, optionally including a lower-left suppression choice. */
+export type RiskConfirmationProps = RiskConfirmationBaseProps & RiskConfirmationSuppressionProps
 
 /**
  * Render one in-page confirmation whose primary action is unavailable until
@@ -36,6 +52,9 @@ export function RiskConfirmation({
   confirmLabel,
   acknowledged,
   disabled = false,
+  suppressFutureLabel,
+  suppressFuture,
+  onSuppressFutureChange,
   onAcknowledgedChange,
   onCancel,
   onConfirm,
@@ -49,19 +68,32 @@ export function RiskConfirmation({
       className={css.confirmation ?? ''}
       contentClassName={css.confirmationContent ?? ''}
       footer={(
-        <>
-          <Button variant="outline" className={css.modalAction} onClick={onCancel}>
-            {cancelLabel}
-          </Button>
-          <Button
-            variant="primary"
-            className={css.confirmAction}
-            disabled={disabled || !acknowledged}
-            onClick={onConfirm}
-          >
-            {confirmLabel}
-          </Button>
-        </>
+        <div className={css.footer}>
+          {suppressFutureLabel !== undefined && (
+            <label className={css.suppressFuture}>
+              <input
+                type="checkbox"
+                checked={suppressFuture}
+                disabled={disabled}
+                onChange={(event) => { onSuppressFutureChange(event.currentTarget.checked) }}
+              />
+              <span>{suppressFutureLabel}</span>
+            </label>
+          )}
+          <div className={css.actions}>
+            <Button variant="outline" className={css.modalAction} onClick={onCancel}>
+              {cancelLabel}
+            </Button>
+            <Button
+              variant="primary"
+              className={css.confirmAction}
+              disabled={disabled || !acknowledged}
+              onClick={onConfirm}
+            >
+              {confirmLabel}
+            </Button>
+          </div>
+        </div>
       )}
     >
       <div className={css.warning}>

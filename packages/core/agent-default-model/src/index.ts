@@ -32,6 +32,14 @@ export interface AgentDefaultModelSettings {
   toolProvider?: string
   /** Provider-owned model id used by product-owned background agent tasks. */
   toolModel?: string
+  /** Provider access route used by product-owned image-generation surfaces. */
+  imageProvider?: string
+  /** Provider-owned image-generation model id. */
+  imageModel?: string
+  /** Provider access route used by product-owned speech-recognition surfaces. */
+  speechProvider?: string
+  /** Provider-owned speech-recognition model id. */
+  speechModel?: string
 }
 
 /** Model call settings selected for product-owned background agent tasks. */
@@ -51,6 +59,10 @@ export const AGENT_DEFAULT_MODEL_SETTINGS_SCHEMA: z<AgentDefaultModelSettings> =
   reasoningEffort: z.string(),
   toolProvider: z.string(),
   toolModel: z.string(),
+  imageProvider: z.string(),
+  imageModel: z.string(),
+  speechProvider: z.string(),
+  speechModel: z.string(),
 })
 
 /** Composition entry for the default model selection. */
@@ -98,6 +110,12 @@ export class AgentDefaultModelConfig extends Service {
         if ((current.toolProvider === undefined) !== (current.toolModel === undefined)) {
           throw new Error('agent-default-model: toolProvider and toolModel must be set together')
         }
+        if ((current.imageProvider === undefined) !== (current.imageModel === undefined)) {
+          throw new Error('agent-default-model: imageProvider and imageModel must be set together')
+        }
+        if ((current.speechProvider === undefined) !== (current.speechModel === undefined)) {
+          throw new Error('agent-default-model: speechProvider and speechModel must be set together')
+        }
       },
     })
   }
@@ -124,6 +142,28 @@ export class AgentDefaultModelConfig extends Service {
   }
 
   /**
+   * Read the model selected for product-owned image-generation surfaces.
+   * @returns a detached provider and model selection, or undefined when unset.
+   */
+  currentImageSelection(): ToolModelSelection | undefined {
+    const current = this.source()
+    return current.imageProvider === undefined || current.imageModel === undefined
+      ? undefined
+      : { provider: current.imageProvider, model: current.imageModel }
+  }
+
+  /**
+   * Read the model selected for product-owned speech-recognition surfaces.
+   * @returns a detached provider and model selection, or undefined when unset.
+   */
+  currentSpeechSelection(): ToolModelSelection | undefined {
+    const current = this.source()
+    return current.speechProvider === undefined || current.speechModel === undefined
+      ? undefined
+      : { provider: current.speechProvider, model: current.speechModel }
+  }
+
+  /**
    * Save the complete default model selection. A deployment without a settings
    * provider keeps its composition entry.
    * @param next - resolved selection accepted by an entry point.
@@ -137,6 +177,10 @@ export class AgentDefaultModelConfig extends Service {
       ...next.reasoningEffort === undefined ? {} : { reasoningEffort: String(next.reasoningEffort) },
       ...current.toolProvider === undefined ? {} : { toolProvider: current.toolProvider },
       ...current.toolModel === undefined ? {} : { toolModel: current.toolModel },
+      ...current.imageProvider === undefined ? {} : { imageProvider: current.imageProvider },
+      ...current.imageModel === undefined ? {} : { imageModel: current.imageModel },
+      ...current.speechProvider === undefined ? {} : { speechProvider: current.speechProvider },
+      ...current.speechModel === undefined ? {} : { speechModel: current.speechModel },
     })
   }
 }

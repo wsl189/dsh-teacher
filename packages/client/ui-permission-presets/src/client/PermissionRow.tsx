@@ -23,8 +23,8 @@ export interface PermissionRowInjected {
   }
   /** Load the descriptor when the row first renders. */
   load: () => Promise<void>
-  /** Persist one advertised preset. */
-  select: (preset: string) => Promise<void>
+  /** Persist one advertised preset and an optional confirmed suppression choice. */
+  select: (preset: string, suppressFuture?: boolean) => Promise<void>
 }
 
 /** Full component props. */
@@ -43,6 +43,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
   const [open, setOpen] = useState(false)
   const [confirmingFullAccess, setConfirmingFullAccess] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
+  const [suppressFuture, setSuppressFuture] = useState(false)
 
   useEffect(() => {
     void load()
@@ -52,6 +53,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
     if (state.writable && state.status !== 'unavailable') return
     setOpen(false)
     setAcknowledged(false)
+    setSuppressFuture(false)
     setConfirmingFullAccess(false)
   }, [state.status, state.writable])
 
@@ -83,7 +85,12 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
             setOpen(false)
             if (id === state.currentValue) return
             if (id === FULL_ACCESS_PRESET) {
+              if (!state.confirmFullAccess) {
+                void select(id)
+                return
+              }
               setAcknowledged(false)
+              setSuppressFuture(false)
               setConfirmingFullAccess(true)
               return
             }
@@ -115,16 +122,26 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
         closeLabel={t('close')}
         confirmLabel={t('confirm.enable')}
         acknowledged={acknowledged}
+        {...state.writable
+          ? {
+            suppressFutureLabel: t('confirm.dontRemind'),
+            suppressFuture,
+            onSuppressFutureChange: setSuppressFuture,
+          }
+          : {}}
         disabled={!state.writable || state.status === 'saving'}
         onAcknowledgedChange={setAcknowledged}
         onCancel={() => {
           setAcknowledged(false)
+          setSuppressFuture(false)
           setConfirmingFullAccess(false)
         }}
         onConfirm={() => {
+          const suppress = suppressFuture
           setAcknowledged(false)
+          setSuppressFuture(false)
           setConfirmingFullAccess(false)
-          void select(FULL_ACCESS_PRESET)
+          void select(FULL_ACCESS_PRESET, suppress)
         }}
       />
     </>

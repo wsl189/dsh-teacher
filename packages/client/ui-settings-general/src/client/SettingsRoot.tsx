@@ -70,6 +70,7 @@ function SettingsPanel({ rows, renderSlot, activeId, onSelect, onClose }: PanelP
                 key={row.id}
                 type="button"
                 className={clsx(css.navCell, row.id === active && css.active)}
+                aria-label={row.label}
                 aria-current={row.id === active ? 'true' : undefined}
                 onClick={() => { onSelect(row.id) }}
               >

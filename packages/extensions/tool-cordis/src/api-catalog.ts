@@ -99,6 +99,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a detached provider and model selection.',
       },
       {
+        signature: 'currentImageSelection(): ToolModelSelection | undefined',
+        description: 'Read the model selected for product-owned image-generation surfaces.',
+        parameters: [],
+        returns: 'a detached provider and model selection, or undefined when unset.',
+      },
+      {
+        signature: 'currentSpeechSelection(): ToolModelSelection | undefined',
+        description: 'Read the model selected for product-owned speech-recognition surfaces.',
+        parameters: [],
+        returns: 'a detached provider and model selection, or undefined when unset.',
+      },
+      {
         signature: 'async saveSelection(next: ModelSelection): Promise<void>',
         description: 'Save the complete default model selection. A deployment without a settings provider keeps its composition entry.',
         parameters: [{ name: 'next', description: 'resolved selection accepted by an entry point.' }],

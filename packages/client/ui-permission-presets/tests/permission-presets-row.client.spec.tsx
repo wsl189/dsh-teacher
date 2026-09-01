@@ -27,16 +27,17 @@ const SCHEMA = {
     2: { type: 'const', value: 'workspace-write' },
     3: { type: 'const', value: 'danger-full-access' },
     4: { type: 'union', list: [1, 2, 3] },
-    5: { type: 'object', dict: { defaultPreset: 4 } },
+    6: { type: 'boolean' },
+    5: { type: 'object', dict: { defaultPreset: 4, confirmFullAccess: 6 } },
   },
 }
 
-function view(defaultPreset: string, revision = 0): SettingsNamespaceView {
+function view(defaultPreset: string, revision = 0, confirmFullAccess = true): SettingsNamespaceView {
   return {
     ns: 'permission',
     schema: SCHEMA,
-    value: { defaultPreset },
-    base: { defaultPreset: 'read-only' },
+    value: { defaultPreset, confirmFullAccess },
+    base: { defaultPreset: 'read-only', confirmFullAccess: true },
     applies: 'live',
     secrets: [],
     revision,
@@ -64,7 +65,7 @@ function mount(controller: PermissionPresetSettingsController) {
     <PermissionRow
       {...runtime}
       load={() => controller.load()}
-      select={preset => controller.select(preset)}
+      select={(preset, suppressFuture) => controller.select(preset, suppressFuture)}
       usePermission={bindSnapshotSelector(controller.store)}
       t={t}
     />,
@@ -118,10 +119,56 @@ describe('PermissionRow', () => {
     const dialog = screen.getByRole('dialog', { name: 'Enable Full access?' })
     const enable = screen.getByRole('button', { name: 'Enable Full access' })
     expect((enable as HTMLButtonElement).disabled).toBe(true)
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand the risks and want to continue' }))
     fireEvent.click(enable)
     await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
     expect(dialog.isConnected).toBe(false)
+  })
+
+  it('stores Do not remind only with a confirmed Full access default', async () => {
+    const mutate = vi.fn(() => Promise.resolve(ok(view('danger-full-access', 1, false))))
+    const controller = derivedController({
+      settings: {
+        describe: () => Promise.resolve(ok({
+          writable: true, hasDocument: false, namespaces: [view('read-only')],
+        })),
+        mutate,
+      },
+    })
+    mount(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Read Only' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Full access' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: "Don't remind me again" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }))
+    expect(mutate).not.toHaveBeenCalled()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Read Only' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Full access' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'I understand the risks and want to continue' }))
+    fireEvent.click(screen.getByRole('checkbox', { name: "Don't remind me again" }))
+    fireEvent.click(screen.getByRole('button', { name: 'Enable Full access' }))
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    expect(mutate).toHaveBeenCalledWith('permission', [
+      { op: 'set', path: ['defaultPreset'], value: 'danger-full-access' },
+      { op: 'set', path: ['confirmFullAccess'], value: false },
+    ], 0)
+  })
+
+  it('selects Full access directly when the durable warning preference is disabled', async () => {
+    const mutate = vi.fn(() => Promise.resolve(ok(view('danger-full-access', 1, false))))
+    const controller = derivedController({
+      settings: {
+        describe: () => Promise.resolve(ok({
+          writable: true, hasDocument: false, namespaces: [view('read-only', 0, false)],
+        })),
+        mutate,
+      },
+    })
+    mount(controller)
+    fireEvent.click(await screen.findByRole('button', { name: 'Read Only' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Full access' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
   })
 
   it('hides an unavailable namespace and disables a read-only provider', async () => {

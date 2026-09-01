@@ -10,13 +10,14 @@ Status: implemented
 
 ## 决策
 
-**每个权限选择器都把 `danger-full-access` 关进共享的页面内 `RiskConfirmation` 对话框：启用按钮在用户勾选明确的风险确认复选框前保持禁用；预设以产品标签 `Full access` 展示；所有取消路径都不作任何提交。**
+**每个 GUI 权限选择器默认都把 `danger-full-access` 关进共享的页面内 `RiskConfirmation` 对话框：启用按钮在用户勾选明确的风险确认复选框前保持禁用；可选的左下角“不再提醒”只有在用户确认切换后才会抑制后续 GUI 风险门。预设以产品标签 `Full access` 展示；所有取消路径都不提交也不持久化任何内容。**
 
-- `RiskConfirmation`（ui-primitives）是受控的 Modal 组合：标题、说明、确认复选框、取消，以及 `acknowledged` 勾选前禁用的确认按钮。它始终是页面内对话框——Modal portal 到本文档 body，绝不打开可能落在另一块显示器上的原生或独立浏览器窗口。`Modal` 新增 `contentClassName` slot，令警示正文在受限的移动端／横屏视口内滚动，动作行保持固定。
-- composer chip（ui-conversation 的 `PermissionSelect`）在 `/permission` 提交前拦截 Full-access 选择：`confirmation`/`acknowledged` 组件状态打开对话框，确认后经与其他选择完全相同的注入 `command` 通道提交 `/permission danger-full-access`；取消、Escape、关闭与遮罩点击均保持当前预设不变并重置复选框。会话锁定时确认自行撤销（`locked`／值缺席 effect），切换任务时随 `key={sessionId}` 重挂载而重置。文案经标准 `conversation` locale slot 以 `access.confirm.*` 键供给。
-- `/permission` popup（ui-permission 构建于 ui-commands 外壳之上）以数据而非第二套对话框实现完成把关：`SelectOption` 新增可选的 `confirmation` 载荷，popup 控制器拥有 `confirming`/`acknowledged` 状态迁移，`PopupSelectView` 在门控选项未决期间把选择卡换成同一个 `RiskConfirmation`。
-- 「通用」设置中的「权限」行在把 Full access 持久化为后续会话的默认值前，也使用同一个受控 `RiskConfirmation`。警示会明确说明该设置只影响后续会话；取消、Escape、关闭与点击遮罩均不会改动已存默认值。
-- `Full access` 在每个选择器中都有意覆盖 kebab 转 Title Case 的显示变换；命令与 Settings 写入在 wire 上保留机器名，每份警示正文都保持中英文 locale 感知。
+- `RiskConfirmation`（ui-primitives）是受控的 Modal 组合：标题、说明、风险确认复选框、可选的抑制复选框、取消，以及 `acknowledged` 勾选前禁用的确认按钮。它始终是页面内对话框——Modal portal 到本文档 body，绝不打开可能落在另一块显示器上的原生或独立浏览器窗口。`Modal` 提供 `contentClassName` slot，让警示正文在受限的移动端或横屏视口内滚动，同时保持动作行固定。抑制复选框只承载呈现状态；所属表面决定已经确认的选择能否持久化。
+- 宿主拥有的 `permission` 设置命名空间在 `defaultPreset` 旁保存默认为 `true` 的 `confirmFullAccess`。三个 GUI 入口都读取这一份偏好。成功的抑制写入存储 `false`；设置不可写的表面不会显示该选项，避免承诺无法持久化的结果。
+- composer chip（ui-conversation 的 `PermissionSelect`）在确认启用时于 `/permission` 提交前拦截 Full access 选择。确认后经与其他选择相同的注入 `command` 通道提交 `/permission danger-full-access`；勾选抑制时，偏好写入先于该命令。取消、Escape、关闭、点击遮罩、会话锁定与任务切换都会重置本地复选框，但不改变偏好或当前预设。文案经标准 `conversation` locale slot 以 `access.confirm.*` 键供给。
+- `/permission` popup（ui-permission 构建于 ui-commands 外壳之上）以数据而非第二套对话框实现把关：`SelectOption` 携带可选的 `confirmation` 载荷，popup 控制器拥有未决复选框状态，`PopupSelectView` 把选择卡换成同一个 `RiskConfirmation`。控制器只在用户完成风险确认的路径、选项结算前调用可选的业务方抑制回调。
+- 「通用」设置中的「权限」行在把 Full access 持久化为后续会话的默认值前，也使用同一个受控 `RiskConfirmation`。勾选抑制并确认后，`defaultPreset: danger-full-access` 与 `confirmFullAccess: false` 会原子写入；取消、Escape、关闭与点击遮罩不会写入任何一个字段。
+- `Full access` 在每个选择器中都有意覆盖 kebab 转 Title Case 的显示变换；命令与 Settings 写入在 wire 上保留机器名，每份警示正文都保持中英文 locale 感知。直接输入带参数命令仍不经过浏览器选择器风险门。
 
 ## 考虑过的替代方案
 
@@ -28,4 +29,4 @@ Status: implemented
 
 ## 后果
 
-进入 Full access 的每条可见 GUI 路径现在都要求刻意且知情的确认，代价是真想启用该预设的用户多一步对话框。新的选择器通过各自拥有的状态机复用共享对话框，或在 popup 路径挂 `confirmation` 载荷。验收：`input-bar.spec.tsx` 中编辑器流的门控用例、`popup-view.spec.tsx` 与 `popup.spec.ts` 的 popup 门、`permission-row.spec.tsx` 的默认设置门控、`atoms.spec.tsx` 的 Modal/RiskConfirmation 约定，以及组装态 Web 回放。
+全新设置会在进入 Full access 的每条可见 GUI 路径上要求刻意且知情的确认。用户可以主动抑制 composer 选择器、`/permission` popup 与「通用」设置行后续的提示，而不会削弱宿主权限写入路径或改变直接命令行为。偏好写入失败或不可用时，下次选择仍会要求确认。验收覆盖 `input-bar.client.spec.tsx` 中的 composer 流、`popup-view.client.spec.tsx` 与 `popup.client.spec.ts` 中的 popup 外壳、`permission-presets-row.client.spec.tsx` 与 `settings-store.client.spec.ts` 中的默认设置流、`browser-plugin.client.spec.ts` 中的浏览器装饰，以及 `access-confirmation.e2e.ts` 与 `settings-chrome.e2e.ts` 中的组装态 Web 回放。

@@ -20,7 +20,7 @@ The in-app directory browser lists real folders from the Windows Host and can se
 
 The installer also contains a private, pinned Python runtime for the built-in Windows-MCP integration. Desktop control starts by default unless the user has saved a disabled setting; the runtime is not added to `PATH`. The generic **Plugin configuration** tab does not expose a Windows desktop control item; no separate Python, `uv`, Windows-MCP, or MCP configuration is required. Full access unlocks the pinned runtime's complete twenty-tool catalog without extra desktop approval; other modes expose thirteen desktop tools with per-call approval. [Windows-MCP permissions](../../packages/mcp/windows-mcp/README.md#tools-and-permission-modes) defines the session isolation and remaining policy checks.
 
-AnySearch is built in for web search and page extraction. Configure its optional key and endpoint under **Settings → Plugins → Plugin configuration → Web search**; without a key it uses anonymous access. [Web search configuration](../../packages/bundle/web-app/README.md#built-in-web-search) describes the remote-service limits and outbound data. Its compiled plugin and MIT license are required by the desktop payload gate.
+AnySearch is built in for web search and page extraction. Configure its optional key, endpoint, and per-search result cap under **Settings → Plugins → Plugin configuration → Web search**; without a key it uses anonymous access. [Web search configuration](../../packages/bundle/web-app/README.md#built-in-web-search) describes the accepted result range, remote-service limits, and outbound data. Its compiled plugin and MIT license are required by the desktop payload gate.
 
 ## Build locally
 

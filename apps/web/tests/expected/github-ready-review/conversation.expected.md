@@ -14,9 +14,6 @@
     - button "Review deepseek-harness/deepseek-harness#314" [disabled]
   - img
   - text: Standard mode
-  - button "Session log":
-    - text: Session log
-    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -40,6 +37,9 @@
 - textbox "Message or run a task... / commands, @ files or sessions"
 - button "Commands":
   - img
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Read Only"': Read Only
 - button "Select model, current github-webhook-review-test/reply":
   - text: github-webhook-review-test/reply

@@ -1,22 +1,43 @@
 diff --git a/README.md b/README.md
-index a4f3dc7d978545f7f196abbddf1bbb9ea877093f..8a22a411fd6f59786a4d7c23270516ced88f32f2 100644
+index a4f3dc7d978545f7f196abbddf1bbb9ea877093f..89fd3b023b3058ce439e3f6369edde90a0d18ce3 100644
 --- a/README.md
 +++ b/README.md
-@@ -122 +122 @@ npx -y @deepseek-ai/dsh plugin --profile web remove @anysearch/anysearch-dsh
+@@ -119,7 +119,7 @@ npx -y @deepseek-ai/dsh plugin --profile web remove @anysearch/anysearch-dsh
+ 
+ - DeepSeek Harness is in developer preview and may make compatibility-breaking changes.
+ - URL extraction is exposed through Harness's provider-neutral `web_fetch`; the plugin does not add a duplicate `anysearch_extract` tool.
 -- Configure the API key through DSH-managed credentials or an environment variable; the DSH settings page does not currently provide a third-party Provider credential field.
-+- This bundled build exposes the API key and endpoint under **Settings → Plugins → Plugin configuration → Web search**; DSH-managed credentials and environment variables remain available for non-GUI deployments.
++- This bundled build exposes the API key, endpoint, and per-search result cap under **Settings → Plugins → Plugin configuration → Web search**; DSH-managed credentials and environment variables remain available for non-GUI deployments.
+ 
+ ## Documentation
+ 
 diff --git a/README.zh-CN.md b/README.zh-CN.md
-index 40b9e8d55e9c14e6f52b4cda0bd6b727e0267390..d4945aef72f1235c54111afddd7f81321bfb0b07 100644
+index 40b9e8d55e9c14e6f52b4cda0bd6b727e0267390..93a5106df60e7e7a9be76ce7a07c5707af6d14b2 100644
 --- a/README.zh-CN.md
 +++ b/README.zh-CN.md
-@@ -122 +122 @@ npx -y @deepseek-ai/dsh plugin --profile web remove @anysearch/anysearch-dsh
+@@ -119,7 +119,7 @@ npx -y @deepseek-ai/dsh plugin --profile web remove @anysearch/anysearch-dsh
+ 
+ - DeepSeek Harness 仍处于开发预览阶段，可能发布不兼容变更。
+ - 网页提取通过 Harness 原生 `web_fetch` 暴露；插件不会再增加一个重复的 `anysearch_extract` 工具。
 -- 请通过 DSH 管理的凭据文件或环境变量配置 API Key；DSH 设置页当前不提供第三方 Provider 凭据输入项。
-+- 本内置版本在**设置 → 插件 → 插件配置 → 网页搜索**中提供 API Key 与接口地址；无 GUI 部署仍可使用 DSH 管理的凭据文件或环境变量。
++- 本内置版本在**设置 → 插件 → 插件配置 → 网页搜索**中提供 API Key、接口地址与单次搜索结果上限；无 GUI 部署仍可使用 DSH 管理的凭据文件或环境变量。
+ 
+ ## 文档
+ 
 diff --git a/lib/client.d.ts b/lib/client.d.ts
-index 00881643b5ab5b573cca3f94ebc64b9615c1164d..82add114da7a77eccbe04ce7d9ae923dc04b0c0d 100644
+index 00881643b5ab5b573cca3f94ebc64b9615c1164d..b3788d349bf52d02be1eec90510eb167d1886f33 100644
 --- a/lib/client.d.ts
 +++ b/lib/client.d.ts
-@@ -44,7 +44,7 @@ export declare class AnySearchClientError extends Error {
+@@ -13,6 +13,8 @@ export interface AnySearchClientOptions {
+     apiKeyReference?: string;
+     /** API base URL; public paths are appended to its pathname. */
+     baseURL: string;
++    /** Maximum results sent for one search; a smaller request limit still applies. */
++    maxResults?: number;
+ }
+ /** Safe HTTP and credential failure surfaced by the shared client. */
+ export declare class AnySearchClientError extends Error {
+@@ -44,7 +46,7 @@ export declare class AnySearchClientError extends Error {
  /** HTTP client shared by the native Provider and AnySearch-specific tools. */
  export declare class AnySearchClient {
      private readonly options;
@@ -26,10 +47,10 @@ index 00881643b5ab5b573cca3f94ebc64b9615c1164d..82add114da7a77eccbe04ce7d9ae923d
      available(): boolean;
      /** Execute one search and validate its complete response. */
 diff --git a/lib/client.js b/lib/client.js
-index e392405843da22097427e7f33d81bbe1749026e9..7abc365553c981cd804494e51e4997b25a86ad7f 100644
+index e392405843da22097427e7f33d81bbe1749026e9..0bb24802c0ef422a6349b29c91b1fe2b5f604246 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -45,11 +45,11 @@ export class AnySearchClientError extends Error {
+@@ -45,19 +45,21 @@ export class AnySearchClientError extends Error {
  export class AnySearchClient {
      options;
      constructor(options) {
@@ -43,12 +64,47 @@ index e392405843da22097427e7f33d81bbe1749026e9..7abc365553c981cd804494e51e4997b2
      }
      /** Execute one search and validate its complete response. */
      async search(request, signal) {
-@@ -89,11 +89,12 @@ export class AnySearchClient {
+-        const envelope = await this.request('/v1/search', 'search', {
++        const options = this.options();
++        const maxResults = searchResultLimit(request.maxResults, options.maxResults);
++        const envelope = await this.request(options, '/v1/search', 'search', {
+             method: 'POST',
+             body: JSON.stringify({
+                 query: request.query,
+-                ...request.maxResults !== undefined ? { max_results: request.maxResults } : {},
++                ...maxResults !== undefined ? { max_results: maxResults } : {},
+                 ...request.tag !== undefined ? { tag: request.tag } : {},
+                 ...request.params !== undefined ? { params: request.params } : {},
+                 ...request.zone !== undefined ? { zone: request.zone } : {},
+@@ -68,7 +70,7 @@ export class AnySearchClient {
+     }
+     /** Extract and validate the cleaned content of one public HTTP(S) URL. */
+     async extract(request, signal) {
+-        const envelope = await this.request('/v1/extract', 'extract', {
++        const envelope = await this.request(this.options(), '/v1/extract', 'extract', {
+             method: 'POST',
+             body: JSON.stringify({ url: request.url }),
+         }, signal);
+@@ -76,7 +78,7 @@ export class AnySearchClient {
+     }
+     /** List all top-level domains in the dynamic capability catalog. */
+     async listDomains(signal) {
+-        const envelope = await this.request('/v1/domains', 'domains', { method: 'GET' }, signal);
++        const envelope = await this.request(this.options(), '/v1/domains', 'domains', { method: 'GET' }, signal);
+         return parseOperationData('domains', envelope, parseDomainsData);
+     }
+     /** Read detailed capabilities for the supplied ordered domain names. */
+@@ -85,15 +87,15 @@ export class AnySearchClient {
+         for (const domain of domains)
+             query.append('domain', domain);
+         const suffix = query.toString();
+-        const envelope = await this.request(`/v1/sub-domains${suffix.length > 0 ? `?${suffix}` : ''}`, 'sub_domains', { method: 'GET' }, signal);
++        const envelope = await this.request(this.options(), `/v1/sub-domains${suffix.length > 0 ? `?${suffix}` : ''}`, 'sub_domains', { method: 'GET' }, signal);
          return parseOperationData('sub_domains', envelope, parseSubDomainsData);
      }
-     async request(path, operation, init, signal) {
+-    async request(path, operation, init, signal) {
 -        const url = endpoint(this.options.baseURL, path);
-+        const options = this.options();
++    async request(options, path, operation, init, signal) {
 +        const url = endpoint(options.baseURL, path);
          if (url === undefined) {
              throw new AnySearchClientError('AnySearch base URL is invalid', { operation });
@@ -58,7 +114,7 @@ index e392405843da22097427e7f33d81bbe1749026e9..7abc365553c981cd804494e51e4997b2
          const authentication = apiKey === undefined ? 'anonymous' : 'credential';
          const headers = {
              'accept': 'application/json',
-@@ -187,12 +188,12 @@ export class AnySearchClient {
+@@ -187,12 +189,12 @@ export class AnySearchClient {
              });
          }
      }
@@ -73,7 +129,7 @@ index e392405843da22097427e7f33d81bbe1749026e9..7abc365553c981cd804494e51e4997b2
          }
          catch (error) {
              if (isSignalAborted(signal) || isAbortError(error))
-@@ -202,7 +203,7 @@ export class AnySearchClient {
+@@ -202,12 +204,17 @@ export class AnySearchClient {
          const trimmed = value?.trim();
          if (trimmed === undefined || trimmed.length === 0)
              return undefined;
@@ -82,8 +138,40 @@ index e392405843da22097427e7f33d81bbe1749026e9..7abc365553c981cd804494e51e4997b2
              throw new AnySearchClientError(`AnySearch ${operation} credential is a placeholder; remove it for anonymous access or configure a valid API key`, { operation });
          }
          return trimmed;
+     }
+ }
++function searchResultLimit(requested, configured) {
++    if (configured === undefined)
++        return requested;
++    return requested === undefined ? configured : Math.min(requested, configured);
++}
+ function parseOperationData(operation, envelope, parse) {
+     try {
+         return parse(envelope);
+diff --git a/lib/index.d.ts b/lib/index.d.ts
+index 88b52f5c69282a6a79c29e14f7a2bed083c1f7e5..48afcf8b0578c42a3e48bf7084601d03126252a3 100644
+--- a/lib/index.d.ts
++++ b/lib/index.d.ts
+@@ -21,6 +21,8 @@ export interface Config {
+     apiKeyEnv?: string;
+     /** API base URL. Defaults to the public AnySearch API. */
+     baseURL?: string;
++    /** Maximum results returned by one search. Defaults to 8; accepted values are 1 through 20. */
++    maxResults?: number;
+     /** Aggregate cleaned-content characters rendered to the model by one advanced tool operation. */
+     maxRenderedContentChars?: number;
+ }
+@@ -30,6 +32,8 @@ export interface ResolvedConfig {
+     apiKeyEnv: string;
+     /** Absolute HTTP or HTTPS API base URL. */
+     baseURL: string;
++    /** Maximum results returned by one search. */
++    maxResults: number;
+     /** Aggregate cleaned-content characters rendered by one tool operation. */
+     maxRenderedContentChars: number;
+ }
 diff --git a/lib/index.js b/lib/index.js
-index a174891155232021fe83f4749e1573e6eff1e3a9..d9b40bcbf2f884e8985680483130558c77104aac 100644
+index a174891155232021fe83f4749e1573e6eff1e3a9..302c8efed4d8186787f4f40700f605701e0dd956 100644
 --- a/lib/index.js
 +++ b/lib/index.js
 @@ -1,6 +1,6 @@
@@ -94,24 +182,42 @@ index a174891155232021fe83f4749e1573e6eff1e3a9..d9b40bcbf2f884e8985680483130558c
  import z from '@deepseek-ai/schemastery';
  import { ANYSEARCH_DEFAULT_BASE_URL, AnySearchClient, } from "./client.js";
  import { AnySearchProvider } from "./provider.js";
-@@ -20,11 +20,16 @@ export const name = 'web-search-anysearch';
+@@ -20,11 +20,20 @@ export const name = 'web-search-anysearch';
  /** Capability seams required by the Providers and model-facing tools. */
  export const inject = ['web', 'credentials', 'systemPrompt', 'tools'];
  const DEFAULT_API_KEY_ENV = 'ANYSEARCH_API_KEY';
++const DEFAULT_MAX_RESULTS = 8;
++const MAX_RESULTS = 20;
 +const SETTINGS_NAMESPACE = settingsNamespace('web-search-anysearch');
  export const Config = z.object({
      apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
      baseURL: z.string(),
++    maxResults: z.number().step(1).min(1).max(MAX_RESULTS).default(DEFAULT_MAX_RESULTS),
      maxRenderedContentChars: z.number().step(1).min(1).default(DEFAULT_MAX_RENDERED_CONTENT_CHARS),
  });
 +const SettingsConfig = z.object({
 +    apiKeyEnv: z.string().role('credential-ref').default(DEFAULT_API_KEY_ENV),
 +    baseURL: z.string(),
++    maxResults: z.number().step(1).min(1).max(MAX_RESULTS).default(DEFAULT_MAX_RESULTS),
 +});
  /** Resolve defaults and reject self-contained configuration errors before registration. */
  export function resolveConfig(config) {
      const apiKeyEnv = (config.apiKeyEnv ?? DEFAULT_API_KEY_ENV).trim();
-@@ -53,17 +58,28 @@ export function resolveConfig(config) {
+@@ -44,26 +53,42 @@ export function resolveConfig(config) {
+     if (parsedURL.username.length > 0 || parsedURL.password.length > 0) {
+         throw new Error('baseURL must not contain credentials');
+     }
++    const maxResults = config.maxResults ?? DEFAULT_MAX_RESULTS;
++    if (!Number.isSafeInteger(maxResults) || maxResults < 1 || maxResults > MAX_RESULTS) {
++        throw new Error(`maxResults must be an integer from 1 to ${MAX_RESULTS}`);
++    }
+     const maxRenderedContentChars = config.maxRenderedContentChars ?? DEFAULT_MAX_RENDERED_CONTENT_CHARS;
+     if (!Number.isSafeInteger(maxRenderedContentChars) || maxRenderedContentChars < 1) {
+         throw new Error('maxRenderedContentChars must be a positive integer');
+     }
+-    return { apiKeyEnv, baseURL, maxRenderedContentChars };
++    return { apiKeyEnv, baseURL, maxResults, maxRenderedContentChars };
+ }
  /** Register the AnySearch Provider and advanced tools with their owning services. */
  export function apply(ctx, config) {
      const resolved = resolveConfig(config);
@@ -120,7 +226,7 @@ index a174891155232021fe83f4749e1573e6eff1e3a9..d9b40bcbf2f884e8985680483130558c
 -        resolveApiKey: async () => (await ctx.credentials.resolve(apiKeyEnv))?.value,
 -        apiKeyReference: resolved.apiKeyEnv,
 -        baseURL: resolved.baseURL,
-+    const entry = { apiKeyEnv: resolved.apiKeyEnv, baseURL: resolved.baseURL };
++    const entry = { apiKeyEnv: resolved.apiKeyEnv, baseURL: resolved.baseURL, maxResults: resolved.maxResults };
 +    let current = () => entry;
 +    installSettingsSection(ctx, SETTINGS_NAMESPACE, SettingsConfig, entry, {
 +        validate: (value) => {
@@ -138,6 +244,7 @@ index a174891155232021fe83f4749e1573e6eff1e3a9..d9b40bcbf2f884e8985680483130558c
 +            resolveApiKey: async () => (await ctx.credentials.resolve(apiKeyEnv))?.value,
 +            apiKeyReference: apiKeyEnv,
 +            baseURL: settings.baseURL,
++            maxResults: settings.maxResults,
 +        };
      });
      ctx.web.registerSearchProvider(new AnySearchProvider(client));

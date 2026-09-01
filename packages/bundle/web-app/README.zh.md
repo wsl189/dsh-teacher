@@ -70,9 +70,9 @@ Windows 桌面启动器会提供私有 Windows-MCP 运行时。该 profile 在�
 <a id="built-in-web-search"></a>
 ### 内置网页搜索
 
-Web profile 与 Windows 桌面版内置 `@anysearch/anysearch-dsh` 0.1.4。标准 `web_search` 与 `web_fetch` 使用 AnySearch；`anysearch_capabilities`、`anysearch_search` 与 `anysearch_batch_search` 分别补充能力发现、垂直搜索和最多五项请求的批量搜索。Web 组合会禁用继承的 `web-search-deepseek` 配置项，因此 Web 与桌面版不会加载 DeepSeek 搜索提供方及其设置分节。无需单独安装插件。界面中的**设置 → 插件 → 插件配置 → 网页搜索**用于保存可选密钥与服务地址，两类变更都会作用于下一次操作。headless 与 SDK profile 保持原有默认值。
+Web profile 与 Windows 桌面版内置 `@anysearch/anysearch-dsh` 0.1.4。标准 `web_search` 与 `web_fetch` 使用 AnySearch；`anysearch_capabilities`、`anysearch_search` 与 `anysearch_batch_search` 分别补充能力发现、垂直搜索和最多五项请求的批量搜索。Web 组合会禁用继承的 `web-search-deepseek` 配置项，因此 Web 与桌面版不会加载 DeepSeek 搜索提供方及其设置分节。无需单独安装插件。界面中的**设置 → 插件 → 插件配置 → 网页搜索**用于保存可选密钥、服务地址与单次搜索结果上限，三类变更都会作用于下一次操作。headless 与 SDK profile 保持原有默认值。
 
-未配置 `ANYSEARCH_API_KEY` 时，插件发送匿名请求，受服务端配额与速率限制。可选密钥由 DSH credentials 在每次操作时解析，包括继承的环境变量值；安装器既不内嵌密钥或账户，也不自动申请。查询与正文提取 URL 会发送到 `https://api.anysearch.com`，因此需要联网。认证与配额失败会直接报告，不会自动切换提供方或把无效密钥请求改成匿名重试。`web-search-anysearch` 配置项接受 `apiKeyEnv`、`baseURL` 与 `maxRenderedContentChars`；设置卡片开放密钥引用与服务地址，正文渲染上限仍由组合配置持有。`web` 配置项选择搜索与抓取提供方。
+未配置 `ANYSEARCH_API_KEY` 时，插件发送匿名请求，受服务端配额与速率限制。可选密钥由 DSH credentials 在每次操作时解析，包括继承的环境变量值；安装器既不内嵌密钥或账户，也不自动申请。查询与正文提取 URL 会发送到 `https://api.anysearch.com`，因此需要联网。认证与配额失败会直接报告，不会自动切换提供方或把无效密钥请求改成匿名重试。`web-search-anysearch` 配置项接受 `apiKeyEnv`、`baseURL`、`maxResults` 与 `maxRenderedContentChars`；`maxResults` 默认为 8、接受 1–20，并限制每次标准、高级与批量搜索，同时保留请求中的更小值。设置卡片开放密钥引用、服务地址与结果上限，正文渲染上限仍由组合配置持有。`web` 配置项选择搜索与抓取提供方。
 
 -----
 

@@ -31,6 +31,14 @@ export interface PermissionSelect {
   currentValue: string
 }
 
+/** User preferences shared by permission policy and its browser surfaces. */
+export interface PermissionSettings {
+  /** Preset pinned into a newly created session. */
+  defaultPreset: string
+  /** Whether browser permission pickers require the Full access risk dialog. */
+  confirmFullAccess: boolean
+}
+
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionMap {
     /**

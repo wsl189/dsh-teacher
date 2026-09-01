@@ -16,6 +16,7 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { TestRemote, scriptedSettingsRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { CommandDecoration } from '@deepseek-ai/dsh-client-ui-commands/client'
+import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import type { PermissionSelect } from '@deepseek-ai/dsh-permission-presets/client'
 import {
   PermissionRow, type PermissionRowInjected,
@@ -34,13 +35,37 @@ const SELECT: PermissionSelect = {
   currentValue: 'workspace-write',
 }
 
-async function bench() {
+const SETTINGS_SCHEMA = {
+  uid: 5,
+  refs: {
+    1: { type: 'const', value: 'read-only' },
+    2: { type: 'const', value: 'workspace-write' },
+    3: { type: 'const', value: 'danger-full-access' },
+    4: { type: 'union', list: [1, 2, 3] },
+    6: { type: 'boolean' },
+    5: { type: 'object', dict: { defaultPreset: 4, confirmFullAccess: 6 } },
+  },
+}
+
+function settingsView(confirmFullAccess = true, revision = 0): SettingsNamespaceView {
+  return {
+    ns: 'permission',
+    schema: SETTINGS_SCHEMA,
+    value: { defaultPreset: 'workspace-write', confirmFullAccess },
+    base: { defaultPreset: 'workspace-write', confirmFullAccess: true },
+    applies: 'live',
+    secrets: [],
+    revision,
+  }
+}
+
+async function bench(confirmFullAccess = true, isLoopback = true) {
   const ctx = new Context()
   await ctx.plugin(SlotRegistry)
   const locale = new LocaleRuntime(ctx)
   locale.setLocale('en')
   ctx.provide('locale', locale)
-  const settingsRemote = scriptedSettingsRemote()
+  const settingsRemote = scriptedSettingsRemote([settingsView(confirmFullAccess)])
   const remote = new TestRemote(ctx, { settings: settingsRemote.settings })
   ctx.slots.register({
     name: 'root',
@@ -49,6 +74,7 @@ async function bench() {
     },
   } as never, () => null)
   ctx.provide('connection', {
+    isLoopback,
     api: {
       settings: {
         describe: () => Promise.resolve({
@@ -90,7 +116,7 @@ async function bench() {
   const fiber = ctx.plugin({ inject: [...inject], apply })
   await fiber.await()
   return {
-    ctx, fiber, values, commands, remote,
+    ctx, fiber, values, commands, remote, settingsRemote,
     setResult: (r: { ok: boolean; matched?: boolean }) => { commandResult = r },
     decoration: () => decoration,
     permissionRow: () => ctx.slots.entries('settings.general.item')
@@ -131,19 +157,28 @@ describe('ui-permission browser plugin', () => {
       .toBe('Always ask before editing external files or using the internet')
     // Product presets use locale copy; non-kebab host-configured names pass through.
     expect(again.map(option => option.label)).toEqual(['Read Only', 'Workspace Write', 'Full access'])
-    expect(again.find(option => option.id === 'danger-full-access')?.confirmation).toEqual({
+    const confirmation = again.find(option => option.id === 'danger-full-access')?.confirmation
+    expect(confirmation).toMatchObject({
       title: 'Enable Full access?',
       description: accessEn['confirm.description'],
       acknowledgeLabel: 'I understand the risks and want to continue',
+      suppressFutureLabel: "Don't remind me again",
       cancelLabel: 'Cancel',
       confirmLabel: 'Enable Full access',
     })
+    expect(typeof confirmation?.onSuppressFuture).toBe('function')
+    await confirmation?.onSuppressFuture?.()
+    expect(b.settingsRemote.mutate).toHaveBeenCalledWith(
+      'permission',
+      [{ op: 'set', path: ['confirmFullAccess'], value: false }],
+      0,
+    )
     b.values.set(sid('s1'), { ...SELECT, options: [{ value: 'plain', name: 'Ask Every Time' }] })
     const passthrough = await c.ui.options(proj, new AbortController().signal)
     expect(passthrough[0]?.label).toBe('Ask Every Time')
     // A projection that vanished between availability and open throws.
-    expect(() => c.ui.options({ sessionId: sid('ghost') }, new AbortController().signal))
-      .toThrow(/not available on this host/)
+    await expect(c.ui.options({ sessionId: sid('ghost') }, new AbortController().signal))
+      .rejects.toThrow(/not available on this host/)
   })
 
   it('a pick submits the /permission line; rejection and unmatched throw', async () => {
@@ -160,6 +195,26 @@ describe('ui-permission browser plugin', () => {
     // An unmaterialized session throws before any submit.
     await expect(c.ui.onSelect({ id: 'read-only', label: 'read-only' }, { sessionId: sid('ghost') }))
       .rejects.toThrow(/not materialized/)
+  })
+
+  it('omits the popup confirmation after the durable preference is disabled', async () => {
+    const b = await bench(false)
+    const c = b.decoration()!
+    const proj = { sessionId: sid('s1') }
+    b.values.set(sid('s1'), SELECT)
+    const options = await c.ui.options(proj, new AbortController().signal)
+    expect(options.find(option => option.id === 'danger-full-access')?.confirmation).toBeUndefined()
+  })
+
+  it('keeps the risk gate but omits suppression when Host settings are unavailable', async () => {
+    const b = await bench(true, false)
+    const c = b.decoration()!
+    const proj = { sessionId: sid('s1') }
+    b.values.set(sid('s1'), SELECT)
+    const confirmation = (await c.ui.options(proj, new AbortController().signal))
+      .find(option => option.id === 'danger-full-access')?.confirmation
+    expect(confirmation).toBeDefined()
+    expect(confirmation?.suppressFutureLabel).toBeUndefined()
   })
 
   it('disposal removes the decoration (HMR safety)', async () => {

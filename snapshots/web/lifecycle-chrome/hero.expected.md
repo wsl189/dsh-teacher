@@ -1,9 +1,11 @@
 - button "New session"
 - button "Collapse sidebar":
   - img
-- button "New session":
+- button "Open workbench":
   - img
-  - text: New Session
+  - text: Workbench
+  - img
+- button "Scheduled Tasks": Scheduled Tasks 0
 - text: Workspaces
 - button "Search sessions":
   - img
@@ -20,7 +22,7 @@
 - button "Settings":
   - img
   - text: Settings
-- text: Into the Unknown Preview
+- text: Into the Unknown
 - button "Choose workspace":
   - img
   - text: workspace
@@ -33,6 +35,9 @@
   - paragraph
 - button "Commands":
   - img
+- button "Upload a file and extract it with MinerU OCR"
+- button "Choose File"
+- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

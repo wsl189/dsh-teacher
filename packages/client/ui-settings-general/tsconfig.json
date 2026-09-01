@@ -24,22 +24,13 @@
       "path": "../ui-session"
     },
     {
-      "path": "../store"
-    },
-    {
       "path": "../ui-settings"
     },
     {
       "path": "../locale"
     },
     {
-      "path": "../../settings/settings"
-    },
-    {
       "path": "../../runtime-diagnostics/invariants"
-    },
-    {
-      "path": "../../api/remotes/tsconfig.client.json"
     },
     {
       "path": "../ui-sidebar"

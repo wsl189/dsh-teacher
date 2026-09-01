@@ -7,8 +7,68 @@
   display: flex;
   flex-direction: column;
   gap: 12px;
-  max-width: 720px;
+  max-width: 880px;
   color: var(--dsw-alias-label-primary);
+}
+
+.panelTabs {
+  display: flex;
+  gap: 18px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.panelTab,
+.panelTabActive {
+  position: relative;
+  box-sizing: border-box;
+  min-height: 36px;
+  padding: 0 2px;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+
+.panelTabActive {
+  color: var(--dsw-alias-label-primary);
+  font-weight: 500;
+}
+
+.panelTabActive::after {
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px;
+  background: var(--dsw-alias-brand-primary);
+  content: '';
+}
+
+.panelTab:focus-visible,
+.panelTabActive:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.panelBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panelBody[hidden] {
+  display: none;
+}
+
+.panelIntro {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .title {
@@ -40,14 +100,368 @@
   color: var(--dsw-alias-state-success-primary);
 }
 
+.usageGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.usageCard {
+  box-sizing: border-box;
+  display: flex;
+  min-width: 0;
+  min-height: 156px;
+  flex-direction: column;
+  gap: 13px;
+  padding: 15px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 13px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.usageCardHead {
+  display: flex;
+  min-width: 0;
+  align-items: flex-start;
+  gap: 11px;
+}
+
+.usageMark {
+  box-sizing: border-box;
+  display: inline-flex;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  background: var(--dsw-alias-state-business-tertiary);
+  color: var(--dsw-alias-state-business-primary);
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 600;
+}
+
+.usageCard[data-tone='tool'] .usageMark {
+  background: var(--dsw-alias-state-success-tertiary);
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.usageCard[data-tone='image'] .usageMark {
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-primary);
+}
+
+.usageCard[data-tone='speech'] .usageMark {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-brand-primary);
+}
+
+.usageIdentity {
+  display: grid;
+  min-width: 0;
+  gap: 2px;
+}
+
+.usageTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 500;
+}
+
+.usageDescription {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.usageSelect {
+  box-sizing: border-box;
+  width: 100%;
+  height: 38px;
+  margin-top: auto;
+  padding: 0 11px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 13px;
+}
+
+.usageSelect:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.usageStatus {
+  margin: -5px 0 0;
+  color: var(--dsw-alias-state-success-primary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
+.usageStatusError {
+  color: var(--dsw-alias-state-error-primary);
+}
+
+.specializedAccess {
+  display: grid;
+  gap: 10px;
+}
+
+.specializedAccess:empty {
+  display: none;
+}
+
 .toolModelCard {
-  margin-top: 12px;
   padding: 14px 16px;
   border: 1px solid var(--dsw-alias-border-l2);
   border-radius: 12px;
   display: flex;
   flex-direction: column;
   gap: 10px;
+}
+
+.presetDirectory {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.otherProvidersTitle {
+  margin: 0;
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 22px;
+  font-weight: 500;
+}
+
+.officialTag,
+.accessConfigured,
+.accessMissing {
+  flex: none;
+  padding: 1px 7px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.officialTag,
+.accessConfigured {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.accessMissing {
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.supplierList {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.accessWorkspace {
+  display: grid;
+  min-height: 360px;
+  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1fr);
+  overflow: hidden;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.supplierRail {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 8px;
+  border-right: 1px solid var(--dsw-alias-border-l2);
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.supplierRailTitle {
+  padding: 0 8px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 18px;
+}
+
+.supplierButton,
+.supplierButtonActive {
+  box-sizing: border-box;
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 9px;
+  padding: 9px 8px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.supplierButton:hover,
+.supplierButtonActive {
+  background: var(--dsw-alias-interactive-bg-hover-solid);
+}
+
+.supplierButtonActive {
+  border-color: var(--dsw-alias-border-l3);
+}
+
+.supplierButton:focus-visible,
+.supplierButtonActive:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
+}
+
+.supplierConfiguredDot,
+.supplierEmptyDot {
+  box-sizing: border-box;
+  width: 7px;
+  height: 7px;
+  margin-left: auto;
+  flex: none;
+  border-radius: 50%;
+}
+
+.supplierConfiguredDot {
+  background: var(--dsw-alias-state-success-primary);
+}
+
+.supplierEmptyDot {
+  border: 1px solid var(--dsw-alias-border-l3);
+}
+
+.supplierWorkspace {
+  min-width: 0;
+  padding: 14px;
+}
+
+.supplierHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--dsw-alias-bg-module-platform);
+}
+
+.supplierWorkspace > .supplierHead {
+  margin: -14px -14px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+
+.supplierWorkspace > .supplierHead .officialTag {
+  margin-left: auto;
+}
+
+.supplierMark {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  flex: none;
+  border: 1px solid var(--dsw-alias-border-l3);
+  border-radius: 9px;
+  color: var(--dsw-alias-brand-primary);
+  font-size: 11px;
+  line-height: 16px;
+  font-weight: 600;
+}
+
+.supplierIdentity {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.supplierName {
+  color: var(--dsw-alias-label-primary);
+  font-size: 14px;
+  line-height: 21px;
+  font-weight: 500;
+}
+
+.supplierSummary {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.accessList {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.accessCard {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.accessChooser {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 12px;
+}
+
+.accessChooser select.input {
+  max-width: none;
+}
+
+.accessHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.accessIdentity {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 7px;
+}
+
+.accessName {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.planNotice {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-state-warn-secondary);
+  border-radius: 8px;
+  background: var(--dsw-alias-state-warn-tertiary);
+  color: var(--dsw-alias-state-warn-label);
+  font-size: 11px;
+  line-height: 17px;
+}
+
+.otherProvidersTitle {
+  margin-top: 4px;
 }
 
 .toolModelHeader {
@@ -274,12 +688,91 @@
 /* Editing surface: a filled module on the panel, matching the settings
    selector fill rather than adding another outline inside the row. */
 .editor {
+  box-sizing: border-box;
   border-radius: 12px;
   background: var(--dsw-alias-bg-module-platform);
   padding: 14px 16px;
   display: flex;
   flex-direction: column;
   gap: 14px;
+}
+
+/* Inline access editors have their own scroll window. Their model catalogs
+   can grow without enlarging the Settings options scroller, and wheel input
+   stays in the editor when it reaches either edge. */
+.accessCard > .editor,
+.rowCard > .editor,
+.setupCard > .editor,
+.addCard > .editor {
+  max-height: clamp(240px, calc(100vh - 340px), 520px);
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  scrollbar-gutter: stable;
+}
+
+.editorSection,
+.routeSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editorSectionHead {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.editorSectionTitle {
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  line-height: 20px;
+  font-weight: 500;
+}
+
+.editorSectionHint,
+.fieldHint {
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 17px;
+  font-weight: 400;
+}
+
+.connectionGrid,
+.routeGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 12px;
+}
+
+.connectionGrid select.input,
+.routeGrid select.input {
+  max-width: none;
+}
+
+.routeSection {
+  padding: 11px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+}
+
+.routeFullWidth {
+  grid-column: 1 / -1;
+}
+
+.endpointPreview {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-family: var(--ds-font-family-code);
+  font-size: 12px;
+}
+
+.routeExplanation {
+  margin: 0;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 17px;
 }
 
 .editorHeader {
@@ -449,6 +942,14 @@
   padding-top: 12px;
 }
 
+.presetEditorBody {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
 /* Model catalog: a table, not a stack of cards. The column captions are
    written once above the rows, so a row is one line of fields plus its
    delete control; each field still carries the indexed `aria-label` that
@@ -460,6 +961,51 @@
   gap: 10px;
   padding-top: 12px;
   border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.capabilityCatalog {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding-top: 12px;
+  border-top: 1px solid var(--dsw-alias-border-l2);
+}
+
+.capabilityModelList {
+  display: grid;
+  gap: 7px;
+}
+
+.capabilityModelRow {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 9px;
+  background: var(--dsw-alias-bg-layer-1);
+}
+
+.capabilityModelName {
+  overflow: hidden;
+  color: var(--dsw-alias-label-primary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  line-height: 18px;
+  font-weight: 500;
+}
+
+.capabilityModelId {
+  overflow: hidden;
+  color: var(--dsw-alias-label-tertiary);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--ds-font-family-code);
+  font-size: 11px;
 }
 
 .modelCatalogHeading {
@@ -683,6 +1229,38 @@ select.input {
   overflow: hidden;
   clip: rect(0 0 0 0);
   white-space: nowrap;
+}
+
+@media (max-width: 720px) {
+  .accessWorkspace {
+    grid-template-columns: 1fr;
+  }
+
+  .supplierRail {
+    border-right: none;
+    border-bottom: 1px solid var(--dsw-alias-border-l2);
+  }
+
+  .supplierList {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .accessChooser,
+  .connectionGrid,
+  .routeGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .routeFullWidth {
+    grid-column: auto;
+  }
+}
+
+@media (max-width: 560px) {
+  .usageGrid {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

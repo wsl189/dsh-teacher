@@ -1,24 +1,12 @@
 /**
- * One provider's editor card, hand-written per adapter family: the primary
- * field is a single write-only **API key** input (the page never asks for an
- * environment-variable name — a typed key stores through `credentials/set`
- * under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile
- * has none. The pi-ai profile records that derivation as `apiKeyEnv` only when
- * a key is entered; a blank key materializes a reference-free profile for
- * provider-native authentication);
- * the collapsed 自定义设置 area carries the per-family extras (`baseURL` for
- * both families, DeepSeek's id/name/context-window model catalog, and the
- * display name and wire protocol of a pi-ai route the adapter does not ship —
- * the two fields the create card asked that route for, editable here for the
- * same reason).
- * Reasoning effort is deliberately absent: it is a per-MODEL capability, and
- * the models under one provider disagree about it, so a provider-scoped
- * control can only be set to a value some of them reject. The composer's
- * model picker offers each model its own levels; `settings.yaml` keeps the
- * profile field for a deployment that knows its route. Everything else stays
- * owned by `settings.yaml`. Profile edits land as minimal `settings.mutate`
- * path ops against the stored section — the card names only the fields it can
- * see instead of rebuilding the whole subtree from a partial descriptor.
+ * Provider editor shared by adapter families. API protocol and the write-only
+ * API key sit in the same access-plan section. Product presets couple each
+ * protocol to an official base URL and show the complete request URL; generic
+ * providers keep request-route and model fields in their advanced disclosure.
+ * A product route absent from the installed catalog receives its serviceable
+ * seed only when saved. Profile edits use minimal `settings.mutate` path ops,
+ * and a typed key is stored through the credential service under the profile's
+ * reference rather than copied into `settings.yaml`.
  */
 
 import { useEffect, useMemo, useState } from 'react'
@@ -32,6 +20,8 @@ import {
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
+import { joinRequestURL } from './provider-presets.ts'
+import type { ProviderAccessPreset, ProviderProtocolPreset } from './provider-presets.ts'
 import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
 import type { ModelsWire } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -54,12 +44,12 @@ export interface ProviderEditorProps {
   hideTitle?: boolean
   /**
    * Whether the adapter reports this route as hand-declared — absent from its
-   * installed catalog. Such a route carries its own wire protocol, chosen when
-   * it was created and editable here for the same reason; a catalog route's
-   * models each carry theirs, so a route-level protocol there could only
-   * override every one of them and the card does not offer it.
+   * installed catalog. Generic declared routes can edit the display name that
+   * their profile owns; product presets keep their product-owned name.
    */
   declared?: boolean
+  /** Product-owned supplier/access defaults and official endpoint pairings. */
+  connectionPreset?: ProviderAccessPreset
   /** The owning namespace view (schema, layers, secrets). */
   namespace: SettingsNamespaceView
   /** Settings-owned synchronous schema and immutable path operations. */
@@ -93,9 +83,12 @@ function draftAt(
   schema: SettingsSchemaOperations,
   namespace: SettingsNamespaceView,
   path: readonly string[],
+  seed: Readonly<Record<string, unknown>> | undefined,
 ): Record<string, unknown> {
   const subtree = schema.getPath(namespace.user, path)
-  if (typeof subtree !== 'object' || subtree === null || Array.isArray(subtree)) return {}
+  if (typeof subtree !== 'object' || subtree === null || Array.isArray(subtree)) {
+    return seed === undefined ? {} : structuredClone(seed)
+  }
   return structuredClone(subtree) as Record<string, unknown>
 }
 
@@ -156,7 +149,12 @@ function refFor(
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const { namespace, schema, settingsPath, api, t } = props
-  const [draft, setDraft] = useState<Record<string, unknown>>(() => draftAt(schema, namespace, settingsPath))
+  const [draft, setDraft] = useState<Record<string, unknown>>(
+    () => draftAt(schema, namespace, settingsPath, props.connectionPreset?.initialProfile),
+  )
+  const [requestType, setRequestType] = useState(
+    () => props.connectionPreset?.requestTypes[0]?.id ?? 'chat',
+  )
   const [keyDraft, setKeyDraft] = useState('')
   const [keyState, setKeyState] = useState<CredentialInfo | undefined>(undefined)
   const [busy, setBusy] = useState(false)
@@ -233,6 +231,25 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   // an edited-but-unsaved endpoint, and a key typed but not yet stored.
   const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
+  const presetProtocols = props.connectionPreset?.protocols ?? []
+  const selectedRequestType = props.connectionPreset?.requestTypes.find(candidate => candidate.id === requestType)
+    ?? props.connectionPreset?.requestTypes[0]
+  const selectedPresetProtocol = presetProtocols.find(candidate => candidate.api === probeApi)
+    ?? presetProtocols[0]
+  const effectiveApi = probeApi ?? selectedPresetProtocol?.api
+  const effectiveBaseURL = probeBaseURL
+    ?? selectedPresetProtocol?.baseURL
+    ?? (layout === 'deepseek' ? DEEPSEEK_PUBLIC_BASE_URL : undefined)
+  const selectedRouteProtocol = selectedRequestType?.protocols?.[0] ?? selectedPresetProtocol
+  const routeBaseURL = selectedRequestType?.protocols === undefined
+    ? effectiveBaseURL
+    : selectedRouteProtocol?.baseURL
+  const requestPath = selectedRouteProtocol?.requestPath
+    ?? (effectiveApi === 'openai-responses'
+      ? '/responses'
+      : effectiveApi === 'anthropic-messages' ? '/v1/messages' : '/chat/completions')
+  const fullRequestURL = routeBaseURL === undefined ? '' : joinRequestURL(routeBaseURL, requestPath)
+  const capabilityRoute = selectedRequestType?.protocols !== undefined
   const probe = {
     settingsNs: namespace.ns,
     // Naming the route lets an adapter that already describes it answer from
@@ -349,7 +366,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     // What a hand-declared route names for itself and nothing else can supply.
     // A whole-section `llm-deepseek` profile is a composition fact with no
     // per-route identity for its schema to carry, hence the family test.
-    const ownsIdentity = family === 'pi-ai' && props.declared === true
+    const ownsIdentity = family === 'pi-ai'
+      && props.declared === true
+      && props.connectionPreset === undefined
     const customModels = schema.getPath(draft, ['models'])
     const modelsOverridden = schema.hasPath(draft, ['models'])
     const models = modelDrafts(modelsOverridden ? customModels : inheritedModels())
@@ -360,6 +379,20 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       : keyState?.configured === true && props.credentialRequired !== true
         ? t('keyStored')
         : family === 'pi-ai' ? t('keyPlaceholderNative') : t('keyPlaceholder')
+    const protocolOptions: readonly ProviderProtocolPreset[] = presetProtocols
+    const selectProtocol = (api: string): void => {
+      const selected = protocolOptions.find(candidate => candidate.api === api)
+      if (selected === undefined) {
+        setField('api', api.length === 0 ? undefined : api)
+        return
+      }
+      setDraft((current) => {
+        if (selected.inherited === true) {
+          return schema.deletePath(schema.deletePath(current, ['api']), ['baseURL'])
+        }
+        return schema.setPath(schema.setPath(current, ['api'], selected.api), ['baseURL'], selected.baseURL)
+      })
+    }
     /** What both family editors take: the rows, whose layer owns them, and the two writes. */
     const catalogProps = {
       models,
@@ -371,118 +404,181 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       },
       onReset: () => { setDraft(current => schema.deletePath(current, ['models'])) },
     }
-    return (
+    const routeAndModels = (
       <>
-        <div className={styles['field']}>
-          <span className={styles['fieldLabel']}>{t('keyInput')}</span>
-          <input
-            className={styles['input']}
-            type="password"
-            autoComplete="off"
-            value={keyDraft}
-            placeholder={keyPlaceholder}
-            aria-label={t('keyInput')}
-            aria-invalid={shownKeyFailure !== undefined}
-            required={props.credentialRequired === true}
-            autoFocus={props.autoFocusCredential === true}
-            disabled={disabled || keyLocked}
-            onChange={(event) => { setKeyDraft(event.target.value) }}
-          />
-          {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
-        </div>
-        {props.credentialOnly === true ? null : <details className={styles['customized']}>
-          <summary className={styles['customizedSummary']}>{t('customized')}</summary>
-          <div className={styles['customizedBody']}>
-            {/* The name and the protocol are the create card's two remaining
-                profile fields; a route the adapter ships defaults both from
-                its catalog entry and neither belongs on its card. */}
-            {ownsIdentity
-              ? (
-                <div className={styles['field']}>
-                  <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
-                  <input
-                    className={styles['input']}
-                    type="text"
-                    value={stringAt(draft, 'displayName') ?? ''}
-                    // What this route is called the moment the field is
-                    // cleared, which is the layer beneath the one this field
-                    // edits: a `cordis.yml` may pin a name for a route the
-                    // catalog does not ship, and only when nothing does is
-                    // the answer the route id. Reading the effective value
-                    // instead would echo the stored override back as the
-                    // thing clearing restores.
-                    placeholder={stringAt(schema.getPath(namespace.base, settingsPath), 'displayName')
-                      ?? props.provider}
-                    aria-label={t('customDisplayName')}
-                    disabled={disabled}
-                    onChange={(event) => { setField('displayName', event.target.value) }}
-                  />
-                </div>
-              )
-              : null}
+        {ownsIdentity
+          ? (
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('customDisplayName')}</span>
+              <input
+                className={styles['input']}
+                type="text"
+                value={stringAt(draft, 'displayName') ?? ''}
+                placeholder={stringAt(schema.getPath(namespace.base, settingsPath), 'displayName')
+                  ?? props.provider}
+                aria-label={t('customDisplayName')}
+                disabled={disabled}
+                onChange={(event) => { setField('displayName', event.target.value) }}
+              />
+            </div>
+          )
+          : null}
+        <section className={styles['routeSection']}>
+          <div className={styles['editorSectionHead']}>
+            <span className={styles['editorSectionTitle']}>{t('requestRouteHeading')}</span>
+            <span className={styles['editorSectionHint']}>{t('requestRouteHint')}</span>
+          </div>
+          <div className={styles['routeGrid']}>
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('requestType')}</span>
+              <select
+                className={`${styles['input']} ${styles['selectInput']}`}
+                value={selectedRequestType?.id ?? 'chat'}
+                aria-label={t('requestType')}
+                disabled={disabled || (props.connectionPreset?.requestTypes.length ?? 0) < 2}
+                onChange={(event) => { setRequestType(event.target.value as typeof requestType) }}
+              >
+                {(props.connectionPreset?.requestTypes ?? [{ id: 'chat', labelKey: 'requestTypeChat' as const }])
+                  .map(choice => <option key={choice.id} value={choice.id}>{t(choice.labelKey)}</option>)}
+              </select>
+            </div>
             <div className={styles['field']}>
               <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
               <input
                 className={styles['input']}
                 type="text"
-                value={stringAt(draft, 'baseURL') ?? ''}
+                value={capabilityRoute ? routeBaseURL ?? '' : stringAt(draft, 'baseURL') ?? ''}
                 placeholder={family === 'deepseek'
                   ? DEEPSEEK_PUBLIC_BASE_URL
-                  : stringAt(fallback, 'baseURL') ?? t('baseUrlDefault')}
+                  : selectedPresetProtocol?.baseURL ?? effectiveBaseURL ?? t('baseUrlDefault')}
                 aria-label={t('baseUrl')}
-                disabled={disabled}
+                disabled={disabled || capabilityRoute}
                 onChange={(event) => {
                   setField('baseURL', event.target.value === '' ? undefined : event.target.value)
                 }}
               />
             </div>
-            {/* The protocol sits beside the endpoint it describes, as it does
-                on the create card. */}
-            {ownsIdentity
-              ? (
+            <div className={`${styles['field']} ${styles['routeFullWidth']}`}>
+              <span className={styles['fieldLabel']}>
+                {t('fullRequestUrl')}
+                <span className={styles['fieldHint']}>{t('readOnlyPreview')}</span>
+              </span>
+              <input
+                className={`${styles['input']} ${styles['endpointPreview']}`}
+                type="text"
+                value={fullRequestURL}
+                aria-label={t('fullRequestUrl')}
+                readOnly
+              />
+            </div>
+          </div>
+          {selectedRequestType === undefined
+            ? null
+            : <p className={styles['routeExplanation']}>{t(selectedRequestType.explanationKey)}</p>}
+        </section>
+        {capabilityRoute
+          ? (
+            <section className={styles['capabilityCatalog']} aria-label={t('models')}>
+              <div className={styles['modelListHead']}>
+                <span className={styles['modelCatalogTitle']}>{t('models')}</span>
+                <span className={styles['modelCatalogMeta']}>{t(selectedRequestType.labelKey)}</span>
+              </div>
+              <div className={styles['capabilityModelList']}>
+                {(selectedRequestType.models ?? []).map(model => (
+                  <div key={model.id} className={styles['capabilityModelRow']}>
+                    <span className={styles['capabilityModelName']}>{model.name}</span>
+                    <code className={styles['capabilityModelId']}>{model.id}</code>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )
+          : family === 'deepseek'
+            ? (
+              <DeepSeekModelsEditor
+                {...catalogProps}
+                defaultContextWindow={typeof defaultContextWindow === 'number'
+                  ? defaultContextWindow
+                  : undefined}
+                defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined}
+              />
+            )
+            : <ModelListEditor {...catalogProps} probe={probe} probeBlocked={keyFailure} api={api} />}
+      </>
+    )
+    return (
+      <>
+        <section className={styles['editorSection']}>
+          {props.credentialOnly === true
+            ? null
+            : (
+              <div className={styles['editorSectionHead']}>
+                <span className={styles['editorSectionTitle']}>{t('connectionHeading')}</span>
+                <span className={styles['editorSectionHint']}>{t('connectionHint')}</span>
+              </div>
+            )}
+          <div className={props.credentialOnly === true ? undefined : styles['connectionGrid']}>
+            {props.credentialOnly === true
+              ? null
+              : (
                 <div className={styles['field']}>
                   <span className={styles['fieldLabel']}>{t('customApi')}</span>
                   <select
                     className={`${styles['input']} ${styles['selectInput']}`}
-                    value={probeApi ?? ''}
+                    value={props.connectionPreset === undefined ? probeApi ?? '' : effectiveApi ?? ''}
                     aria-label={t('customApi')}
-                    disabled={disabled}
-                    onChange={(event) => { setField('api', event.target.value) }}
+                    disabled={disabled || family === 'deepseek'}
+                    onChange={(event) => { selectProtocol(event.target.value) }}
                   >
-                    {/* A profile naming no protocol — hand-written into
-                        settings.yaml with no model to need one — selects
-                        nothing rather than reading as if it had picked the
-                        first choice. The option is named because a screen
-                        reader announces it either way, and an empty one is
-                        announced as a choice with no identity. */}
-                    {probeApi === undefined ? <option value="">{t('customApiUnset')}</option> : null}
-                    {protocols.map(choice => <option key={choice} value={choice}>{choice}</option>)}
+                    {props.connectionPreset === undefined
+                      ? <option value="">{t('protocolProviderDefault')}</option>
+                      : null}
+                    {protocolOptions.length > 0
+                      ? protocolOptions.map(choice => (
+                        <option key={`${choice.api}:${choice.baseURL}`} value={choice.api}>{t(choice.labelKey)}</option>
+                      ))
+                      : protocols.map(choice => <option key={choice} value={choice}>{choice}</option>)}
                   </select>
                 </div>
-              )
-              : null}
-            {/* Both families edit the same rows through the same contract; only
-                the extras differ — DeepSeek's inherited capacities, pi-ai's
-                endpoint interrogation. */}
-            {family === 'deepseek'
-              ? (
-                <DeepSeekModelsEditor
-                  {...catalogProps}
-                  defaultContextWindow={typeof defaultContextWindow === 'number'
-                    ? defaultContextWindow
-                    : undefined}
-                  defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined}
-                />
-              )
-              : <ModelListEditor {...catalogProps} probe={probe} probeBlocked={keyFailure} api={api} />}
+              )}
+            <div className={styles['field']}>
+              <span className={styles['fieldLabel']}>{t('keyInput')}</span>
+              <input
+                className={styles['input']}
+                type="password"
+                autoComplete="off"
+                value={keyDraft}
+                placeholder={keyPlaceholder}
+                aria-label={t('keyInput')}
+                aria-invalid={shownKeyFailure !== undefined}
+                required={props.credentialRequired === true}
+                autoFocus={props.autoFocusCredential === true}
+                disabled={disabled || keyLocked}
+                onChange={(event) => { setKeyDraft(event.target.value) }}
+              />
+              {shownKeyFailure === undefined ? null : <p className={styles['error']}>{t(shownKeyFailure)}</p>}
+            </div>
           </div>
-        </details>}
+        </section>
+        {props.credentialOnly === true
+          ? null
+          : props.connectionPreset === undefined
+            ? (
+              <details className={styles['customized']}>
+                <summary className={styles['customizedSummary']}>{t('customized')}</summary>
+                <div className={styles['customizedBody']}>{routeAndModels}</div>
+              </details>
+            )
+            : <div className={styles['presetEditorBody']}>{routeAndModels}</div>}
       </>
     )
   }
 
   return (
-    <div className={props.credentialOnly === true ? styles['addBlock'] : styles['editor']}>
+    <div
+      className={props.credentialOnly === true ? styles['addBlock'] : styles['editor']}
+      {...props.credentialOnly === true ? {} : { 'data-scroll-region': 'provider-editor' }}
+    >
       {props.hideTitle === true
         ? null
         : (

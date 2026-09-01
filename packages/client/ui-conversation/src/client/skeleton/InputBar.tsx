@@ -17,7 +17,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, KeyboardEvent, MouseEvent, ReactNode } from 'react'
 import clsx from 'clsx'
 import {
-  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip,
+  IconPlusOutline16, IconWarningOutline16, Toast, Tooltip, VoiceMicrophoneIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { formatFileMention } from '@deepseek-ai/dsh-file-reference/grammar'
 // Type-only: the `plan` projection key merge (the TodoDock posture — the
@@ -78,8 +78,8 @@ function voiceErrorText(code: string, t: VoiceErrorTranslate): string {
 export function InputBar({
   useSession, useInput, inputActions, keyboard, addImages, removeImage, draftImages,
   addDocuments, removeDocument, draftDocumentFile, transcribeVoice,
-  resolveSubmitMode, toggleCommandMenu, stop, command, t,
-  renderSlot, useNotices, useLexicon, useMenuLauncher, useDocuments,
+  resolveSubmitMode, toggleCommandMenu, stop, command, setConfirmFullAccess, t,
+  renderSlot, useNotices, useLexicon, useMenuLauncher, useDocuments, useFullAccessConfirmation,
   useProjection, sessionId, variant, disabled: inert = false, blocked,
   workspacePickerOpen = false, onRequestWorkspace,
   placeholder, accessory, overlay, leftItems, rightItems, footer,
@@ -89,6 +89,7 @@ export function InputBar({
   void useLexicon // hook seat stays bound by the inject compartment; text-ref decoration rides the shell's editor transforms
   const commandMenuOpen = useMenuLauncher(source => source === 'command')
   const documents = useDocuments(rows => rows)
+  const fullAccessConfirmation = useFullAccessConfirmation(snapshot => snapshot)
   const promptError = useSession(s => s.promptError) ?? null
   const running = useSession(s => s.running) ?? false
   const subagent = useSession(s => s.subagent) ?? null
@@ -443,7 +444,20 @@ export function InputBar({
   // or while the command face is absent with the session).
   const accessSelect: ReactNode = command === undefined
     ? null
-    : <PermissionSelect key={sessionId} value={permissions} locked={locked} command={command} t={t} />
+    : (
+      <PermissionSelect
+        key={sessionId}
+        value={permissions}
+        locked={locked}
+        command={command}
+        confirmFullAccess={fullAccessConfirmation.value?.confirmFullAccess ?? true}
+        canSuppressFullAccessConfirmation={
+          fullAccessConfirmation.status === 'ready' && fullAccessConfirmation.writable
+        }
+        suppressFullAccessConfirmation={() => setConfirmFullAccess(false)}
+        t={t}
+      />
+    )
 
   // Claim ghost hint: rendered by CSS as generated content after the last
   // paragraph while the claim's args are blank (a hint implies a single-line
@@ -641,7 +655,7 @@ export function InputBar({
             >
               <button
                 type="button"
-                className={clsx(css.add, voice.listening && css.voiceActive)}
+                className={css.add}
                 aria-label={voice.transcribing
                   ? t('voice.transcribing')
                   : voice.listening ? t('voice.stop') : t('voice.start')}
@@ -650,16 +664,7 @@ export function InputBar({
                 onMouseDown={keepFocus}
                 onClick={() => { voice.toggle() }}
               >
-                {voice.listening ? (
-                  <svg viewBox="0 0 16 16" width="14" height="14" aria-hidden>
-                    <rect x="3" y="3" width="10" height="10" rx="2" fill="currentColor" />
-                  </svg>
-                ) : (
-                  <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden>
-                    <rect x="5.25" y="1.5" width="5.5" height="8.5" rx="2.75" fill="none" stroke="currentColor" strokeWidth="1.4" />
-                    <path d="M3.5 7.75a4.5 4.5 0 0 0 9 0M8 12.25V15M5.5 15h5" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-                  </svg>
-                )}
+                <VoiceMicrophoneIcon active={voice.listening} level={voice.level} size={15} />
               </button>
             </Tooltip>
             <div className={css.modes}>

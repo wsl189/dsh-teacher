@@ -16,15 +16,39 @@
       - img
       - text: Agent 预设
     - button "侧边卡片"
-  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭
   - heading "模型" [level=2]
-  - paragraph: 填入各提供方的 API 密钥即可使用其模型。
-  - text: 工具模型
-  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
-  - combobox "工具模型"
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每种接入方式独立保存 API 密钥、协议、地址和模型目录。
+  - region "国内供应商预设":
+    - complementary "供应商":
+      - text: 供应商
+      - button "智谱 GLM 标准 API 与 GLM Coding Plan"
+      - button "Kimi / 月之暗面 Kimi 开放平台与 Kimi Code"
+      - button "DeepSeek 官方直连接口" [pressed]
+      - button "阿里云百炼 / Qwen 标准 API、Coding Plan 与 Token Plan"
+      - button "MiniMax 标准 API 与 Token Plan"
+    - article:
+      - text: DeepSeek 官方直连接口 官方预设
+      - list:
+        - listitem:
+          - text: 接入方式
+          - combobox "接入方式":
+            - option "标准 API" [selected]
+          - text: DeepSeek 可用
+          - button "编辑 DeepSeek (deepseek-official)" [disabled]: 编辑
+  - list
+  - button "添加提供方":
+    - img
+    - text: 添加提供方
+  - button "添加自定义提供方":
+    - img
+    - text: 添加自定义提供方
   - 'button "收起: 生图模型" [expanded]': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
   - region "渠道":
     - heading "渠道" [level=3]
@@ -39,10 +63,3 @@
   - 'button "展开设置: 语音模型"':
     - strong: 语音模型
     - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。
-  - list
-  - button "添加提供方":
-    - img
-    - text: 添加提供方
-  - button "添加自定义提供方":
-    - img
-    - text: 添加自定义提供方

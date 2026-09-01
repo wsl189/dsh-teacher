@@ -1,5 +1,5 @@
 ---
-description: "Models settings and product-onboarding plugin for the dsh web client: provider rows, API-key management, model lists, and the DeepSeek first-run dialogs."
+description: "Models settings and product-onboarding plugin for the dsh web client: direct use-case assignments, supplier-grouped access routes, API-key management, capability catalogs, and the DeepSeek first-run dialogs."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-client-ui-settings-models` is the Models settings page of the dsh web client: users configure API keys (stored write-only under the profile's credential reference), edit each provider's model list, and hand-declare custom pi-ai routes, with provider rows and one editor card at a time. The page joins the provider directory, the settings document, and the credential descriptions into one shared snapshot, so a row's state stays consistent across all three. It also walks first-run users through two ordered dialogs — a versioned internal-testing notice and the conditional official-DeepSeek credential step.
+`dsh-client-ui-settings-models` is the Models settings page of the dsh web client. **Use cases** presents one direct selector each for the default conversation, background tools, image generation, and speech recognition; every choice comes from a configured route that advertises the required operation, and the panel contains no provider-specific controls. **Service access** groups the official presets for Zhipu, Kimi, DeepSeek, Alibaba Model Studio/Qwen, and MiniMax by supplier while keeping Standard API, Coding Plan, and Token Plan routes independently authenticated and configured; plugin-owned image and speech access cards also render only in this panel. Users can add installed catalog providers or hand-declare custom pi-ai routes. The page joins the provider directory, settings document, and credential descriptions into one shared snapshot, and it walks first-run users through a versioned internal-testing notice and the conditional official-DeepSeek credential step.
 
 ## Table of Contents
 
@@ -25,19 +25,19 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Open the Models page from the Settings navigation to see every configured provider as a row. A whole-section provider whose key is not configured anywhere renders as its open setup card instead, but only in the first-run posture and only until the user closes that card. Each card kind owns its own open state, so closing one never discards a draft in another.
+Open Models from the Settings navigation. Use **Service access** to select a supplier and one of its access methods, then configure that route. The supplier grouping is presentational: Standard API, Coding Plan, and Token Plan keep separate settings paths, credentials, protocols, endpoints, and model catalogs. An expanded provider editor keeps a bounded height and scrolls its own contents, so a large model catalog does not move the Settings frame or supplier controls. Use **Use cases** after at least one route is usable to assign its models to conversation, background-tool, image-generation, and speech-recognition work. Image and speech selectors list only configured product presets with an official capability route; adapter-specific configuration that the common assignment cannot express stays in **Service access**. A whole-section provider whose key is not configured anywhere still renders as its open setup card in the first-run posture until the user closes it.
 
 ### API keys
 
-The primary field on an editor card is a single **API key** input — the page never asks for an environment-variable name. A typed key stores write-only through `credentials.set` under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile has none, and the pi-ai profile records that derivation as `apiKeyEnv`, so `settings.yaml` never carries a key value. Leaving a new pi-ai provider's key blank saves a reference-free profile and preserves provider-native authentication (for example the Bedrock credential chain or Vertex ADC). A row labels API-key state with a green solid dot only when a referenced credential is confirmed configured, and with a red solid dot only when a named reference is confirmed missing. A successful Apply emits a local accessible status message without echoing secret material.
+Each access-route editor places **API protocol** and a single **API key** input in the same credential section; protocol is route-level, not a per-model override. A typed key stores write-only through `credentials.set` under the profile's reference, deriving `<ROUTE>_API_KEY` when the profile has none, and the pi-ai profile records that derivation as `apiKeyEnv`, so `settings.yaml` never carries a key value. Subscription-plan keys remain isolated from standard API keys even when the supplier uses the same hostname. Leaving a new pi-ai provider's key blank saves a reference-free profile and preserves provider-native authentication. A row labels confirmed configured and confirmed missing credentials with accessible status dots, and a successful Apply never echoes secret material.
 
 ### Editing a provider
 
-The collapsed 自定义设置 fold carries the curated extras: `baseURL` for both families (the deepseek placeholder shows the public endpoint), each adapter's model catalog, and the **display name** and **API protocol** of a pi-ai route the adapter does not ship. The Provider ID stays fixed: it is the settings key, the name every other namespace and every logged session references, and the stem of a credential reference the page cannot read back to move. Reasoning effort is deliberately not among the editable fields: it is a per-model capability, so a provider-scoped control could only be set to a value some models reject. Each DeepSeek row edits `id`, optional display `name`, and optional `contextWindow`/`maxTokens`; existing fields outside that curated set survive edits.
+Product presets expose the request route and model catalog directly. Selecting a supported LLM protocol applies its official base URL and previews the complete request URL; conversation, image-input, and coding LLMs share that route. Selecting Image generation or Speech recognition previews the operation's separate official URL and product-owned model catalog without treating that endpoint as an LLM protocol override. Each LLM model separately declares text-only or text-and-image input. Generic providers keep these fields under **Model catalog and advanced settings**, and a hand-declared route can also edit its display name. Provider ID stays fixed because settings, logged sessions, and the credential reference identify the route by that value. Existing fields outside the curated set survive edits.
 
 ### Adding and deleting providers
 
-The add flow is a card carrying the dormant-directory provider select — a bare-mounted `llm-pi-ai` offers its whole installed catalog before any route exists. **Add a custom provider** declares a route pi-ai does not ship; the create card asks for a unique **Provider ID**, an endpoint, a protocol, and at least one uniquely-identified model, because nothing can default those. **Fetch available models** asks the `llm/discoverModels` Remote about the endpoint the form shows, so adding a provider is one pass instead of save-then-return; the reply opens a picker rather than being written, and nothing is written until **Add selected**. A row is deletable only when the user layer alone carries it (removal restores the composition base), and its confirmation dialog names the provider.
+The domestic supplier workspace owns the product presets, including complete seeds for supported routes absent from the installed pi-ai catalog. **Add provider** still adopts any remaining installed catalog route, and **Add a custom provider** declares a route pi-ai does not ship; the create card asks for a unique Provider ID, endpoint, protocol, and at least one model because nothing can default them. **Fetch available models** asks `llm/discoverModels` about the endpoint shown by the form and opens a picker without writing until **Add selected**. A route is deletable only when the user layer carries it, and its confirmation dialog identifies the route and whether this page also owns its credential.
 
 ### First-run dialogs
 
@@ -45,7 +45,7 @@ After the versioned notice step completes, the DeepSeek step projects first-run 
 
 ### Extension slots
 
-The section declares three seats for plugins distributed outside this repository, typed in [`src/client/slot-contract.ts`](src/client/slot-contract.ts) and exported from `./client`. `settings.models.specialized-model` (list) renders immediately below Tool model for product-owned model configuration that is not an LLM provider row; the bundled image-generation client uses order `-10` for its collapsed Image generation model card, followed by the bundled IM client's order `0` Voice model card. `settings.models.provider-card` (keyed) renders inside every card that shows a directory row — a saved row's card, its first-run setup posture, and the add-provider draft — dispatched with `entryKey = settingsNs` and owner props carrying the row's `ConfigurableProviderView`, its configured state, and its confirmed api-key credential state, so one registration under an adapter family's namespace receives every card of that family, hand-declared routes included; the hand-declared draft card has no directory row yet and dispatches nothing until saved. `settings.models.footer` (list) renders after the rows and the add controls. A registrant activates through `ctx.slots.inject` with a type-only import of this package's `/client` entry; without registrants all three seats render nothing.
+The section declares three seats for plugins distributed outside this repository, typed in [`src/client/slot-contract.ts`](src/client/slot-contract.ts) and exported from `./client`. `settings.models.specialized-model` (list) renders after the generic provider workspace in **Service access** for product-owned configuration that does not belong to a generic LLM provider row. `settings.models.provider-card` (keyed) renders inside every service-access card that shows a directory row and dispatches with `entryKey = settingsNs` plus the row's `ConfigurableProviderView`, configured state, and confirmed API-key state. `settings.models.footer` (list) renders after both service-access areas. A registrant activates through `ctx.slots.inject` with a type-only import of this package's `/client` entry; without registrants all three seats render nothing.
 
 -----
 
@@ -55,7 +55,7 @@ The section declares three seats for plugins distributed outside this repository
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The page never holds a full settings section: it holds only the REDACTED descriptor, so every edit lands as `settings.mutate` path ops against the stored section — a set per changed field, an unset per cleared one, and a single unset for a deleted provider row.
+The page never holds a full settings section: it holds only the REDACTED descriptor, so every edit lands as `settings.mutate` path ops against the stored section — paired provider/model sets for a use-case assignment, a set per changed provider field, an unset per cleared one, and a single unset for a deleted provider row.
 
 ### Validation
 
@@ -102,10 +102,11 @@ None; this package neither assembles nor sends a provider request.
 
 These limits define the editor's field coverage and the page's reach; they are current package constraints, not a settings roadmap.
 
-- **Only the API key and curated fold fields are editable on the card** — the hand-written editor traded schema-generic field coverage for the mockup layout. Retry policy, timeouts, DeepSeek model descriptions, and other advanced fields remain in `settings.yaml`; existing model fields the editor does not show are preserved.
+- **Only route credentials and the curated request/model fields are editable on the card** — the hand-written editor trades schema-generic field coverage for the product hierarchy. Retry policy, timeouts, DeepSeek model descriptions, and other advanced fields remain in `settings.yaml`; existing model fields the editor does not show are preserved.
 - **Credential cleanup is intentionally narrow** — deleting a row removes the configured, writable credential only when its reference is the exact `<ROUTE>_API_KEY` target this page derives. Custom references, environment credentials, and unidentifiable targets are retained because the row cannot prove ownership of them.
 - **Only pi-ai routes can be hand-declared** — the custom-provider card writes into `llm-pi-ai`, the one namespace whose profiles describe a whole provider. A `llm-deepseek` route is a composition fact, not something this page can create.
 - **Interrogation covers OpenAI-compatible endpoints** — the adapter reads only that model-list response format, so a gateway speaking another protocol reports that it cannot be asked and its models are entered by hand.
+- **A media assignment does not make LLM adapters execute media operations** — image and speech consumers must read the corresponding assignment and implement the provider-specific request and response format; adapter-owned transport parameters remain in **Service access**.
 - **Undeclared live routes render nowhere** — a route registered without a configurable-provider declaration has no settings address; it stays visible in pickers but not on this page's rows.
 
 <a id="dev-note"></a>

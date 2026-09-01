@@ -29,7 +29,7 @@ Compose feature UI from these atoms whenever the web client needs a standard con
 
 ### Controls and icons
 
-`Button`, `Pill`, `Input`, `Menu`, `Modal`, `Tooltip`, `DisclosureRow`, `StateDot`, `HoverCard`, `Toast`, `ConnectionBanner`, `RiskConfirmation`, and the `OnboardingSurface` first-run takeover cover the common interaction shapes. The `ic_ds_*` icon set and the `FishLogo`/`BrandWordmark` marks fill brand and inline-icon slots. `useAnchoredPosition` and `useAnchoredMaxHeight` keep floating panels and bottom-anchored overlays clamped to the viewport and following their anchor. `HoverCard` keeps its portaled preview reachable across the anchor gap and can expose a copy button through the `copyText` prop. `Toast` holds for the window its owner names through `holdMs`, because how long a banner has to stay depends on how much there is to read; the same value drives its unmount timer and the stylesheet's fade delay, so the two cannot disagree.
+`Button`, `Pill`, `Input`, `Menu`, `Modal`, `Tooltip`, `DisclosureRow`, `StateDot`, `HoverCard`, `Toast`, `ConnectionBanner`, `RiskConfirmation`, and the `OnboardingSurface` first-run takeover cover the common interaction shapes. `RiskConfirmation` requires a controlled acknowledgement before its primary action and can render a separate controlled suppression choice in the lower-left footer; the owner decides whether and when that choice is persisted. `useVoiceRecorder` exposes a normalized microphone level and, when Web Audio metering is available, finishes the recording after three seconds without audible input; `VoiceMicrophoneIcon` pulses while active and fills from bottom to top with that level. The `ic_ds_*` icon set and the `FishLogo`/`BrandWordmark` marks fill brand and inline-icon slots. `useAnchoredPosition` and `useAnchoredMaxHeight` keep floating panels and bottom-anchored overlays clamped to the viewport and following their anchor. `HoverCard` keeps its portaled preview reachable across the anchor gap and can expose a copy button through the `copyText` prop. `Toast` holds for the window its owner names through `holdMs`, because how long a banner has to stay depends on how much there is to read; the same value drives its unmount timer and the stylesheet's fade delay, so the two cannot disagree.
 
 ### Rendering agent output
 
@@ -58,6 +58,7 @@ The package is one separation: presentational React atoms with zero Cordis and z
 | [`src/TerminalBlock.tsx`](src/TerminalBlock.tsx) | ANSI escape parsing (`anser`) and terminal card rendering |
 | [`src/ReadBlock.tsx`](src/ReadBlock.tsx) / [`src/DiffBlock.tsx`](src/DiffBlock.tsx) | Read and diff cards |
 | [`src/SearchBlock.tsx`](src/SearchBlock.tsx) / [`src/WebBlock.tsx`](src/WebBlock.tsx) | Search and web-retrieval cards |
+| [`src/useVoiceRecorder.ts`](src/useVoiceRecorder.ts) / [`src/VoiceMicrophoneIcon.tsx`](src/VoiceMicrophoneIcon.tsx) | Browser recording lifecycle, silence completion, and level presentation |
 | [`src/icons/`](src/icons/) | `ic_ds_*` glyph components and brand marks |
 | [`src/useAnchoredPosition.ts`](src/useAnchoredPosition.ts) / [`src/useAnchoredMaxHeight.ts`](src/useAnchoredMaxHeight.ts) | Floating-panel and overlay geometry hooks |
 
@@ -107,6 +108,7 @@ These limits define how the atoms behave at the edges; they are current package 
 - **`Pill` and `Input` have no design source** — both atoms are self-defined; the sidebar search field and view-tab strip that resemble them are consumer-owned compositions, not these atoms.
 - **No `Active` `StateDot` variant** — the supported states are done, warning, ongoing, and error.
 - **User-facing copy is required at the render site** — the atoms are zero-Cordis and cannot reach `ctx.locale`; each feature must supply complete localized labels through the primitive's typed props ([decision](../../../.agents/notes/implemented/architecture/2026-08-23-locale-owned-client-ui-copy.md)).
+- **Automatic voice completion requires Web Audio metering** — a host with `MediaRecorder` but no standard or WebKit `AudioContext` can still record and transcribe, but its user must stop the recording manually and the microphone level remains empty.
 - **`TerminalBlock` is not a terminal emulator** — it renders settled or still-running command output, not an interactive session: SGR colors, carriage return, backspace, erase-in-line, tab stops, and character width are honored; absolute cursor positioning, screen clearing, and alternate-screen sequences are stripped.
 
 <a id="dev-note"></a>

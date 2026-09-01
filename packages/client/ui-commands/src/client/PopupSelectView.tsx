@@ -167,6 +167,13 @@ export function PopupSelectView({ popup, t }: PopupSelectViewProps) {
           closeLabel={t('close')}
           confirmLabel={confirmation.confirmLabel}
           acknowledged={state.acknowledged}
+          {...confirmation.suppressFutureLabel === undefined
+            ? {}
+            : {
+              suppressFutureLabel: confirmation.suppressFutureLabel,
+              suppressFuture: state.suppressFuture,
+              onSuppressFutureChange: (value: boolean) => { popup.suppressFuture(value) },
+            }}
           onAcknowledgedChange={(value) => { popup.acknowledge(value) }}
           onCancel={() => { popup.cancelConfirmation() }}
           onConfirm={() => { void popup.confirm() }}

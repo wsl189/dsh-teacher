@@ -1216,11 +1216,6 @@
   opacity: 0.4;
 }
 
-.voiceButtonActive {
-  background: var(--dsw-alias-state-error-primary);
-  color: var(--dsw-alias-label-primary-foreground);
-}
-
 .todoComposer {
   display: grid;
   grid-template-columns: minmax(150px, 1fr) 180px 32px 32px;

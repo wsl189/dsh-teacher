@@ -1,8 +1,12 @@
 /** Host-backed speech-transcription microphone command. */
 
 import { useCallback, useRef, useState } from 'react'
-import { CircleAlert, Mic, Square } from 'lucide-react'
-import { Toast, useVoiceRecorder } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CircleAlert } from 'lucide-react'
+import {
+  Toast,
+  useVoiceRecorder,
+  VoiceMicrophoneIcon,
+} from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
 
@@ -78,14 +82,14 @@ export function VoiceInputButton({ transcribe, onTranscript, t }: VoiceInputButt
     <>
       <button
         type="button"
-        className={voice.listening ? css.voiceButtonActive : css.voiceButton}
+        className={css.voiceButton}
         aria-label={label}
         aria-pressed={voice.listening}
         title={label}
         disabled={!voice.supported || voice.starting || voice.transcribing}
         onClick={() => { setError(''); voice.toggle() }}
       >
-        {voice.listening ? <Square size={15} /> : <Mic size={16} />}
+        <VoiceMicrophoneIcon active={voice.listening} level={voice.level} />
       </button>
       {toast !== null && (
         <Toast

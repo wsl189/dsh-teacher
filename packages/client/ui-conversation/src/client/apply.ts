@@ -5,6 +5,7 @@ import { createSnapshotStore, type BoundActions } from '@deepseek-ai/dsh-client-
 import { blobToBase64 } from '@deepseek-ai/dsh-client-ui-primitives'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
+import type { PermissionSettings } from '@deepseek-ai/dsh-permission-presets/client'
 // Type-only service and declaration merges used by this assembly.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
@@ -113,6 +114,9 @@ export function apply(ctx: Context): void {
   const submissionPolicy = new ComposerSubmissionPolicy(
     ctx.settingsScope.bind<ConversationSettings>({ namespace: CONVERSATION_SETTINGS_NAMESPACE }),
   )
+  const permissionSettings = ctx.settingsScope.bind<PermissionSettings>({ namespace: 'permission' })
+  const setConfirmFullAccess = (enabled: boolean): Promise<void> =>
+    permissionSettings.set('confirmFullAccess', enabled)
 
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
@@ -273,11 +277,13 @@ export function apply(ctx: Context): void {
           toggleCommandMenu: undefined,
           stop: undefined,
           command: undefined,
+          setConfirmFullAccess,
           hooks: {
             notices: ABSENT_NOTICES,
             lexicon: ABSENT_LEXICON,
             menuLauncher: ABSENT_MENU_LAUNCHER,
             documents: ABSENT_DOCUMENTS,
+            fullAccessConfirmation: permissionSettings,
           },
         }
       }
@@ -341,11 +347,13 @@ export function apply(ctx: Context): void {
           const result = await session.command(line)
           return result.ok && result.value.matched
         },
+        setConfirmFullAccess,
         hooks: {
           notices: shell.notices,
           lexicon: shell.lexicon,
           menuLauncher: inputTriggers?.launcher ?? ABSENT_MENU_LAUNCHER,
           documents: conversation.documentStore(sessionId),
+          fullAccessConfirmation: permissionSettings,
         },
       }
     },

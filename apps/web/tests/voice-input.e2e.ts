@@ -20,8 +20,10 @@ import {
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/voice-input', import.meta.url))
+const COMPOSER_RECORDING_EXPECTED = join(SNAPSHOT_DIR, 'composer-recording.expected.md')
 const COMPOSER_EXPECTED = join(SNAPSHOT_DIR, 'composer.expected.md')
 const COMPOSER_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'composer-error.expected.md')
+const WORKBENCH_RECORDING_EXPECTED = join(SNAPSHOT_DIR, 'workbench-recording.expected.md')
 const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'workbench.expected.md')
 const WORKBENCH_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'workbench-error.expected.md')
 const MODE = webSnapshotMode()
@@ -108,6 +110,28 @@ describe('web e2e: QQ-configured voice input', () => {
         }
       }
       class DeterministicAudioContext {
+        createMediaStreamSource(_stream: MediaStream): MediaStreamAudioSourceNode {
+          return {
+            connect: () => {},
+            disconnect: () => {},
+          } as unknown as MediaStreamAudioSourceNode
+        }
+
+        createAnalyser(): AnalyserNode {
+          let audibleFrames = 4
+          return {
+            fftSize: 256,
+            smoothingTimeConstant: 0,
+            getByteTimeDomainData: (samples: Uint8Array) => {
+              const amplitude = audibleFrames > 0 ? 20 : 0
+              audibleFrames -= 1
+              for (let index = 0; index < samples.length; index += 1) {
+                samples[index] = 128 + (index % 2 === 0 ? amplitude : -amplitude)
+              }
+            },
+          } as unknown as AnalyserNode
+        }
+
         async decodeAudioData(_audioData: ArrayBuffer): Promise<AudioBuffer> {
           const samples = Float32Array.from([0.25, 0.25, 0.25, -0.25, -0.25, -0.25])
           return {
@@ -119,6 +143,7 @@ describe('web e2e: QQ-configured voice input', () => {
         }
 
         close(): Promise<void> { return Promise.resolve() }
+        resume(): Promise<void> { return Promise.resolve() }
       }
       Object.defineProperty(window, 'MediaRecorder', {
         configurable: true,
@@ -150,11 +175,22 @@ describe('web e2e: QQ-configured voice input', () => {
   it('transcribes the conversation composer through the QQ ASR settings', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-composer'))
     const composer = page.locator('[data-composer-card]')
-    await composer.getByRole('button', { name: '语音输入（也可长按空格）' }).click()
-    await composer.getByRole('button', { name: '停止语音输入' }).click()
+    const idleVoice = composer.getByRole('button', { name: '语音输入（也可长按空格）' })
+    const idleClass = await idleVoice.getAttribute('class')
+    await idleVoice.click()
+    const activeVoice = composer.getByRole('button', { name: '停止语音输入' })
+    await activeVoice.waitFor()
+    expect(await activeVoice.getAttribute('class')).toBe(idleClass)
+    await expect.poll(async () => Number(await activeVoice.locator('[data-voice-level]').getAttribute('data-voice-level')))
+      .toBeGreaterThan(0.8)
+    await compareOrRefreshGolden(
+      COMPOSER_RECORDING_EXPECTED,
+      await captureStableAria(page, '[data-composer-card]', scaffold.workspaceCwd),
+      MODE,
+    )
     await expect.poll(
       () => composer.locator('[data-composer-input]').textContent(),
-      { timeout: 10_000 },
+      { timeout: 12_000 },
     ).toBe('课堂口述')
     expect(uploads[0]).toContain('name="model"')
     expect(uploads[0]).toContain('whisper-large-v3')
@@ -196,11 +232,22 @@ describe('web e2e: QQ-configured voice input', () => {
     await page.getByRole('button', { name: '打开工作台' }).click()
     await page.getByRole('button', { name: '日常管理', exact: true }).first().click()
     const todo = page.locator('section[aria-labelledby="daily-todo-title"]')
-    await todo.getByRole('button', { name: '开始语音输入' }).click()
-    await todo.getByRole('button', { name: '停止语音输入' }).click()
+    const idleVoice = todo.getByRole('button', { name: '开始语音输入' })
+    const idleClass = await idleVoice.getAttribute('class')
+    await idleVoice.click()
+    const activeVoice = todo.getByRole('button', { name: '停止语音输入' })
+    await activeVoice.waitFor()
+    expect(await activeVoice.getAttribute('class')).toBe(idleClass)
+    await expect.poll(async () => Number(await activeVoice.locator('[data-voice-level]').getAttribute('data-voice-level')))
+      .toBeGreaterThan(0.8)
+    await compareOrRefreshGolden(
+      WORKBENCH_RECORDING_EXPECTED,
+      await captureStableAria(page, 'section[aria-labelledby="daily-todo-title"]', scaffold.workspaceCwd),
+      MODE,
+    )
     await expect.poll(
       () => todo.getByLabel('新增今日待办').inputValue(),
-      { timeout: 10_000 },
+      { timeout: 12_000 },
     ).toBe('批改语音作业')
     expect(uploads).toHaveLength(3)
     await compareOrRefreshGolden(
@@ -238,8 +285,10 @@ describe('web e2e: QQ-configured voice input', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'composer-error.expected.md',
+      'composer-recording.expected.md',
       'composer.expected.md',
       'workbench-error.expected.md',
+      'workbench-recording.expected.md',
       'workbench.expected.md',
     ])
   })

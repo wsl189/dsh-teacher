@@ -28,13 +28,18 @@ describe('VoiceInputButton', () => {
     const onTranscript = vi.fn()
     render(<VoiceInputButton transcribe={transcribe} onTranscript={onTranscript} t={t} />)
 
-    fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
+    const idleVoiceButton = screen.getByRole('button', { name: '开始语音输入' })
+    const voiceButtonClass = idleVoiceButton.className
+    expect(idleVoiceButton.querySelector('[data-voice-active="false"]')).not.toBeNull()
+    fireEvent.click(idleVoiceButton)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在连接麦克风' }).disabled).toBe(true)
-    await screen.findByRole('button', { name: '停止语音输入' })
+    const activeVoiceButton = await screen.findByRole('button', { name: '停止语音输入' })
+    expect(activeVoiceButton.className).toBe(voiceButtonClass)
+    expect(activeVoiceButton.querySelector('[data-voice-active="true"]')).not.toBeNull()
     expect(getUserMedia).toHaveBeenCalledWith({ audio: true })
     expect(MediaRecorderMock.instances[0]?.mimeType).toBe('audio/webm;codecs=opus')
 
-    fireEvent.click(screen.getByRole('button', { name: '停止语音输入' }))
+    fireEvent.click(activeVoiceButton)
     expect(screen.getByRole<HTMLButtonElement>('button', { name: '正在识别语音' }).disabled).toBe(true)
     expect(stopTrack).toHaveBeenCalledOnce()
     await waitFor(() => { expect(transcribe).toHaveBeenCalledWith(expect.any(Blob)) })

@@ -43,6 +43,22 @@ interface Config {
 
 该服务要求一个施加隔离的 `ctx.shell` 执行器和 `ctx.approval`，配置错误在插件加载时即失败：名为 `custom` 的表项会抛出异常（该名称保留给派生的「非预设」状态）；在不施加隔离的 bash 执行器（没有 `sandboxMode` 能力事实）之上组合同样抛出异常，因为预设捆绑了一个沙箱模式。
 
+## 用户设置与 GUI 确认
+
+该服务拥有 `permission` 设置命名空间。`defaultPreset` 只在创建全新会话时固定；改变它不会改写现有会话。`confirmFullAccess` 默认为 `true`，用于控制 Web GUI 的权限选择器是否打开 Full access 风险对话框。
+
+```ts type-equiv
+/** User preferences shared by permission policy and its browser surfaces. */
+interface PermissionSettings {
+  /** Preset pinned into a newly created session. */
+  defaultPreset: string
+  /** Whether browser permission pickers require the Full access risk dialog. */
+  confirmFullAccess: boolean
+}
+```
+
+只有当用户选择抑制选项并完成风险确认后，GUI 才会存储 `confirmFullAccess: false`。关闭对话框不会写入任何内容。该偏好不会拦截宿主 setter 或直接输入的 `/permission danger-full-access` 命令。
+
 ## 当前预设与派生的 `custom`
 
 `current(events)` 从 knob 派生实际生效的预设，而不是只看自身事件：它折叠会话的生效沙箱模式（回退到执行器配置的模式）与生效审批策略（先回退到审批服务配置，再回退到 `ask`），优先取仍然匹配的已记录选择，其次取声明顺序中第一个匹配的表项，否则返回 `CUSTOM_PRESET`（`'custom'`）。`custom` 只是派生值：客户端可以把它显示为当前值，但它绝不是切换目标，也绝不出现在事件 payload 中。

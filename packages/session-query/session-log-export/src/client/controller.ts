@@ -1,9 +1,9 @@
-/** Browser download state shared by the Session Header button and `/export`. */
+/** Browser download state for `/export` and its result dialog. */
 
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
-/** Download phases presented by the shared modal. */
+/** Download phases presented by the result modal. */
 export type SessionLogDownloadStatus = 'downloading' | 'success' | 'error'
 
 /** One Session's current download-dialog state. */
@@ -13,7 +13,7 @@ export interface SessionLogDownloadEntry {
   readonly error: string | null
 }
 
-/** Download states keyed by the Session whose Header owns the dialog. */
+/** Download states keyed by the Session whose result dialog presents them. */
 export interface SessionLogDownloadState {
   bySession: Record<string, SessionLogDownloadEntry | undefined>
 }

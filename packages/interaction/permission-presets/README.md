@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-permission-presets` gives a deployment one user-facing Permissions selector that bundles two independent enforcement knobs — the sandbox mode and the approval policy — into named presets. Selecting a preset applies the sandbox mode and approval policy together, while each knob keeps its own value, so sandbox execution, approval, prompt narration, and replay each read their own setting. The default table ships `workspace-write` (workspace-write + ask) and `danger-full-access` (danger-full-access + never); a knob combination matching no preset reads back as the derived `custom`, which clients may display but never select. The service also owns the `permission` settings namespace whose default applies only when a later session is created, and two optional children — a `permissions` session projection and the `/permission` command — expose the same surface to the Web client. Mounting it requires a confining bash executor and the approval service; it owns no enforcement itself.
+`dsh-permission-presets` gives a deployment one user-facing Permissions selector that bundles two independent enforcement knobs — the sandbox mode and the approval policy — into named presets. Selecting a preset applies the sandbox mode and approval policy together, while each knob keeps its own value, so sandbox execution, approval, prompt narration, and replay each read their own setting. The default table ships `workspace-write` (workspace-write + ask) and `danger-full-access` (danger-full-access + never); a knob combination matching no preset reads back as the derived `custom`, which clients may display but never select. The service also owns the `permission` settings namespace for the future-session default and the Web GUI's Full access confirmation preference, and two optional children — a `permissions` session projection and the `/permission` command — expose the same surface to the Web client. Mounting it requires a confining bash executor and the approval service; it owns no enforcement itself.
 
 ## Table of Contents
 
@@ -62,6 +62,8 @@ Clients render the select with every switchable preset in table order, plus `cus
 ### Session defaults
 
 The `permission` settings namespace holds `defaultPreset` for future sessions: session creation reads it, applies it to the sandbox mode and approval policy, and records the applied preset as a `permission/preset` selection. Later settings changes never alter an existing session. A resumed seed, including an explicitly empty one marked by `session/end-seed`, preserves its effective permission and receives only missing durable facts rather than the latest user default.
+
+The same namespace holds `confirmFullAccess`, which defaults to `true`. Web GUI permission pickers use it to decide whether a Full access choice opens the risk dialog. A confirmed “Don't remind me again” choice stores `false`; dismissing the dialog stores nothing. This preference changes only the browser confirmation flow: direct `/permission danger-full-access` commands and the host permission write path remain available.
 
 -----
 

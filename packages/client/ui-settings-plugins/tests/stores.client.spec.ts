@@ -873,10 +873,14 @@ describe('WebSearchCardController', () => {
     const state = () => controller.inject().hooks.webSearchCard.getSnapshot()
     await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
 
-    host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
+    host.publish({
+      status: 'ready', writable: true,
+      value: { maxResults: 8, baseURL: 'https://search.test/v1' }, user: {},
+    })
     await vi.waitFor(() => { expect(state().apiKeyConfigured).toBe(true) })
 
     expect(state()).toMatchObject({
+      maxResults: { text: '8', overridden: false },
       baseURL: { text: 'https://search.test/v1', overridden: false },
       apiKey: { text: '', overridden: false },
     })
@@ -1007,7 +1011,7 @@ describe('WebSearchCardController', () => {
     expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(false)
   })
 
-  it('saves the endpoint through the AnySearch settings section', async () => {
+  it('saves the result cap and endpoint through the AnySearch settings section', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     acceptWrites(host)
     const credentials = credentialsApi(true)
@@ -1015,11 +1019,15 @@ describe('WebSearchCardController', () => {
     host.publish({ status: 'ready', writable: true, value: {}, base: {}, user: {} })
     const face = controller.inject()
 
+    face.edit('maxResults', '5')
     face.edit('baseURL', 'https://other.test')
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(1) })
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
 
-    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test']])
+    expect(host.set.mock.calls).toEqual([
+      ['maxResults', 5],
+      ['baseURL', 'https://other.test'],
+    ])
     expect(credentials.set).not.toHaveBeenCalled()
   })
 })

@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本包为 Web GUI 中两种生命周期提供权限预设表面：通用设置中的一行选择之后创建会话所用的默认值，但不会切换当前会话。挂在宿主 `/permission` 命令上的选择器通过一张扁平预设列表切换当前会话，并标记 active 值。Kebab-case 名称渲染为 Title Case 标签，`danger-full-access` 显示为 `Full access`。选择完全权限时，该行或选择器写入前必须先显式确认风险。两个表面读取同一份宿主计算的投影、经同一条路径写入，因此推送的投影帧是两者共同跟随的唯一确认。
+本包为 Web GUI 中两种生命周期提供权限预设表面：通用设置中的一行选择之后创建会话所用的默认值，但不会切换当前会话。挂在宿主 `/permission` 命令上的选择器通过一张扁平预设列表切换当前会话，并标记 active 值。Kebab-case 名称渲染为 Title Case 标签，`danger-full-access` 显示为 `Full access`。Full access 默认要求显式确认风险；用户勾选对话框左下角的“不再提醒”并确认切换后，后续 GUI 确认才会被抑制。该宿主持久化偏好与 composer 选择器共享。当前会话选择器读取同一份宿主计算投影并提交宿主命令，通用行则写入未来会话设置。
 
 ## 目录
 
@@ -29,11 +29,11 @@ kind: "package-reference"
 
 ### 选择器
 
-选中即提交 `/permission <preset>` 命令行。带参路径（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。未知 kebab-case 预设名渲染为 Title Case 标签，`custom` 只是显示状态，绝非目标。
+选中即提交 `/permission <preset>` 命令行。带参路径（直接键入 `/permission <preset>`）仍直接切换；装饰只替换裸调用。未知 kebab-case 预设名渲染为 Title Case 标签，`custom` 只是显示状态，绝非目标。启用 Full access 确认时，关闭对话框会同时保留当前预设与提醒偏好。勾选“不再提醒”并完成风险确认后，选择器会先存储抑制偏好，再提交命令。
 
 ### 设置行
 
-该行从宿主动态的 `defaultPreset` enum 推导选项，写入一条设置变更操作。该值只在之后创建会话时生效；改变它绝不会切换或改写当前会话。
+该行从宿主动态的 `defaultPreset` enum 推导选项，写入设置变更操作。该值只在之后创建会话时生效；改变它绝不会切换或改写当前会话。确认 Full access 时可在一个原子写入中同时保存 `defaultPreset` 与 `confirmFullAccess: false`；取消或关闭不会写入任何一个字段。
 
 -----
 
@@ -43,7 +43,7 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-通用行经 `ctx.settingsScope` 读取显式暴露的 `permission` Settings 描述符，并携带描述符 revision 写入一条 `settings.mutate` 路径操作；其 observable 经槽位系统的 `hooks` 格传递，因此 React 钩子绑定归渲染器，推送失效通知会重新获取描述符。该值只在之后创建会话时读取。当前会话表面是挂在宿主 `/permission` 命令上的 popupSelect 装饰（`ctx.commandUi.decorate`）：宿主命令保留斜杠菜单行、带参路径与持久生命周期记账，装饰只把裸调用替换为选择器。选项与 active 标记读取会话的 `permissions` 投影——与 composer chip 渲染的同一份宿主计算 select。完全权限选项携带 `confirmation` 载荷，由共享弹窗外壳渲染为页内风险门。
+通用行经 `ctx.settingsScope` 读取显式暴露的 `permission` Settings 描述符，并携带 revision 写入 `settings.mutate` 路径操作；其 observable 经槽位系统的 `hooks` 格传递，因此 React 钩子绑定归渲染器，推送失效通知会重新获取描述符。`defaultPreset` 只在之后创建会话时读取，`confirmFullAccess` 则控制通用行、命令 popup 与 composer 选择器的浏览器风险门。当前会话表面是挂在宿主 `/permission` 命令上的 popupSelect 装饰（`ctx.commandUi.decorate`）：宿主命令保留斜杠菜单行、带参路径与持久生命周期记账，装饰只把裸调用替换为选择器。选项与 active 标记读取会话的 `permissions` 投影——与 composer chip 渲染的同一份宿主计算 select。确认仍启用时，Full access 选项携带包含可选抑制回调的 `confirmation` 载荷；共享弹窗外壳只会在用户完成确认的路径调用该回调。
 
 </details>
 
