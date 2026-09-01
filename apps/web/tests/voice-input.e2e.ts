@@ -1,6 +1,5 @@
-/** QQ-configured voice transcription through the shipped Host and both browser Consumers. */
+/** Supplier-selected voice transcription through the shipped Host and both browser Consumers. */
 
-import { mkdir, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
@@ -8,6 +7,9 @@ import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
+import { credentialRef } from '@deepseek-ai/dsh-credentials'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import {
   assertFixtureInventory,
   captureStableAria,
@@ -28,27 +30,15 @@ const WORKBENCH_EXPECTED = join(SNAPSHOT_DIR, 'workbench.expected.md')
 const WORKBENCH_ERROR_EXPECTED = join(SNAPSHOT_DIR, 'workbench-error.expected.md')
 const MODE = webSnapshotMode()
 
-describe('web e2e: QQ-configured voice input', () => {
+describe('web e2e: supplier-selected voice input', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
   let server: Server
-  let configPath: string
-  let speechBaseUrl: string
   let successfulUploads = 0
+  let rejectNextUpload = false
   const uploads: string[] = []
-  const configureModel = async (model: string): Promise<void> => {
-    await writeFile(configPath, JSON.stringify({
-      version: 1,
-      speech: {
-        enabled: true,
-        baseUrl: speechBaseUrl,
-        model,
-        language: 'zh',
-      },
-    }))
-  }
 
   beforeAll(async () => {
     server = createServer((request, response) => {
@@ -56,13 +46,14 @@ describe('web e2e: QQ-configured voice input', () => {
       request.on('data', (chunk: Buffer) => { chunks.push(chunk) })
       request.on('end', () => {
         const upload = Buffer.concat(chunks).toString('latin1')
-        if (request.method !== 'POST' || request.url !== '/v1/audio/transcriptions') {
+        if (request.method !== 'POST' || request.url !== '/audio/transcriptions') {
           response.writeHead(404).end()
           return
         }
         uploads.push(upload)
         response.setHeader('content-type', 'application/json')
-        if (upload.includes('missing-model')) {
+        if (rejectNextUpload) {
+          rejectNextUpload = false
           response.writeHead(404).end(JSON.stringify({ detail: 'model is not installed' }))
           return
         }
@@ -74,12 +65,25 @@ describe('web e2e: QQ-configured voice input', () => {
     })
     await new Promise<void>((resolve) => { server.listen(0, '127.0.0.1', resolve) })
     const address = server.address() as AddressInfo
-    speechBaseUrl = `http://127.0.0.1:${String(address.port)}/v1/`
-    scaffold = await launchWebScaffold({})
-    const qqDirectory = join(scaffold.harnessHome, 'integrations', 'dsh-qq')
-    await mkdir(qqDirectory, { recursive: true })
-    configPath = join(qqDirectory, 'config.json')
-    await configureModel('whisper-large-v3')
+    scaffold = await launchWebScaffold({
+      speechEndpoint: `http://127.0.0.1:${String(address.port)}/audio/transcriptions`,
+    })
+    await scaffold.ctx.settings.update(settingsNamespace('llm-pi-ai'), {
+      providers: {
+        'zhipu-cn': {
+          displayName: 'Zhipu GLM Standard API',
+          apiKeyEnv: 'ZHIPU_CN_API_KEY',
+          api: 'openai-completions',
+          baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+          models: [{ id: 'glm-5.2', name: 'GLM-5.2', input: ['text'] }],
+        },
+      },
+    })
+    await scaffold.ctx.credentials.set(credentialRef('ZHIPU_CN_API_KEY'), 'voice-input-e2e-key')
+    await scaffold.ctx.settings.update(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      speechProvider: 'zhipu-cn',
+      speechModel: 'glm-asr-2512',
+    })
 
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE })
@@ -172,7 +176,7 @@ describe('web e2e: QQ-configured voice input', () => {
     await new Promise<void>((resolve) => { server?.close(() => { resolve() }) })
   })
 
-  it('transcribes the conversation composer through the QQ ASR settings', async () => {
+  it('transcribes the conversation composer through the selected supplier model', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-composer'))
     const composer = page.locator('[data-composer-card]')
     const idleVoice = composer.getByRole('button', { name: '语音输入（也可长按空格）' })
@@ -193,8 +197,9 @@ describe('web e2e: QQ-configured voice input', () => {
       { timeout: 12_000 },
     ).toBe('课堂口述')
     expect(uploads[0]).toContain('name="model"')
-    expect(uploads[0]).toContain('whisper-large-v3')
-    expect(uploads[0]).toContain('name="language"')
+    expect(uploads[0]).toContain('glm-asr-2512')
+    expect(uploads[0]).toContain('name="stream"')
+    expect(uploads[0]).toContain('false')
     expect(uploads[0]).toContain('name="file"; filename="voice-input.wav"')
     expect(uploads[0]).toContain('Content-Type: audio/wav')
     await compareOrRefreshGolden(
@@ -207,27 +212,23 @@ describe('web e2e: QQ-configured voice input', () => {
 
   it('reports a rejected model request without calling it a network error in the composer', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-composer-error'))
-    await configureModel('missing-model')
-    try {
-      const composer = page.locator('[data-composer-card]')
-      await composer.getByRole('button', { name: '语音输入（也可长按空格）' }).click()
-      await composer.getByRole('button', { name: '停止语音输入' }).click()
-      const message = '语音识别请求失败，请检查服务地址、模型和 API Key'
-      await expect.poll(() => uploads.length, { timeout: 10_000 }).toBe(2)
-      expect(uploads[1]).toContain('missing-model')
-      await page.getByRole('alert').filter({ hasText: message }).waitFor()
-      await compareOrRefreshGolden(
-        COMPOSER_ERROR_EXPECTED,
-        await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
-        MODE,
-      )
-    } finally {
-      await configureModel('whisper-large-v3')
-    }
+    rejectNextUpload = true
+    const composer = page.locator('[data-composer-card]')
+    await composer.getByRole('button', { name: '语音输入（也可长按空格）' }).click()
+    await composer.getByRole('button', { name: '停止语音输入' }).click()
+    const message = '语音识别请求失败，请检查服务地址、模型和 API Key'
+    await expect.poll(() => uploads.length, { timeout: 10_000 }).toBe(2)
+    expect(uploads[1]).toContain('glm-asr-2512')
+    await page.getByRole('alert').filter({ hasText: message }).waitFor()
+    await compareOrRefreshGolden(
+      COMPOSER_ERROR_EXPECTED,
+      await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
+      MODE,
+    )
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('uses the same QQ ASR settings in Workbench daily management', async () => {
+  it('uses the same supplier speech assignment in Workbench daily management', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-workbench'))
     await page.getByRole('button', { name: '打开工作台' }).click()
     await page.getByRole('button', { name: '日常管理', exact: true }).first().click()
@@ -261,24 +262,20 @@ describe('web e2e: QQ-configured voice input', () => {
   it('reports the same rejected model request in Workbench daily management', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-workbench-error'))
     await expect.poll(() => page.getByRole('alert').count(), { timeout: 6_000 }).toBe(0)
-    await configureModel('missing-model')
-    try {
-      const todo = page.locator('section[aria-labelledby="daily-todo-title"]')
-      const uploadCount = uploads.length
-      await todo.getByRole('button', { name: '开始语音输入' }).click()
-      await todo.getByRole('button', { name: '停止语音输入' }).click()
-      const message = '语音识别请求失败，请检查服务地址、模型和 API Key'
-      await expect.poll(() => uploads.length, { timeout: 10_000 }).toBe(uploadCount + 1)
-      await page.getByRole('alert').filter({ hasText: message }).waitFor()
-      expect(uploads.at(-1)).toContain('missing-model')
-      await compareOrRefreshGolden(
-        WORKBENCH_ERROR_EXPECTED,
-        await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
-        MODE,
-      )
-    } finally {
-      await configureModel('whisper-large-v3')
-    }
+    rejectNextUpload = true
+    const todo = page.locator('section[aria-labelledby="daily-todo-title"]')
+    const uploadCount = uploads.length
+    await todo.getByRole('button', { name: '开始语音输入' }).click()
+    await todo.getByRole('button', { name: '停止语音输入' }).click()
+    const message = '语音识别请求失败，请检查服务地址、模型和 API Key'
+    await expect.poll(() => uploads.length, { timeout: 10_000 }).toBe(uploadCount + 1)
+    await page.getByRole('alert').filter({ hasText: message }).waitFor()
+    expect(uploads.at(-1)).toContain('glm-asr-2512')
+    await compareOrRefreshGolden(
+      WORKBENCH_ERROR_EXPECTED,
+      await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
+      MODE,
+    )
     expect(tripwire.pageErrors).toEqual([])
   })
 

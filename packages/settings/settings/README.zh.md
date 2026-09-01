@@ -127,7 +127,7 @@ scope.update({ density: 'compact' })   // merges into the user section and persi
 
 - [设置子系统参考](../../../docs/subsystems/settings.zh.md)——namespace、注册、owner scope、descriptor、变更提交与生成的 cordis 接口面。
 - [文件型设置提供方](../settings-file/README.zh.md)——随附的 YAML/JSON 提供方：配置、热重载、保留注释的写入。
-- [设置包映射](../README.zh.md)——用户设置能力的两个包及其角色。
+- [设置包映射](../README.zh.md)——用户设置组内的各个包及其角色。
 - [能力 seam](../../../docs/capability-seams.zh.md)——本服务遵循的 Service Definition / Service Provider / Consumer 拆分。
 
 -----

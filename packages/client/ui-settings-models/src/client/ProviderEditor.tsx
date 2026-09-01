@@ -20,9 +20,22 @@ import {
 import { apiKeyFailure } from './apiKey.ts'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
+import {
+  ServiceModelListEditor,
+  serviceModelSettingsValue,
+  serviceModelsFailure,
+} from './ServiceModelListEditor.tsx'
 import { joinRequestURL } from './provider-presets.ts'
-import type { ProviderAccessPreset, ProviderProtocolPreset } from './provider-presets.ts'
-import { deriveKeyRef, messageOf, protocolChoices } from './store.ts'
+import type {
+  ProviderAccessPreset, ProviderProtocolPreset, ProviderRequestTypePreset,
+} from './provider-presets.ts'
+import {
+  MODEL_SERVICE_SETTINGS_NS,
+  deriveKeyRef,
+  messageOf,
+  protocolChoices,
+  type ModelServiceModelView,
+} from './store.ts'
 import type { ModelsWire } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import type { en } from './locales.ts'
@@ -33,6 +46,13 @@ type EditorLayout = 'deepseek' | 'pi-ai' | 'unknown'
 
 /** The public DeepSeek endpoint shown as the deepseek base-URL placeholder. */
 const DEEPSEEK_PUBLIC_BASE_URL = 'https://api.deepseek.com'
+
+const GENERIC_REQUEST_TYPES = [
+  { id: 'chat', labelKey: 'requestTypeChat', explanationKey: 'requestTypeChatHint' },
+  { id: 'vision', labelKey: 'requestTypeVision', explanationKey: 'requestTypeVisionHint' },
+  { id: 'speech', labelKey: 'requestTypeSpeechRecognition', explanationKey: 'requestTypeSpeechRecognitionHint' },
+  { id: 'image', labelKey: 'requestTypeImageGeneration', explanationKey: 'requestTypeImageGenerationHint' },
+] as const satisfies readonly ProviderRequestTypePreset[]
 
 /** Props of {@link ProviderEditor}. */
 export interface ProviderEditorProps {
@@ -52,6 +72,8 @@ export interface ProviderEditorProps {
   connectionPreset?: ProviderAccessPreset
   /** The owning namespace view (schema, layers, secrets). */
   namespace: SettingsNamespaceView
+  /** Shared typed-route namespace used by image and speech models. */
+  serviceNamespace?: SettingsNamespaceView
   /** Settings-owned synchronous schema and immutable path operations. */
   schema: SettingsSchemaOperations
   /** Path from the section root to this provider's profile. */
@@ -142,19 +164,78 @@ function refFor(
   return typeof named === 'string' && named.length > 0 ? named : deriveKeyRef(provider)
 }
 
+/** A complete request URL whose protocol path can be removed without changing the request target. */
+function baseURLFromCompleteRequest(value: string, requestPath: string): string | undefined {
+  const candidate = value.trim()
+  let parsed: URL
+  try {
+    parsed = new URL(candidate)
+  } catch {
+    return undefined
+  }
+  const loopback = ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(parsed.hostname.toLowerCase())
+  if ((parsed.protocol !== 'https:' && !(parsed.protocol === 'http:' && loopback))
+    || parsed.username !== '' || parsed.password !== '' || parsed.search !== '' || parsed.hash !== '') return undefined
+  const suffix = `/${requestPath.replace(/^\/+/, '')}`
+  if (!parsed.pathname.endsWith(suffix)) return undefined
+  const basePath = parsed.pathname.slice(0, -suffix.length).replace(/\/+$/u, '')
+  return `${parsed.origin}${basePath}`
+}
+
+/** Whether a media request URL is complete and safe for the installed local request consumer. */
+function validCompleteRequestURL(value: string): boolean {
+  let parsed: URL
+  try {
+    parsed = new URL(value.trim())
+  } catch {
+    return false
+  }
+  const loopback = ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(parsed.hostname.toLowerCase())
+  return (parsed.protocol === 'https:' || (parsed.protocol === 'http:' && loopback))
+    && parsed.username === '' && parsed.password === '' && parsed.search === '' && parsed.hash === ''
+}
+
+function serviceModels(value: unknown): ModelServiceModelView[] {
+  if (!Array.isArray(value)) return []
+  return value.flatMap((raw): ModelServiceModelView[] => {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return []
+    const model = raw as { id?: unknown; name?: unknown }
+    if (typeof model.id !== 'string') return []
+    return [{ id: model.id, name: typeof model.name === 'string' ? model.name : model.id }]
+  })
+}
+
+function inferredLlmRequestType(value: unknown): ProviderRequestTypePreset['id'] {
+  if (!Array.isArray(value)) return 'chat'
+  return value.some((raw) => {
+    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return false
+    const model = raw as Record<string, unknown>
+    const input = model['input'] ?? model['inputModalities']
+    return Array.isArray(input) && input.includes('image')
+  }) ? 'vision' : 'chat'
+}
+
 /**
  * Render one provider's editing card.
  * @param props - the addressed profile plus wire faces and copy.
  * @returns the editor card.
  */
 export function ProviderEditor(props: ProviderEditorProps): ReactNode {
-  const { namespace, schema, settingsPath, api, t } = props
+  const { namespace, serviceNamespace, schema, settingsPath, api, t } = props
   const [draft, setDraft] = useState<Record<string, unknown>>(
     () => draftAt(schema, namespace, settingsPath, props.connectionPreset?.initialProfile),
   )
   const [requestType, setRequestType] = useState(
-    () => props.connectionPreset?.requestTypes[0]?.id ?? 'chat',
+    () => props.connectionPreset?.requestTypes[0]?.id
+      ?? inferredLlmRequestType(schema.getPath(draft, ['models'])),
   )
+  const serviceSettingsPath = ['providers', props.provider] as const
+  const [serviceDraft, setServiceDraft] = useState<Record<string, unknown>>(
+    () => serviceNamespace === undefined
+      ? {}
+      : draftAt(schema, serviceNamespace, serviceSettingsPath, undefined),
+  )
+  const [requestURLDrafts, setRequestURLDrafts] = useState<Readonly<Record<string, string>>>({})
   const [keyDraft, setKeyDraft] = useState('')
   const [keyState, setKeyState] = useState<CredentialInfo | undefined>(undefined)
   const [busy, setBusy] = useState(false)
@@ -166,6 +247,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     () => schema.getPath(namespace.user, settingsPath),
   )
   const [expectedRevision, setExpectedRevision] = useState(() => namespace.revision)
+  const [committedServiceOriginal, setCommittedServiceOriginal] = useState<unknown>(
+    () => serviceNamespace === undefined
+      ? undefined
+      : schema.getPath(serviceNamespace.user, serviceSettingsPath),
+  )
+  const [serviceExpectedRevision, setServiceExpectedRevision] = useState(
+    () => serviceNamespace?.revision ?? 0,
+  )
   const root = useMemo(() => schema.rehydrate(namespace.schema), [namespace.schema, schema])
   const node = useMemo(() => schema.nodeAtPath(root, settingsPath), [root, schema, settingsPath])
   const fallback = schema.getPath(namespace.value, settingsPath)
@@ -232,24 +321,60 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
   const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
   const presetProtocols = props.connectionPreset?.protocols ?? []
-  const selectedRequestType = props.connectionPreset?.requestTypes.find(candidate => candidate.id === requestType)
-    ?? props.connectionPreset?.requestTypes[0]
+  const requestTypes: readonly ProviderRequestTypePreset[] = props.connectionPreset?.requestTypes
+    ?? GENERIC_REQUEST_TYPES
+  const selectedRequestType: ProviderRequestTypePreset = requestTypes.find(
+    candidate => candidate.id === requestType,
+  )
+    ?? requestTypes[0]
+    ?? GENERIC_REQUEST_TYPES[0]
   const selectedPresetProtocol = presetProtocols.find(candidate => candidate.api === probeApi)
     ?? presetProtocols[0]
   const effectiveApi = probeApi ?? selectedPresetProtocol?.api
   const effectiveBaseURL = probeBaseURL
     ?? selectedPresetProtocol?.baseURL
     ?? (layout === 'deepseek' ? DEEPSEEK_PUBLIC_BASE_URL : undefined)
-  const selectedRouteProtocol = selectedRequestType?.protocols?.[0] ?? selectedPresetProtocol
-  const routeBaseURL = selectedRequestType?.protocols === undefined
-    ? effectiveBaseURL
-    : selectedRouteProtocol?.baseURL
+  const selectedMediaType = selectedRequestType.id === 'speech' || selectedRequestType.id === 'image'
+    ? selectedRequestType.id
+    : undefined
+  const capabilityRoute = selectedMediaType !== undefined
+  const selectedRouteProtocol: ProviderProtocolPreset | undefined = selectedRequestType.protocols?.[0]
+    ?? (selectedRequestType.id === 'speech'
+      ? { api: 'openai-audio-transcriptions', baseURL: '', requestPath: '', labelKey: 'protocolZhipuSpeech' as const }
+      : selectedRequestType.id === 'image'
+        ? { api: 'openai-images', baseURL: '', requestPath: '', labelKey: 'protocolZhipuImage' as const }
+        : selectedPresetProtocol)
+  const serviceFallback = serviceNamespace === undefined
+    ? undefined
+    : schema.getPath(serviceNamespace.value, serviceSettingsPath)
+  const draftedServiceRoute = capabilityRoute
+    ? schema.getPath(serviceDraft, ['routes', selectedRequestType.id])
+    : undefined
+  const fallbackServiceRoute = capabilityRoute
+    ? schema.getPath(serviceFallback, ['routes', selectedRequestType.id])
+    : undefined
+  const effectiveServiceRoute = typeof draftedServiceRoute === 'object' && draftedServiceRoute !== null
+    ? draftedServiceRoute
+    : typeof fallbackServiceRoute === 'object' && fallbackServiceRoute !== null
+      ? fallbackServiceRoute
+      : undefined
+  const routeBaseURL = capabilityRoute ? selectedRouteProtocol?.baseURL : effectiveBaseURL
   const requestPath = selectedRouteProtocol?.requestPath
     ?? (effectiveApi === 'openai-responses'
       ? '/responses'
       : effectiveApi === 'anthropic-messages' ? '/v1/messages' : '/chat/completions')
-  const fullRequestURL = routeBaseURL === undefined ? '' : joinRequestURL(routeBaseURL, requestPath)
-  const capabilityRoute = selectedRequestType?.protocols !== undefined
+  const inheritedFullRequestURL = capabilityRoute
+    ? stringAt(effectiveServiceRoute, 'endpoint')
+      ?? (routeBaseURL === undefined || routeBaseURL.length === 0 ? '' : joinRequestURL(routeBaseURL, requestPath))
+    : routeBaseURL === undefined ? '' : joinRequestURL(routeBaseURL, requestPath)
+  const fullRequestURL = requestURLDrafts[selectedRequestType.id] ?? inheritedFullRequestURL
+  const mediaModels = serviceModels(
+    schema.getPath(effectiveServiceRoute, ['models']) ?? selectedRequestType.models ?? [],
+  )
+  const mediaModelFailure = capabilityRoute ? serviceModelsFailure(mediaModels) : undefined
+  const requestURLInvalid = capabilityRoute
+    ? !validCompleteRequestURL(fullRequestURL)
+    : fullRequestURL.length > 0 && baseURLFromCompleteRequest(fullRequestURL, requestPath) === undefined
   const probe = {
     settingsNs: namespace.ns,
     // Naming the route lets an adapter that already describes it answer from
@@ -269,10 +394,22 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const ns = namespace.ns
     // A pi-ai profile names the conventional reference only when this page is
     // about to store a key. Otherwise the provider keeps its native auth path.
-    const next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
+    let next = layout === 'pi-ai' && stringAt(draft, 'apiKeyEnv') === undefined
       && stringAt(fallback, 'apiKeyEnv') === undefined && keyValue.length > 0
       ? schema.setPath(draft, ['apiKeyEnv'], keyRef)
       : draft
+    if (props.credentialOnly !== true && !capabilityRoute) {
+      const explicitRequestURL = requestURLDrafts[selectedRequestType.id]
+      if (explicitRequestURL !== undefined) {
+        if (explicitRequestURL.trim().length === 0) {
+          next = schema.deletePath(next, ['baseURL'])
+        } else {
+          const completeBaseURL = baseURLFromCompleteRequest(explicitRequestURL, requestPath)
+          if (completeBaseURL === undefined) return t('fullRequestUrlInvalid')
+          next = schema.setPath(next, ['baseURL'], completeBaseURL)
+        }
+      }
+    }
     if (props.credentialOnly !== true) {
       // The same checker gates the submit button, so a card cannot reach this
       // with a bad row; it stays because the schema check below would refuse
@@ -308,6 +445,43 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       setCommittedOriginal(schema.getPath(response.value.user, settingsPath))
       setExpectedRevision(response.value.revision)
       setDraft(next)
+    }
+    if (props.credentialOnly !== true && capabilityRoute) {
+      if (serviceNamespace === undefined) return t('serviceRoutesUnavailable')
+      if (!validCompleteRequestURL(fullRequestURL)) return t('fullRequestUrlInvalid')
+      if (mediaModels.length === 0) return t('customNeedsModels')
+      const failure = serviceModelsFailure(mediaModels)
+      if (failure !== undefined) {
+        return `${t('model')} ${String(failure.index + 1)}: ${t(failure.key)}`
+      }
+      const protocol = stringAt(effectiveServiceRoute, 'protocol') ?? selectedRouteProtocol?.api
+      /* v8 ignore next -- every fixed media type supplies an installed default protocol */
+      if (protocol === undefined) return t('serviceRoutesUnavailable')
+      let nextService = schema.setPath(serviceDraft, ['routes', selectedRequestType.id], {
+        endpoint: fullRequestURL.trim(),
+        protocol,
+        models: serviceModelSettingsValue(mediaModels),
+      })
+      if (serviceFallback === undefined) {
+        nextService = schema.setPath(nextService, ['displayName'], props.displayName)
+        nextService = schema.setPath(nextService, ['apiKeyEnv'], keyRef)
+      }
+      const serviceOps = pathOps(serviceSettingsPath, committedServiceOriginal, nextService)
+      if (serviceOps.length > 0) {
+        const response = await api.settings.mutate(
+          MODEL_SERVICE_SETTINGS_NS,
+          serviceOps,
+          serviceExpectedRevision,
+        )
+        if (!response.ok) {
+          return response.error.code === 'settings-conflict'
+            ? t('conflict')
+            : response.error.message
+        }
+        setCommittedServiceOriginal(schema.getPath(response.value.user, serviceSettingsPath))
+        setServiceExpectedRevision(response.value.revision)
+        setServiceDraft(nextService)
+      }
     }
     if (keyValue.length > 0) {
       const stored = await api.credentials.set(keyRef, keyValue)
@@ -371,7 +545,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       && props.connectionPreset === undefined
     const customModels = schema.getPath(draft, ['models'])
     const modelsOverridden = schema.hasPath(draft, ['models'])
-    const models = modelDrafts(modelsOverridden ? customModels : inheritedModels())
+    const allModels = modelDrafts(modelsOverridden ? customModels : inheritedModels())
+    const selectedVision = selectedRequestType.id === 'vision'
+    const isVisionModel = (model: Record<string, unknown>): boolean => {
+      const input = family === 'deepseek' ? model['inputModalities'] : model['input']
+      return Array.isArray(input) && input.includes('image')
+    }
+    const models = capabilityRoute ? allModels : allModels.filter(model => isVisionModel(model) === selectedVision)
     const defaultContextWindow = schema.getPath(fallback, ['defaultContextWindow'])
     const defaultMaxTokens = schema.getPath(fallback, ['maxTokens'])
     const keyPlaceholder = keyLocked
@@ -381,6 +561,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         : family === 'pi-ai' ? t('keyPlaceholderNative') : t('keyPlaceholder')
     const protocolOptions: readonly ProviderProtocolPreset[] = presetProtocols
     const selectProtocol = (api: string): void => {
+      setRequestURLDrafts(current => Object.fromEntries(
+        Object.entries(current).filter(([type]) => type !== selectedRequestType.id),
+      ))
       const selected = protocolOptions.find(candidate => candidate.api === api)
       if (selected === undefined) {
         setField('api', api.length === 0 ? undefined : api)
@@ -400,7 +583,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       t,
       disabled,
       onChange: (next: Record<string, unknown>[]) => {
-        setDraft(current => schema.setPath(current, ['models'], next))
+        const kept = allModels.filter(model => isVisionModel(model) !== selectedVision)
+        const inputKey = family === 'deepseek' ? 'inputModalities' : 'input'
+        const typed = selectedVision
+          ? next.map(model => ({ ...model, [inputKey]: ['text', 'image'] }))
+          : next
+        setDraft(current => schema.setPath(current, ['models'], [...kept, ...typed]))
       },
       onReset: () => { setDraft(current => schema.deletePath(current, ['models'])) },
     }
@@ -433,65 +621,75 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               <span className={styles['fieldLabel']}>{t('requestType')}</span>
               <select
                 className={`${styles['input']} ${styles['selectInput']}`}
-                value={selectedRequestType?.id ?? 'chat'}
+                value={selectedRequestType.id}
                 aria-label={t('requestType')}
-                disabled={disabled || (props.connectionPreset?.requestTypes.length ?? 0) < 2}
+                disabled={disabled || requestTypes.length < 2}
                 onChange={(event) => { setRequestType(event.target.value as typeof requestType) }}
               >
-                {(props.connectionPreset?.requestTypes ?? [{ id: 'chat', labelKey: 'requestTypeChat' as const }])
+                {requestTypes
                   .map(choice => <option key={choice.id} value={choice.id}>{t(choice.labelKey)}</option>)}
               </select>
             </div>
-            <div className={styles['field']}>
-              <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
+            {capabilityRoute
+              ? null
+              : (
+                <div className={styles['field']}>
+                  <span className={styles['fieldLabel']}>{t('baseUrl')}</span>
+                  <input
+                    className={styles['input']}
+                    type="text"
+                    value={stringAt(draft, 'baseURL') ?? ''}
+                    placeholder={family === 'deepseek'
+                      ? DEEPSEEK_PUBLIC_BASE_URL
+                      : selectedPresetProtocol?.baseURL ?? effectiveBaseURL ?? t('baseUrlDefault')}
+                    aria-label={t('baseUrl')}
+                    disabled={disabled}
+                    onChange={(event) => {
+                      setField('baseURL', event.target.value === '' ? undefined : event.target.value)
+                      setRequestURLDrafts(current => Object.fromEntries(
+                        Object.entries(current).filter(([type]) => type !== selectedRequestType.id),
+                      ))
+                    }}
+                  />
+                </div>
+              )}
+            <div className={`${styles['field']} ${styles['routeFullWidth']}`}>
+              <span className={styles['fieldLabel']}>{t('fullRequestUrl')}</span>
               <input
                 className={styles['input']}
                 type="text"
-                value={capabilityRoute ? routeBaseURL ?? '' : stringAt(draft, 'baseURL') ?? ''}
-                placeholder={family === 'deepseek'
-                  ? DEEPSEEK_PUBLIC_BASE_URL
-                  : selectedPresetProtocol?.baseURL ?? effectiveBaseURL ?? t('baseUrlDefault')}
-                aria-label={t('baseUrl')}
-                disabled={disabled || capabilityRoute}
-                onChange={(event) => {
-                  setField('baseURL', event.target.value === '' ? undefined : event.target.value)
-                }}
-              />
-            </div>
-            <div className={`${styles['field']} ${styles['routeFullWidth']}`}>
-              <span className={styles['fieldLabel']}>
-                {t('fullRequestUrl')}
-                <span className={styles['fieldHint']}>{t('readOnlyPreview')}</span>
-              </span>
-              <input
-                className={`${styles['input']} ${styles['endpointPreview']}`}
-                type="text"
                 value={fullRequestURL}
                 aria-label={t('fullRequestUrl')}
-                readOnly
+                aria-invalid={requestURLInvalid}
+                disabled={disabled || (capabilityRoute && serviceNamespace === undefined)}
+                onChange={(event) => {
+                  const value = event.target.value
+                  setRequestURLDrafts(current => ({ ...current, [selectedRequestType.id]: value }))
+                }}
               />
+              {requestURLInvalid ? <p className={styles['error']}>{t('fullRequestUrlInvalid')}</p> : null}
             </div>
           </div>
-          {selectedRequestType === undefined
-            ? null
-            : <p className={styles['routeExplanation']}>{t(selectedRequestType.explanationKey)}</p>}
+          <p className={styles['routeExplanation']}>{t(selectedRequestType.explanationKey)}</p>
         </section>
-        {capabilityRoute
+        {selectedMediaType !== undefined
           ? (
-            <section className={styles['capabilityCatalog']} aria-label={t('models')}>
-              <div className={styles['modelListHead']}>
-                <span className={styles['modelCatalogTitle']}>{t('models')}</span>
-                <span className={styles['modelCatalogMeta']}>{t(selectedRequestType.labelKey)}</span>
-              </div>
-              <div className={styles['capabilityModelList']}>
-                {(selectedRequestType.models ?? []).map(model => (
-                  <div key={model.id} className={styles['capabilityModelRow']}>
-                    <span className={styles['capabilityModelName']}>{model.name}</span>
-                    <code className={styles['capabilityModelId']}>{model.id}</code>
-                  </div>
-                ))}
-              </div>
-            </section>
+            <ServiceModelListEditor
+              type={selectedMediaType}
+              models={mediaModels}
+              t={t}
+              disabled={disabled || serviceNamespace === undefined}
+              onChange={(next) => {
+                const protocol = stringAt(effectiveServiceRoute, 'protocol') ?? selectedRouteProtocol?.api
+                /* v8 ignore next -- every fixed media type supplies an installed default protocol */
+                if (protocol === undefined) return
+                setServiceDraft(current => schema.setPath(current, ['routes', selectedRequestType.id], {
+                  endpoint: fullRequestURL,
+                  protocol,
+                  models: next.map(model => ({ ...model })),
+                }))
+              }}
+            />
           )
           : family === 'deepseek'
             ? (
@@ -605,6 +803,9 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         busy={busy}
         submitDisabled={disabled || layout === 'unknown'
           || (props.credentialOnly !== true && modelFailure !== undefined)
+          || (props.credentialOnly !== true && requestURLInvalid)
+          || (props.credentialOnly !== true && capabilityRoute
+            && (serviceNamespace === undefined || mediaModels.length === 0 || mediaModelFailure !== undefined))
           || shownKeyFailure !== undefined
           || (props.credentialRequired === true && keyValue.length === 0)}
         submitLabelKey={props.submitLabelKey ?? 'apply'}

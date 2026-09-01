@@ -2,7 +2,7 @@
 
 English | [中文](speech.zh.md)
 
-The speech capability separates provider-neutral transcription ([dsh-speech](../../packages/speech/speech)) from the QQ-configured implementation ([dsh-speech-qq](../../packages/speech/speech-qq)) and browser Consumers. `ctx.speech` selects one provider at operation time and exposes normalized final text through the Typert `speech.transcribe` Remote or the same-process abortable operation. Browser recordings and returned text remain transient until a Consumer inserts the text into its own editable state. The shared browser recorder exposes the sampled microphone level and uses Web Audio activity to finish one recording after three seconds of silence; Consumers retain an explicit stop action.
+The speech capability separates provider-neutral transcription ([dsh-speech](../../packages/speech/speech)) from the supplier-model implementation ([dsh-speech-model-settings](../../packages/speech/speech-model-settings)) and its browser and IM Consumers. `ctx.speech` selects one provider at operation time and exposes normalized final text through the Typert `speech.transcribe` Remote or the same-process abortable operation. Browser recordings and returned text remain transient until a Consumer inserts the text into its own editable state; QQ voice attachments use the same operation without creating a second ASR configuration. The shared browser recorder exposes the sampled microphone level and uses Web Audio activity to finish one recording after three seconds of silence; Consumers retain an explicit stop action.
 
 Source: [`packages/speech/speech/src/types.ts`](../../packages/speech/speech/src/types.ts)
 
@@ -95,7 +95,7 @@ interface SpeechProvider {
 }
 ```
 
-Providers validate request fields, enforce their own resource limits, and throw `SpeechError` with a stable `SpeechErrorCode`. The runtime converts expected failures to `SpeechTranscribeRejected`, hides unexpected provider diagnostics, and rejects ambiguous automatic selection instead of depending on registration order. The QQ adapter re-reads the QQ integration's ASR settings and credential for each operation; it accepts HTTPS or loopback HTTP endpoints, reports transport failures as `provider-unavailable`, reports rejected HTTP requests and invalid settings as `provider-failure`, and never persists audio or returned text.
+Providers validate request fields, enforce their own resource limits, and throw `SpeechError` with a stable `SpeechErrorCode`. The runtime converts expected failures to `SpeechTranscribeRejected`, hides unexpected provider diagnostics, and rejects ambiguous automatic selection instead of depending on registration order. The Models-settings adapter re-reads the speech assignment, supplier profile, and credential for each operation; it dispatches only exact provider/model pairs with maintained operation transports, accepts HTTPS or loopback HTTP endpoints, reports transport failures as `provider-unavailable`, reports rejected HTTP requests as `provider-failure`, and never persists audio or returned text.
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

@@ -16,7 +16,7 @@ Review the [safety notice](SAFETY.md) before running the project.
 
 ## Run
 
-> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, skill/MCP manager, Office preview and Univer authoring, teacher workbench (question cutting, student folders), QQ-backed voice input, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
+> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, skill/MCP manager, Office preview and Univer authoring, teacher workbench (question cutting, student folders), supplier-model voice input shared with QQ, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
 
 ### Windows installer
 
@@ -70,7 +70,7 @@ Do NOT use `npx @deepseek-ai/dsh web` — it installs the official npm package w
 
 ### 2. Built-in image generation, IM, cron, skill/MCP management, and Office
 
-The Web composition and Windows EXE already contain the reviewed `@dickpy/dsh-imagegen` 1.5.1 runtime repack, `@xmanrui/dsh-im` 1.0.3, `dsh-plugin-cron` 0.1.3, `dsh-skill-mcp-panel` 2.0.1, `dsh-univer-office` 0.2.12 DSH rebuild, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine, and remove a separately installed image-generation row before starting this built-in version. Configure OpenAI-compatible image-provider channels under **Settings → Models → Image generation model**; adding an image model to the ordinary provider list alone does not create image-generation tools. Configure bots under **Settings → Plugins → Connected Platforms**, configure speech recognition under **Settings → Models → Voice model**, manage skills under **Settings → Skills**, and manage profile servers under **Settings → MCP** or through `dsh-panel mcp`; image generation, cron, Office preview, and Univer review surfaces load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
+The Web composition and Windows EXE already contain the reviewed `@dickpy/dsh-imagegen` 1.5.1 runtime repack, `@xmanrui/dsh-im` 1.0.3, `dsh-plugin-cron` 0.1.3, `dsh-skill-mcp-panel` 2.0.1, `dsh-univer-office` 0.2.12 DSH rebuild, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine, and remove a separately installed image-generation row before starting this built-in version. Configure OpenAI-compatible image-provider channels under **Settings → Models → Image generation model**; adding an image model to the ordinary provider list alone does not create image-generation tools. Configure bots under **Settings → Plugins → Connected Platforms**. Configure supplier access under **Settings → Models → Service access**, then assign speech recognition under **Use cases**; the composer, QQ, and Daily Management share that assignment. Manage skills under **Settings → Skills**, and manage profile servers under **Settings → MCP** or through `dsh-panel mcp`; image generation, cron, Office preview, and Univer review surfaces load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
 
 The Univer wrapper is Apache-2.0, but its executable closure includes commercial `@univerjs-pro/*` components. Supply a valid license through `UNIVER_LICENSE` before launch and obtain the required distribution rights before shipping an installer; the built-in row disables product telemetry. Some Slide layout, SVG measurement, and screenshot operations also need local Chrome or Chromium, with `UNIVER_RENDER_BROWSER` available to select its executable.
 
@@ -78,20 +78,11 @@ The Univer wrapper is Apache-2.0, but its executable closure includes commercial
 
 The Web bundle defaults to a local MinerU endpoint at `http://127.0.0.1:8005/file_parse` (see `packages/bundle/web-app/cordis.patch.yml`). Run a MinerU server on this machine (for example the official `mineru` pipeline serving `/file_parse`), or override the endpoint on the **Plugins → Plugin configuration → Document extraction** settings page. Settings of interest: `endpoint`, `backend` (`pipeline` | `vlm-engine` | `hybrid-engine`), `effort`, `language` (`ch` for Chinese), `maxFileBytes` (default 50 MiB), and `layoutBatchPages` (4). If no MinerU server is reachable, document extraction and question cutting fail with a provider error.
 
-### 4. Configure the Voice model (ASR)
+### 4. Configure speech recognition
 
-Open **Settings → Models → Voice model**, expand the card, and enable speech recognition. The same values remain stored under `speech` in `~/.dsh/integrations/dsh-qq/config.json`; the current machine uses:
+Open **Settings → Models → Service access** and configure either Zhipu Standard API or Alibaba Model Studio/Qwen Standard API with its API key. Then open **Use cases → Speech recognition** and select `GLM-ASR-2512` or `Qwen3 ASR Flash`. The product fills the maintained official operation URL and request format for that exact provider/model pair; there is no separate Voice model card or QQ-owned ASR endpoint.
 
-```json
-"speech": {
-  "enabled": true,
-  "baseUrl": "http://127.0.0.1:8000/v1/",
-  "model": "Systran/faster-whisper-small",
-  "language": "zh"
-}
-```
-
-`baseUrl` must be HTTPS or a loopback HTTP URL, and must point to an OpenAI-compatible transcription server (the current machine runs Speaches at `127.0.0.1:8000`). Set `model` to an installed ASR model returned by that server's `GET /v1/models`; this machine exposes `Systran/faster-whisper-small`, while its `whisper-1` alias targets an uninstalled large model and returns HTTP 404. If the server requires an API key, store it through the Voice model card or set `DSH_QQ_ASR_API_KEY`. The QQ bot, main composer, and Workbench Daily Management microphone controls share these settings; the next completed recording reads the saved values without a Host restart. A QQ voice message can use text supplied directly by QQ, so verify the configured ASR service with either browser microphone control instead of treating bot recognition alone as an endpoint check.
+The QQ bot, main composer, and Workbench Daily Management microphone controls read the same assignment and supplier credential for every completed recording, so a saved change affects the next request without a Host restart. A QQ voice message can use text supplied directly by QQ and then bypass remote transcription; verify a selected supplier model with either browser microphone control instead of treating bot recognition alone as an endpoint check. Other suppliers or self-hosted ASR services require an explicit operation adapter before they appear as executable speech choices.
 
 ### 5. Office preview and authoring formats
 

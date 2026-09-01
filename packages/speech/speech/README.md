@@ -45,7 +45,7 @@ Provider selection occurs for each recording, and expected request or provider f
 ## Further Exploration
 
 - [Speech subsystem reference](../../../docs/subsystems/speech.md) — shared request, result, failure, provider, and generated Cordis service vocabulary.
-- [QQ-configured provider](../speech-qq/README.md) — shipped OpenAI-compatible provider.
+- [Models-settings provider](../speech-model-settings/README.md) — shipped supplier speech adapters.
 - [Conversation UI](../../client/ui-conversation/README.md) — microphone entry and editable draft Consumer.
 
 <a id="model-experience"></a>

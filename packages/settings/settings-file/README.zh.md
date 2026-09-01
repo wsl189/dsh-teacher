@@ -111,7 +111,7 @@ YAML 渲染把缓存文本解析成可变的保留注释树，再对一个 names
 
 - [用户设置服务](../settings/README.zh.md)——namespace 注册、分层解析、写入与本提供方所供的事件。
 - [设置子系统参考](../../../docs/subsystems/settings.zh.md)——namespace、解析顺序、descriptor 与变更提交。
-- [设置包映射](../README.zh.md)——用户设置能力的两个包。
+- [设置包映射](../README.zh.md)——用户设置组内的各个包。
 - [原子写入](../../util/atomic-write/README.zh.md)——每次写入都使用的写锁与原子替换。
 - [主目录路径](../../util/home-paths/README.zh.md)——`$DSH_HOME` 解析与规范化监听路径。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-settings-file)——每个受支持配置字段及其源声明。

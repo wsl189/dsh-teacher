@@ -1,5 +1,5 @@
 ---
-description: "Package map for the user-settings capability family: the ctx.settings service that resolves per-namespace configuration, and the YAML/JSON file provider that stores it."
+description: "Package map for user settings: namespace resolution, typed model-service routes, and YAML/JSON persistence."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The `settings/` group makes plugin configuration user-editable: a plugin registers a named namespace with a schema, and users override values in one document without touching `cordis.yml`. User overrides win over the deployment's own configuration and schema defaults, and changes apply live. Two packages cover the capability: `settings/` provides the settings service, and `settings-file/` stores every namespace in one YAML or JSON document users can edit. Settings are optional: without a provider mounted, configuration stays exactly as composed.
+The `settings/` group makes plugin configuration user-editable: a plugin registers a named namespace with a schema, and users override values in one document without touching `cordis.yml`. User overrides win over the deployment's own configuration and schema defaults, and changes apply live. `settings/` provides the service, `settings-file/` stores every namespace in one YAML or JSON document, and `model-service-settings/` owns typed provider request routes shared by Models settings and media Consumers. Settings are optional: without a provider mounted, configuration stays exactly as composed.
 
 ## Table of Contents
 
@@ -22,12 +22,13 @@ The `settings/` group makes plugin configuration user-editable: a plugin registe
 <a id="packages"></a>
 ## Packages
 
-Two packages cover the capability; each child README owns the full contract, and the subsystem reference owns the exhaustive service surface.
+Three packages live in this group; each child README owns its full behavior, and the subsystem reference owns the exhaustive settings-service surface.
 
 | Package | Role | ctx key |
 |---|---|---|
 | [`settings/`](settings/README.md) | Settings service: register namespaces and read or change their values | `ctx.settings` |
 | [`settings-file/`](settings-file/README.md) | Stores settings in one local YAML/JSON file and hot-publishes external edits | registers `ctx.settings` |
+| [`model-service-settings/`](model-service-settings/README.md) | Stores typed provider endpoints and model directories for configuration and capability Consumers | registers `model-service-settings` |
 
 -----
 

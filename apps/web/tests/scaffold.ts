@@ -220,6 +220,8 @@ export interface LaunchOptions {
   extraOverlayPath?: string
   /** Deterministic MinerU endpoint for document-extraction browser scenarios. */
   ocrEndpoint?: string
+  /** Deterministic GLM-ASR endpoint for supplier-selected voice-input scenarios. */
+  speechEndpoint?: string
   /**
    * Additional source-checkout package manifests whose dependency closures
    * supply private profile layers named by {@link extraOverlayPath}.
@@ -540,6 +542,26 @@ export async function launchWebScaffold(options: LaunchOptions = {}): Promise<We
     ...options.ocrEndpoint === undefined
       ? []
       : [{ id: 'ocr-mineru', config: { endpoint: options.ocrEndpoint } }],
+    ...options.speechEndpoint === undefined
+      ? []
+      : [{
+        id: 'model-service-settings',
+        config: {
+          providers: {
+            'zhipu-cn': {
+              displayName: 'Zhipu GLM Standard API',
+              apiKeyEnv: 'ZHIPU_CN_API_KEY',
+              routes: {
+                speech: {
+                  endpoint: options.speechEndpoint,
+                  protocol: 'openai-audio-transcriptions',
+                  models: [{ id: 'glm-asr-2512', name: 'GLM-ASR-2512' }],
+                },
+              },
+            },
+          },
+        },
+      }],
     ...mode === 'record' || options.deepSeekMissingCredential === true
       ? []
       : [{ id: 'llm-deepseek', disabled: true }],

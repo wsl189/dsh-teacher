@@ -22,6 +22,36 @@ import type { SettingsSchemaOperations } from './schema-operations.ts'
  */
 const PROBE_ROUTE = '\u0000probe'
 
+/** Settings namespace containing typed provider request routes. */
+export const MODEL_SERVICE_SETTINGS_NS = 'model-service-settings'
+
+/** The four model types exposed by Models settings. */
+export type ModelServiceType = 'chat' | 'vision' | 'speech' | 'image'
+
+/** One model entry inside a typed provider route. */
+export interface ModelServiceModelView {
+  readonly id: string
+  readonly name: string
+}
+
+/** One typed provider route read from the shared settings namespace. */
+export interface ModelServiceRouteView {
+  readonly endpoint: string
+  readonly protocol: string
+  readonly models: readonly ModelServiceModelView[]
+}
+
+/** One provider profile in the shared typed-route directory. */
+export interface ModelServiceProviderView {
+  readonly provider: string
+  readonly displayName: string
+  readonly apiKeyEnv: string
+  readonly routes: Readonly<Partial<Record<ModelServiceType, ModelServiceRouteView>>>
+  readonly credential?: CredentialInfo
+  /** Whether the user layer, rather than composition alone, owns this provider entry. */
+  readonly userOwned: boolean
+}
+
 /** The credentials Remote methods the Models page reads and writes through. */
 export type ModelsCredentials = Pick<ClientRemote['credentials'], 'describe' | 'set' | 'unset'>
 
@@ -131,6 +161,62 @@ export interface ModelsSettingsState {
   modelGroups: readonly ModelProviderGroup[]
   /** Provider-local model-catalog failures. */
   modelFailures: readonly ModelCatalogFailure[]
+  /** Typed model-service routes and their credential state. */
+  serviceProviders: readonly ModelServiceProviderView[]
+}
+
+/**
+ * Parse the typed route directory from its redacted settings value.
+ * @param value - resolved `model-service-settings` namespace value.
+ * @param user - optional user layer used to mark user-owned provider entries.
+ * @returns valid provider and route records; malformed leaves are omitted.
+ */
+export function modelServiceProviders(value: unknown, user?: unknown): ModelServiceProviderView[] {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return []
+  const providers = (value as { providers?: unknown }).providers
+  if (typeof providers !== 'object' || providers === null || Array.isArray(providers)) return []
+  const types = ['chat', 'vision', 'speech', 'image'] as const
+  const output: ModelServiceProviderView[] = []
+  const userProviders = typeof user === 'object' && user !== null && !Array.isArray(user)
+    && typeof (user as { providers?: unknown }).providers === 'object'
+    && (user as { providers?: unknown }).providers !== null
+    && !Array.isArray((user as { providers?: unknown }).providers)
+    ? (user as { providers: Record<string, unknown> }).providers
+    : {}
+  for (const [provider, rawProfile] of Object.entries(providers)) {
+    if (typeof rawProfile !== 'object' || rawProfile === null || Array.isArray(rawProfile)) continue
+    const profile = rawProfile as { displayName?: unknown; apiKeyEnv?: unknown; routes?: unknown }
+    const routes: Partial<Record<ModelServiceType, ModelServiceRouteView>> = {}
+    const rawRoutes = typeof profile.routes === 'object' && profile.routes !== null && !Array.isArray(profile.routes)
+      ? profile.routes as Record<string, unknown>
+      : {}
+    for (const type of types) {
+      const rawRoute = rawRoutes[type]
+      if (typeof rawRoute !== 'object' || rawRoute === null || Array.isArray(rawRoute)) continue
+      const candidate = rawRoute as { endpoint?: unknown; protocol?: unknown; models?: unknown }
+      if (typeof candidate.endpoint !== 'string' || typeof candidate.protocol !== 'string'
+        || !Array.isArray(candidate.models)) continue
+      const models = candidate.models.flatMap((rawModel): ModelServiceModelView[] => {
+        if (typeof rawModel !== 'object' || rawModel === null || Array.isArray(rawModel)) return []
+        const model = rawModel as { id?: unknown; name?: unknown }
+        if (typeof model.id !== 'string' || model.id.length === 0) return []
+        return [{ id: model.id, name: typeof model.name === 'string' ? model.name : model.id }]
+      })
+      if (models.length > 0) routes[type] = { endpoint: candidate.endpoint, protocol: candidate.protocol, models }
+    }
+    output.push({
+      provider,
+      displayName: typeof profile.displayName === 'string' && profile.displayName.length > 0
+        ? profile.displayName
+        : provider,
+      apiKeyEnv: typeof profile.apiKeyEnv === 'string' && profile.apiKeyEnv.length > 0
+        ? profile.apiKeyEnv
+        : deriveKeyRef(provider),
+      routes,
+      userOwned: Object.hasOwn(userProviders, provider),
+    })
+  }
+  return output
 }
 
 /**
@@ -193,7 +279,7 @@ export class ModelsSettingsStore {
   /** The snapshot the section renders from (uSES-safe store). */
   readonly store: SnapshotStore<ModelsSettingsState> = createSnapshotStore<ModelsSettingsState>({
     status: 'idle', error: null, credentialError: null, modelCatalogError: null,
-    writable: false, rows: [], namespaces: new Map(), modelGroups: [], modelFailures: [],
+    writable: false, rows: [], namespaces: new Map(), modelGroups: [], modelFailures: [], serviceProviders: [],
   })
 
   /** Latest load wins; an older response never overwrites a newer one. */
@@ -262,6 +348,8 @@ export class ModelsSettingsStore {
       return
     }
     const namespaces = new Map(views.map(view => [view.ns, view]))
+    const serviceNamespace = namespaces.get(MODEL_SERVICE_SETTINGS_NS)
+    const serviceProviders = modelServiceProviders(serviceNamespace?.value, serviceNamespace?.user)
     const rows: ProviderRow[] = providers.map((entry) => {
       const namespace = namespaces.get(entry.settingsNs)
       const configured = namespace !== undefined
@@ -278,7 +366,10 @@ export class ModelsSettingsStore {
         credential: undefined,
       }
     })
-    const refs = [...new Set(rows.map(row => row.apiKeyEnv ?? deriveKeyRef(row.entry.provider)))]
+    const refs = [...new Set([
+      ...rows.map(row => row.apiKeyEnv ?? deriveKeyRef(row.entry.provider)),
+      ...serviceProviders.map(provider => provider.apiKeyEnv),
+    ])]
     let credentials: Record<string, CredentialInfo> = {}
     let credentialError: string | null = null
     if (refs.length > 0) {
@@ -312,6 +403,12 @@ export class ModelsSettingsStore {
       s.namespaces = namespaces
       s.modelGroups = modelGroups
       s.modelFailures = modelFailures
+      s.serviceProviders = serviceProviders.map(provider => ({
+        ...provider,
+        ...credentials[provider.apiKeyEnv] === undefined
+          ? {}
+          : { credential: credentials[provider.apiKeyEnv] },
+      }))
     })
   }
 }

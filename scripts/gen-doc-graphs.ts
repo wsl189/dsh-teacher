@@ -121,7 +121,7 @@ const SERVICE_ROLES: ServiceRole[] = [
     pkg: 'speech',
     title: 'Speech transcription seam',
     mode: 'seam',
-    implementations: ['speech-qq'],
+    implementations: ['speech-model-settings'],
     consumers: ['client-ui-conversation', 'client-ui-teacher-workbench'],
     note: 'Providers return final text through the Host Remote; browser Consumers keep it as editable draft text until the user submits or saves it.',
   },

@@ -122,7 +122,7 @@ describe('teacher-workbench browser wiring', () => {
     }))
     const transcribe = vi.fn(async () => ({
       ok: true,
-      value: { ok: true, value: { text: '课堂记录', provider: 'qq-config' } },
+      value: { ok: true, value: { text: '课堂记录', provider: 'model-settings' } },
     }))
     const setSetting = vi.fn(async () => {})
     const scope = { set: setSetting }

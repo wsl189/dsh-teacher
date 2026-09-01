@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-reusable-document-extraction.md
-2026-08-18-reusable-document-extraction.md: 25dc0c45c0cb228b9e9c8a7bcffaf238b835fdd0
-2026-08-18-reusable-document-extraction.zh.md: ad21ada47e4275f8efe8c140586b9b4c5830b881
+2026-08-18-reusable-document-extraction.md: 3890c0c497554838bc3689d6d00902ebcf40a198
+2026-08-18-reusable-document-extraction.zh.md: 21e130e4ea779966f0ce36bcadbf1b02cd8e48c2

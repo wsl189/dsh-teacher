@@ -1,5 +1,5 @@
 ---
-description: "The speech package group: provider-neutral browser transcription and the QQ-configured OpenAI-compatible provider used by conversation and teacher-workbench drafts."
+description: "The speech package group: provider-neutral transcription and supplier-model adapters shared by browser and IM Consumers."
 kind: "package-group"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This family accepts browser microphone recordings and returns normalized text without binding a UI Consumer to one transcription service. The shipped Web composition selects `qq-config`; conversation and Teacher Workbench Consumers normalize supported recordings to 16 kHz mono PCM WAV and insert the completed transcript into ordinary editable draft fields. Audio and returned text remain transient until the user submits or saves the draft.
+This family accepts complete browser or IM recordings and returns normalized text without binding a Consumer to one transcription service. The shipped Web composition selects `model-settings`; conversation and Teacher Workbench Consumers normalize supported recordings to 16 kHz mono PCM WAV, while QQ supplies its WAV attachment to the same runtime. All three use the supplier speech model assigned under **Models → Use cases**. Audio and returned text remain transient until a Consumer submits or saves the resulting text.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ This family accepts browser microphone recordings and returns normalized text wi
 | Package | Role | `ctx` key |
 |---|---|---|
 | [`speech/`](speech/README.md) | Provider registry, selection, stable failures, and browser Remote | `ctx.speech` |
-| [`speech-qq/`](speech-qq/README.md) | OpenAI-compatible provider sharing dsh-im's live QQ ASR settings | registers on `ctx.speech` |
+| [`speech-model-settings/`](speech-model-settings/README.md) | Executes maintained supplier speech endpoints from the live Models assignment | registers on `ctx.speech` |
 
 <a id="related-documentation"></a>
 ## Related documentation

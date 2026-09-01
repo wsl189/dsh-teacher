@@ -22,7 +22,7 @@ flowchart LR
   pkg_host_teacher_workbench["host-teacher-workbench"]
   pkg_speech["speech"]
   svc_speech["ctx.speech<br/>Speech transcription seam"]
-  pkg_speech_qq["speech-qq"]
+  pkg_speech_model_settings["speech-model-settings"]
   pkg_client_ui_conversation["client-ui-conversation"]
   pkg_client_ui_teacher_workbench["client-ui-teacher-workbench"]
   pkg_llm["llm"]
@@ -318,7 +318,7 @@ flowchart LR
   pkg_skill_filesystem --> svc_skills
   pkg_skill_ppt_master --> svc_skills
   pkg_speech --> svc_speech
-  pkg_speech_qq --> svc_speech
+  pkg_speech_model_settings --> svc_speech
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
   pkg_storage --> svc_storage
@@ -491,7 +491,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 宿主会在会话事件之前提交已接受的图片；提供方适配器将已授权的持久引用解析为提供方原生内容。 |
 | `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`tool-fs`](../packages/fs/tool-fs), [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | 提供方归一化提取出的 Markdown 与页面几何信息；文件系统读取和教师试题分割分别负责这些结果的持久或模型可见使用。 |
-| `ctx.speech` | `seam` | [`speech`](../packages/speech/speech) | [`speech-qq`](../packages/speech/speech-qq) | [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-teacher-workbench`](../packages/client/ui-teacher-workbench) | - | 提供方通过 Host Remote 返回最终文本；浏览器 Consumer 在用户提交或保存前将其保留为可编辑草稿。 |
+| `ctx.speech` | `seam` | [`speech`](../packages/speech/speech) | [`speech-model-settings`](../packages/speech/speech-model-settings) | [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-teacher-workbench`](../packages/client/ui-teacher-workbench) | - | 提供方通过 Host Remote 返回最终文本；浏览器 Consumer 在用户提交或保存前将其保留为可编辑草稿。 |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | 适配器注册提供方实现；agent loop（智能体循环）与压缩功能调用提供方无关的流服务。 |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | 插件准备彼此独立的顶层字段；官方适配器会合并这些字段，并在 HTTP 接受后提交其交付状态。 |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | 拥有按会话隔离的回放折叠区；压力消费方共享不可变且带修订版本的测量结果。 |

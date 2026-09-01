@@ -52,6 +52,7 @@ function state(overrides: Partial<ModelsSettingsState> = {}): ModelsSettingsStat
     namespaces: new Map(),
     modelGroups: [],
     modelFailures: [],
+    serviceProviders: [],
     ...overrides,
   }
 }

@@ -1,20 +1,20 @@
 /**
- * Package-owned invariant companion for `@deepseek-ai/dsh-speech-qq`.
- * @module @deepseek-ai/dsh-speech-qq/invariant
+ * Package-owned invariant companion for `@deepseek-ai/dsh-speech-model-settings`.
+ * @module @deepseek-ai/dsh-speech-model-settings/invariant
  */
 
 /* jscpd:ignore-start */
 import type { Context } from '@deepseek-ai/cordis'
 import type { InvariantInstaller } from '@deepseek-ai/dsh-invariants'
 
-const PACKAGE_NAME = '@deepseek-ai/dsh-speech-qq'
+const PACKAGE_NAME = '@deepseek-ai/dsh-speech-model-settings'
 
 /** Cordis companion plugin name. */
-export const name = 'speech-qq-invariant'
+export const name = 'speech-model-settings-invariant'
 /** Service required before the companion can reserve package ownership. */
 export const inject = ['invariants']
 
-/** No runtime invariant: configuration, upload, and response limits are checked for every request. */
+/** No runtime invariant: selection, profile, credential, upload, and response limits are checked per request. */
 const install: InvariantInstaller = () => {}
 
 /**

@@ -127,7 +127,7 @@ Read these pages when the service-level contract is not enough. They move from t
 
 - [Settings subsystem reference](../../../docs/subsystems/settings.md) — namespaces, registration, owner scope, descriptors, change commits, and the generated cordis surface.
 - [File-backed settings provider](../settings-file/README.md) — the shipped YAML/JSON provider: configuration, hot reload, comment-preserving writes.
-- [Settings package map](../README.md) — the two packages of the user-settings capability and their roles.
+- [Settings package map](../README.md) — packages in the user-settings group and their roles.
 - [Capability seams](../../../docs/capability-seams.md) — the Service Definition / Service Provider / Consumer split this service follows.
 
 -----

@@ -1,6 +1,6 @@
 {
-  "name": "@deepseek-ai/dsh-speech-qq",
-  "description": "Speech provider that shares the dsh-im QQ ASR configuration",
+  "name": "@deepseek-ai/dsh-speech-model-settings",
+  "description": "Speech provider driven by supplier routes selected in Models settings",
   "version": "1.1.1",
   "publishConfig": {
     "access": "public"
@@ -8,7 +8,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
-    "directory": "packages/speech/speech-qq"
+    "directory": "packages/speech/speech-model-settings"
   },
   "type": "module",
   "main": "lib/index.js",
@@ -37,14 +37,20 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-model-service-settings": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
     "@deepseek-ai/dsh-speech": "workspace:^"
   },
   "devDependencies": {
     "@deepseek-ai/cordis": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-invariants": "workspace:^",
+    "@deepseek-ai/dsh-model-service-settings": "workspace:^",
+    "@deepseek-ai/dsh-settings": "workspace:^",
     "@deepseek-ai/dsh-speech": "workspace:^"
   }
 }

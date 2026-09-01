@@ -111,7 +111,7 @@ Read these pages when the provider-level contract is not enough. They move from 
 
 - [User-settings service](../settings/README.md) — namespace registration, layered resolution, writes, and the events this provider feeds.
 - [Settings subsystem reference](../../../docs/subsystems/settings.md) — namespaces, resolution order, descriptors, and change commits.
-- [Settings package map](../README.md) — the two packages of the user-settings capability.
+- [Settings package map](../README.md) — packages in the user-settings group.
 - [Atomic write](../../util/atomic-write/README.md) — the writer lock and atomic replacement every write uses.
 - [Home paths](../../util/home-paths/README.md) — `$DSH_HOME` resolution and canonical watch paths.
 - [Generated configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-settings-file) — every accepted config field and its source declaration.

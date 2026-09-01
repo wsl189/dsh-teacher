@@ -98,18 +98,88 @@
     - id: speech
       name: '@deepseek-ai/dsh-speech'
       config:
-        provider: qq-config
+        provider: model-settings
 
-    # The provider reads the exact QQ ASR document and credential reference
-    # owned by dsh-im, once per recording, so UI voice input follows live QQ
-    # settings without a second configuration surface or Host restart.
-    - id: speech-qq
-      name: '@deepseek-ai/dsh-speech-qq'
+    # Typed media routes are the shared catalog for Models use-case selectors
+    # and capability consumers. User edits layer over these official defaults.
+    - id: model-service-settings
+      name: '@deepseek-ai/dsh-model-service-settings'
       config:
-        configPath: !!js dshHomePath('integrations/dsh-qq/config.json')
-        credentialRef: DSH_QQ_ASR_API_KEY
+        providers:
+          zhipu-cn:
+            displayName: Zhipu GLM Standard API
+            apiKeyEnv: ZHIPU_CN_API_KEY
+            routes:
+              speech:
+                endpoint: https://open.bigmodel.cn/api/paas/v4/audio/transcriptions
+                protocol: openai-audio-transcriptions
+                models:
+                  - id: glm-asr-2512
+                    name: GLM-ASR-2512
+              image:
+                endpoint: https://open.bigmodel.cn/api/paas/v4/images/generations
+                protocol: openai-images
+                models:
+                  - id: glm-image
+                    name: GLM-Image
+          qwen-cn:
+            displayName: Alibaba Model Studio Standard API
+            apiKeyEnv: QWEN_CN_API_KEY
+            routes:
+              speech:
+                endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+                protocol: qwen-input-audio
+                models:
+                  - id: qwen3-asr-flash
+                    name: Qwen3 ASR Flash
+              image:
+                endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+                protocol: dashscope-image
+                models:
+                  - id: qwen-image-3.0-pro
+                    name: Qwen Image 3.0 Pro
+                  - id: qwen-image-3.0
+                    name: Qwen Image 3.0
+          qwen-token-plan-cn:
+            displayName: Alibaba Model Studio Token Plan
+            apiKeyEnv: QWEN_TOKEN_PLAN_CN_API_KEY
+            routes:
+              image:
+                endpoint: https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation
+                protocol: dashscope-image
+                models:
+                  - id: qwen-image-3.0-pro
+                    name: Qwen Image 3.0 Pro
+                  - id: qwen-image-3.0
+                    name: Qwen Image 3.0
+          minimax-cn:
+            displayName: MiniMax Standard API
+            apiKeyEnv: MINIMAX_CN_API_KEY
+            routes:
+              image:
+                endpoint: https://api.minimaxi.com/v1/image_generation
+                protocol: minimax-image
+                models:
+                  - id: image-01
+                    name: MiniMax Image-01
+          minimax-token-plan-cn:
+            displayName: MiniMax Token Plan
+            apiKeyEnv: MINIMAX_TOKEN_PLAN_CN_API_KEY
+            routes:
+              image:
+                endpoint: https://api.minimaxi.com/v1/image_generation
+                protocol: minimax-image
+                models:
+                  - id: image-01
+                    name: MiniMax Image-01
+
+    # Each recording resolves the selected typed route, complete endpoint, and
+    # provider credential at request time.
+    - id: speech-model-settings
+      name: '@deepseek-ai/dsh-speech-model-settings'
+      config:
         timeoutMs: 120000
-        maxAudioBytes: 20971520
+        maxAudioBytes: 26214400
         maxResponseBytes: 65536
 
     # Product-bundled third-party extensions. Their configuration and durable

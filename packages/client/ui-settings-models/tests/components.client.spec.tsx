@@ -81,6 +81,40 @@ const DeepSeekConfig = Schema.object({
   ]),
 })
 
+const ModelServiceConfig = Schema.object({
+  providers: Schema.dict(Schema.object({
+    displayName: Schema.string(),
+    apiKeyEnv: Schema.string(),
+    routes: Schema.dict(Schema.object({
+      endpoint: Schema.string(),
+      protocol: Schema.string(),
+      models: Schema.array(Schema.object({ id: Schema.string(), name: Schema.string() })),
+    })),
+  })),
+})
+
+const QWEN_SERVICE_ROUTES = {
+  'qwen-cn': {
+    displayName: 'Qwen Standard API',
+    apiKeyEnv: 'DASHSCOPE_API_KEY',
+    routes: {
+      image: {
+        endpoint: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
+        protocol: 'dashscope-image',
+        models: [
+          { id: 'qwen-image-3.0-pro', name: 'Qwen Image 3.0 Pro' },
+          { id: 'qwen-image-3.0', name: 'Qwen Image 3.0' },
+        ],
+      },
+      speech: {
+        endpoint: 'https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions',
+        protocol: 'qwen-input-audio',
+        models: [{ id: 'qwen3-asr-flash', name: 'Qwen3 ASR Flash' }],
+      },
+    },
+  },
+}
+
 const DEFAULT_DEEPSEEK_MODELS = [
   {
     id: 'deepseek-v4-flash',
@@ -135,6 +169,16 @@ function wireNamespaces(): SettingsNamespaceView[] {
       applies: 'live',
       secrets: [],
       revision: 4,
+    },
+    {
+      ns: 'model-service-settings',
+      schema: JSON.parse(JSON.stringify(ModelServiceConfig.toJSON())) as JsonValue,
+      value: { providers: QWEN_SERVICE_ROUTES },
+      base: { providers: QWEN_SERVICE_ROUTES },
+      user: { providers: {} },
+      applies: 'live',
+      secrets: [],
+      revision: 0,
     },
   ]
 }
@@ -382,6 +426,7 @@ describe('ModelsSection', () => {
     expect(protocol.value).toBe('openai-completions')
     expect(baseURL.value).toBe('https://coding.dashscope.aliyuncs.com/v1')
     expect(fullURL.value).toBe('https://coding.dashscope.aliyuncs.com/v1/chat/completions')
+    fireEvent.change(screen.getByLabelText(en.requestType), { target: { value: 'vision' } })
     expandRow(1)
     expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
 
@@ -438,9 +483,11 @@ describe('ModelsSection', () => {
     })
   })
 
-  it('chooses image and speech models directly from a configured supplier route', async () => {
+  it('chooses media models from configured preset and custom provider routes', async () => {
     const scripted = scriptedFace()
-    const piAiNamespace = wireNamespaces().find(view => view.ns === 'llm-pi-ai')!
+    const namespaces = wireNamespaces()
+    const piAiNamespace = namespaces.find(view => view.ns === 'llm-pi-ai')!
+    const modelServiceNamespace = namespaces.find(view => view.ns === 'model-service-settings')!
     const defaultModelNamespace: SettingsNamespaceView = {
       ns: 'agent-default-model',
       schema: JSON.parse(JSON.stringify(Schema.object({
@@ -477,10 +524,33 @@ describe('ModelsSection', () => {
         },
       },
     }
+    const customMediaProfile = {
+      displayName: 'Acme Media',
+      apiKeyEnv: 'ACME_MEDIA_API_KEY',
+      routes: {
+        image: {
+          endpoint: 'https://media.acme.example/v1/images/generations',
+          protocol: 'openai-images',
+          models: [{ id: 'acme-image-new', name: 'Acme Image New' }],
+        },
+        speech: {
+          endpoint: 'https://media.acme.example/v1/audio/transcriptions',
+          protocol: 'openai-audio-transcriptions',
+          models: [{ id: 'acme-asr-new', name: 'Acme ASR New' }],
+        },
+      },
+    }
+    const customModelServiceNamespace: SettingsNamespaceView = {
+      ...modelServiceNamespace,
+      value: { providers: { ...QWEN_SERVICE_ROUTES, 'acme-media': customMediaProfile } },
+      user: { providers: { 'acme-media': customMediaProfile } },
+    }
     scripted.face.settings.describe.mockImplementation(() => Promise.resolve(remoteOk({
       writable: true,
       hasDocument: false,
-      namespaces: wireNamespaces().map(view => view.ns === 'llm-pi-ai' ? qwenNamespace : view)
+      namespaces: namespaces.map(view => view.ns === 'llm-pi-ai'
+        ? qwenNamespace
+        : view.ns === 'model-service-settings' ? customModelServiceNamespace : view)
         .concat(defaultModelNamespace),
     })))
     scripted.face.llm.listProviders.mockImplementation(() => Promise.resolve(remoteOk([
@@ -505,10 +575,12 @@ describe('ModelsSection', () => {
       '',
       JSON.stringify(['qwen-cn', 'qwen-image-3.0-pro']),
       JSON.stringify(['qwen-cn', 'qwen-image-3.0']),
+      JSON.stringify(['acme-media', 'acme-image-new']),
     ])
     expect([...speechPicker.options].map(option => option.value)).toEqual([
       '',
-      JSON.stringify(['qwen-cn', 'qwen3-asr-flash-filetrans']),
+      JSON.stringify(['qwen-cn', 'qwen3-asr-flash']),
+      JSON.stringify(['acme-media', 'acme-asr-new']),
     ])
     fireEvent.change(imagePicker, {
       target: { value: JSON.stringify(['qwen-cn', 'qwen-image-3.0-pro']) },
@@ -1144,7 +1216,7 @@ describe('ModelsSection', () => {
     revealAdvancedFields()
     fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'not-a-url' } })
     fireEvent.click(screen.getByText(en.apply))
-    await screen.findByText(/baseURL/)
+    await screen.findByText(en.fullRequestUrlInvalid)
     expect(mutate).not.toHaveBeenCalled()
   })
 

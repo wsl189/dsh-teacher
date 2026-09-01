@@ -25,7 +25,7 @@ export interface ProviderProtocolPreset {
 
 /** One model-use category available through a route's LLM endpoint. */
 export interface ProviderRequestTypePreset {
-  id: 'chat' | 'vision' | 'coding' | 'image' | 'speech'
+  id: 'chat' | 'vision' | 'image' | 'speech'
   labelKey: ModelsKey
   explanationKey: ModelsKey
   /** Capability route when it differs from the access plan's LLM protocol. */
@@ -89,12 +89,6 @@ const VISION: ProviderRequestTypePreset = {
   explanationKey: 'requestTypeVisionHint',
 }
 
-const CODING: ProviderRequestTypePreset = {
-  id: 'coding',
-  labelKey: 'requestTypeCoding',
-  explanationKey: 'requestTypeCodingHint',
-}
-
 const capabilityProtocol = (
   api: string,
   baseURL: string,
@@ -109,7 +103,7 @@ const ZHIPU_IMAGE: ProviderRequestTypePreset = {
   labelKey: 'requestTypeImageGeneration',
   explanationKey: 'requestTypeImageGenerationHint',
   protocols: [capabilityProtocol(
-    'zhipu-image',
+    'openai-images',
     'https://open.bigmodel.cn/api/paas/v4',
     '/images/generations',
     'protocolZhipuImage',
@@ -122,7 +116,7 @@ const ZHIPU_SPEECH: ProviderRequestTypePreset = {
   labelKey: 'requestTypeSpeechRecognition',
   explanationKey: 'requestTypeSpeechRecognitionHint',
   protocols: [capabilityProtocol(
-    'zhipu-asr',
+    'openai-audio-transcriptions',
     'https://open.bigmodel.cn/api/paas/v4',
     '/audio/transcriptions',
     'protocolZhipuSpeech',
@@ -151,12 +145,12 @@ const QWEN_SPEECH: ProviderRequestTypePreset = {
   labelKey: 'requestTypeSpeechRecognition',
   explanationKey: 'requestTypeSpeechRecognitionHint',
   protocols: [capabilityProtocol(
-    'dashscope-asr',
-    'https://dashscope.aliyuncs.com',
-    '/api/v1/services/audio/asr/transcription',
+    'qwen-input-audio',
+    'https://dashscope.aliyuncs.com/compatible-mode/v1',
+    '/chat/completions',
     'protocolQwenSpeech',
   )],
-  models: [capabilityModel('qwen3-asr-flash-filetrans', 'Qwen3 ASR Flash FileTrans')],
+  models: [capabilityModel('qwen3-asr-flash', 'Qwen3 ASR Flash')],
 }
 
 const MINIMAX_IMAGE: ProviderRequestTypePreset = {
@@ -256,7 +250,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           OPENAI('https://open.bigmodel.cn/api/coding/paas/v4', true),
           ANTHROPIC('https://open.bigmodel.cn/api/anthropic'),
         ],
-        requestTypes: [CODING],
+        requestTypes: [CHAT],
       },
     ],
   },
@@ -284,7 +278,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           ANTHROPIC('https://api.kimi.com/coding', true),
           OPENAI('https://api.kimi.com/coding/v1'),
         ],
-        requestTypes: [CODING, VISION],
+        requestTypes: [CHAT, VISION],
       },
     ],
   },
@@ -301,7 +295,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
         labelKey: 'accessStandard',
         noticeKey: 'noticeDeepSeek',
         protocols: [OPENAI('https://api.deepseek.com', true)],
-        requestTypes: [CHAT, VISION, CODING],
+        requestTypes: [CHAT, VISION],
       },
     ],
   },
@@ -321,7 +315,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           RESPONSES('https://dashscope.aliyuncs.com/compatible-mode/v1'),
           ANTHROPIC('https://dashscope.aliyuncs.com/apps/anthropic'),
         ],
-        requestTypes: [CHAT, VISION, CODING, QWEN_IMAGE, QWEN_SPEECH],
+        requestTypes: [CHAT, VISION, QWEN_IMAGE, QWEN_SPEECH],
         declared: true,
         initialProfile: {
           displayName: 'Alibaba Model Studio Standard API',
@@ -340,7 +334,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           OPENAI('https://coding.dashscope.aliyuncs.com/v1'),
           ANTHROPIC('https://coding.dashscope.aliyuncs.com/apps/anthropic'),
         ],
-        requestTypes: [CODING, VISION],
+        requestTypes: [CHAT, VISION],
         declared: true,
         initialProfile: {
           displayName: 'Alibaba Model Studio Coding Plan',
@@ -360,7 +354,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           RESPONSES('https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1'),
           ANTHROPIC('https://token-plan.cn-beijing.maas.aliyuncs.com/apps/anthropic'),
         ],
-        requestTypes: [CHAT, VISION, CODING, QWEN_IMAGE, QWEN_SPEECH],
+        requestTypes: [CHAT, VISION, QWEN_IMAGE],
       },
     ],
   },
@@ -379,7 +373,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           ANTHROPIC('https://api.minimaxi.com/anthropic', true),
           OPENAI('https://api.minimaxi.com/v1'),
         ],
-        requestTypes: [CHAT, VISION, CODING, MINIMAX_IMAGE],
+        requestTypes: [CHAT, VISION, MINIMAX_IMAGE],
       },
       {
         provider: 'minimax-token-plan-cn',
@@ -391,7 +385,7 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
           ANTHROPIC('https://api.minimaxi.com/anthropic'),
           OPENAI('https://api.minimaxi.com/v1'),
         ],
-        requestTypes: [CHAT, VISION, CODING, MINIMAX_IMAGE],
+        requestTypes: [CHAT, VISION, MINIMAX_IMAGE],
         declared: true,
         initialProfile: {
           displayName: 'MiniMax Token Plan',

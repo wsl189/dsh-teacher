@@ -14,7 +14,7 @@ Electron 为[新建 IM 机器人的工作区](../../third-party/README.zh.md)提
 
 会话、设置、凭据与教师工作台数据仍保存在普通 DSH home 下（未设置 `DSH_HOME` 时为 `%USERPROFILE%\.dsh`）。生图插件会把生成历史、画廊与模板缓存保存在 `%USERPROFILE%\.dsh\dsh-imagegen`。重新安装应用不会替换这些目录。迁移到另一台电脑时，需要另行复制这些数据目录。
 
-对话输入框与日常管理共用同一条麦克风链路。Electron 只允许本应用私有回环地址的主页面采集音频，仍拒绝摄像头与外来内容，并保留复制控件所需的剪贴板写入。完整浏览器录音会先在本机解码为 16 kHz 单声道 PCM WAV，再调用读取 QQ 配置的 ASR，因此它与 QQ 语音消息使用相同的 WAV 输入，不再要求每个本地服务都能解码 Chromium WebM。Windows 中还必须打开**设置 → 隐私和安全性 → 麦克风 → 允许桌面应用访问麦克风**；操作系统拒绝时，界面会显示既有的麦克风权限提示。
+对话输入框与日常管理共用同一条麦克风链路。Electron 只允许本应用私有回环地址的主页面采集音频，仍拒绝摄像头与外来内容，并保留复制控件所需的剪贴板写入。完整浏览器录音会先在本机解码为 16 kHz 单声道 PCM WAV，再调用**设置 → 模型 → 使用场景**中选择的供应商语音服务。QQ 语音消息也会把其 WAV 附件交给同一个 Host 语音运行时，因此三处共用一项模型分配，不再要求每个本地服务都能解码 Chromium WebM。Windows 中还必须打开**设置 → 隐私和安全性 → 麦克风 → 允许桌面应用访问麦克风**；操作系统拒绝时，界面会显示既有的麦克风权限提示。
 
 应用内目录浏览器会列出 Windows Host 上的真实文件夹，并可直接选择当前文件夹；QQ 工作区对话框的标题为「选择机器人工作区目录」。安装版不出现 Windows 系统文件夹窗口是预期行为。
 
@@ -58,7 +58,7 @@ git push origin v0.1.2
 
 renderer 启用 `contextIsolation` 与 sandbox，并关闭 Node integration。preload 只暴露更新快照、订阅、下载和安装方法。初始 loopback URL 会把当前进程的令牌交换为绑定 authority 的 HttpOnly 浏览器 cookie，再重定向到不带令牌的根 URL。外部导航会被拒绝并交给系统浏览器。GitHub 元数据与下载始终留在主进程，安装器由 electron-updater 按 SemVer 选择。
 
-安装器包含 Electron、JavaScript／Node 运行时、本仓库已构建的 Web UI，以及完整的发行版 DSH 插件闭包，其中包括 AI 生图工作室、IM、cron、技能／MCP 管理、Windows 桌面控制、AGPL Office 查看器、Univer Office、读取 QQ 配置的语音适配器，以及带脚本、参考资料、模板、媒体、许可证与赞助记录的 PPT Master 6.1.0。这些插件和 Skill 资源不需要单独安装。仅 Windows-MCP 带有一套私有嵌入式 CPython 与 wheel 闭包，除非 Windows 桌面控制被关闭，否则它会默认启动；安装版从 `resources/windows-mcp` 解析它，并忽略环境中的覆盖路径。EXE 不会内嵌生图服务或模型、PPT Master 的可选 Python 包、vLLM、MinerU、语音识别服务器、模型权重、GPU 驱动、Docker、Chrome／Chromium 可执行文件、Univer 许可证或本机专属插件配置。请在**设置 → 模型 → 生图模型**中配置 OpenAI 兼容生图端点、API 密钥与模型目录；提示词与参考图会离开本机并发送给该服务。外部运行时、服务与私有值应独立维护，并单独迁移 `DSH_HOME` 与生图数据目录。
+安装器包含 Electron、JavaScript／Node 运行时、本仓库已构建的 Web UI，以及完整的发行版 DSH 插件闭包，其中包括 AI 生图工作室、IM、cron、技能／MCP 管理、Windows 桌面控制、AGPL Office 查看器、Univer Office、供应商模型语音适配器，以及带脚本、参考资料、模板、媒体、许可证与赞助记录的 PPT Master 6.1.0。这些插件和 Skill 资源不需要单独安装。仅 Windows-MCP 带有一套私有嵌入式 CPython 与 wheel 闭包，除非 Windows 桌面控制被关闭，否则它会默认启动；安装版从 `resources/windows-mcp` 解析它，并忽略环境中的覆盖路径。EXE 不会内嵌生图服务或模型、PPT Master 的可选 Python 包、vLLM、MinerU、语音识别服务、模型权重、GPU 驱动、Docker、Chrome／Chromium 可执行文件、Univer 许可证或本机专属插件配置。请先在**设置 → 模型 → 服务接入**中配置供应商线路，再于**使用场景**分配受支持的语音模型；独立的 OpenAI 兼容生图插件仍在**生图模型**中配置。录音、提示词与参考图会离开本机并发送给相应服务。外部运行时、服务与私有值应独立维护，并单独迁移 `DSH_HOME` 与生图数据目录。
 
 ## 已知限制与暂缓事项
 

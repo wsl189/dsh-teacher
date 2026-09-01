@@ -10,7 +10,7 @@
 |---|---|---:|---|---|
 | `anysearch-dsh/` | `anysearch-anysearch-dsh-0.1.4.tgz` | 0.1.4 | [anysearch-team/anysearch-dsh](https://github.com/anysearch-team/anysearch-dsh) | Web 默认搜索与正文提取提供方、能力发现、垂直搜索和批量搜索。 |
 | `dsh-imagegen/` | `dickpy-dsh-imagegen-1.5.1-dsh.1.tgz` | 1.5.1，DSH 运行时重打包 1 | [dickpy/dsh-imagegen](https://github.com/dickpy/dsh-imagegen) | AI 生图工作室、文生图与图生图工具、画廊和提示词模板。 |
-| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、QQ 文件发送、手机提醒与 QQ ASR 设置。 |
+| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、QQ 文件发送、手机提醒，以及把 QQ 语音转交共享语音运行时。 |
 | `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | [abiaoa1314/dsh-plugin-cron](https://github.com/abiaoa1314/dsh-plugin-cron) | 持久 cron 任务、模型工具与浏览器管理页。 |
 | `dsh-skill-mcp-panel/` | `dsh-skill-mcp-panel-2.0.1.tgz` | 2.0.1 | [Fishquito7/dsh-skill-mcp-panel](https://github.com/Fishquito7/dsh-skill-mcp-panel) | 通过 Web 与 CLI 管理全局／工作区技能和 profile MCP 服务器。 |
 | `dsh-univer-office/` | `dsh-univer-office-0.2.12-dsh.2.tgz` | 0.2.12，DSH 重构建 2 | [dream-num/dsh-univer-office](https://github.com/dream-num/dsh-univer-office) | 由 agent 创建 Sheets、Docs、Slides、Bases 与 Boards，并通过隔离草稿审阅和导入／导出 Office 文件。 |
@@ -23,7 +23,7 @@ Web 组合还从 npm 固定 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0
 
 AnySearch 无需密钥即可使用，但受远程服务的匿名限制。[Web 组合包](../packages/bundle/web-app/README.zh.md#built-in-web-search)说明可选凭据、服务地址与单次搜索结果上限配置、提供方选择，以及向外发送的查询与正文提取 URL。安装器包含插件，不包含搜索服务或注册账户。
 
-可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务、技能文件、MCP 配置、Univer 文档、工作树与下载资源缓存仍保存在 `DSH_HOME` 或所选工作区下。机器人通过**设置 → 插件 → 连接平台**配置，语音识别通过**设置 → 模型 → 语音模型**配置，生图服务渠道通过**设置 → 模型 → 生图模型**配置，技能在**设置 → 技能**中管理，MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理。生图 API 密钥保存在本机设置文档中，生成历史、画廊与模板缓存使用 `~/.dsh/dsh-imagegen`；参考图和提示词会发送给已配置的服务提供方。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
+可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务、技能文件、MCP 配置、Univer 文档、工作树与下载资源缓存仍保存在 `DSH_HOME` 或所选工作区下。机器人通过**设置 → 插件 → 连接平台**配置。请先在**设置 → 模型 → 服务接入**配置供应商线路，再于**使用场景**分配其支持的语音模型；浏览器语音输入与 QQ 语音消息会使用同一项分配。生图服务渠道通过**生图模型**配置，技能在**设置 → 技能**中管理，MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理。生图 API 密钥保存在本机设置文档中，生成历史、画廊与模板缓存使用 `~/.dsh/dsh-imagegen`；参考图和提示词会发送给已配置的服务提供方。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
 
 内置 Univer 配置项设置了 `telemetry: false`。未设置 `UNIVER_LICENSE` 时，Univer Viewer 会按上游的受限试用模式打开，并保留水印和功能限制。需要授权功能时，通过 `UNIVER_LICENSE` 提供有效许可证；产物中没有开发许可证回退值。部分 Slide 布局检查、SVG 文本测量与截图操作还需要本机 Chrome 或 Chromium；自动发现无效时可用 `UNIVER_RENDER_BROWSER` 显式指定。
 
@@ -39,7 +39,7 @@ Windows 桌面控制在运行时可用时默认启动；已持久化的用户值
 
 ## 验证
 
-真实发行组合的浏览器测试会断言所有客户端模块均进入模块图，并固定四项生图工具、Host 级 `cron_*`、`qq_send_local_file`、十三项 `univer_*` 工具，以及 Windows-MCP 按运行时可用性确定的默认值和已保存的关闭选择。模型测试会固定默认收起的生图模型与语音模型卡片、展开前者并要求存在渠道控件，再保存后者的共享语音配置。语音输入测试还会把浏览器录音经该语音配置发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作、确认 QQ 页面不再包含语音设置，并固定真实 Host 后端返回的应用内目录列表快照。桌面载荷门禁还会单独要求已打包依赖闭包包含生图 Host 与 Client bundle、内置模板快照与许可证；Univer Viewer、Gateway、worker、技能、商业资源 manifest 与 Windows x64 原生 binding；以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的 Python 原生模块。
+真实发行组合的浏览器测试会断言所有客户端模块均进入模块图，并固定四项生图工具、Host 级 `cron_*`、`qq_send_local_file`、十三项 `univer_*` 工具，以及 Windows-MCP 按运行时可用性确定的默认值和已保存的关闭选择。模型测试会固定默认收起的生图模型卡片、拒绝重复语音模型卡片、配置供应商线路，并在「使用场景」中保存其语音分配。语音输入测试会把浏览器录音经该供应商分配发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作、确认 QQ 页面不再包含语音设置，并固定真实 Host 后端返回的应用内目录列表快照；Host 集成测试还要求 QQ WAV 附件委托给共享语音运行时。桌面载荷门禁还会单独要求已打包依赖闭包包含生图 Host 与 Client bundle、内置模板快照与许可证；Univer Viewer、Gateway、worker、技能、商业资源 manifest 与 Windows x64 原生 binding；以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的 Python 原生模块。
 
 <a id="artifact-notes"></a>
 ## 产物说明

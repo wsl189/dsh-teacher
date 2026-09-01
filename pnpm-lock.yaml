@@ -32,7 +32,7 @@ patchedDependencies:
   '@anysearch/anysearch-dsh@0.1.4': f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82
   '@dickpy/dsh-imagegen@1.5.1': 5d0b75d1226004286dbe33d5b69d45614ebd826bc9677c01f844271abb52f6f0
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': 34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd
-  '@xmanrui/dsh-im@1.0.3': 21c334c8b068295daed9680c5b7b8084fe7f32f01e629e9434397d51a302e4fb
+  '@xmanrui/dsh-im@1.0.3': ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762
   dsh-better-sidebar@0.17.1: 78d35a900c83a83e141ae27f8a225bf8c579859814f5be0e4cd145531efa71ef
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.1: 5d0df683dd92b21df2238f151ed5c3700e2dc73158c2e58e2fd77f361a1ec835
@@ -1795,6 +1795,9 @@ importers:
       '@deepseek-ai/dsh-message-feedback':
         specifier: workspace:^
         version: link:../../feedback/message-feedback
+      '@deepseek-ai/dsh-model-service-settings':
+        specifier: workspace:^
+        version: link:../../settings/model-service-settings
       '@deepseek-ai/dsh-ocr':
         specifier: workspace:^
         version: link:../../ocr/ocr
@@ -1822,9 +1825,9 @@ importers:
       '@deepseek-ai/dsh-speech':
         specifier: workspace:^
         version: link:../../speech/speech
-      '@deepseek-ai/dsh-speech-qq':
+      '@deepseek-ai/dsh-speech-model-settings':
         specifier: workspace:^
-        version: link:../../speech/speech-qq
+        version: link:../../speech/speech-model-settings
       '@deepseek-ai/dsh-subprocess':
         specifier: workspace:^
         version: link:../../subprocess/subprocess
@@ -1863,7 +1866,7 @@ importers:
         version: 0.1.2(patch_hash=34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd)(bcb238876ae0845a34599176906e0d4a)
       '@xmanrui/dsh-im':
         specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
-        version: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=21c334c8b068295daed9680c5b7b8084fe7f32f01e629e9434397d51a302e4fb)
+        version: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -8256,6 +8259,22 @@ importers:
         specifier: workspace:^
         version: link:../../util/timeout
 
+  packages/settings/model-service-settings:
+    dependencies:
+      '@deepseek-ai/schemastery':
+        specifier: link:../../../vendor/schemastery
+        version: link:../../../vendor/schemastery
+    devDependencies:
+      '@deepseek-ai/cordis':
+        specifier: workspace:^
+        version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-invariants':
+        specifier: workspace:^
+        version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../settings
+
   packages/settings/settings:
     dependencies:
       '@deepseek-ai/schemastery':
@@ -8824,7 +8843,7 @@ importers:
         specifier: workspace:^
         version: link:../../typert/protocol
 
-  packages/speech/speech-qq:
+  packages/speech/speech-model-settings:
     dependencies:
       '@deepseek-ai/schemastery':
         specifier: link:../../../vendor/schemastery
@@ -8836,12 +8855,21 @@ importers:
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
+      '@deepseek-ai/dsh-agent-default-model':
+        specifier: workspace:^
+        version: link:../../core/agent-default-model
       '@deepseek-ai/dsh-credentials':
         specifier: workspace:^
         version: link:../../credentials/credentials
       '@deepseek-ai/dsh-invariants':
         specifier: workspace:^
         version: link:../../runtime-diagnostics/invariants
+      '@deepseek-ai/dsh-model-service-settings':
+        specifier: workspace:^
+        version: link:../../settings/model-service-settings
+      '@deepseek-ai/dsh-settings':
+        specifier: workspace:^
+        version: link:../../settings/settings
       '@deepseek-ai/dsh-speech':
         specifier: workspace:^
         version: link:../speech
@@ -24860,7 +24888,7 @@ snapshots:
     optionalDependencies:
       react: 18.3.1
 
-  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=21c334c8b068295daed9680c5b7b8084fe7f32f01e629e9434397d51a302e4fb)':
+  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762)':
     dependencies:
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4

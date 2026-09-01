@@ -45,7 +45,7 @@ kind: "package-reference"
 ## 延伸阅读
 
 - [语音子系统参考](../../../docs/subsystems/speech.zh.md)——共享请求、结果、失败、提供方与生成的 Cordis 服务词汇。
-- [QQ 配置提供方](../speech-qq/README.zh.md)——发行版 OpenAI 兼容提供方。
+- [模型设置提供方](../speech-model-settings/README.zh.md)——发行版供应商语音适配器。
 - [对话 UI](../../client/ui-conversation/README.zh.md)——麦克风入口与可编辑草稿 Consumer。
 
 <a id="model-experience"></a>

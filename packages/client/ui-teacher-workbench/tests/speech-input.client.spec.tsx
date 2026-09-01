@@ -64,10 +64,10 @@ describe('VoiceInputButton', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
     fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
-    await screen.findByRole('button', { name: '请先在设置 → 模型 → 语音模型中启用语音识别' })
-    expect(screen.getByRole('alert').textContent).toBe('请先在设置 → 模型 → 语音模型中启用语音识别')
+    await screen.findByRole('button', { name: '请先在设置 → 模型 → 使用场景中选择并配置语音识别模型' })
+    expect(screen.getByRole('alert').textContent).toBe('请先在设置 → 模型 → 使用场景中选择并配置语音识别模型')
 
-    fireEvent.click(screen.getByRole('button', { name: '请先在设置 → 模型 → 语音模型中启用语音识别' }))
+    fireEvent.click(screen.getByRole('button', { name: '请先在设置 → 模型 → 使用场景中选择并配置语音识别模型' }))
     fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
     await screen.findByRole('button', { name: '语音识别服务连接失败' })
     expect(screen.getByRole('alert').textContent).toBe('语音识别服务连接失败')

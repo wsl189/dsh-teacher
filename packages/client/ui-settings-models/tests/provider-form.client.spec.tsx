@@ -38,6 +38,31 @@ const PiAiConfig = Schema.object({
   })),
 })
 
+const ModelServiceConfig = Schema.object({
+  providers: Schema.dict(Schema.object({
+    displayName: Schema.string(),
+    apiKeyEnv: Schema.string(),
+    routes: Schema.dict(Schema.object({
+      endpoint: Schema.string(),
+      protocol: Schema.string(),
+      models: Schema.array(Schema.object({ id: Schema.string(), name: Schema.string() })),
+    })),
+  })),
+})
+
+function modelServiceNamespace(): SettingsNamespaceView {
+  return {
+    ns: 'model-service-settings',
+    schema: JSON.parse(JSON.stringify(ModelServiceConfig.toJSON())) as JsonValue,
+    value: { providers: {} },
+    base: { providers: {} },
+    user: { providers: {} },
+    applies: 'live',
+    secrets: [],
+    revision: 5,
+  }
+}
+
 function ok<T>(value: T) {
   return { ok: true as const, value }
 }
@@ -107,7 +132,10 @@ function scriptedFace(options: {
       discoverModels: discover,
     },
     settings: {
-      describe: vi.fn(() => Promise.resolve(remoteOk({ writable: true, namespaces: [namespace] }))),
+      describe: vi.fn(() => Promise.resolve(remoteOk({
+        writable: true,
+        namespaces: [namespace, modelServiceNamespace()],
+      }))),
       mutate,
     },
     credentials: {
@@ -234,7 +262,7 @@ describe('model list editing', () => {
     })
   })
 
-  it('writes each model input type explicitly', async () => {
+  it('keeps vision models explicitly classified', async () => {
     const { mutate } = await mountSection({
       providers: {
         openai: {
@@ -243,15 +271,55 @@ describe('model list editing', () => {
       },
     })
     openEditor('openai')
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('vision')
     expandModel(1)
 
     const input = screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`)
     expect(input.value).toBe('image')
-    fireEvent.change(input, { target: { value: 'text' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Vision' } })
     fireEvent.click(screen.getByText(en.apply))
 
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    expect(firstMutate(mutate).ops[0]?.value).toEqual([{ id: 'vision', input: ['text'] }])
+    expect(firstMutate(mutate).ops[0]?.value).toEqual([{
+      id: 'vision', name: 'Vision', input: ['text', 'image'],
+    }])
+  })
+
+  it('adds a speech model and exact request URL to an existing provider', async () => {
+    const { mutate } = await mountSection()
+    openEditor('openai')
+
+    fireEvent.change(screen.getByLabelText(en.requestType), { target: { value: 'speech' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://speech.example/v1/audio/transcriptions' },
+    })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'speech-new' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Speech New' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => {
+      expect(mutate.mock.calls.some(call => call[0] === 'model-service-settings')).toBe(true)
+    })
+    const call = mutate.mock.calls.find(candidate => candidate[0] === 'model-service-settings') as
+      | [string, MutateCall['ops'], number]
+      | undefined
+    expect(call?.[1]).toEqual(expect.arrayContaining([
+      {
+        op: 'set',
+        path: ['providers', 'openai', 'routes'],
+        value: {
+          speech: {
+            endpoint: 'https://speech.example/v1/audio/transcriptions',
+            protocol: 'openai-audio-transcriptions',
+            models: [{ id: 'speech-new', name: 'Speech New' }],
+          },
+        },
+      },
+      { op: 'set', path: ['providers', 'openai', 'displayName'], value: 'openai' },
+      { op: 'set', path: ['providers', 'openai', 'apiKeyEnv'], value: 'OPENAI_API_KEY' },
+    ]))
+    expect(call?.[2]).toBe(5)
   })
 
   it('names a duplicate model id in the edit flow too', async () => {
@@ -577,14 +645,16 @@ describe('endpoint interrogation', () => {
     const scripted = scriptedFace()
     render(
       <CustomProviderCard
-        taken={[]} protocols={PROTOCOLS} revision={7} api={scripted.face as never}
+        taken={[]} protocols={PROTOCOLS} revision={7} serviceRevision={5} api={scripted.face as never}
         t={t} readOnly={false} onClose={vi.fn()}
       />,
     )
     expect(buttonNamed(en.fetchModels).disabled).toBe(true)
     expect(buttonNamed(en.fetchModels).title).toBe(en.fetchNeedsBaseUrl)
 
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     expect(buttonNamed(en.fetchModels).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.fetchModels))
 
@@ -726,6 +796,7 @@ describe('hand-declared providers', () => {
         taken={['openai']}
         protocols={PROTOCOLS}
         revision={7}
+        serviceRevision={5}
         api={scripted.face as never}
         t={t}
         readOnly={false}
@@ -741,7 +812,10 @@ describe('hand-declared providers', () => {
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
     fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme Gateway' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.requestType), { target: { value: 'vision' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://gateway.acme.example/v1/chat/completions' },
+    })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
@@ -771,6 +845,44 @@ describe('hand-declared providers', () => {
     expect(set).toHaveBeenCalledWith('ACME_GATEWAY_API_KEY', 'gw-key')
   })
 
+  it.each([
+    ['speech', 'https://speech.acme.example/v1/audio/transcriptions', 'openai-audio-transcriptions'],
+    ['image', 'https://image.acme.example/v1/images/generations', 'openai-images'],
+  ] as const)('creates a custom %s route with its exact request URL', async (type, endpoint, protocol) => {
+    const { mutate, set, onClose } = mountCard()
+
+    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-media' } })
+    fireEvent.change(screen.getByLabelText(en.requestType), { target: { value: type } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), { target: { value: endpoint } })
+    fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'media-key' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), {
+      target: { value: type === 'speech' ? 'acme-asr' : 'acme-image' },
+    })
+    fireEvent.click(screen.getByText(en.create))
+
+    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    expect(firstMutate(mutate)).toEqual({
+      ns: 'model-service-settings',
+      ops: [{
+        op: 'set',
+        path: ['providers', 'acme-media'],
+        value: {
+          apiKeyEnv: 'ACME_MEDIA_API_KEY',
+          routes: {
+            [type]: {
+              endpoint,
+              protocol,
+              models: [{ id: type === 'speech' ? 'acme-asr' : 'acme-image' }],
+            },
+          },
+        },
+      }],
+      expectedRevision: 5,
+    })
+    expect(set).toHaveBeenCalledWith('ACME_MEDIA_API_KEY', 'media-key')
+  })
+
   it('scopes each card to fields a provider can actually own', async () => {
     // Reasoning effort is a per-MODEL capability and the
     // models under one provider disagree about it, so a provider-scoped
@@ -782,7 +894,14 @@ describe('hand-declared providers', () => {
 
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    expect(fields()).toEqual([en.customRoute, en.customDisplayName, en.baseUrl, en.customApi, en.keyInput])
+    expect(fields()).toEqual([
+      en.customRoute,
+      en.customDisplayName,
+      en.requestType,
+      en.customApi,
+      en.fullRequestUrl,
+      en.keyInput,
+    ])
     cleanup()
 
     // Every service route exposes its protocol beside the API key. A catalog
@@ -954,7 +1073,9 @@ describe('hand-declared providers', () => {
     const { mutate, onClose } = mountCard({}, { set })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '  gw-key  ' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
@@ -970,7 +1091,7 @@ describe('hand-declared providers', () => {
     // The provider exists now, so the fields describing it are settled and
     // only the key can still be corrected.
     expect(screen.getByLabelText<HTMLInputElement>(en.customRoute).disabled).toBe(true)
-    expect(screen.getByLabelText<HTMLInputElement>(en.baseUrl).disabled).toBe(true)
+    expect(screen.getByLabelText<HTMLInputElement>(en.fullRequestUrl).disabled).toBe(true)
     expect(screen.getByLabelText<HTMLInputElement>(en.keyInput).disabled).toBe(false)
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key-2' } })
@@ -988,7 +1109,9 @@ describe('hand-declared providers', () => {
     const { onClose } = mountCard({}, { set })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
@@ -1005,7 +1128,9 @@ describe('hand-declared providers', () => {
     mountCard()
     const routeField = screen.getByLabelText(en.customRoute)
     fireEvent.change(routeField, { target: { value: '2' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
 
@@ -1066,14 +1191,16 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
 
     // Endpoint first: the gate names the one thing standing in the way.
-    expect(screen.getByText(en.customNeedsBaseUrl)).toBeTruthy()
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    expect(screen.getByText(en.fullRequestUrlInvalid)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
 
     // Satisfied: the shared line disappears rather than rendering empty.
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
-    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
+    expect(screen.queryByText(en.fullRequestUrlInvalid)).toBeNull()
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
     expect(buttonNamed(en.create).disabled).toBe(false)
   })
@@ -1081,7 +1208,9 @@ describe('hand-declared providers', () => {
   it('refuses to create while a capacity is unreadable', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     expandModel(1)
@@ -1094,7 +1223,9 @@ describe('hand-declared providers', () => {
   it('keeps each half-typed capacity with its own row across a removal', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     for (const [at, id] of [[1, 'first'], [2, 'second'], [3, 'third']] as const) {
       fireEvent.click(screen.getByRole('button', { name: en.addModel }))
       fireEvent.change(screen.getByLabelText(`${en.modelId} ${String(at)}`), { target: { value: id } })
@@ -1116,7 +1247,9 @@ describe('hand-declared providers', () => {
   it('refuses two models sharing one id', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'same' } })
@@ -1134,7 +1267,9 @@ describe('hand-declared providers', () => {
   it('creates a model with no capacities, which the route\u2019s fallbacks size', async () => {
     const { mutate, onClose } = mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'bare' } })
 
@@ -1157,8 +1292,10 @@ describe('hand-declared providers', () => {
     expect(screen.getByText(en.customRouteTaken)).toBeTruthy()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    expect(screen.getByText(en.customNeedsBaseUrl)).toBeTruthy()
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    expect(screen.getByText(en.fullRequestUrlInvalid)).toBeTruthy()
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     expect(screen.getByText(en.customNeedsModels)).toBeTruthy()
     expect(buttonNamed(en.create).disabled).toBe(true)
 
@@ -1174,7 +1311,9 @@ describe('hand-declared providers', () => {
     const { onClose } = mountCard({ api: { ...scriptedFace({ mutate: refused }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
@@ -1188,7 +1327,9 @@ describe('hand-declared providers', () => {
     const { onClose } = mountCard({ api: { ...scriptedFace({ mutate: rejecting }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
@@ -1202,7 +1343,9 @@ describe('hand-declared providers', () => {
     const { onClose } = mountCard({ api: { ...scriptedFace({ set }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'k' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
@@ -1216,8 +1359,10 @@ describe('hand-declared providers', () => {
     const { mutate, onClose } = mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
     fireEvent.change(screen.getByLabelText(en.customApi), { target: { value: 'anthropic-messages' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/messages' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
@@ -1229,7 +1374,7 @@ describe('hand-declared providers', () => {
     // nothing ever sets. The with-key case is covered above.
     expect(firstMutate(mutate).ops[0]?.value).toEqual({
       api: 'anthropic-messages',
-      baseURL: 'https://acme.test/v1',
+      baseURL: 'https://acme.test',
       models: [{ id: 'm', input: ['text'] }],
     })
   })
@@ -1278,7 +1423,9 @@ describe('hand-declared providers', () => {
     const { mutate, set } = mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://gateway.acme.example/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-\u{1F600}' } })
@@ -1295,7 +1442,9 @@ describe('hand-declared providers', () => {
     mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://gateway.acme.example/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'sk-\u{1F600}' } })
@@ -1304,14 +1453,16 @@ describe('hand-declared providers', () => {
     // next unmet gate would print a second, false fault beside the real one.
     expect(screen.getByText(en.keyIllegalCharacters)).toBeTruthy()
     expect(screen.queryByText(en.customNeedsModels)).toBeNull()
-    expect(screen.queryByText(en.customNeedsBaseUrl)).toBeNull()
+    expect(screen.queryByText(en.fullRequestUrlInvalid)).toBeNull()
   })
 
   it('tells a whitespace-only key what a blank field means on a create card', () => {
     const { mutate } = mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://gateway.acme.example/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: '   ' } })
@@ -1329,7 +1480,9 @@ describe('hand-declared providers', () => {
     const { set, onClose } = mountCard()
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'ambient-gateway' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://gateway.acme.example/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://gateway.acme.example/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.click(screen.getByText(en.create))
@@ -1444,7 +1597,9 @@ describe('API key field', () => {
 
     fireEvent.click(screen.getByRole('button', { name: en.customAdd }))
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.baseUrl), { target: { value: 'https://acme.test/v1' } })
+    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
+      target: { value: 'https://acme.test/v1/chat/completions' },
+    })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))

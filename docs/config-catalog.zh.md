@@ -1629,6 +1629,57 @@ export interface Config {
 
 来源：[`packages/feedback/message-feedback/src/index.ts:49`](../packages/feedback/message-feedback/src/index.ts)
 
+<a id="deepseek-aidsh-model-service-settings"></a>
+
+## `@deepseek-ai/dsh-model-service-settings`
+
+```ts config-catalog
+/** Plugin configuration used as the composition layer below user settings. */
+export type Config = ModelServiceSettings
+
+/** Settings section containing every configured model-service provider. */
+export interface ModelServiceSettings {
+  /** Provider profiles keyed by stable provider route id. */
+  providers: Record<string, ModelServiceProviderProfile>
+}
+
+/** Typed routes sharing one provider identity and credential. */
+export interface ModelServiceProviderProfile {
+  /** Name shown by configuration and use-case selectors. */
+  displayName?: string
+  /** Credential reference shared by the provider's routes. */
+  apiKeyEnv?: string
+  /** Optional routes for each fixed product model type. */
+  routes?: Partial<Record<ModelServiceType, ModelServiceRoute>>
+}
+
+/** One product model type accepted by Models settings. */
+export type ModelServiceType = typeof MODEL_SERVICE_TYPES[number]
+
+/** One complete request endpoint and its model directory. */
+export interface ModelServiceRoute {
+  /** Complete request URL, including the protocol-specific path. */
+  endpoint: string
+  /** Installed request adapter used to serialize and parse this route. */
+  protocol: ModelServiceProtocol
+  /** Models served by this exact endpoint. */
+  models: ModelServiceModel[]
+}
+
+/** One installed request adapter identifier. */
+export type ModelServiceProtocol = typeof MODEL_SERVICE_PROTOCOLS[number]
+
+/** One provider-owned model exposed through a typed request route. */
+export interface ModelServiceModel {
+  /** Provider-owned model id sent on requests. */
+  id: string
+  /** Optional human-facing name; the id is used when absent. */
+  name?: string
+}
+```
+
+来源：[`packages/settings/model-service-settings/src/index.ts:74`](../packages/settings/model-service-settings/src/index.ts)
+
 <a id="deepseek-aidsh-ocr"></a>
 
 ## `@deepseek-ai/dsh-ocr`
@@ -2351,29 +2402,25 @@ export interface SpeechRuntimeConfig {
 
 来源：[`packages/speech/speech/src/index.ts:39`](../packages/speech/speech/src/index.ts)
 
-<a id="deepseek-aidsh-speech-qq"></a>
+<a id="deepseek-aidsh-speech-model-settings"></a>
 
-## `@deepseek-ai/dsh-speech-qq`
+## `@deepseek-ai/dsh-speech-model-settings`
 
-需要：`speech` · `credentials`
+需要：`speech` · `agentDefaultModel` · `settings` · `credentials`
 
 ```ts config-catalog
 /** Provider configuration owned by deployment composition. */
 export interface Config {
-  /** Absolute dsh-im QQ configuration document path. */
-  readonly configPath: string
-  /** Credential reference written by the Voice model settings card. */
-  readonly credentialRef: string
   /** Per-transcription network deadline in milliseconds. */
   readonly timeoutMs: number
-  /** Maximum decoded browser recording size. */
+  /** Maximum decoded recording size before provider-specific limits are applied. */
   readonly maxAudioBytes: number
-  /** Maximum JSON response bytes accepted from the transcription service. */
+  /** Maximum JSON response bytes accepted from a transcription service. */
   readonly maxResponseBytes: number
 }
 ```
 
-来源：[`packages/speech/speech-qq/src/index.ts:53`](../packages/speech/speech-qq/src/index.ts)
+来源：[`packages/speech/speech-model-settings/src/index.ts:70`](../packages/speech/speech-model-settings/src/index.ts)
 
 <a id="deepseek-aidsh-spill-local"></a>
 

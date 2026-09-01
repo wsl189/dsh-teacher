@@ -2,7 +2,7 @@
 
 [English](speech.md) | 中文
 
-语音能力把提供方无关转写（[dsh-speech](../../packages/speech/speech)）与 QQ 配置实现（[dsh-speech-qq](../../packages/speech/speech-qq)）及浏览器消费方分离。`ctx.speech` 在操作时选择一个提供方，并通过 Typert `speech.transcribe` Remote 或同进程可取消操作开放归一化最终文本。浏览器录音与返回文本保持瞬时状态，直到消费方把文本插入自身可编辑状态。共享浏览器录音器会开放采样所得麦克风音量，并通过 Web Audio 活动在连续静音三秒后结束一次录音；消费方仍保留显式停止操作。
+语音能力把提供方无关转写（[dsh-speech](../../packages/speech/speech)）与供应商模型实现（[dsh-speech-model-settings](../../packages/speech/speech-model-settings)）及浏览器和 IM 消费方分离。`ctx.speech` 在操作时选择一个提供方，并通过 Typert `speech.transcribe` Remote 或同进程可取消操作开放规范化最终文本。浏览器录音与返回文本保持瞬时状态，直到消费方把文本插入自身可编辑状态；QQ 语音附件会使用同一项操作，不再创建第二份 ASR 配置。共享浏览器录音器会开放采样所得麦克风音量，并通过 Web Audio 活动在连续静音三秒后结束一次录音；消费方仍保留显式停止操作。
 
 源码：[`packages/speech/speech/src/types.ts`](../../packages/speech/speech/src/types.ts)
 
@@ -95,7 +95,7 @@ interface SpeechProvider {
 }
 ```
 
-提供方校验请求字段、强制自身资源上限，并用稳定 `SpeechErrorCode` 抛出 `SpeechError`。运行时把预期失败转换为 `SpeechTranscribeRejected`，隐藏意外提供方诊断，并拒绝有歧义的自动选择，而不依赖注册顺序。QQ 适配器会为每次操作重新读取 QQ 集成的 ASR 设置与凭据，只接受 HTTPS 或回环 HTTP 端点，把传输失败报告为 `provider-unavailable`，把被拒绝的 HTTP 请求与无效设置报告为 `provider-failure`，并且不持久化音频或返回文本。
+提供方校验请求字段、强制自身资源上限，并用稳定 `SpeechErrorCode` 抛出 `SpeechError`。运行时把预期失败转换为 `SpeechTranscribeRejected`，隐藏意外提供方诊断，并拒绝有歧义的自动选择，而不依赖注册顺序。模型设置适配器会为每次操作重新读取语音分配、供应商 profile 与凭据，只按具有受维护操作传输的准确提供方／模型组合分发，接受 HTTPS 或回环 HTTP 端点，把传输失败报告为 `provider-unavailable`，把被拒绝的 HTTP 请求报告为 `provider-failure`，并且不持久化音频或返回文本。
 
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 

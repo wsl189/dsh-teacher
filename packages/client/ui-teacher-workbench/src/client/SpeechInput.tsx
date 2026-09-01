@@ -49,7 +49,7 @@ export interface VoiceInputButtonProps {
 }
 
 /**
- * Render a MediaRecorder toggle backed by the configured QQ ASR service.
+ * Render a MediaRecorder toggle backed by the speech model selected in Models settings.
  * @param props - transcription callback, transcript callback, and localized copy.
  * @returns an icon command disabled while recording startup or transcription is pending.
  */

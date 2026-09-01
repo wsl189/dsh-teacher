@@ -90,9 +90,9 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
 
     await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
     const imageModel = dialog.getByRole('button', { name: '展开: 生图模型' })
-    const voiceModel = dialog.getByRole('button', { name: '展开设置: 语音模型' })
     await imageModel.waitFor({ timeout: 10_000 })
-    await voiceModel.waitFor({ timeout: 10_000 })
+    expect(await dialog.getByRole('button', { name: '展开设置: 语音模型' }).count()).toBe(0)
+    expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     await imageModel.click()
     await dialog.getByText('渠道', { exact: true }).waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '+ 添加提供方', exact: true }).waitFor({ timeout: 10_000 })
@@ -102,36 +102,28 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByRole('button', { name: '收起: 生图模型' }).click()
     expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
 
-    await voiceModel.click()
-    const baseUrl = dialog.getByLabel('ASR Base URL')
-    await baseUrl.waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: '启用语音识别' }).click()
-    await baseUrl.fill('http://127.0.0.1:9001/v1/')
-    await dialog.getByRole('textbox', { name: '模型', exact: true }).fill('faster-whisper-small')
-    await dialog.getByLabel('语言', { exact: true }).fill('zh')
-    await dialog.getByLabel('API Key', { exact: true }).fill('voice-model-e2e-key')
+    await dialog.getByRole('button', { name: /智谱 GLM 标准 API 与 GLM Coding Plan/u }).click()
+    await dialog.getByRole('button', { name: /配置 .*zhipu-cn/u }).click()
+    await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('zhipu-speech-e2e-key')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
-    await dialog.getByText('语音模型设置已保存。', { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: /编辑 .*zhipu-cn/u }).waitFor({ timeout: 10_000 })
 
-    const qqConfigPath = join(scaffold.harnessHome, 'integrations', 'dsh-qq', 'config.json')
-    await expect.poll(async () => {
-      const document: unknown = JSON.parse(await readFile(qqConfigPath, 'utf8'))
-      if (typeof document !== 'object' || document === null || !('speech' in document)) return undefined
-      return document.speech
-    })
-      .toEqual({
-        enabled: true,
-        baseUrl: 'http://127.0.0.1:9001/v1/',
-        model: 'faster-whisper-small',
-        language: 'zh',
-      })
+    await dialog.getByRole('tab', { name: '使用场景', exact: true }).click()
+    await expect.poll(async () => speechAssignment.locator('option').allTextContents(), { timeout: 10_000 })
+      .toContain('GLM-ASR-2512 (glm-asr-2512)')
+    await speechAssignment.selectOption(JSON.stringify(['zhipu-cn', 'glm-asr-2512']))
+    await dialog.getByText('语音识别模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
+
+    const settings = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    expect(settings).toContain('zhipu-cn:')
+    expect(settings).toContain('speechProvider: zhipu-cn')
+    expect(settings).toContain('speechModel: glm-asr-2512')
     await expect.poll(
       async () => readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8').catch(() => ''),
       { timeout: 10_000 },
-    ).toContain('DSH_QQ_ASR_API_KEY: voice-model-e2e-key')
-    expect(await page.content()).not.toContain('voice-model-e2e-key')
+    ).toContain('ZHIPU_CN_API_KEY: zhipu-speech-e2e-key')
+    expect(await page.content()).not.toContain('zhipu-speech-e2e-key')
 
-    await dialog.getByRole('button', { name: '收起设置: 语音模型' }).click()
     expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     await dialog.getByRole('button', { name: '关闭', exact: true }).click()
     await dialog.waitFor({ state: 'hidden' })
@@ -306,7 +298,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await declare.click()
     await dialog.getByLabel('Provider ID').fill('acme-gateway')
     await dialog.getByLabel('显示名称').fill('Acme Gateway')
-    await dialog.getByLabel('API 地址').fill('https://gateway.acme.example/v1')
+    await dialog.getByLabel('模型类型').selectOption('vision')
+    await dialog.getByLabel('完整请求地址').fill('https://gateway.acme.example/v1/chat/completions')
     // No reasoning effort on a provider card at all: effort is a per-model
     // capability, the models under one provider disagree about it, and a
     // switch in the composer already records provider+model+effort together.
@@ -314,7 +307,6 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByRole('button', { name: '添加模型' }).click()
     await dialog.getByLabel('模型 ID 1').fill('acme-large')
     await dialog.getByRole('button', { name: '容量 1' }).click()
-    await dialog.getByLabel('输入类型 1').selectOption('image')
     await dialog.getByRole('button', { name: '创建提供方', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()

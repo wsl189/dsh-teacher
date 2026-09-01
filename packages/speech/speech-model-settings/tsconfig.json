@@ -10,8 +10,11 @@
   "references": [
     { "path": "../../../vendor/cordis" },
     { "path": "../../../vendor/schemastery" },
+    { "path": "../../core/agent-default-model" },
     { "path": "../../credentials/credentials" },
     { "path": "../../runtime-diagnostics/invariants" },
+    { "path": "../../settings/model-service-settings" },
+    { "path": "../../settings/settings" },
     { "path": "../speech" }
   ]
 }

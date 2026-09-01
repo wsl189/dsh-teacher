@@ -147,7 +147,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`zod`](https://github.com/colinhacks/zod) | MIT |
 | [`zustand`](https://github.com/pmndrs/zustand) | MIT |
 
-`@huanlin/dsh-plugin-better-sidebar-plugin-office` (AGPL-3.0) is distributed by the explicit identity-scoped decision in [Bundled extensions and QQ speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
+`@huanlin/dsh-plugin-better-sidebar-plugin-office` (AGPL-3.0) is distributed by the explicit identity-scoped decision in [Bundled extensions and shared speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
 
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:

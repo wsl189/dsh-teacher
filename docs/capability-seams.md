@@ -20,7 +20,7 @@ flowchart LR
   pkg_host_teacher_workbench["host-teacher-workbench"]
   pkg_speech["speech"]
   svc_speech["ctx.speech<br/>Speech transcription seam"]
-  pkg_speech_qq["speech-qq"]
+  pkg_speech_model_settings["speech-model-settings"]
   pkg_client_ui_conversation["client-ui-conversation"]
   pkg_client_ui_teacher_workbench["client-ui-teacher-workbench"]
   pkg_llm["llm"]
@@ -316,7 +316,7 @@ flowchart LR
   pkg_skill_filesystem --> svc_skills
   pkg_skill_ppt_master --> svc_skills
   pkg_speech --> svc_speech
-  pkg_speech_qq --> svc_speech
+  pkg_speech_model_settings --> svc_speech
   pkg_spill --> svc_spillStore
   pkg_spill_local --> svc_spillStore
   pkg_storage --> svc_storage
@@ -489,7 +489,7 @@ flowchart LR
 | --- | --- | --- | --- | --- | --- | --- |
 | `ctx.attachments` | `seam` | [`attachment`](../packages/attachment/attachment) | [`attachment-local`](../packages/attachment/attachment-local) | [`api-session-controller`](../packages/api/session-controller), [`tool-fs`](../packages/fs/tool-fs), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-deepseek`](../packages/llm/llm-deepseek) | - | The host commits accepted images before session events; provider adapters resolve authorized durable references into provider-native content. |
 | `ctx.ocr` | `seam` | [`ocr`](../packages/ocr/ocr) | [`ocr-mineru`](../packages/ocr/ocr-mineru) | [`tool-fs`](../packages/fs/tool-fs), [`host-teacher-workbench`](../packages/host/teacher-workbench) | - | Providers normalize extracted Markdown and page geometry; filesystem reading and teacher question segmentation own the durable or model-visible use of those results. |
-| `ctx.speech` | `seam` | [`speech`](../packages/speech/speech) | [`speech-qq`](../packages/speech/speech-qq) | [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-teacher-workbench`](../packages/client/ui-teacher-workbench) | - | Providers return final text through the Host Remote; browser Consumers keep it as editable draft text until the user submits or saves it. |
+| `ctx.speech` | `seam` | [`speech`](../packages/speech/speech) | [`speech-model-settings`](../packages/speech/speech-model-settings) | [`client-ui-conversation`](../packages/client/ui-conversation), [`client-ui-teacher-workbench`](../packages/client/ui-teacher-workbench) | - | Providers return final text through the Host Remote; browser Consumers keep it as editable draft text until the user submits or saves it. |
 | `ctx.llm` | `seam` | [`llm`](../packages/llm/llm) | [`llm-deepseek`](../packages/llm/llm-deepseek), [`llm-pi-ai`](../packages/llm/llm-pi-ai), [`llm-replay`](../packages/test-support/llm-replay) | [`agent-loop`](../packages/core/agent-loop), [`compaction-basic`](../packages/compaction/compaction-basic) | - | Adapters register provider implementations; the loop and compaction call the provider-neutral stream service. |
 | `ctx.deepseekLlmApiExtensions` | `seam` | [`deepseek-llm-api-extensions`](../packages/llm/deepseek-llm-api-extensions) | [`session-log-deepseek`](../packages/session/session-log-deepseek), [`plugin-package-inventory-deepseek`](../packages/llm/plugin-package-inventory-deepseek) | [`llm-deepseek`](../packages/llm/llm-deepseek) | - | Plugins prepare independent top-level fields; the official adapter merges them and commits their delivery state after HTTP acceptance. |
 | `ctx.tokenMeter` | `core` | [`token-meter`](../packages/llm/token-meter) | - | [`compaction-basic`](../packages/compaction/compaction-basic) | - | Owns isolated per-session replay folds; pressure consumers share immutable revisioned measurements. |

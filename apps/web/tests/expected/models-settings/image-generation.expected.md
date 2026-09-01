@@ -60,6 +60,3 @@
   - button "更多设置"
   - button "放弃修改" [disabled]
   - button "保存" [disabled]
-  - 'button "展开设置: 语音模型"':
-    - strong: 语音模型
-    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。

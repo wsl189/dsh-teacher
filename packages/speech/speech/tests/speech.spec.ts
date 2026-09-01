@@ -29,10 +29,10 @@ const request = { mediaType: 'audio/webm;codecs=opus', contentBase64: 'YQ==' }
 describe('SpeechRuntime', () => {
   it('auto-selects one usable provider', async () => {
     const speech = await harness()
-    speech.registerProvider(provider('qq-config'))
+    speech.registerProvider(provider('model-settings'))
     await expect(speech.transcribe(request)).resolves.toEqual({
       ok: true,
-      value: { text: 'text:qq-config', provider: 'qq-config' },
+      value: { text: 'text:model-settings', provider: 'model-settings' },
     })
   })
 
@@ -49,12 +49,12 @@ describe('SpeechRuntime', () => {
       ok: false,
       error: { code: 'provider-unavailable' },
     })
-    const selectedMissing = await harness({ provider: 'qq-config' })
+    const selectedMissing = await harness({ provider: 'model-settings' })
     await expect(selectedMissing.transcribe(request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'provider-unavailable' },
     })
-    selectedMissing.registerProvider(provider('qq-config', false))
+    selectedMissing.registerProvider(provider('model-settings', false))
     await expect(selectedMissing.transcribe(request)).resolves.toMatchObject({
       ok: false,
       error: { code: 'provider-unavailable' },
@@ -62,19 +62,19 @@ describe('SpeechRuntime', () => {
   })
 
   it('contains typed and opaque provider failures', async () => {
-    const typed = await harness({ provider: 'qq-config' })
+    const typed = await harness({ provider: 'model-settings' })
     typed.registerProvider({
-      ...provider('qq-config'),
-      transcribe: () => Promise.reject(new SpeechError('configure QQ ASR', 'provider-disabled')),
+      ...provider('model-settings'),
+      transcribe: () => Promise.reject(new SpeechError('select a speech model', 'provider-disabled')),
     })
     await expect(typed.transcribe(request)).resolves.toEqual({
       ok: false,
-      error: { code: 'provider-disabled', message: 'configure QQ ASR' },
+      error: { code: 'provider-disabled', message: 'select a speech model' },
     })
 
     const opaque = await harness()
     opaque.registerProvider({
-      ...provider('qq-config'),
+      ...provider('model-settings'),
       transcribe: () => Promise.reject(new Error('secret response')),
     })
     await expect(opaque.transcribe(request)).resolves.toEqual({
@@ -84,10 +84,10 @@ describe('SpeechRuntime', () => {
   })
 
   it('forwards same-process cancellation', async () => {
-    const speech = await harness({ provider: 'qq-config' })
+    const speech = await harness({ provider: 'model-settings' })
     const transcribe = vi.fn<SpeechProvider['transcribe']>(() =>
-      Promise.resolve({ text: 'done', provider: 'qq-config' }))
-    speech.registerProvider({ ...provider('qq-config'), transcribe })
+      Promise.resolve({ text: 'done', provider: 'model-settings' }))
+    speech.registerProvider({ ...provider('model-settings'), transcribe })
     const signal = new AbortController().signal
     await expect(speech.transcribeAbortable(request, signal)).resolves.toMatchObject({ ok: true })
     expect(transcribe).toHaveBeenCalledWith(request, signal)
@@ -96,8 +96,8 @@ describe('SpeechRuntime', () => {
   it('rejects duplicate ids and unregisters through the disposer', async () => {
     const speech = await harness()
     expect(() => speech.registerProvider(provider('Bad Provider'))).toThrow('must use lower-case')
-    const dispose = speech.registerProvider(provider('qq-config'))
-    expect(() => speech.registerProvider(provider('qq-config'))).toThrow('already registered')
+    const dispose = speech.registerProvider(provider('model-settings'))
+    expect(() => speech.registerProvider(provider('model-settings'))).toThrow('already registered')
     dispose()
     await expect(speech.transcribe(request)).resolves.toMatchObject({
       ok: false,

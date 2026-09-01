@@ -1064,7 +1064,7 @@ function renderOfficeDistribution(deps: ExternalDep[]): string {
   const office = deps.find(dep => dep.name === OFFICE_VIEWER_PACKAGE)
   if (office === undefined) return ''
   return `
-\`${OFFICE_VIEWER_PACKAGE}\` (${office.license}) is distributed by the explicit identity-scoped decision in [Bundled extensions and QQ speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
+\`${OFFICE_VIEWER_PACKAGE}\` (${office.license}) is distributed by the explicit identity-scoped decision in [Bundled extensions and shared speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
 `
 }
 

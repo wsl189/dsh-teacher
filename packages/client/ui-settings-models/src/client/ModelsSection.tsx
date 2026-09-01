@@ -15,6 +15,7 @@ import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
 import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
 import type { ModelsSettingsStore, ModelsWire, ProviderRow } from './store.ts'
+import type { ModelServiceProviderView } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import { PRESET_PROVIDER_IDS, PROVIDER_SUPPLIERS } from './provider-presets.ts'
@@ -207,7 +208,7 @@ function UsageModelCard(props: UsageModelCardProps): ReactNode {
 /** Values that vary around the shared provider-editor rendering. */
 interface ProviderEditorRenderProps extends Pick<
   ProviderEditorProps,
-  'namespace' | 'schema' | 'api' | 't' | 'readOnly' | 'onClose'
+  'namespace' | 'serviceNamespace' | 'schema' | 'api' | 't' | 'readOnly' | 'onClose'
 > {
   target: EditorTarget
   connectionPreset?: ProviderAccessPreset
@@ -306,6 +307,20 @@ function targetOf(row: ProviderRow): EditorTarget {
     ...credentialRef === undefined ? {} : { credentialRef },
     // Only declared routes may expose route-owned fields.
     ...row.entry.declared === true ? { declared: true } : {},
+  }
+}
+
+function serviceTargetOf(provider: ModelServiceProviderView): EditorTarget {
+  const managedCredential = provider.credential?.configured === true && provider.credential.writable
+    ? provider.apiKeyEnv
+    : undefined
+  return {
+    provider: provider.provider,
+    displayName: provider.displayName,
+    settingsNs: 'model-service-settings',
+    settingsPath: ['providers', provider.provider],
+    ...managedCredential === undefined ? {} : { credentialRef: managedCredential },
+    declared: true,
   }
 }
 
@@ -476,6 +491,10 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const selectedCredentialMissing = selectedPresetRow !== undefined && !selectedCredentialConfigured
     && selectedPresetRow.apiKeyEnv !== undefined && selectedPresetRow.credential?.configured === false
   const otherConfigured = configured.filter(row => !PRESET_PROVIDER_IDS.has(row.entry.provider))
+  const llmProviderIds = new Set(state.rows.map(row => row.entry.provider))
+  const serviceOnlyProviders = state.serviceProviders.filter(provider => (
+    provider.userOwned && !llmProviderIds.has(provider.provider)
+  ))
   const addable = state.rows.filter(row => (
     !row.configured && row.entry.settingsNs !== '' && !PRESET_PROVIDER_IDS.has(row.entry.provider)
   ))
@@ -492,6 +511,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   // there is nothing to declare and the entry point stays disabled.
   const protocols = protocolChoices(state.namespaces.get('llm-pi-ai'), schema)
   const defaultModelNamespace = state.namespaces.get('agent-default-model')
+  const serviceNamespace = state.namespaces.get('model-service-settings')
   const defaultModel = configuredDefaultModel(defaultModelNamespace?.value)
   const toolModel = configuredToolModel(defaultModelNamespace?.value)
   const imageModel = configuredUseCaseModel(defaultModelNamespace?.value, 'imageProvider', 'imageModel')
@@ -506,17 +526,21 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
     modelName: model.name,
   })))
   const capabilityGroups = (capability: 'image' | 'speech'): UsageModelGroup[] =>
-    PROVIDER_SUPPLIERS.flatMap(supplier => supplier.access.flatMap((access) => {
-      const row = presetRows.get(access.provider)
-      if (row === undefined || !providerUsable(row)) return []
-      const route = access.requestTypes.find(candidate => candidate.id === capability)
-      if (route?.models === undefined || route.models.length === 0) return []
+    state.serviceProviders.flatMap((provider) => {
+      const route = provider.routes[capability]
+      if (route === undefined || provider.credential?.configured !== true) return []
+      const supplier = PROVIDER_SUPPLIERS.find(candidate => candidate.access.some(
+        access => access.provider === provider.provider,
+      ))
+      const access = supplier?.access.find(candidate => candidate.provider === provider.provider)
       return [{
-        id: access.provider,
-        name: `${t(supplier.nameKey)} · ${t(access.labelKey)}`,
+        id: provider.provider,
+        name: supplier === undefined || access === undefined
+          ? provider.displayName
+          : `${t(supplier.nameKey)} · ${t(access.labelKey)}`,
         models: route.models,
       }]
-    }))
+    })
   const imageModelGroups = capabilityGroups('image')
   const speechModelGroups = capabilityGroups('speech')
   const mediaModelAvailable = (groups: readonly UsageModelGroup[], selection: ToolModelSelection | undefined): boolean =>
@@ -891,6 +915,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       target: selectedTarget,
                       connectionPreset: selectedAccess,
                       namespace: selectedNamespace,
+                      ...serviceNamespace === undefined ? {} : { serviceNamespace },
                       schema,
                       api,
                       t,
@@ -908,7 +933,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             </article>
           </div>
         </section>
-        {otherConfigured.length === 0 ? null : (
+        {otherConfigured.length === 0 && serviceOnlyProviders.length === 0 ? null : (
           <h3 className={styles['otherProvidersTitle']}>{t('otherProvidersTitle')}</h3>
         )}
         <ul className={styles['rows']}>
@@ -925,6 +950,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   {renderProviderEditor({
                     target,
                     namespace,
+                    ...serviceNamespace === undefined ? {} : { serviceNamespace },
                     schema,
                     api,
                     t,
@@ -1020,12 +1046,78 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   ? renderProviderEditor({
                     target,
                     namespace,
+                    ...serviceNamespace === undefined ? {} : { serviceNamespace },
                     schema,
                     api,
                     t,
                     readOnly: !state.writable,
                     onClose: (changed) => { closeEditor(changed, target) },
                   })
+                  : null}
+              </li>
+            )
+          })}
+          {serviceOnlyProviders.map((provider) => {
+            const target = serviceTargetOf(provider)
+            const open = !adding && editing?.provider === provider.provider
+            return (
+              <li key={provider.provider} className={styles['rowCard']}>
+                <div className={styles['rowHead']}>
+                  <span className={styles['rowIdentity']}>
+                    <span className={styles['rowName']}>{provider.displayName}</span>
+                    <span className={styles['rowTag']}>{t('customTag')}</span>
+                    <span
+                      className={`${styles['credentialDot']} ${provider.credential?.configured === true
+                        ? styles['credentialDotConfigured']
+                        : styles['credentialDotMissing']}`}
+                      role="img"
+                      aria-label={t(provider.credential?.configured === true ? 'credentialConfigured' : 'credentialMissing')}
+                      title={t(provider.credential?.configured === true ? 'credentialConfigured' : 'credentialMissing')}
+                    />
+                  </span>
+                  <span className={styles['rowActions']}>
+                    <button
+                      type="button"
+                      className={styles['secondaryButton']}
+                      aria-label={providerCopy(t('editProvider'), target)}
+                      onClick={() => {
+                        setSavedTarget(undefined)
+                        setDeclaring(false)
+                        setAdding(false)
+                        setEditing(open ? undefined : target)
+                      }}
+                    >
+                      {t('edit')}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles['dangerButton']}
+                      aria-label={providerCopy(t('removeProvider'), target)}
+                      disabled={!state.writable}
+                      onClick={() => {
+                        setSavedTarget(undefined)
+                        setDeleteFailure(undefined)
+                        setDeleteTarget(target)
+                      }}
+                    >
+                      {t('remove')}
+                    </button>
+                  </span>
+                </div>
+                {open
+                  ? (
+                    <CustomProviderCard
+                      existing={provider}
+                      taken={[...state.rows.map(row => row.entry.provider), ...PRESET_PROVIDER_IDS]}
+                      protocols={protocols}
+                      revision={state.namespaces.get('llm-pi-ai')?.revision ?? 0}
+                      serviceRevision={serviceNamespace?.revision ?? 0}
+                      api={api}
+                      t={t}
+                      readOnly={!state.writable}
+                      onClose={(changed) => { closeEditor(changed, target) }}
+                    />
+                  )
                   : null}
               </li>
             )
@@ -1059,6 +1151,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                   displayName={addTarget.displayName}
                   hideTitle
                   namespace={addNamespace}
+                  {...serviceNamespace === undefined ? {} : { serviceNamespace }}
                   schema={schema}
                   settingsPath={addTarget.settingsPath}
                   api={api}
@@ -1083,6 +1176,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     protocols={protocols}
                     /* v8 ignore next -- the card only opens from a button disabled without this namespace */
                     revision={state.namespaces.get('llm-pi-ai')?.revision ?? 0}
+                    serviceRevision={serviceNamespace?.revision ?? 0}
                     api={api}
                     t={t}
                     readOnly={!state.writable}
