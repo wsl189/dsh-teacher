@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`dsh-windows-mcp` provides Windows desktop and system automation as native DSH tools. The Windows desktop installer carries its own pinned CPython and Python dependency runtime, so users do not install Python, `uv`, Windows-MCP, or a separate MCP row. The plugin starts by default when that runtime is available, unless the user has saved a disabled setting. Full access unlocks all twenty tools without this plugin's extra approval; other modes expose thirteen desktop tools with per-call approval. These actions operate outside the DSH sandbox.
+`dsh-windows-mcp` provides Windows desktop and system automation as native DSH tools. The Windows desktop installer carries its own pinned CPython and Python dependency runtime, so users do not install Python, `uv`, Windows-MCP, or a separate MCP row. The plugin starts by default when that runtime is available, unless the user has saved a disabled setting. A standard `dsh` launcher starts the Python child after the application becomes ready, so runtime import and discovery do not delay the main page. Full access unlocks all twenty tools without this plugin's extra approval; other modes expose thirteen desktop tools with per-call approval. These actions operate outside the DSH sandbox.
 
 ## Table of Contents
 
@@ -25,7 +25,7 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Install and launch the Windows desktop EXE to start Windows desktop control automatically. Use **Settings → Plugins → Windows Desktop Control** to turn it off or back on; saved choices override the startup default. The desktop launcher supplies the packaged runtime path; deployments without that trusted payload remain disabled and the settings card stays unavailable. Enabling starts a private stdio MCP child and disabling stops it and removes its tools without restarting DSH.
+Install and launch the Windows desktop EXE to start Windows desktop control automatically. Use **Settings → Plugins → Windows Desktop Control** to turn it off or back on; saved choices override the startup default. The desktop launcher supplies the packaged runtime path; deployments without that trusted payload remain disabled and the settings card stays unavailable. The settings section activates with the main profile, while the initial private stdio child starts after launcher readiness and publishes its tools when discovery completes. A manual composition with no `appReady` launcher service starts the child during plugin activation. Enabling later starts the child immediately; disabling stops it and removes its tools without restarting DSH.
 
 <a id="tools-and-permission-modes"></a>
 ### Tools and permission modes
@@ -67,7 +67,7 @@ Every call reaches the ordinary DSH tool-policy chain. Full access waives only t
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-The plugin composes `dsh-mcp-client` through a real Loader child, with the pinned catalog passed to both Windows-MCP's `--tools` option and the bridge's exact `includeTools` filter. Session-scoped tool restrictions follow the latest recorded sandbox mode and MCP discovery; the pre-execute policy and a monotonic guard enforce execution. Policies remain installed until child removal succeeds. A missing runtime or failed child leaves all Windows tools absent and emits an error without failing DSH startup, so the enabled setting remains reachable and can be turned off.
+The plugin composes `dsh-mcp-client` through a real Loader child, with the pinned catalog passed to both Windows-MCP's `--tools` option and the bridge's exact `includeTools` filter. When `ctx.appReady` exists, the plugin registers settings during profile activation, folds any pre-ready setting change into the current source, and schedules the initial child reconciliation after successful readiness; disposal cancels work that has not started. Session-scoped tool restrictions follow the latest recorded sandbox mode and MCP discovery; the pre-execute policy and a monotonic guard enforce execution. Policies remain installed until child removal succeeds. A missing runtime or failed child leaves all Windows tools absent and emits an error without failing DSH startup, so the enabled setting remains reachable and can be turned off.
 
 The desktop build installs a hash-pinned CPython and wheel closure, then replaces the complete Windows-MCP Python package with the reviewed source snapshot. Source hashes and all twenty tool signatures are verified before the recorded TheFuzz and sampling-correlation patches are applied. Packaging requires real MCP discovery, an inert `Wait` call, and a Scrape sampling smoke. Packaged launches ignore ambient runtime overrides and accept only `resources/windows-mcp/python.exe`; source launches may provide explicit developer paths.
 

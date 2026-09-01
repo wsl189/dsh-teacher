@@ -14,6 +14,8 @@ This note supersedes only default-off activation in the [bundled integration not
 
 The plugin's `enabled` default is true. The shipped Web profile sets its composition default from the presence of a nonblank `DSH_WINDOWS_MCP_COMMAND`, which the packaged desktop launcher supplies only for its trusted payload. Deployments without a command stay disabled. The settings provider merges saved user values above that composition default, so an explicit `enabled: false` survives plugin remounts and subsequent launches. The existing settings card can disable or re-enable the child without restarting DSH.
 
+When the launcher provides `ctx.appReady`, the plugin registers its settings section during profile activation but schedules the first MCP child reconciliation after successful application readiness. Setting changes before readiness update the source used by that first reconciliation, and profile disposal cancels readiness and event-loop work that has not started. A manual composition without `appReady` retains blocking activation so Loader callers receive the initial child outcome before the plugin settles. Later setting changes reconcile immediately in both modes.
+
 Activation does not change session permission presets. Restricted sessions retain desktop approval and cannot call system tools; Full access grants the pinned catalog under the existing policy. No administrator token or UAC exemption follows from either default activation or Full access.
 
 ## Alternatives considered
@@ -24,8 +26,11 @@ Activation does not change session permission presets. Restricted sessions retai
 
 **Override saved disabled values.** Re-enabling after a restart or upgrade would discard a deliberate user choice. Only the absent value inherits the new default.
 
+**Increase the desktop backend timeout while keeping the child in activation.** This leaves the main profile dependent on Python import and MCP discovery, so any fixed timeout remains machine- and antivirus-dependent. Launcher readiness already supplies the exact successful-startup point for optional post-boot work.
+
 ## Consequences
 
 - An available runtime adds a Python child and the session's permitted tool schemas by default. Disabling removes both; permission changes remain session-scoped.
-- Real Loader tests cover omitted activation, explicit disable, missing runtime, and a saved opt-out across remounts. The shipped Web composition covers runtime-present and runtime-absent defaults, plus a saved disable across Host launches.
+- Application readiness can precede Windows tool availability; tools enter subsequent model requests only after MCP discovery publishes them. Closing the profile before readiness starts no child.
+- Real Loader tests cover deferred launcher readiness, cancellation before readiness, omitted activation, explicit disable, missing runtime, and a saved opt-out across remounts. The shipped Web composition covers runtime-present and runtime-absent defaults, plus a saved disable across Host launches.
 - Keyless session snapshots mount the plugin without an explicit `enabled` value and replay Full access, restricted calls, and a live downgrade. Windows UI Automation and the packaged Python executable still require the Windows workflow's smoke tests.

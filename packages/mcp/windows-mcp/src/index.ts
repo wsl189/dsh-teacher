@@ -2,11 +2,13 @@
  * Windows desktop automation composition. The plugin mounts the bundled
  * Windows-MCP Python server through the generic MCP client, publishes a fixed
  * version-pinned tool set, and grants its complete catalog only in Full access.
+ * A launcher readiness service moves initial child startup after profile boot.
  * @module @deepseek-ai/dsh-windows-mcp
  */
 
 import type { Context } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/cordis-plugin-loader'
+import type {} from '@deepseek-ai/dsh-cmdline'
 import type { Config as McpClientConfig } from '@deepseek-ai/dsh-mcp-client'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
@@ -162,7 +164,7 @@ function mountSignature(config: ResolvedConfig): string {
  * Reconcile the live Loader child with composition and user settings. The
  * generic client is a real Loader entry, so its activation and teardown retain
  * ordinary transaction, HMR, and dependency behavior.
- * @param ctx - plugin context carrying Loader, agents, tools, and optional settings.
+ * @param ctx - plugin context carrying Loader, agents, tools, optional settings, and optional launcher readiness.
  * @param entryConfig - composition-layer defaults, including the launcher-owned runtime path.
  */
 export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
@@ -171,6 +173,10 @@ export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
   let attemptedSignature: string | undefined
   let stopping = false
   let tail: Promise<void> = Promise.resolve()
+  const appReady = ctx.get('appReady')
+  let canReconcile = appReady === undefined
+  let cancelReady = (): void => {}
+  let deferredStart: NodeJS.Immediate | undefined
 
   const unmount = async (): Promise<void> => {
     const mounted = active
@@ -220,6 +226,9 @@ export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
 
   ctx.effect(() => async () => {
     stopping = true
+    canReconcile = false
+    cancelReady()
+    if (deferredStart !== undefined) clearImmediate(deferredStart)
     await tail
     await unmount()
   }, 'windows-mcp: mounted client')
@@ -230,6 +239,7 @@ export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
     validate: (value) => { resolveWindowsMcpConfig(value) },
     setSource: (current) => { source = current },
     onChange: () => {
+      if (!canReconcile || deferredStart !== undefined) return
       const run = enqueue()
       if (activating) startup = run
       else void run.catch((error: unknown) => {
@@ -237,6 +247,19 @@ export async function apply(ctx: Context, entryConfig: Config): Promise<void> {
       })
     },
   })
+  if (appReady !== undefined) {
+    cancelReady = appReady.onReady(() => {
+      canReconcile = true
+      deferredStart = setImmediate(() => {
+        deferredStart = undefined
+        void enqueue().catch((error: unknown) => {
+          ctx.logger.error('windows-mcp: failed to apply settings change', error)
+        })
+      })
+    })
+    activating = false
+    return
+  }
   startup ??= enqueue()
   try {
     await startup

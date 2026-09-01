@@ -748,6 +748,25 @@ describe('popupFor', () => {
 })
 
 describe('directory invalidation events', () => {
+  it('absorbs commands/change frames emitted during a failed initial Agent mount', async () => {
+    let reject!: (reason?: unknown) => void
+    const pending = new Promise<{ commands: CommandDescriptor[] }>((_resolve, rejectPull) => {
+      reject = rejectPull
+    })
+    const { source, listCalls, remote } = await bench({ commands: () => pending })
+
+    source.warm!(proj('s1'))
+    for (let index = 0; index < 20; index++) remote.emit('commands/change', [])
+    expect(listCalls).toEqual([{ sessionId: sid('s1') }])
+
+    reject(new Error('preset mount failed'))
+    await Promise.resolve()
+    await Promise.resolve()
+    for (let index = 0; index < 20; index++) remote.emit('commands/change', [])
+    await Promise.resolve()
+    expect(listCalls).toEqual([{ sessionId: sid('s1') }])
+  })
+
   it('commands/change repulls in the background while the old snapshot serves', async () => {
     let round = 0
     const { source, warm, remote } = await bench({

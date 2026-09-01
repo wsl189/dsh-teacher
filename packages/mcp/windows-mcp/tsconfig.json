@@ -19,6 +19,9 @@
       "path": "../../../vendor/schemastery"
     },
     {
+      "path": "../../boot/cmdline"
+    },
+    {
       "path": "../mcp-client"
     },
     {

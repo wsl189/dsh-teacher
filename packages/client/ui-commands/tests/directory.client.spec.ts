@@ -131,7 +131,7 @@ describe('epoch guard (per key)', () => {
   })
 })
 
-describe('invalidateAll (commands-changed soft)', () => {
+describe('invalidateAll (commands/change soft)', () => {
   it('repulls every touched key in the background while ready snapshots keep serving', async () => {
     const { dir, pull, countOf } = bench()
     const a = dir.refresh(S1)
@@ -157,6 +157,57 @@ describe('invalidateAll (commands-changed soft)', () => {
     const { dir, calls } = bench()
     dir.invalidateAll()
     expect(calls).toEqual([])
+  })
+
+  it('does not turn mount notifications into recursive initial or failed pulls', async () => {
+    const { dir, pull, countOf } = bench()
+    const initial = dir.refresh(S1)
+
+    for (let index = 0; index < 20; index++) dir.invalidateAll()
+    expect(countOf(S1)).toBe(1)
+
+    pull(S1, 0).reject(new Error('preset mount failed'))
+    await initial
+    for (let index = 0; index < 20; index++) dir.invalidateAll()
+    expect(dir.status(S1)).toBe('failed')
+    expect(countOf(S1)).toBe(1)
+  })
+
+  it('coalesces repeated ready-key notifications into one successful follow-up', async () => {
+    const { dir, pull, countOf } = bench()
+    const initial = dir.refresh(S1)
+    pull(S1, 0).resolve(CMDS)
+    await initial
+
+    dir.invalidateAll()
+    for (let index = 0; index < 20; index++) dir.invalidateAll()
+    expect(countOf(S1)).toBe(2)
+    expect(dir.resolve(S1, 'plan')).toBeDefined()
+
+    pull(S1, 1).resolve([{ name: 'fresh', description: 'new world' }])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(countOf(S1)).toBe(3)
+    pull(S1, 2).resolve([{ name: 'fresh', description: 'new world' }])
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(dir.resolve(S1, 'fresh')).toBeDefined()
+  })
+
+  it('does not retry a failed ready-key repull from queued notifications', async () => {
+    const { dir, pull, countOf } = bench()
+    const initial = dir.refresh(S1)
+    pull(S1, 0).resolve(CMDS)
+    await initial
+
+    dir.invalidateAll()
+    dir.invalidateAll()
+    pull(S1, 1).reject(new Error('refresh failed'))
+    await Promise.resolve()
+    await Promise.resolve()
+
+    expect(dir.status(S1)).toBe('failed')
+    expect(countOf(S1)).toBe(2)
   })
 })
 

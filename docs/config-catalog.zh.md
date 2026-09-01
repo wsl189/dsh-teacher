@@ -3587,7 +3587,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/mcp/windows-mcp/src/index.ts:37`](../packages/mcp/windows-mcp/src/index.ts)
+来源：[`packages/mcp/windows-mcp/src/index.ts:39`](../packages/mcp/windows-mcp/src/index.ts)
 
 <a id="deepseek-aidsh-workflow-worker-thread"></a>
 

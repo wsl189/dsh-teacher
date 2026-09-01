@@ -26,6 +26,10 @@ class Entry {
   commands: readonly CommandDescriptor[] = []
   /** Bumped at each pull start; only the latest pull may publish its outcome. */
   epoch = 0
+  /** All pulls, including explicit overlapping refreshes guarded by epoch. */
+  activePulls = 0
+  /** Whether a ready snapshot changed again during its background repull. */
+  queuedInvalidation = false
   lastError: unknown
   waiters: Array<() => void> = []
 }
@@ -57,9 +61,23 @@ export class CommandDirectory {
     return entry.commands.find(c => c.name === name)
   }
 
-  /** Soft invalidation (commands-changed): background repull on every touched key; ready snapshots keep serving. */
+  /**
+   * Soft invalidation (`commands/change`): repull each ready key in the background.
+   * Notifications emitted while an initial pull mounts its Agent are already
+   * represented by that pull and cannot recursively start another one. Repeated
+   * notifications during a ready-key repull coalesce into one follow-up after a
+   * successful result. A failed result does not retry from queued change
+   * notifications; later user demand or a hard reset may retry it.
+   */
   invalidateAll(): void {
-    for (const key of this.entries.keys()) void this.refresh(key)
+    for (const [key, entry] of this.entries) {
+      if (entry.state !== 'ready') continue
+      if (entry.activePulls > 0) {
+        entry.queuedInvalidation = true
+        continue
+      }
+      void this.refresh(key)
+    }
   }
 
   /**
@@ -71,6 +89,7 @@ export class CommandDirectory {
     entry.state = 'cold'
     entry.commands = []
     entry.lastError = undefined
+    entry.queuedInvalidation = false
     void this.refresh(sessionId)
   }
 
@@ -82,6 +101,7 @@ export class CommandDirectory {
     for (const [key, entry] of this.entries) {
       entry.state = 'cold'
       entry.commands = []
+      entry.queuedInvalidation = false
       void this.refresh(key)
     }
   }
@@ -106,6 +126,7 @@ export class CommandDirectory {
   async refresh(sessionId: SessionId): Promise<void> {
     const entry = this.entry(sessionId)
     const epoch = ++entry.epoch
+    entry.activePulls++
     if (entry.state !== 'ready') entry.state = 'pending'
     try {
       const commands = await this.fetchCommands(sessionId)
@@ -119,7 +140,13 @@ export class CommandDirectory {
       entry.state = 'failed'
       entry.lastError = error
     } finally {
+      entry.activePulls--
       if (epoch === entry.epoch) notifyWaiters(entry)
+      if (entry.activePulls === 0 && entry.queuedInvalidation) {
+        const shouldRefresh = entry.state === 'ready'
+        entry.queuedInvalidation = false
+        if (shouldRefresh) void this.refresh(sessionId)
+      }
     }
   }
 

@@ -14,41 +14,19 @@ import {
 } from './update-protocol.ts'
 import { installRendererPermissions } from './renderer-permissions.ts'
 import { resolveRuntimeEnvironment } from './runtime-environment.ts'
+import { waitForBackendReady } from './backend-process.ts'
+import { startupPageUrl } from './startup-page.ts'
+import { runDesktopStartup } from './startup-lifecycle.ts'
 
 const require = createRequire(import.meta.url)
 const BACKEND_ENTRY = require.resolve('@deepseek-ai/dsh/desktop-backend')
-const BACKEND_START_TIMEOUT_MS = 45_000
 const BACKEND_STOP_TIMEOUT_MS = 8_000
-
-type BackendMessage =
-  | { type: 'ready'; url: string }
-  | { type: 'fatal'; message: string }
 
 let mainWindow: BrowserWindow | undefined
 let backend: ChildProcess | undefined
 let backendStop: Promise<void> | undefined
 let allowQuit = false
-
-/** Validate a child IPC payload and its private-loopback URL. */
-function backendMessage(value: unknown): BackendMessage | undefined {
-  if (typeof value !== 'object' || value === null) return undefined
-  const candidate = value as Record<string, unknown>
-  if (candidate.type === 'fatal' && typeof candidate.message === 'string') {
-    return { type: 'fatal', message: candidate.message }
-  }
-  if (candidate.type !== 'ready' || typeof candidate.url !== 'string') return undefined
-  let url: URL
-  try {
-    url = new URL(candidate.url)
-  } catch {
-    return undefined
-  }
-  const tokens = url.searchParams.getAll('token')
-  if (url.protocol !== 'http:' || url.hostname !== '127.0.0.1' || url.port === ''
-    || url.pathname !== '/' || url.hash !== '' || tokens.length !== 1
-    || !/^[A-Za-z0-9_-]{43}$/u.test(tokens[0] ?? '')) return undefined
-  return { type: 'ready', url: url.href }
-}
+let quitRequested = false
 
 /** Start the DSH Web profile under Electron's embedded Node runtime. */
 function startBackend(): Promise<string> {
@@ -71,37 +49,7 @@ function startBackend(): Promise<string> {
   child.stdout?.on('data', (chunk: string) => { log.info(chunk.trimEnd()) })
   child.stderr?.on('data', (chunk: string) => { log.error(chunk.trimEnd()) })
 
-  return new Promise<string>((resolve, reject) => {
-    const settle = (action: () => void): void => {
-      clearTimeout(timeout)
-      child.off('error', onError)
-      child.off('exit', onExit)
-      child.off('message', onMessage)
-      action()
-    }
-    const onError = (error: Error): void => { settle(() => { reject(error) }) }
-    const onExit = (code: number | null, signal: NodeJS.Signals | null): void => {
-      settle(() => { reject(new Error(`desktop backend exited before ready (${String(code ?? signal)})`)) })
-    }
-    const onMessage = (value: unknown): void => {
-      const message = backendMessage(value)
-      if (message === undefined) return
-      if (message.type === 'fatal') {
-        settle(() => { reject(new Error(message.message)) })
-        return
-      }
-      settle(() => { resolve(message.url) })
-    }
-    const timeout = setTimeout(() => {
-      settle(() => {
-        child.kill()
-        reject(new Error(`desktop backend did not become ready within ${String(BACKEND_START_TIMEOUT_MS)}ms`))
-      })
-    }, BACKEND_START_TIMEOUT_MS)
-    child.once('error', onError)
-    child.once('exit', onExit)
-    child.on('message', onMessage)
-  })
+  return waitForBackendReady(child)
 }
 
 /** Dispose the profile tree, terminating only if its bounded shutdown stalls. */
@@ -150,8 +98,8 @@ const updates = new DesktopUpdateController(autoUpdater as unknown as AutoUpdate
 })
 autoUpdater.logger = log
 
-/** Create the hardened renderer window and load the private loopback server. */
-async function createWindow(url: string): Promise<void> {
+/** Create the hardened renderer window and show its local startup page. */
+async function createWindow(): Promise<BrowserWindow> {
   const window = new BrowserWindow({
     width: 1440,
     height: 900,
@@ -168,9 +116,9 @@ async function createWindow(url: string): Promise<void> {
     },
   })
   mainWindow = window
-  const disposePermissions = installRendererPermissions(window, url)
-  window.once('closed', disposePermissions)
-  window.once('ready-to-show', () => { window.show() })
+  window.once('closed', () => {
+    if (mainWindow === window) mainWindow = undefined
+  })
   window.webContents.setWindowOpenHandler(({ url: target }) => {
     let protocol: string | undefined
     try {
@@ -181,8 +129,24 @@ async function createWindow(url: string): Promise<void> {
     if (protocol === 'https:' || protocol === 'http:') void shell.openExternal(target)
     return { action: 'deny' }
   })
+  await window.loadURL(startupPageUrl(app.getLocale()))
+  if (!window.isDestroyed()) window.show()
+  return window
+}
+
+/** Replace the local startup page with the authenticated private Web application. */
+async function loadBackendPage(window: BrowserWindow, url: string): Promise<void> {
+  const disposePermissions = installRendererPermissions(window, url)
+  window.once('closed', disposePermissions)
   window.webContents.on('will-navigate', (event, target) => {
-    if (new URL(target).origin !== new URL(url).origin) event.preventDefault()
+    let targetOrigin: string | undefined
+    try {
+      targetOrigin = new URL(target).origin
+    } catch {
+      event.preventDefault()
+      return
+    }
+    if (targetOrigin !== new URL(url).origin) event.preventDefault()
   })
   await window.loadURL(url)
 }
@@ -203,6 +167,7 @@ if (!app.requestSingleInstanceLock()) {
   })
   app.on('before-quit', (event) => {
     if (allowQuit) return
+    quitRequested = true
     event.preventDefault()
     void stopBackend().finally(() => {
       allowQuit = true
@@ -212,10 +177,15 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => { app.quit() })
   void app.whenReady().then(async () => {
     try {
-      const url = await startBackend()
-      await createWindow(url)
-      await updates.start()
+      await runDesktopStartup({
+        createWindow,
+        startBackend,
+        loadBackendPage,
+        startUpdates: async () => { await updates.start() },
+        shouldStop: () => quitRequested,
+      })
     } catch (error) {
+      if (quitRequested) return
       const message = error instanceof Error ? error.message : String(error)
       log.error(message)
       dialog.showErrorBox('DSH Teacher 启动失败', message)

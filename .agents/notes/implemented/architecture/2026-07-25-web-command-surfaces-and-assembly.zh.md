@@ -20,7 +20,7 @@ Status: implemented
 ### ui-commands：`CommandUiRuntime` + 按会话键控的 `CommandDirectory` + 逐会话 `PopupSelectController`
 
 - 投影 `ClientSessionContext { sessionId }` 自持于 ui-input-trigger 约定（types.ts）：会话恒 agent-backed，会话身份即命令能力的全部投影；wire 以 `{sessionId}` 寻址（`command.list` / `command.execute` 均是；host 从会话 header 解析 Agent）。
-- 目录按 `SessionId` 分区，per-key single-flight + epoch guard（旧拉取永不覆盖新态），`commands/changed` 全 key 软失效（旧快照继续服务、后台重拉）、`connection/reset` 全 key 硬失效并预热，Enter 必须等待当前 key 就绪、失败留草稿不降级。预热挂 source 的 `warm` 钩子——scope 出生时对全 roster 一次，即覆盖整个会话生命周期（会话能力自出生恒定）。
+- 目录按 `SessionId` 分区。普通预热与推送失效拉取按 key single-flight，epoch guard 则阻止被明确取代的拉取发布陈旧状态。`commands/change` 会软失效已就绪 key：初次 Agent 挂载拉取会吸收其结果已经反映的注册表通知，已就绪 key 重拉期间的通知会合并为至多一次成功后的补拉，失败不会因另一条变更通知而重试。明确的预热或 Enter 操作以及硬重置可以重试。`connection/reset` 会硬失效并预热所有 key，Enter 必须等待当前 key 就绪，失败留草稿且不降级。预热挂在 source 的 `warm` 钩子上——scope 出生时对全 roster 一次，即覆盖整个会话生命周期（会话能力自出生恒定）。
 - `register(contribution)` 注册 client 命令（descriptor + `available(projection)` + popupSelect spec）；候选合成 = host 目录 + contribution 可用性过滤，再过 query/position，host/contribution 重名 fail loud。
 - 命令三型按注册面派生，开发者不声明位置：host descriptor 带 `input` = **leadingInput**（回填 `/name ␣` + claim，继续打参数，仅限行首）；client 注册 popupSelect spec = **popupSelect**（官方选择框壳，业务零组件）；两者皆无 = **execute**（选中即执行，零 UI）。
 - 派发决策表：菜单可触发三型；Space 只认 leadingInput（误触发防线：不可逆副作用只留显式入口）；Enter 裸 token 才 execute/开壳、leadingInput 容忍尾随参数。
@@ -48,7 +48,8 @@ Status: implemented
 | skill 物化为 command 的桥 | skill 自有目录；N 笔注册是绕路；标签形式天然避开命令平面 |
 | `skill.invoke` RPC | host 无此操作；skill 引用是随提示词的普通文本 |
 | 新 ContentBlock 引用类型 | 全链路成本（适配器/UI/压缩（compaction））；文本即真身 + 结构化 occurrence 记录已足够 |
-| client 各包自报命令目录 | host 是唯一真源；client 只读 descriptor，`commands-changed` 推失效 |
+| client 各包自报命令目录 | host 是唯一真源；client 只读 descriptor，`commands/change` 推失效 |
+| 每个 `commands/change` frame 都启动一次目录拉取 | Agent 激活会在列表拉取仍 pending 时发出注册表变更；挂载失败会把这些 frame 变成递归请求，因此 pending 与 failed 条目会吸收它们，只有明确操作才重试 |
 | `requires: 'none' \| 'agent'` 判别轴（agentless 目录 + 双址查询） | 会话恒 agent-backed 后两栖命令无 owner；整轴弃置，待真需求重开 |
 | 专用 commandresult / commandpanel slot | 结果走 notice；popup 壳是骨架内浮层；富结果卡入台账 |
 | agent-type 目录做 `@` 源 | 无类型注册表；实时会话快照已覆盖 |
@@ -57,6 +58,6 @@ Status: implemented
 ## 后果
 
 - 业务命令上架 = host 注册 + client 一笔 `command.register`（popupSelect）或零注册（execute/leadingInput 自动派生），零骨架改动；代价是三型语义集中在 ui-commands，假想的第四型意味着改它。
-- 常驻目录缓存 + 推失效换来菜单零延迟与回车裁决可靠；代价是三条失效路径（change 帧、重连、epoch guard）都需测试钉住。
+- 常驻目录缓存 + 推失效换来菜单零延迟与回车裁决可靠；代价是软变更合并、重连与 preset 硬重置，以及 epoch 排序都需测试钉住。
 - sessionId 寻址让 host 的 per-agent 有效目录（全局 + scoped shadows）直接上 wire，client 原样呈现。
 - 已知欠账：popupSelect 壳暂无已上架业务消费方（模型选择等将随 host `selectModel` 工作以 live-mutation 形态到来，届时作接入样板）；队列第二刀（逐项 Inbox 操作）、富结果卡、roster 可配置性入台账待触发。

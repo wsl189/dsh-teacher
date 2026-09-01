@@ -4,6 +4,8 @@
 
 这是本仓库的 Windows 桌面发行版。Electron 在强化后的 renderer 中打开现有 Web 表层，`@deepseek-ai/dsh/desktop-backend` 则把完整 `web` profile 作为受 IPC 控制的子进程运行在 `127.0.0.1` 的系统分配端口上。子进程会向 Electron 提供一次性启动令牌 URL，并创建与 `dsh web` 相同的已认证浏览器会话。关闭应用或安装更新时，都会先释放整棵插件树，再让子进程退出。目录选择会留在当前应用内：工作区操作以及 QQ 机器人当前工作区等插件字段会打开应用内目录浏览器，不再启动第二个打包进程来显示 Windows 文件夹对话框。
 
+Electron 会先显示一个不含脚本的本地启动页，再 fork 后端。profile 树初始化期间，该页面会持续可见，并且只在子进程报告通过校验的启动 URL 后才被替换。启动没有固定的墙钟时间上限：明确的 fatal 消息、fork 错误或子进程提前退出仍会立即失败，健康的首次启动则可继续完成杀毒软件扫描。内置 Windows-MCP Python 子进程会在应用成功就绪后启动，因此它的 import 与工具发现不会延迟私有 Web 页面。
+
 Electron 为[新建 IM 机器人的工作区](../../third-party/README.zh.md)提供系统桌面目录，包括重定向到 OneDrive 或其他磁盘的桌面。
 
 ## 安装与更新
@@ -33,11 +35,11 @@ pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
 运行时装配要求使用 `third-party/windows-mcp/runtime.json` 记录的确切 setup Python 版本。脚本会下载并校验官方嵌入式压缩包，只安装经过哈希固定的二进制 wheel，应用已记录的本地补丁，并在创建桌面安装包前完成真实 MCP stdio 冒烟。
 
-安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，并确认工作区目录操作会打开应用内目录列表；仅成功生成 artifact 并不会执行 Electron 主进程。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。作用于整个依赖树的排除规则会移除 Source Map 与 TypeScript 增量编译状态。载荷门禁还会读取已打包 manifest，并拒绝缺失任何必需 workspace 依赖或对等依赖（peer dependency）的载荷；它会显式要求生图 Host 与 Client bundle、模板快照与许可证、技能／MCP 包、归属信息完整的 PPT Master skill 完整分发、Univer Viewer、Gateway、worker、技能、商业资源与 Windows x64 原生 binding，以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的原生 Python 模块。
+安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，创建标准会话，并确认其斜杠命令目录与工作区目录操作均可加载；仅成功生成 artifact 并不会执行 Electron 主进程或动态解析的 preset。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。作用于整个依赖树的排除规则会移除 Source Map 与 TypeScript 增量编译状态。标准 preset 会动态解析 `dsh-tool-web`，因此桌面 manifest 直接锚定 Turndown 及其 GFM 插件；载荷门禁除读取已打包 manifest 并拒绝缺失任何必需 workspace 依赖或对等依赖（peer dependency）的载荷外，还要求包含这两个包的可执行入口及其 Domino 依赖。它也会显式要求生图 Host 与 Client bundle、模板快照与许可证、技能／MCP 包、归属信息完整的 PPT Master skill 完整分发、Univer Viewer、Gateway、worker、技能、商业资源与 Windows x64 原生 binding，以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的原生 Python 模块。
 
 ## GitHub 自动化
 
-`.github/workflows/windows-desktop.yml` 会在每次分支推送和手动触发时运行。它在 `windows-2025` 上构建并冒烟固定的 Windows-MCP 运行时，随后构建仓库、生成 NSIS 安装器、启动解包后的应用，把启动令牌交换为浏览器 cookie，并调用真实的 `directoryPicker/list` Remote，之后才写入 `SHA256SUMS.txt` 并把安装器保留为 workflow artifact。只有 tag 与 `v<根 package 版本>` 完全一致时，才会把这些文件发布为更新 feed。
+`.github/workflows/windows-desktop.yml` 会在每次分支推送和手动触发时运行。它在 `windows-2025` 上构建并冒烟固定的 Windows-MCP 运行时，随后构建仓库、生成 NSIS 安装器、启动解包后的应用，把启动令牌交换为浏览器 cookie，调用真实的 `directoryPicker/list` Remote，创建标准 preset 会话，并要求其返回 `/goal` 与 `/plan` 命令行，之后才写入 `SHA256SUMS.txt` 并把安装器保留为 workflow artifact。只有 tag 与 `v<根 package 版本>` 完全一致时，才会把这些文件发布为更新 feed。
 
 要发布一个客户端可见的新版本，请先递增仓库共享版本，推送版本提交，再创建匹配的桌面 tag：
 

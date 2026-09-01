@@ -7,6 +7,7 @@ import { Context } from '@deepseek-ai/cordis'
 import Loader from '@deepseek-ai/cordis-plugin-loader'
 import Include from '@deepseek-ai/cordis-plugin-include'
 import AgentRegistry, { type Agent } from '@deepseek-ai/dsh-agent'
+import type { AppReady } from '@deepseek-ai/dsh-cmdline'
 import InvariantRegistry from '@deepseek-ai/dsh-invariants'
 import { setSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
 import { createScope } from '@deepseek-ai/dsh-scope'
@@ -59,6 +60,30 @@ interface FakeMcpBehavior {
     readonly cwd: string
     readonly entered: PromiseWithResolvers<boolean>
     readonly release: PromiseWithResolvers<boolean>
+  }
+}
+
+/** Controllable launcher readiness with the production one-shot listener semantics. */
+function controlledAppReady(): { readonly service: AppReady; commit(): void } {
+  let ready = false
+  const listeners = new Set<() => void>()
+  return {
+    service: {
+      onReady(listener) {
+        if (ready) {
+          listener()
+          return () => {}
+        }
+        listeners.add(listener)
+        return () => { listeners.delete(listener) }
+      },
+    },
+    commit() {
+      if (ready) return
+      ready = true
+      for (const listener of [...listeners]) listener()
+      listeners.clear()
+    },
   }
 }
 
@@ -280,6 +305,41 @@ describe('configuration and policy', () => {
 })
 
 describe('real Loader composition', () => {
+  it('settles the app before starting the bundled runtime when launcher readiness is available', async () => {
+    const ready = controlledAppReady()
+    const entered = Promise.withResolvers<boolean>()
+    const release = Promise.withResolvers<boolean>()
+    const result = await bootComposition(true, {
+      block: { cwd: 'C:/bundled/windows-mcp', entered, release },
+      beforeLoad(ctx) { ctx.provide('appReady', ready.service) },
+    })
+
+    expect(result.captured).toEqual([])
+    expect([...result.ctx.loader.entries()].some(entry => entry.options.name === '@deepseek-ai/dsh-mcp-client'))
+      .toBe(false)
+
+    ready.commit()
+    await Promise.resolve()
+    expect(result.captured).toEqual([])
+    await entered.promise
+    expect(result.captured).toHaveLength(1)
+    release.resolve(true)
+    await vi.waitFor(() => { expect(result.ctx.tools.get('mcp__windows__Snapshot')).toBeDefined() })
+  })
+
+  it('cancels a deferred bundled runtime when the profile exits before readiness', async () => {
+    const ready = controlledAppReady()
+    const result = await bootComposition(true, {
+      beforeLoad(ctx) { ctx.provide('appReady', ready.service) },
+    })
+
+    await result.ctx.fiber.dispose()
+    context = undefined
+    ready.commit()
+    await new Promise<void>((resolve) => { setImmediate(resolve) })
+    expect(result.captured).toEqual([])
+  })
+
   it('guards system tools and unknown names even if another listener returns allow', async () => {
     const { ctx, executions } = await bootComposition(true)
     const agent = await sessionAgent(ctx, 'windows-final-guard')

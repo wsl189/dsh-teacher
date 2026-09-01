@@ -15,6 +15,12 @@ const PPT_MASTER_RUNTIME_BYTES = 79_496_215
 
 /** Product runtime files whose omission would leave a successful but incomplete Windows build. */
 export const REQUIRED_WINDOWS_RUNTIME_FILES = [
+  'node_modules/@joplin/turndown-plugin-gfm/package.json',
+  'node_modules/@joplin/turndown-plugin-gfm/lib/turndown-plugin-gfm.cjs.js',
+  'node_modules/@mixmark-io/domino/package.json',
+  'node_modules/@mixmark-io/domino/lib/index.js',
+  'node_modules/turndown/package.json',
+  'node_modules/turndown/lib/turndown.cjs.js',
   'node_modules/@deepseek-ai/dsh-skill-ppt-master/package.json',
   'node_modules/@deepseek-ai/dsh-skill-ppt-master/lib/index.js',
   'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SKILL.md',

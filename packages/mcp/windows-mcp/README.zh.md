@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-`dsh-windows-mcp` 以 DSH 原生工具提供 Windows 桌面与系统自动化。Windows 桌面安装包自带固定版本的 CPython 与 Python 依赖运行时，因此用户无需安装 Python、`uv`、Windows-MCP，也不必另建 MCP 配置项。运行时可用时，插件默认启动，但用户已保存的关闭设置会继续生效。Full access 会开放全部二十项工具，且本插件不再额外请求批准；其他模式提供十三项桌面工具并逐次请求批准。这些操作发生在 DSH 沙箱之外。
+`dsh-windows-mcp` 以 DSH 原生工具提供 Windows 桌面与系统自动化。Windows 桌面安装包自带固定版本的 CPython 与 Python 依赖运行时，因此用户无需安装 Python、`uv`、Windows-MCP，也不必另建 MCP 配置项。运行时可用时，插件默认启动，但用户已保存的关闭设置会继续生效。标准 `dsh` 启动器会在应用就绪后启动 Python 子进程，因此运行时 import 与发现不会延迟主页面。Full access 会开放全部二十项工具，且本插件不再额外请求批准；其他模式提供十三项桌面工具并逐次请求批准。这些操作发生在 DSH 沙箱之外。
 
 ## 目录
 
@@ -25,7 +25,7 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-安装并启动 Windows 桌面 EXE，Windows 桌面控制即可自动启动。可以在**设置 → 插件 → Windows 桌面控制**中关闭或重新开启；已保存的选择优先于启动默认值。桌面启动器会提供安装包内的运行时路径；没有该受信任载荷的部署保持关闭，设置卡片也保持不可用。开启后会启动一个私有 stdio MCP 子进程；关闭后会停止它并移除工具，无需重启 DSH。
+安装并启动 Windows 桌面 EXE，Windows 桌面控制即可自动启动。可以在**设置 → 插件 → Windows 桌面控制**中关闭或重新开启；已保存的选择优先于启动默认值。桌面启动器会提供安装包内的运行时路径；没有该受信任载荷的部署保持关闭，设置卡片也保持不可用。设置区会随主 profile 激活，初始私有 stdio 子进程则在启动器就绪后启动，并在发现完成时发布工具。没有 `appReady` 启动器服务的手工组合会在插件激活期间启动子进程。之后再启用会立即启动子进程；关闭则会停止它并移除工具，无需重启 DSH。
 
 <a id="tools-and-permission-modes"></a>
 ### 工具与权限模式
@@ -67,7 +67,7 @@ kind: "package-reference"
 <details>
 <summary>实现内部细节——点击展开</summary>
 
-本插件通过真实 Loader 子项组合 `dsh-mcp-client`，并把固定工具目录同时传给 Windows-MCP 的 `--tools` 参数和桥接层的精确 `includeTools` 过滤器。会话作用域的工具限制跟随最新记录的沙箱模式和 MCP 工具发现变化；执行前策略与只允许拒绝的守卫共同约束调用。子项成功移除前，策略会一直保留。运行时缺失或子项启动失败时，所有 Windows 工具都会保持缺失并记录错误，但不会阻止 DSH 启动，因此已启用设置仍然可访问并可以关闭。
+本插件通过真实 Loader 子项组合 `dsh-mcp-client`，并把固定工具目录同时传给 Windows-MCP 的 `--tools` 参数和桥接层的精确 `includeTools` 过滤器。存在 `ctx.appReady` 时，插件会在 profile 激活期间注册设置，把就绪前的设置变化折叠进当前来源，并在成功就绪后调度初始子进程协调；释放会取消尚未开始的工作。会话作用域的工具限制跟随最新记录的沙箱模式和 MCP 工具发现变化；执行前策略与只允许拒绝的守卫共同约束调用。子项成功移除前，策略会一直保留。运行时缺失或子项启动失败时，所有 Windows 工具都会保持缺失并记录错误，但不会阻止 DSH 启动，因此已启用设置仍然可访问并可以关闭。
 
 桌面构建会安装经过哈希固定的 CPython 与 wheel 包依赖闭包，再用经过审阅的源码快照替换完整 Windows-MCP Python 包。应用已记录的 TheFuzz 与 sampling 关联补丁前，会校验源码哈希和全部二十项工具签名。打包要求真实 MCP 工具发现、无副作用的 `Wait` 调用与 Scrape sampling 冒烟均通过。安装版启动会忽略环境中的运行时覆盖，只接受 `resources/windows-mcp/python.exe`；源码启动可以显式提供开发路径。
 

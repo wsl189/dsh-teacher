@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-windows-mcp-default-on.md
-2026-09-01-windows-mcp-default-on.md: 9c0a4017c328aca3d8c101d5ee5ddf8acaa7aacb
-2026-09-01-windows-mcp-default-on.zh.md: cdf0510e591db7731f882ed96c9770638380f412
+2026-09-01-windows-mcp-default-on.md: e89ae573c5000e977ecd18e3e6fd8de10d61844c
+2026-09-01-windows-mcp-default-on.zh.md: a89c96d6de733d2413b103425c9a3076d7727244
