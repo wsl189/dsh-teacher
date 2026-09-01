@@ -28,7 +28,7 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 `.github/workflows/windows-desktop.yml` 使用原生 Windows 与 Node 24，在每次分支推送和手动触发时构建 NSIS artifact。它会启动解包后的应用、等待主窗口、从桌面日志中取得经过认证的私有后端 URL，在不跟随重定向的情况下交换令牌，并要求已认证的 `directoryPicker/list` Remote 返回有效目录列表。随后，它会通过打包 Host 创建 `standard` preset 会话，并要求其命令目录包含 `/goal` 与 `/plan`，之后才保留 artifact。失败诊断会遮盖启动令牌。`v<版本>` tag 必须与仓库根共享 package 版本一致，workflow 才会把安装器、blockmap、channel 元数据与 SHA-256 checksum 列表发布到 GitHub Release。普通提交构建只保留为 workflow artifact，绝不会进入客户端更新 feed。
 
-安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。作用于整个依赖树的文件过滤器会在 NSIS 压缩前，从 workspace 链接包与 registry 包中移除 Source Map 和 TypeScript 增量编译状态；两者都不参与安装版运行。桌面 manifest 会列出全部必需 workspace 对等依赖，以及 electron-builder 无法经传递关系收集的 workspace 依赖。它还会直接锚定 `turndown` 与 `@joplin/turndown-plugin-gfm`；标准 preset 动态 import `@deepseek-ai/dsh-tool-web` 时需要这两个包的可执行入口，从而避免打包器的 pnpm workspace 收集在 Loader 解析的包处终止该运行时依赖分支。载荷门禁除检查每份已打包 workspace manifest、要求其非可选 workspace 依赖与 peer 位于应用根目录外，还会要求这两个入口和 Turndown 的 `@mixmark-io/domino` 运行时。安装器不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
+安装器包含 Electron、其内嵌 Node 运行时、已构建前端，以及关闭 `asar` 的 DSH 生产依赖闭包，使动态插件、worker、子进程入口与原生 addon 都保留为真实文件。作用于整个依赖树的文件过滤器会在 NSIS 压缩前，从 workspace 链接包与 registry 包中移除 Source Map 和 TypeScript 增量编译状态；两者都不参与安装版运行。桌面 manifest 会列出全部必需 workspace 对等依赖，以及 electron-builder 无法经传递关系收集的 workspace 依赖。它还会直接锚定 `turndown` 与 `@joplin/turndown-plugin-gfm`；标准 preset 动态 import `@deepseek-ai/dsh-tool-web` 时需要这两个包的可执行入口。electron-builder 完成依赖收集后，Windows `afterPack` 钩子会从桌面应用解析这两个包，并从 Turndown 的依赖解析基址定位 `@mixmark-io/domino`。钩子会把收集到的这三个包目录替换为明确的运行时子集，其中包含各包的 manifest、许可证与 `lib` 目录，并继续应用作用于依赖树的 Source Map 和编译状态排除规则。载荷门禁除检查每份已打包 workspace manifest、要求其非可选 workspace 依赖与 peer 位于应用根目录外，还会要求这三个可执行入口。安装器不包含 vLLM、MinerU、ASR、模型权重、GPU 驱动、第三方 profile 配置或 `%USERPROFILE%\.dsh` 用户数据。这些服务仍可独立部署，包括使用 Docker；安装版应用通过配置的端点调用它们。
 
 ## 考虑过的替代方案
 
@@ -44,7 +44,7 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 
 **使用宽泛 glob 排除源码目录与第三方库的其他构建版本。** 包资源和 Loader 解析的入口没有统一目录布局，因此目录级规则可能移除可执行内容。因此载荷只移除在所有依赖中都只用于开发的后缀；若要进一步缩小文件集合，需要用显式的 staged-runtime manifest 证明每一条保留路径。
 
-**依赖 electron-builder 保留动态 workspace 包的全部传递 registry 依赖。** pnpm workspace 收集器可能保留 workspace 包，却漏掉其运行时入口 import 的外部包。桌面直接锚定依赖并检查可执行文件，可以明确该依赖闭包，又不必把每个动态插件都摊平进 Electron manifest。
+**依赖 electron-builder 保留动态 workspace 包的全部传递 registry 依赖。** pnpm 11 可能把直接依赖报告为 workspace 列表中的去重引用，却不提供 electron-builder 可收集的规范依赖树。桌面 manifest 的直接锚定仍会声明所有权，但无法强制该包及其传递依赖进入输出。打包后的运行时子集和可执行文件检查会显式固定该依赖闭包，而无需把每个动态插件都摊平进 Electron manifest。
 
 ## 结果
 
@@ -55,9 +55,10 @@ updater 使用公开的 `wsl189/dsh-teacher` GitHub Releases feed。自动下载
 - 桌面 Web server 仍只绑定 loopback，并使用临时端口，因此安装器不会新增暴露到 LAN 的代码执行表层，也不会占用固定本地端口。
 - 用户会在 profile 初始化开始前看到窗口。无法 settle 的插件可能让启动文档持续显示到用户关闭应用；仅凭经过时间无法把它与正常的首次启动工作区分开。
 - 安装版不包含 Source Map，因此其中的 stack trace 指向生成后的 JavaScript；开发构建仍保留源码导航。移除 Source Map 与编译器状态可以减少 NSIS 解压工作，以及 Windows 安全软件需要检查的文件数量。
+- 暂存的 HTML 转换包不会包含 registry 包的测试、工具和替代发行 bundle。如果依赖更新改变了必需的 manifest、许可证或 `lib` 入口，暂存钩子或载荷门禁会失败，直到明确运行时集合同步更新。
 
 ## 测试
 
-桌面 update-controller 测试覆盖未打包时的当前版本投影、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、展开与轨道当前版本状态、更新操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认当前版本位于「设置」旁，检查可用操作会在同一位置替换该状态，驱动下载与重启状态，并捕获两份无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。桌面载荷校验器 fixture 会接受完整 workspace 依赖、缺失的可选 peer、运行时 JavaScript、资源与原生 addon，同时拒绝缺失的必需 workspace 包、嵌套 Source Map 与编译器状态；其 Windows 运行时集合会固定 Turndown、GFM 插件与 Domino 的入口文件。Windows workflow 构建真实 NSIS target，校验 `resources/app` 中的依赖闭包，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口、交换启动令牌、调用已认证的 `directoryPicker/list` Remote、创建标准会话，并要求其命令目录包含 `/goal` 与 `/plan`；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
+桌面 update-controller 测试覆盖未打包时的当前版本投影、预发布选择、发现版本、手动下载、进度、下载完成安装、隐藏检查失败、可见重试失败与无效操作。运行时适配器测试只把 electron-updater 暴露为 CommonJS 默认导出，并要求从中解析 `autoUpdater`。客户端测试覆盖隔离边界校验、observable 订阅释放、展开与轨道当前版本状态、更新操作、进度、重启、重试、普通浏览器抑制、晚到 slot 声明与插件释放。侧边栏测试固定新增 seat 声明及其展开／轨道 owner share。Web 场景会在真实已发布组合启动前注入同一个 preload API，确认当前版本位于「设置」旁，检查可用操作会在同一位置替换该状态，驱动下载与重启状态，并捕获两份无障碍快照。QQ 工作区场景会用一个预置的离线机器人启动真实发行组合，打开其工作区操作，并在不调用模型的情况下捕获真实 Host 支持的应用内目录列表。app-boot 与 preset 测试禁用 Loader 内部机制，并要求配置自有与宿主自有的包均保留 ESM import 解析；HMR 测试要求该模式下精确配置监听仍保持可用。Workspace constraints 会拒绝 `@deepseek-ai/dsh` 完整生产依赖图中缺失的任何非可选 peer。after-pack 测试会从各自所属包的解析基址定位直接 Turndown 包与传递 Domino 包，替换过期的收集器输出，只保留 manifest、许可证与经过过滤的 `lib` 目录，并拒绝缺失任何已声明运行时入口。桌面载荷校验器 fixture 会接受完整 workspace 依赖、缺失的可选 peer、运行时 JavaScript、资源与原生 addon，同时拒绝缺失的必需 workspace 包、嵌套 Source Map 与编译器状态；其 Windows 运行时集合会固定 Turndown、GFM 插件与 Domino 的入口文件。Windows workflow 构建真实 NSIS target，校验 `resources/app` 中的依赖闭包，使用隔离的用户数据运行应用，要求其打开 `DeepSeek Harness` 窗口、交换启动令牌、调用已认证的 `directoryPicker/list` Remote、创建标准会话，并要求其命令目录包含 `/goal` 与 `/plan`；它还会在保留或发布 artifact 前拒绝缺少安装器或 `latest.yml` 的结果。
 
 renderer 权限测试会执行两种 Electron handler，并要求仅为当前回环主 frame 放行音频麦克风、保留剪贴板写入，拒绝视频、子 frame、外来 renderer、外来或畸形 origin 与无关权限，同时验证 handler 清理可重复调用。桌面启动测试要求本地窗口先于后端工作变为可见，校验本地化且不含脚本的启动标记，让健康后端等待模拟的 90 秒，拒绝明确的 fatal 与退出结果，并证明 listener 清理。
