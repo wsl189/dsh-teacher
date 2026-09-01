@@ -8,6 +8,10 @@
 
 *.pdf binary
 
+# Generated pnpm patch files preserve upstream indentation after unified-diff
+# context markers, which Git must not reinterpret as repository whitespace.
+patches/*.patch -whitespace
+
 # Preserve the bundled upstream skill distribution byte-for-byte; its inventory
 # and attribution tests verify the unmodified release contents.
 packages/skill/skill-ppt-master/assets/ppt-master/** -whitespace

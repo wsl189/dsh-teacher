@@ -4,7 +4,7 @@ Status: implemented
 
 English | [中文](2026-08-31-bundled-windows-mcp.zh.md)
 
-The catalog and unconditional-approval decisions below are superseded by [session-scoped Full access](2026-09-01-windows-mcp-full-access.md); default-off activation is superseded by [default-on desktop control](2026-09-01-windows-mcp-default-on.md). [Source parity and sampling](2026-09-01-windows-mcp-source-parity.md) owns the reviewed source overlay and auxiliary model requests. The runtime distribution, licensing, and Loader lifecycle decisions remain authoritative.
+The catalog and unconditional-approval decisions below are superseded by [session-scoped Full access](2026-09-01-windows-mcp-full-access.md); default-off activation is superseded by [default-on desktop control](2026-09-01-windows-mcp-default-on.md); the settings-card presentation is superseded by [the hidden Windows-MCP settings card](../simplification/2026-09-01-hide-windows-mcp-settings-card.md). [Source parity and sampling](2026-09-01-windows-mcp-source-parity.md) owns the reviewed source overlay and auxiliary model requests. The runtime distribution, licensing, and Loader lifecycle decisions remain authoritative.
 
 ## Problem
 
@@ -16,7 +16,7 @@ The upstream 0.8.5 dependency declaration also imports GPL-licensed `fuzzywuzzy`
 
 ## Decision
 
-`@deepseek-ai/dsh-windows-mcp` is a Host composition plugin in `packages/mcp/windows-mcp`. The shipped Web profile mounts it disabled. When its `windows-mcp` settings namespace becomes enabled, it creates a real Loader child for `@deepseek-ai/dsh-mcp-client`; disabling or changing runtime fields removes and joins the current child before reconciling another one. A missing runtime or failed child publishes no desktop tools and records an error without failing Host startup. This failure policy keeps a persisted enabled setting reachable so the user can turn it off or retry after repairing the payload.
+`@deepseek-ai/dsh-windows-mcp` is a Host composition plugin in `packages/mcp/windows-mcp`. The shipped Web profile mounts it disabled. When its `windows-mcp` settings namespace becomes enabled, it creates a real Loader child for `@deepseek-ai/dsh-mcp-client`; disabling or changing runtime fields removes and joins the current child before reconciling another one. A missing runtime or failed child publishes no desktop tools and records an error without failing Host startup. This failure policy preserves the settings namespace and its persisted value so a later settings commit can reconcile again after the payload is repaired.
 
 The composition publishes exactly `App`, `Click`, `DisplayInventory`, `Move`, `MultiEdit`, `MultiSelect`, `Screenshot`, `Scroll`, `Shortcut`, `Snapshot`, `Type`, `Wait`, and `WaitFor` under the fixed `mcp__windows__` namespace. The allowlist is passed independently to Windows-MCP's `--tools` argument and the MCP bridge's new exact, case-sensitive `includeTools` filter. The generic bridge validates duplicate advertised names before filtering, so an invalid upstream list cannot hide a duplicate outside the selected subset. Any unreviewed name that reaches the reserved namespace is denied.
 
@@ -26,7 +26,7 @@ The Windows x64 desktop build assembles `apps/desktop/runtime/windows-mcp` from 
 
 The runtime build completes a real FastMCP stdio initialize/list/call smoke and requires the exact pinned tool set plus a successful inert `Wait` call. Electron-builder copies the resulting directory to `resources/windows-mcp`; the payload gate requires CPython, its standard-library archive and license, Windows-MCP metadata, and representative Python native modules. Packaged desktop launches ignore ambient `DSH_WINDOWS_MCP_*` overrides and provide environment paths only when `resources/windows-mcp/python.exe` exists. Source launches retain explicit developer overrides.
 
-The Plugins settings page owns a Windows desktop card. It can enable the feature only when the Host reports a non-empty bundled runtime command, can always turn off an already-enabled value, and keeps the outside-sandbox approval warning visible. No Python path is user-editable in the installed UI.
+The generic Plugins configuration page does not register a Windows desktop card. The Host namespace remains active so composition defaults and persisted values still govern the child, while the installed UI exposes neither an enable switch nor an editable Python path.
 
 ## Alternatives considered
 
@@ -40,8 +40,8 @@ The Plugins settings page owns a Windows desktop card. It can enable the feature
 
 ## Consequences
 
-- Windows x64 desktop users can enable the integration without installing Python or creating an MCP configuration; other builds expose no usable runtime.
-- A missing or broken runtime cannot prevent DSH from opening; the enabled setting remains visible while the tool namespace stays absent.
+- Windows x64 desktop users receive the integration by default without installing Python or creating an MCP configuration; other builds expose no usable runtime.
+- A missing or broken runtime cannot prevent DSH from opening; the settings namespace remains registered while the tool namespace stays absent.
 - Enabling adds thirteen tool schemas to model requests and starts one private Python MCP child. Disabling removes both without restarting DSH.
 - Approval is a policy gate, not OS containment. An approved call operates the interactive Windows session and can observe or change visible applications.
 - An upstream, Python, dependency, patch, or tool-surface upgrade is one review unit and requires another Windows runtime build, smoke, payload validation, notices update, and installer artifact.
@@ -49,4 +49,4 @@ The Plugins settings page owns a Windows desktop card. It can enable the feature
 
 ## Testing
 
-The generic MCP tests cover filter validation, exact and case-sensitive selection, discovery updates, and duplicate rejection before filtering. The Windows composition test boots a real `cordis.yml` through Loader, captures the child configuration, live-disables the child through settings, and proves missing or failed runtimes leave the settings namespace available. The Full-access note owns catalog and permission coverage. Client tests cover the boolean field controller, runtime-unavailable state, card rendering, locale-owned copy, and the seven-card registration order. Desktop environment tests prove packaged paths are trusted only beneath `resources/windows-mcp` while source overrides remain available. The Windows workflow assembles and smokes the real pinned runtime before packaging, and the desktop payload test pins its required files.
+The generic MCP tests cover filter validation, exact and case-sensitive selection, discovery updates, and duplicate rejection before filtering. The Windows composition test boots a real `cordis.yml` through Loader, captures the child configuration, live-disables the child through settings, and proves missing or failed runtimes leave the settings namespace available. The Full-access note owns catalog and permission coverage, while the presentation note owns client and assembled-Web absence coverage. Desktop environment tests prove packaged paths are trusted only beneath `resources/windows-mcp` while source overrides remain available. The Windows workflow assembles and smokes the real pinned runtime before packaging, and the desktop payload test pins its required files.

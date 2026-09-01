@@ -44,6 +44,11 @@
     searchProvider: anysearch
     fetchProvider: anysearch
 
+# Web and desktop use AnySearch exclusively; base-derived non-Web profiles keep
+# the inherited DeepSeek search provider active.
+- id: web-search-deepseek
+  disabled: true
+
 # ── web-only host rows, the transport layer, and the browser roster ─────────
 
 # `dsh.client` rows are the browser roster the modules node half scans into
@@ -343,6 +348,11 @@
     # Tool call tree, generic fallback, and keyed business Tool views.
     - id: ui-tool
       name: '@deepseek-ai/dsh-client-ui-tool'
+
+    # Generated-image Tool results as an independent final-answer Chat node.
+    # The bundled provider keeps its existing Tool card and studio dispatch.
+    - id: ui-image-generation
+      name: '@deepseek-ai/dsh-client-ui-image-generation'
 
     - id: ui-cordis
       name: '@deepseek-ai/dsh-client-ui-cordis'

@@ -111,8 +111,9 @@ const EXPECTED_GLOBAL_TOOLS = [
   'univer_worktree',
 ]
 
-/** Third-party browser modules that the shipped profile mounts directly. */
+/** Browser modules whose shipped-profile availability is release behavior. */
 const EXPECTED_BUNDLED_CLIENT_MODULES = [
+  '@deepseek-ai/dsh-client-ui-image-generation',
   '@dickpy/dsh-imagegen',
   '@huanlin/dsh-plugin-better-sidebar-plugin-office',
   '@xmanrui/dsh-im',

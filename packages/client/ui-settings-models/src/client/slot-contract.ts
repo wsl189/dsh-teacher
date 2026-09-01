@@ -1,7 +1,11 @@
 /**
- * Models-page extension slots — the two seats through which a plugin
+ * Models-page extension slots — the three seats through which a plugin
  * distributed outside this repository adds UI to the Models settings section
  * without editing it.
+ *
+ * `settings.models.specialized-model` is an ordered area immediately below
+ * the tool-model selector for product-owned model configurations that do not
+ * belong to an LLM provider row.
  *
  * `settings.models.provider-card` is keyed by the row's owning settings
  * namespace (`ProviderDirectoryEntry.settingsNs`): an adapter family's
@@ -23,6 +27,11 @@ import type { ProviderDirectoryEntry } from './store.ts'
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface SlotMap {
     /**
+     * Ordered specialized-model area immediately below the tool-model card.
+     * Without a registrant the area renders nothing.
+     */
+    'settings.models.specialized-model': { kind: 'list'; scope: 'root'; owner: SpecializedModelOwnerProps }
+    /**
      * One provider card's adapter extension area, dispatched with
      * `entryKey = settingsNs` on every card that renders a directory row: a
      * saved row's card (its first-run setup posture included) and the
@@ -37,6 +46,12 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
      */
     'settings.models.footer': { kind: 'list'; scope: 'root'; owner: ModelsFooterOwnerProps }
   }
+}
+
+/** Owner share of the specialized-model area (the section supplies nothing). */
+export interface SpecializedModelOwnerProps {
+  /** Marker field: specialized-model owner props are intentionally empty. */
+  children?: never
 }
 
 /** Owner share of one provider-card extension occurrence. */

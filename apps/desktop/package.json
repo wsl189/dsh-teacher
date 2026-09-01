@@ -14,7 +14,8 @@
   "main": "lib/main.js",
   "scripts": {
     "bundle": "tsdown",
-    "package:win": "electron-builder --config electron-builder.yml --win nsis --x64 --publish never"
+    "generate:icon": "tsx scripts/generate-icon.ts",
+    "package:win": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never"
   },
   "license": "MIT",
   "dependencies": {
@@ -39,6 +40,7 @@
     "@types/node": "^22.20.0",
     "electron": "43.4.1",
     "electron-builder": "26.15.7",
+    "sharp": "^0.35.3",
     "typescript": "^6.0.3"
   },
   "files": [

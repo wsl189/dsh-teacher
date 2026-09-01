@@ -10,7 +10,7 @@ Full access 把 `danger-full-access` 与批准策略 `never` 组合在一起。�
 
 ## 决策
 
-本记录取代[内置集成记录](2026-08-31-bundled-windows-mcp.zh.md)中仅提供桌面工具目录和无条件批准的决策。原记录继续拥有私有固定 Python 运行时、许可、载荷验证与 Loader 生命周期。[默认开启桌面控制](2026-09-01-windows-mcp-default-on.zh.md)拥有启用方式与已保存用户选择的规则。
+本记录取代[内置集成记录](2026-08-31-bundled-windows-mcp.zh.md)中仅提供桌面工具目录和无条件批准的决策。原记录继续拥有私有固定 Python 运行时、许可、载荷验证与 Loader 生命周期。[默认开启桌面控制](2026-09-01-windows-mcp-default-on.zh.md)拥有启用方式与已保存用户选择的规则；[隐藏设置卡片](../simplification/2026-09-01-hide-windows-mcp-settings-card.zh.md)拥有通用设置呈现。
 
 内置客户端发现 Windows-MCP 0.8.5 的完整二十项工具目录。Python 的 `--tools` 列表与桥接层的 `includeTools` 过滤器共同固定该目录；未来新增或未知名称仍会被拒绝。十三项桌面工具在受限模式中仍可经批准使用。PowerShell、Registry、Process、Clipboard、FileSystem、Notification 与 Scrape 要求 Full access。
 
@@ -18,7 +18,7 @@ Full access 把 `danger-full-access` 与批准策略 `never` 组合在一起。�
 
 MCP 子项活动期间，作用域工具限制会向受限 agent（智能体）隐藏系统工具。agent 创建、模式事件与 MCP 工具发现会协调这些限制，无需重启 Python。共享工具注册表将同一作用域视图用于 schema、查找、原生执行与 PTC 分派。执行策略会在下游策略完成后独立检查已记录模式；即使其他监听器允许调用，只允许拒绝的守卫仍会拒绝未获得 Full access 的系统调用。其他工具与其他会话保持既有策略。子项成功移除后，插件才能释放策略注册。
 
-设置卡片会说明完整系统授权。Windows-MCP 使用既有 Windows 进程权限运行；Full access 不会提供管理员令牌，也不能绕过 UAC 和安全桌面。模式降级会限制后续调用，但不会撤销已经开始的操作。
+Windows-MCP 包与桌面文档会说明完整系统授权。Windows-MCP 使用既有 Windows 进程权限运行；Full access 不会提供管理员令牌，也不能绕过 UAC 和安全桌面。模式降级会限制后续调用，但不会撤销已经开始的操作。
 
 ## 考虑过的替代方案
 

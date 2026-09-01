@@ -16,7 +16,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import { Button, IconPlusOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
-// Type-only: pulls this package's SlotMap merge (the two Models child slots).
+// Type-only: pulls this package's SlotMap merge (the three Models child slots).
 import type {} from './slot-contract.ts'
 import { CustomProviderCard } from './CustomProviderCard.tsx'
 import { deriveKeyRef, messageOf, protocolChoices, providerUsable } from './store.ts'
@@ -43,7 +43,10 @@ export interface ModelsSectionInjected {
 }
 
 /** The child slots this section declares and dispatches (see ./slot-contract.ts). */
-type ModelsChildSlots = 'settings.models.provider-card' | 'settings.models.footer'
+type ModelsChildSlots =
+  | 'settings.models.specialized-model'
+  | 'settings.models.provider-card'
+  | 'settings.models.footer'
 
 /** The child-slot dispatch function the renderer binds for the section. */
 type ModelsRenderSlot = PropsRenderSlots<ModelsChildSlots>['renderSlot']
@@ -417,6 +420,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 : null
           : <p className={`${styles['toolModelStatus']} ${styles['toolModelStatusError']}`} role="alert">{t('toolModelCatalogFailed')}</p>}
       </div>
+      {renderSlot('settings.models.specialized-model', {})}
       {!state.writable && state.status === 'ready' ? <p className={styles['notice']}>{t('readOnly')}</p> : null}
       {savedIdentity === undefined
         ? null

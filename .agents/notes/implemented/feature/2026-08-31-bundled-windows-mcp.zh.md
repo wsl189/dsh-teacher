@@ -4,7 +4,7 @@
 
 [English](2026-08-31-bundled-windows-mcp.md) | 中文
 
-下文的工具目录与无条件批准决策由[按会话控制的 Full access](2026-09-01-windows-mcp-full-access.zh.md)取代；默认关闭的启用方式由[默认开启桌面控制](2026-09-01-windows-mcp-default-on.zh.md)取代。[源码对齐与采样](2026-09-01-windows-mcp-source-parity.zh.md)拥有已审阅源码覆盖和辅助模型请求。运行时分发、许可与 Loader 生命周期决策继续作为当前依据。
+下文的工具目录与无条件批准决策由[按会话控制的 Full access](2026-09-01-windows-mcp-full-access.zh.md)取代；默认关闭的启用方式由[默认开启桌面控制](2026-09-01-windows-mcp-default-on.zh.md)取代；设置卡片呈现由[隐藏 Windows-MCP 设置卡片](../simplification/2026-09-01-hide-windows-mcp-settings-card.zh.md)取代。[源码对齐与采样](2026-09-01-windows-mcp-source-parity.zh.md)拥有已审阅源码覆盖和辅助模型请求。运行时分发、许可与 Loader 生命周期决策继续作为当前依据。
 
 ## 问题
 
@@ -16,7 +16,7 @@ Windows-MCP 可以自动操作可见 Windows 应用，但若把用户提供的 P
 
 ## 决策
 
-`@deepseek-ai/dsh-windows-mcp` 是位于 `packages/mcp/windows-mcp` 的 Host 组合插件。发行 Web profile 会挂载它，但保持关闭。当 `windows-mcp` 设置命名空间变为启用时，它会为 `@deepseek-ai/dsh-mcp-client` 创建真实 Loader 子项；关闭或修改运行时字段时，会先移除并 join 当前子项，再协调新的状态。运行时缺失或子项启动失败时，不会发布任何桌面工具，并会记录错误而不让 Host 启动失败。这项失败策略会保留持久化启用设置的可访问性，使用户能够关闭它，或在修复载荷后重试。
+`@deepseek-ai/dsh-windows-mcp` 是位于 `packages/mcp/windows-mcp` 的 Host 组合插件。发行 Web profile 会挂载它，但保持关闭。当 `windows-mcp` 设置命名空间变为启用时，它会为 `@deepseek-ai/dsh-mcp-client` 创建真实 Loader 子项；关闭或修改运行时字段时，会先移除并 join 当前子项，再协调新的状态。运行时缺失或子项启动失败时，不会发布任何桌面工具，并会记录错误而不让 Host 启动失败。这项失败策略会保留设置命名空间及其持久化值，使后续 settings 提交能在载荷修复后再次协调。
 
 组合只会在固定 `mcp__windows__` 命名空间下发布 `App`、`Click`、`DisplayInventory`、`Move`、`MultiEdit`、`MultiSelect`、`Screenshot`、`Scroll`、`Shortcut`、`Snapshot`、`Type`、`Wait` 与 `WaitFor`。allowlist 会独立传给 Windows-MCP 的 `--tools` 参数和 MCP 桥接层新增的精确、区分大小写 `includeTools` 过滤器。通用桥接会在过滤前校验已发布名称是否重复，因此无效上游列表不能把重复项藏在所选子集之外。任何进入保留命名空间的未审阅名称都会被拒绝。
 
@@ -26,7 +26,7 @@ Windows x64 桌面构建会从官方 CPython 3.14.7 AMD64 嵌入式压缩包和 
 
 运行时构建会完成真实 FastMCP stdio initialize/list/call 冒烟，要求工具集恰好匹配固定目录，并成功执行无副作用的 `Wait` 调用。Electron-builder 把生成目录复制到 `resources/windows-mcp`；载荷门禁要求存在 CPython、标准库压缩包及许可证、Windows-MCP 元数据和代表性的 Python 原生模块。安装版桌面启动会忽略环境中的 `DSH_WINDOWS_MCP_*` 覆盖，并且只在 `resources/windows-mcp/python.exe` 存在时提供环境路径。源码启动保留显式开发覆盖。
 
-「插件」设置页拥有 Windows 桌面卡片。只有 Host 报告非空内置运行时命令时，它才能启用能力；已经启用的值始终可以关闭；沙箱外批准警告持续可见。安装版 UI 不提供可编辑 Python 路径。
+通用「插件配置」页面不注册 Windows 桌面卡片。Host 命名空间继续生效，因此组合默认值与持久化值仍控制子项；安装版 UI 不提供启用开关或可编辑 Python 路径。
 
 ## 考虑过的替代方案
 
@@ -40,8 +40,8 @@ Windows x64 桌面构建会从官方 CPython 3.14.7 AMD64 嵌入式压缩包和 
 
 ## 结果
 
-- Windows x64 桌面用户无需安装 Python 或创建 MCP 配置即可启用集成；其他构建没有可用运行时。
-- 运行时缺失或损坏不能阻止 DSH 打开；启用设置仍然可见，而工具命名空间保持缺失。
+- Windows x64 桌面用户无需安装 Python 或创建 MCP 配置即可默认获得该集成；其他构建没有可用运行时。
+- 运行时缺失或损坏不能阻止 DSH 打开；设置命名空间保持注册，而工具命名空间保持缺失。
 - 启用会为模型请求增加十三项工具 schema，并启动一个私有 Python MCP 子进程；关闭后无需重启 DSH 即可移除两者。
 - 批准是策略门禁，不是操作系统级隔离。批准后的调用会操作交互式 Windows 会话，并且可以观察或改变可见应用。
 - 上游、Python、依赖、补丁或工具表面升级构成同一个审阅单元，需要重新执行 Windows 运行时构建、冒烟、载荷校验、声明更新与安装器构建。
@@ -49,4 +49,4 @@ Windows x64 桌面构建会从官方 CPython 3.14.7 AMD64 嵌入式压缩包和 
 
 ## 测试
 
-通用 MCP 测试覆盖过滤器校验、精确且区分大小写的选择、发现更新，以及过滤前的重复项拒绝。Windows 组合测试会通过 Loader 启动真实 `cordis.yml`，捕获子项配置，通过设置实时关闭子项，并证明运行时缺失或失败时设置命名空间仍然可用。Full access 记录拥有工具目录与权限测试。客户端测试覆盖布尔字段 controller、运行时不可用状态、卡片渲染、locale 所有的文案与七卡片注册顺序。桌面环境测试证明安装版只信任 `resources/windows-mcp` 下的路径，而源码覆盖保持可用。Windows workflow 会在打包前装配并冒烟真实固定运行时，桌面载荷测试则固定其必需文件。
+通用 MCP 测试覆盖过滤器校验、精确且区分大小写的选择、发现更新，以及过滤前的重复项拒绝。Windows 组合测试会通过 Loader 启动真实 `cordis.yml`，捕获子项配置，通过设置实时关闭子项，并证明运行时缺失或失败时设置命名空间仍然可用。Full access 记录拥有工具目录与权限测试，呈现记录拥有客户端及已组装 Web 的缺失项覆盖。桌面环境测试证明安装版只信任 `resources/windows-mcp` 下的路径，而源码覆盖保持可用。Windows workflow 会在打包前装配并冒烟真实固定运行时，桌面载荷测试则固定其必需文件。

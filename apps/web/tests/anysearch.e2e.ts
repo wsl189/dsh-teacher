@@ -7,11 +7,15 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-web'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
 
 const KEY_REF = credentialRef('DSH_ANYSEARCH_BUNDLED_TEST_KEY')
+const SETTINGS_KEY_REF = credentialRef('DSH_ANYSEARCH_SETTINGS_TEST_KEY')
+const SETTINGS_NS = settingsNamespace('web-search-anysearch')
+const DEEPSEEK_SETTINGS_NS = settingsNamespace('web-search-deepseek')
 const SOURCE_URL = 'https://docs.example.test/anysearch'
 const SOURCE = { title: 'AnySearch fixture', url: SOURCE_URL, snippet: 'Search integration', content: 'Page content' }
 
@@ -29,6 +33,7 @@ describe('bundled AnySearch', () => {
   let scaffold: WebScaffold
   let handle: AgentHandle
   let server: Server
+  let serviceBaseURL: string
   let callIndex = 0
   const requests: CapturedRequest[] = []
 
@@ -65,7 +70,7 @@ describe('bundled AnySearch', () => {
           return
         }
         let data: unknown
-        if (path === '/v1/search') {
+        if (path.endsWith('/v1/search')) {
           data = { results: [SOURCE], metadata: { total_results: 1, search_time_ms: 5 } }
         } else if (path === '/v1/extract') {
           data = { url: body.url, title: SOURCE.title, content: SOURCE.content }
@@ -92,8 +97,9 @@ describe('bundled AnySearch', () => {
       })
     })
     const address = server.address() as AddressInfo
+    serviceBaseURL = `http://127.0.0.1:${address.port}`
     scaffold = await launchWebScaffold({
-      anySearch: { baseURL: `http://127.0.0.1:${address.port}`, apiKeyEnv: KEY_REF },
+      anySearch: { baseURL: serviceBaseURL, apiKeyEnv: KEY_REF },
     })
     handle = await scaffold.ctx.agents.create({
       sessionId: SessionId('bundled-anysearch'),
@@ -105,6 +111,8 @@ describe('bundled AnySearch', () => {
   beforeEach(async () => {
     requests.length = 0
     await scaffold.ctx.credentials.unset(KEY_REF)
+    await scaffold.ctx.credentials.unset(SETTINGS_KEY_REF)
+    await scaffold.ctx.settings.replace(SETTINGS_NS, {})
   })
 
   afterAll(async () => {
@@ -121,6 +129,12 @@ describe('bundled AnySearch', () => {
         })
       }
     }
+  })
+
+  it('loads AnySearch without the inherited DeepSeek search provider', () => {
+    const namespaces = scaffold.ctx.settings.describe().map(row => row.ns)
+    expect(namespaces).toContain(SETTINGS_NS)
+    expect(namespaces).not.toContain(DEEPSEEK_SETTINGS_NS)
   })
 
   it('uses anonymous search and extraction while presets own the standard tools', async () => {
@@ -166,6 +180,29 @@ describe('bundled AnySearch', () => {
     expect(requests.map(request => request.authorization)).toEqual([
       'Bearer fixture-key-one', 'Bearer fixture-key-two', 'Bearer fixture-key-two',
     ])
+  })
+
+  it('applies endpoint and credential-reference settings to the next operation', async () => {
+    await scaffold.ctx.credentials.set(SETTINGS_KEY_REF, 'fixture-settings-key')
+    await scaffold.ctx.settings.update(SETTINGS_NS, {
+      apiKeyEnv: ` ${SETTINGS_KEY_REF} `,
+      baseURL: `${serviceBaseURL}/configured`,
+    })
+
+    const descriptor = scaffold.ctx.settings.describe().find(row => row.ns === SETTINGS_NS)
+    expect(descriptor).toMatchObject({
+      ns: SETTINGS_NS,
+      value: { apiKeyEnv: ` ${SETTINGS_KEY_REF} `, baseURL: `${serviceBaseURL}/configured` },
+      user: { apiKeyEnv: ` ${SETTINGS_KEY_REF} `, baseURL: `${serviceBaseURL}/configured` },
+    })
+    const result = await execute('anysearch_search', { query: 'configured' })
+    expect(result.isError, textContent(result)).toBe(false)
+    expect(requests).toMatchObject([{
+      path: '/configured/v1/search',
+      authorization: 'Bearer fixture-settings-key',
+    }])
+    await expect(scaffold.ctx.settings.update(SETTINGS_NS, { baseURL: 'file:///not-http' }))
+      .rejects.toThrow('baseURL must use HTTP or HTTPS')
   })
 
   it('keeps batch successes alongside quota and rate-limit failures', async () => {

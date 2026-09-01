@@ -267,6 +267,9 @@ describe('ModelsSection', () => {
 
   it('dispatches the provider-card seat per rendered row, keyed by the owning namespace', async () => {
     const { renderSlot } = await mountSection()
+    expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.models.specialized-model')).toEqual([
+      ['settings.models.specialized-model', {}],
+    ])
     const cards = cardSeatCalls(renderSlot)
     expect(cards).toContainEqual(['openai', true, true, 'llm-pi-ai'])
     expect(cards).toContainEqual(['deepseek-official', true, false, 'llm-deepseek'])
@@ -274,6 +277,9 @@ describe('ModelsSection', () => {
     expect(renderSlot.mock.calls.filter(call => call[0] === 'settings.models.footer')).toEqual([
       ['settings.models.footer', {}],
     ])
+    const dispatchedNames = renderSlot.mock.calls.map(call => call[0])
+    expect(dispatchedNames.indexOf('settings.models.specialized-model'))
+      .toBeLessThan(dispatchedNames.indexOf('settings.models.provider-card'))
   })
 
   it('dispatches the provider-card seat inside the first-run setup card', async () => {

@@ -25,11 +25,11 @@ English | [中文](README.zh.md)
 <a id="use-this-package"></a>
 ## Use this package
 
-Open the Plugins section in Settings and select the **Plugin configuration** tab to edit the host-plane plugins this deployment composes. The seven built-in cards appear in this order when their namespaces are served: the shell executor (`bash`), agent-loop tool-call parallelism (`agent-loop`), subagent model selection (`subagent-model-selection`), DeepSeek search (`web-search-deepseek`), MinerU document extraction (`mineru`), question-workspace storage (`teacher-workbench`), and Windows desktop control (`windows-mcp`).
+Open the Plugins section in Settings and select the **Plugin configuration** tab to edit the host-plane plugins this deployment composes. The six built-in cards appear in this order when their namespaces are served: the shell executor (`bash`), agent-loop tool-call parallelism (`agent-loop`), subagent model selection (`subagent-model-selection`), AnySearch web search (`web-search-anysearch`), MinerU document extraction (`mineru`), and question-workspace storage (`teacher-workbench`).
 
 ### What appears here
 
-The tab reads which settings namespaces the Host serves and dispatches one slot key per namespace, so what renders is the intersection of two ledgers: the namespaces a live Host plugin registered, and the cards registered under those keys. A served namespace no card claims renders nothing, and a card whose namespace this deployment does not serve is never dispatched. The empty line waits for the Host's first answer, so an unanswered read never reads as "this deployment configures no plugin".
+The tab reads which settings namespaces the Host serves and dispatches one slot key per namespace, so what renders is the intersection of two ledgers: the namespaces a live Host plugin registered, and the cards registered under those keys. A served namespace no card claims renders nothing, and a card whose namespace this deployment does not serve is never dispatched. The built-in `windows-mcp` namespace is intentionally unclaimed: desktop control follows the Host composition and any persisted user value without appearing in this tab. The empty line waits for the Host's first answer, so an unanswered read never reads as "this deployment configures no plugin".
 
 ### Editing and saving
 
@@ -37,11 +37,11 @@ A card stages what the user types and writes it only when they save. Each contro
 
 The Subagent card stages its permission switch and exact model checkboxes together. Enabling requires at least one selected adapter route. Saving submits `enabled` and `allowedModels` in one mutation fenced by the revision where that draft began; a newer Host revision marks the draft failed instead of restoring a revoked route. Disabling retains the selected routes for later reuse. Available models are grouped by provider, while saved routes absent from the current catalog appear last and remain removable. Adapter names and model descriptions remain live directory metadata and are not stored, and the card refreshes them after adapter changes, settings commits, and reconnects.
 
-The Windows desktop card stages a single `enabled` switch and reflects the Host's runtime-aware default and saved user choice. It reports whether the Host received a trusted bundled runtime path and prevents enabling when that payload is unavailable; an already-enabled value can still be turned off. Its warning explains that Full access unlocks all twenty Windows-MCP tools without extra desktop approval, while other modes expose thirteen desktop tools with approval. Windows process privileges and other DSH policies still apply; these operations execute outside the DSH sandbox.
-
 ### Secret-role fields
 
 A key control starts blank, reports only whether one is configured, and writes through the credentials domain rather than the settings section; a blank draft writes nothing and keeps the stored key.
+
+The Web search card binds the bundled AnySearch namespace. Its key control writes the reference named by the section (`ANYSEARCH_API_KEY` by default), while endpoint changes are stored in the settings document. Both changes reach the next operation, and an absent key keeps anonymous access active.
 
 -----
 
@@ -98,7 +98,6 @@ These limits define which plugins appear and how fresh the list is; they are cur
 - **A card still needs a browser bundle** — the browser half must be a `dsh.client` package built in the client module system's lazy-CJS factory format, and the `clientBundle` preset that emits it lives in `../../../packages/client/tsdown.client.ts` rather than a published package, so a plugin outside this repository has to reproduce that build itself.
 - **The served namespaces re-read on two signals only** — the wire announces settings-document commits and connection resets, not registrations, so a namespace whose owner registers after the tab's read joins the list on the next document commit or reconnect.
 - **The shell card follows the composed executor** — the POSIX and PowerShell executor families share the `bash` namespace because a host composes exactly one of them, so the served schema differs by platform (PowerShell adds `pwshPath`) even though the card edits the same two fields on both.
-- **The Windows card does not install a runtime** — it can enable only the trusted payload advertised by the desktop Host; browser-only and source deployments without that path keep the switch unavailable.
 
 <a id="dev-note"></a>
 ### Dev Note

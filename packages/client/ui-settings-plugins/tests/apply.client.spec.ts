@@ -132,17 +132,18 @@ describe('ui-settings-plugins apply', () => {
         'shell',
         'agent-loop',
         'subagent-model-selection',
-        'web-search-deepseek',
+        'web-search-anysearch',
         'ocr-mineru',
         'teacher-workbench',
-        'windows-mcp',
       ])
   })
 
   it('dispatches the served namespaces its cards claim, and no others', async () => {
-    // ui-theme is served but belongs to another surface, and a deployment
-    // composing no PowerShell/POSIX executor serves no `bash` at all.
-    const { ctx, slots } = await bench(['agent-loop', 'ui-theme', 'web-search-deepseek'])
+    // ui-theme belongs to another surface, Windows-MCP is intentionally hidden,
+    // and a deployment composing no PowerShell/POSIX executor serves no `bash`.
+    const { ctx, slots } = await bench([
+      'agent-loop', 'ui-theme', 'web-search-anysearch', 'windows-mcp',
+    ])
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
 
@@ -150,7 +151,7 @@ describe('ui-settings-plugins apply', () => {
     const face = (tab.inject as unknown as () => ConfigurablePluginsTabFace)()
     await vi.waitFor(() => {
       expect(face.hooks.configurablePlugins.getSnapshot().namespaces)
-        .toEqual(['agent-loop', 'web-search-deepseek'])
+        .toEqual(['agent-loop', 'web-search-anysearch'])
     })
   })
 
@@ -190,7 +191,7 @@ describe('ui-settings-plugins apply', () => {
 
     // A key written on another surface changes no settings section, so this
     // event is the only thing that reaches the card.
-    remote.emit('credentials/reference-updated', ['DEEPSEEK_API_KEY'])
+    remote.emit('credentials/reference-updated', ['ANYSEARCH_API_KEY'])
 
     await vi.waitFor(() => { expect(describeCredentials).toHaveBeenCalledTimes(1) })
   })
@@ -239,7 +240,7 @@ describe('ui-settings-plugins apply', () => {
     declareRoot(slots)
     const fiber = ctx.plugin({ inject: [...inject], apply })
     await fiber.await()
-    expect(slots.entries('settings.plugin.item')).toHaveLength(7)
+    expect(slots.entries('settings.plugin.item')).toHaveLength(6)
 
     await fiber.dispose()
 

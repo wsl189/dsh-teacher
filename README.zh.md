@@ -72,7 +72,7 @@ pnpm dsh web
 
 ### 2. 内置生图、IM、cron、技能／MCP 管理与 Office
 
-Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 插件 → AI 生图**中配置；只在**设置 → 模型**中添加生图模型并不会创建生图工具。机器人与 QQ 语音在**设置 → 插件 → 连接平台**中配置，技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
+Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 模型 → 生图模型**中配置；只向普通提供方列表添加生图模型并不会创建生图工具。机器人在**设置 → 插件 → 连接平台**中配置，语音识别在**设置 → 模型 → 语音模型**中配置，技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
 
 Univer 封装层采用 Apache-2.0，但其可执行依赖闭包含有商业 `@univerjs-pro/*` 组件。启动前必须通过 `UNIVER_LICENSE` 提供有效许可证，分发安装器前还要取得所需分发权；内置配置项已关闭产品遥测。部分 Slide 布局、SVG 测量与截图操作还需要本机 Chrome 或 Chromium，可用 `UNIVER_RENDER_BROWSER` 指定其可执行文件。
 
@@ -80,9 +80,9 @@ Univer 封装层采用 Apache-2.0，但其可执行依赖闭包含有商业 `@un
 
 Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`（见 `packages/bundle/web-app/cordis.patch.yml`）。请在本机运行 MinerU 服务（例如官方 `mineru` pipeline 提供 `/file_parse`），或在 **插件 → 插件配置 → 文档提取** 页面覆盖端点。常用设置项：`endpoint`、`backend`（`pipeline` | `vlm-engine` | `hybrid-engine`）、`effort`、`language`（中文用 `ch`）、`maxFileBytes`（默认 50 MiB）、`layoutBatchPages`（4）。若 MinerU 服务不可达，文档提取与试题切割会返回 provider 错误。
 
-### 4. 配置 QQ 语音识别（ASR）
+### 4. 配置语音模型（ASR）
 
-编辑 `~/.dsh/integrations/dsh-qq/config.json`，开启 `speech`（当前机器配置为 `enabled: true`）：
+打开**设置 → 模型 → 语音模型**，展开卡片并开启语音识别。相同配置仍保存在 `~/.dsh/integrations/dsh-qq/config.json` 的 `speech` 字段中；当前机器使用：
 
 ```json
 "speech": {
@@ -93,7 +93,7 @@ Web 组合包默认使用本机 MinerU 端点 `http://127.0.0.1:8005/file_parse`
 }
 ```
 
-`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行 Speaches）。`model` 必须是该服务通过 `GET /v1/models` 返回的已安装 ASR 模型；本机开放 `Systran/faster-whisper-small`，而 `whisper-1` 别名指向未安装的大模型并返回 HTTP 404。若服务需要 API key，可通过 QQ 设置页保存，或设置 `DSH_QQ_ASR_API_KEY`。QQ 机器人、主输入框和工作台「日常管理」的麦克风控件共用这些设置；保存后下一次完整录音会直接读取新值，无需重启 Host。QQ 语音消息可以直接采用 QQ 平台提供的文字，因此应使用任一浏览器麦克风控件验证已配置的 ASR 服务，不能只根据机器人识别成功判断端点可用。
+`baseUrl` 必须是 HTTPS 或本机回环 HTTP，且指向 OpenAI 兼容的转写服务（当前机器在 `127.0.0.1:8000` 运行 Speaches）。`model` 必须是该服务通过 `GET /v1/models` 返回的已安装 ASR 模型；本机开放 `Systran/faster-whisper-small`，而 `whisper-1` 别名指向未安装的大模型并返回 HTTP 404。若服务需要 API key，可通过语音模型卡片保存，或设置 `DSH_QQ_ASR_API_KEY`。QQ 机器人、主输入框和工作台「日常管理」的麦克风控件共用这些设置；保存后下一次完整录音会直接读取新值，无需重启 Host。QQ 语音消息可以直接采用 QQ 平台提供的文字，因此应使用任一浏览器麦克风控件验证已配置的 ASR 服务，不能只根据机器人识别成功判断端点可用。
 
 ### 5. Office 预览与创作格式
 

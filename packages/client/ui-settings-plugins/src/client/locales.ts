@@ -10,7 +10,7 @@ export type PluginsSettingsLocaleKey =
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
   | 'webSearchTitle' | 'webSearchDescription'
   | 'webSearchApiKey' | 'webSearchApiKeyHint' | 'webSearchApiKeySet' | 'webSearchApiKeyUnset'
-  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint' | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'webSearchBaseUrl' | 'webSearchBaseUrlHint'
   | 'mineruTitle' | 'mineruDescription' | 'mineruEndpoint' | 'mineruEndpointHint'
   | 'mineruBackend' | 'mineruBackendHint' | 'mineruBackendPipeline' | 'mineruBackendVlm' | 'mineruBackendHybrid'
   | 'mineruEffort' | 'mineruEffortHint' | 'mineruEffortLow' | 'mineruEffortMedium' | 'mineruEffortHigh'
@@ -31,9 +31,6 @@ export type PluginsSettingsLocaleKey =
   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
   | 'subagentModelSelectionUnavailableGroup' | 'subagentModelSelectionEmpty'
   | 'subagentModelSelectionRequired' | 'subagentModelSelectionConflict' | 'subagentModelSelectionOff'
-  | 'windowsMcpTitle' | 'windowsMcpDescription' | 'windowsMcpToggle'
-  | 'windowsMcpRuntimeReady' | 'windowsMcpRuntimeUnavailable'
-  | 'windowsMcpEnabledHint' | 'windowsMcpDisabledHint' | 'windowsMcpApprovalWarning'
 
 /** English copy. */
 export const en: Record<PluginsSettingsLocaleKey, string> = {
@@ -65,15 +62,13 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: 'Parallel tool calls',
   agentLoopMaxParallelHint: 'Upper bound on parallel-safe calls running at once within one step.',
   webSearchTitle: 'Web search',
-  webSearchDescription: 'The DeepSeek search provider.',
-  webSearchApiKey: 'API key',
-  webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key.',
+  webSearchDescription: 'AnySearch for web search and page extraction.',
+  webSearchApiKey: 'API key (optional)',
+  webSearchApiKeyHint: 'Stored outside the settings file. Leave blank to keep the current key; no key uses anonymous access.',
   webSearchApiKeySet: 'A key is configured.',
-  webSearchApiKeyUnset: 'No key is configured; search is unavailable until one is.',
+  webSearchApiKeyUnset: 'No key is configured; anonymous access is active.',
   webSearchBaseUrl: 'Endpoint',
-  webSearchBaseUrlHint: 'Leave blank to use the provider default.',
-  webSearchMaxUses: 'Max searches per request',
-  webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  webSearchBaseUrlHint: 'Reset to use the public AnySearch API.',
   mineruTitle: 'Document extraction',
   mineruDescription: 'The self-hosted MinerU extractor used for reusable document parsing.',
   mineruEndpoint: 'Endpoint',
@@ -138,14 +133,6 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: 'Select at least one model before saving.',
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
-  windowsMcpTitle: 'Windows desktop control',
-  windowsMcpDescription: 'Control Windows applications and system tools through the bundled Windows-MCP runtime.',
-  windowsMcpToggle: 'Enable Windows desktop tools',
-  windowsMcpRuntimeReady: 'The bundled runtime is available in this installation.',
-  windowsMcpRuntimeUnavailable: 'The bundled runtime is unavailable. Install and run the Windows desktop build to enable this plugin.',
-  windowsMcpEnabledHint: 'Enabled; the reviewed desktop tools appear after the bundled runtime connects successfully.',
-  windowsMcpDisabledHint: 'Desktop tools stay absent from model requests until this setting is saved.',
-  windowsMcpApprovalWarning: 'Full access unlocks all 20 tools, including PowerShell, files, registry, processes, and clipboard, without extra desktop approval. Other modes expose 13 desktop tools and require approval. These actions run outside the DSH sandbox; Windows permissions and other DSH policies still apply.',
 }
 
 /** Simplified Chinese copy. */
@@ -178,15 +165,13 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   agentLoopMaxParallel: '并行工具调用数',
   agentLoopMaxParallelHint: '同一步内最多同时运行多少个可并行的调用。',
   webSearchTitle: '网页搜索',
-  webSearchDescription: 'DeepSeek 搜索提供方。',
-  webSearchApiKey: 'API Key',
-  webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥。',
+  webSearchDescription: '使用 AnySearch 进行网页搜索和正文提取。',
+  webSearchApiKey: 'API Key（可选）',
+  webSearchApiKeyHint: '不写入设置文件。留空表示保持当前密钥；未配置时使用匿名访问。',
   webSearchApiKeySet: '已配置密钥。',
-  webSearchApiKeyUnset: '未配置密钥；配置之前搜索不可用。',
+  webSearchApiKeyUnset: '未配置密钥；当前使用匿名访问。',
   webSearchBaseUrl: '接口地址',
-  webSearchBaseUrlHint: '留空则使用提供方默认地址。',
-  webSearchMaxUses: '单次请求最多搜索次数',
-  webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  webSearchBaseUrlHint: '恢复默认后使用 AnySearch 公共接口。',
   mineruTitle: '文档提取',
   mineruDescription: '用于可复用文档解析的自托管 MinerU 提取器。',
   mineruEndpoint: '接口地址',
@@ -251,12 +236,4 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: '保存前请至少选择一个模型。',
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
-  windowsMcpTitle: 'Windows 桌面控制',
-  windowsMcpDescription: '通过安装包内置的 Windows-MCP 运行时控制 Windows 应用并使用系统工具。',
-  windowsMcpToggle: '启用 Windows 桌面工具',
-  windowsMcpRuntimeReady: '当前安装已包含可用的内置运行时。',
-  windowsMcpRuntimeUnavailable: '内置运行时不可用；请安装并运行 Windows 桌面版后再启用。',
-  windowsMcpEnabledHint: '已启用；内置运行时连接成功后，审查过的桌面工具会出现在后续模型请求中。',
-  windowsMcpDisabledHint: '保存启用设置前，桌面工具不会出现在模型请求中。',
-  windowsMcpApprovalWarning: 'Full access 会开放全部 20 项工具，包括 PowerShell、文件、注册表、进程和剪贴板，且不额外请求桌面操作批准。其他模式只提供 13 项桌面工具并要求批准。这些操作在 DSH 沙箱外执行，仍受 Windows 权限和其他 DSH 策略约束。',
 }

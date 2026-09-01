@@ -16,15 +16,12 @@ import { SubagentModelSelectionCard } from '../src/client/SubagentModelSelection
 import type { SubagentModelSelectionCardProps } from '../src/client/SubagentModelSelectionCard.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
 import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
-import { WindowsMcpCard } from '../src/client/WindowsMcpCard.tsx'
-import type { WindowsMcpCardProps } from '../src/client/WindowsMcpCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import type { SubagentModelSelectionCardState } from '../src/client/subagent-model-selection-card-controller.ts'
-import type { WindowsMcpCardState } from '../src/client/windows-mcp-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -112,23 +109,6 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
     useSubagentModelSelectionCard: bindSnapshotSelector(store),
   } as unknown as SubagentModelSelectionCardProps
   render(<SubagentModelSelectionCard {...props} />)
-  return actions
-}
-
-function renderWindowsMcp(state: Partial<WindowsMcpCardState> = {}) {
-  const store = createSnapshotStore<WindowsMcpCardState>({
-    ...settled,
-    enabled: false,
-    runtimeAvailable: true,
-    ...state,
-  })
-  const actions = { toggleEnabled: vi.fn(), save: vi.fn(), discard: vi.fn() }
-  const props = {
-    ...actions,
-    t,
-    useWindowsMcpCard: bindSnapshotSelector(store),
-  } as unknown as WindowsMcpCardProps
-  render(<WindowsMcpCard {...props} />)
   return actions
 }
 
@@ -478,45 +458,6 @@ describe('SubagentModelSelectionCard', () => {
   })
 })
 
-describe('WindowsMcpCard', () => {
-  it('stages an explicit opt-in and explains full-access system authority', () => {
-    const actions = renderWindowsMcp()
-    fireEvent.click(screen.getByText(en.windowsMcpTitle))
-
-    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle })
-    expect(toggle.getAttribute('aria-checked')).toBe('false')
-    expect(screen.getByText(en.windowsMcpRuntimeReady)).toBeTruthy()
-    expect(screen.getByText(en.windowsMcpApprovalWarning)).toBeTruthy()
-    expect(screen.getByText(/Full access unlocks all 20 tools/).textContent).toContain('Windows permissions')
-    fireEvent.click(toggle)
-
-    expect(actions.toggleEnabled).toHaveBeenCalledOnce()
-  })
-
-  it('disables opt-in when this deployment has no bundled runtime', () => {
-    const actions = renderWindowsMcp({ runtimeAvailable: false })
-    fireEvent.click(screen.getByText(en.windowsMcpTitle))
-
-    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle }) as HTMLButtonElement
-    expect(toggle.disabled).toBe(true)
-    expect(screen.getByText(en.windowsMcpRuntimeUnavailable)).toBeTruthy()
-    fireEvent.click(toggle)
-    expect(actions.toggleEnabled).not.toHaveBeenCalled()
-  })
-
-  it('keeps an already-enabled unavailable runtime switch operable for shutdown', () => {
-    const actions = renderWindowsMcp({ enabled: true, runtimeAvailable: false })
-    fireEvent.click(screen.getByText(en.windowsMcpTitle))
-
-    const toggle = screen.getByRole('switch', { name: en.windowsMcpToggle }) as HTMLButtonElement
-    expect(toggle.disabled).toBe(false)
-    expect(toggle.getAttribute('aria-checked')).toBe('true')
-    expect(screen.getByText(en.windowsMcpEnabledHint)).toBeTruthy()
-    fireEvent.click(toggle)
-    expect(actions.toggleEnabled).toHaveBeenCalledOnce()
-  })
-})
-
 describe('AgentLoopCard', () => {
   it('stages and saves the only field it owns', () => {
     const store = createSnapshotStore<AgentLoopCardState>({
@@ -565,7 +506,6 @@ describe('WebSearchCard', () => {
     const store = createSnapshotStore<WebSearchCardState>({
       ...settled,
       baseURL: field(''),
-      maxUses: field('5'),
       apiKey: field(''),
       apiKeyConfigured: false,
       apiKeyWritable: true,
@@ -608,23 +548,18 @@ describe('WebSearchCard', () => {
     expect(screen.getByLabelText(en.webSearchBaseUrl)).toHaveProperty('disabled', false)
   })
 
-  it('stages the endpoint, the search budget, and their resets', () => {
+  it('stages the endpoint and its reset', () => {
     const actions = renderWebSearch({
       baseURL: field('https://search.test/v1', { overridden: true }),
-      maxUses: field('3', { overridden: true }),
     })
     fireEvent.click(screen.getByText(en.webSearchTitle))
 
     fireEvent.change(screen.getByLabelText(en.webSearchBaseUrl), { target: { value: 'https://other.test' } })
-    fireEvent.change(screen.getByLabelText(en.webSearchMaxUses), { target: { value: '4' } })
     const resets = screen.getAllByRole('button', { name: en.reset })
-    expect(resets).toHaveLength(2)
+    expect(resets).toHaveLength(1)
     for (const reset of resets) fireEvent.click(reset)
 
-    expect(actions.edit.mock.calls).toEqual([
-      ['baseURL', 'https://other.test'],
-      ['maxUses', '4'],
-    ])
-    expect(actions.resetField.mock.calls).toEqual([['baseURL'], ['maxUses']])
+    expect(actions.edit.mock.calls).toEqual([['baseURL', 'https://other.test']])
+    expect(actions.resetField.mock.calls).toEqual([['baseURL']])
   })
 })

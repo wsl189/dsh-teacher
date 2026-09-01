@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-打开设置中的「插件」分区并选择**插件配置**标签页，即可编辑本部署所组装的宿主平面插件。对应命名空间被服务时，七张内置卡片依次为 shell 执行器（`bash`）、agent 循环工具调用并行度（`agent-loop`）、subagent 模型选择（`subagent-model-selection`）、DeepSeek 搜索（`web-search-deepseek`）、MinerU 文档提取（`mineru`）、试题工作区存储（`teacher-workbench`）以及 Windows 桌面控制（`windows-mcp`）。
+打开设置中的「插件」分区并选择**插件配置**标签页，即可编辑本部署所组装的宿主平面插件。对应命名空间被服务时，六张内置卡片依次为 shell 执行器（`bash`）、agent 循环工具调用并行度（`agent-loop`）、subagent 模型选择（`subagent-model-selection`）、AnySearch 网页搜索（`web-search-anysearch`）、MinerU 文档提取（`mineru`）以及试题工作区存储（`teacher-workbench`）。
 
 ### 这里会出现什么
 
-标签页读取 Host 服务了哪些 settings 命名空间，并为每个命名空间派发一个 slot 键，因此渲染出来的是两份账本的交集：存活 Host 插件注册的命名空间，以及注册在这些键上的卡片。被服务却无人认领的命名空间什么都不渲染；命名空间未被本部署服务的卡片根本不会被派发。空态文案要等 Host 的第一次答复，因此一次尚未答复的读取绝不会被读成「本部署没有可配置的插件」。
+标签页读取 Host 服务了哪些 settings 命名空间，并为每个命名空间派发一个 slot 键，因此渲染出来的是两份账本的交集：存活 Host 插件注册的命名空间，以及注册在这些键上的卡片。被服务却无人认领的命名空间什么都不渲染；命名空间未被本部署服务的卡片根本不会被派发。内置 `windows-mcp` 命名空间有意不由卡片认领：桌面控制继续遵循 Host 组合与已持久化的用户值，但不会出现在该标签页中。空态文案要等 Host 的第一次答复，因此一次尚未答复的读取绝不会被读成「本部署没有可配置的插件」。
 
 ### 编辑与保存
 
@@ -37,11 +37,11 @@ kind: "package-reference"
 
 Subagent 卡会同时暂存其权限开关与精确模型复选框。启用时必须至少选择一条适配器路由。保存会在一次 mutation 中提交 `enabled` 与 `allowedModels`，并以草稿开始时的 revision 设栅；Host revision 更新后，草稿会标记为失败，而不会恢复已撤销的路由。关闭时会保留已选路由供以后重新使用。可用模型按提供方分组；当前目录中缺失的已存路由排在末尾，且仍可移除。适配器名称与模型描述仍属于实时目录元数据，不会存储；适配器变化、设置提交和重连后，卡片会刷新这些元数据。
 
-Windows 桌面卡只暂存一个 `enabled` 开关，并反映 Host 按运行时可用性确定的默认值及用户已保存的选择。它会报告 Host 是否收到受信任的内置运行时路径，并在载荷不可用时阻止开启；已经启用的值仍可关闭。警告会说明 Full access 开放全部二十项 Windows-MCP 工具且不额外请求桌面操作批准，其他模式则提供十三项桌面工具并要求批准。Windows 进程权限与其他 DSH 策略仍然生效；这些操作在 DSH 沙箱之外执行。
-
 ### secret 角色字段
 
 密钥控件初始为空、只报告是否已配置，并经由 credentials 领域而非 settings 分节写入；空草稿不写入任何东西，保留已存密钥。
+
+「网页搜索」卡片绑定内置 AnySearch 命名空间。密钥控件写入分节所指定的引用（默认为 `ANYSEARCH_API_KEY`），服务地址变更则存入 settings 文档。两类变更都会作用于下一次操作；未配置密钥时继续使用匿名访问。
 
 -----
 
@@ -98,7 +98,6 @@ Windows 桌面卡只暂存一个 `enabled` 开关，并反映 Host 按运行时�
 - **卡片仍然需要一份浏览器 bundle**：浏览器半侧必须是按客户端模块系统的 lazy-CJS factory 格式构建的 `dsh.client` 包，而产出它的 `clientBundle` 预设位于 `../../../packages/client/tsdown.client.ts`，并非已发布的包，因此本仓库之外的插件得自行复刻该构建。
 - **被服务的命名空间只在两种信号上重读**：协议通告的是 settings 文档提交与连接重置，而非注册行为，因此在标签页读取之后才被其拥有方注册的命名空间，要等下一次文档提交或重连才会加入列表。
 - **shell 卡片跟随被组装的执行器**：POSIX 与 PowerShell 两个执行器家族共用 `bash` 命名空间，因为一个宿主只组装其中之一，所以被服务的 schema 随平台不同（PowerShell 多出 `pwshPath`），尽管卡片在两者下编辑的都是同样两个字段。
-- **Windows 卡片不会安装运行时**：它只能启用桌面 Host 发布的受信任载荷；纯浏览器部署与未提供该路径的源码部署会保持开关不可用。
 
 <a id="dev-note"></a>
 ### 开发备注

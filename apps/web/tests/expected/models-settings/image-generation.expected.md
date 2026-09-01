@@ -1,0 +1,48 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "技能"
+    - button "MCP"
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "侧边卡片"
+  - button "打开配置文件"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 填入各提供方的 API 密钥即可使用其模型。
+  - text: 工具模型
+  - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
+  - combobox "工具模型"
+  - 'button "收起: 生图模型" [expanded]': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
+  - region "渠道":
+    - heading "渠道" [level=3]
+    - paragraph: 填写各渠道的 API 地址与密钥即可使用对应模型
+    - paragraph: 尚无渠道，点击下方按钮添加
+    - button "+ 添加提供方"
+    - button "+ 添加自定义渠道"
+  - button "提示词增强模型 可选"
+  - button "更多设置"
+  - button "放弃修改" [disabled]
+  - button "保存" [disabled]
+  - 'button "展开设置: 语音模型"':
+    - strong: 语音模型
+    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。
+  - list
+  - button "添加提供方":
+    - img
+    - text: 添加提供方
+  - button "添加自定义提供方":
+    - img
+    - text: 添加自定义提供方

@@ -22,7 +22,7 @@ Three host-plane plugins register their own settings namespace, and one browser-
 
 **A section is a subset when the plugin config is bigger than what a user owns.** `agent-loop` exposes only `maxParallelToolCalls`; its `agents` array is consumed once when the service starts, so a stored change there could only look like it had an effect.
 
-**The provider projects, rather than captures.** `web-search-deepseek` hands its provider a thunk instead of an options value, so an endpoint or model change reaches the next search without re-registering the provider — which would make the web seam's provider selection observable to the user as a flicker.
+**The provider projects, rather than captures.** The bundled AnySearch adapter reads one settings snapshot at each operation entry, so a changed credential reference and endpoint travel together on the next request without provider re-registration. The editable section is the `apiKeyEnv` and `baseURL` subset; `maxRenderedContentChars` remains composition-owned because the advanced tools capture that limit when they register.
 
 **Exposure stays a Host allowlist.** The three namespaces join `WEB_SETTINGS_NAMESPACES`; registration alone still never crosses the transport, and a namespace absent from that list answers `settings-not-exposed` exactly as an unregistered one does.
 
@@ -38,12 +38,12 @@ Three host-plane plugins register their own settings namespace, and one browser-
 - **One namespace per executor package instead of the capability-named `bash`.** Declined because the composed executor differs by platform while the settings document does not: a user who set a timeout on macOS would silently lose it on Windows.
 - **Writing the search key into the settings section.** Declined because the literal would then have to ride a `describe` response to be rendered. The card reports only whether a key is configured and writes through the credentials domain, addressed by the reference the section names.
 - **Committing each control as it settles, with no save.** Built first, and replaced: blur is not a decision. It spent a namespace revision per control, gave the user nothing to preview or undo before the write, and left an invalid draft silently discarded — a value the Host's validator refuses simply snapped back with no reason given. One save per card makes the write a gesture the user performs.
-- **Letting the provider read its options per property.** The thunk was read at each use site so read sites could stay unchanged, which quietly broke the contract the constructor states: `search()` awaits credential resolution and then reads the endpoint, model, and budget, so a settings write landing inside that await sent the key resolved from the old section to the endpoint named by the new one. Each operation now snapshots once at its entry and threads that snapshot into credential resolution.
+- **Letting the provider read its options per property.** Reading the thunk at each use site quietly breaks the constructor's promise: an operation awaits credential resolution before sending its request, so a settings write landing inside that await could send the key resolved from the old section to the endpoint named by the new one. Each operation snapshots once at its entry and threads that snapshot into credential resolution.
 - **Validating the fields in the browser to keep the save honest.** Declined: the constraints live in the owning plugin's section validator, and restating them here would make two homes for one rule that could disagree per release. The card checks only what its own control can decide — that a numeric draft is a number — and lets the Host answer for the rest, which is why the save reads the section back.
 
 ## Consequences
 
-A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and the search provider's key, endpoint, and per-request budget from the settings page, with each field marking whether they set it and offering a reset.
+A user edits the shell's command timeout and output cap, the agent loop's parallel tool-call cap, and AnySearch's optional key and endpoint from the settings page, with each field marking whether they set it and offering a reset.
 
 Two costs are real. Adding a fourth plugin still requires an entry in the apiproxy allowlist, so the page's reach is a Host decision rather than a plugin's. And the plugins the web deployment moved into the agent plane — the file tools, the skills, compaction, the todo tool — appear nowhere here, which is most of what a user might expect to find; their configuration remains the preset editor's.
 

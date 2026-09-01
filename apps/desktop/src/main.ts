@@ -13,16 +13,22 @@ import {
   UPDATE_CHANNELS, type DesktopUpdateState,
 } from './update-protocol.ts'
 import { installRendererPermissions } from './renderer-permissions.ts'
+import { resolveDesktopIconPath } from './desktop-assets.ts'
 import { resolveRuntimeEnvironment } from './runtime-environment.ts'
 import { waitForBackendReady } from './backend-process.ts'
 import { startupPageUrl } from './startup-page.ts'
 import { runDesktopStartup } from './startup-lifecycle.ts'
+import {
+  APPLICATION_WINDOW_OPTIONS,
+  STARTUP_WINDOW_OPTIONS,
+} from './window-presentation.ts'
 
 const require = createRequire(import.meta.url)
 const BACKEND_ENTRY = require.resolve('@deepseek-ai/dsh/desktop-backend')
 const BACKEND_STOP_TIMEOUT_MS = 8_000
 
 let mainWindow: BrowserWindow | undefined
+let startupWindow: BrowserWindow | undefined
 let backend: ChildProcess | undefined
 let backendStop: Promise<void> | undefined
 let allowQuit = false
@@ -98,27 +104,32 @@ const updates = new DesktopUpdateController(autoUpdater as unknown as AutoUpdate
 })
 autoUpdater.logger = log
 
-/** Create the hardened renderer window and show its local startup page. */
-async function createWindow(): Promise<BrowserWindow> {
+/** Create the transparent, script-free startup card. */
+async function createStartupWindow(): Promise<BrowserWindow> {
   const window = new BrowserWindow({
-    width: 1440,
-    height: 900,
-    minWidth: 980,
-    minHeight: 640,
-    show: false,
-    backgroundColor: '#f7f8fa',
-    autoHideMenuBar: true,
+    ...STARTUP_WINDOW_OPTIONS,
+    icon: resolveDesktopIconPath({
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+    }),
     webPreferences: {
-      preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
     },
   })
-  mainWindow = window
+  startupWindow = window
   window.once('closed', () => {
-    if (mainWindow === window) mainWindow = undefined
+    if (startupWindow === window) startupWindow = undefined
   })
+  await window.loadURL(startupPageUrl(app.getLocale()))
+  if (!window.isDestroyed()) window.show()
+  return window
+}
+
+/** Restrict links and renderer-created windows to the user's external browser. */
+function installExternalNavigation(window: BrowserWindow): void {
   window.webContents.setWindowOpenHandler(({ url: target }) => {
     let protocol: string | undefined
     try {
@@ -129,13 +140,28 @@ async function createWindow(): Promise<BrowserWindow> {
     if (protocol === 'https:' || protocol === 'http:') void shell.openExternal(target)
     return { action: 'deny' }
   })
-  await window.loadURL(startupPageUrl(app.getLocale()))
-  if (!window.isDestroyed()) window.show()
-  return window
 }
 
-/** Replace the local startup page with the authenticated private Web application. */
-async function loadBackendPage(window: BrowserWindow, url: string): Promise<void> {
+/** Create a hidden ordinary window and load the authenticated Web application. */
+async function createApplicationWindow(url: string): Promise<BrowserWindow> {
+  const window = new BrowserWindow({
+    ...APPLICATION_WINDOW_OPTIONS,
+    icon: resolveDesktopIconPath({
+      packaged: app.isPackaged,
+      resourcesPath: process.resourcesPath,
+      appPath: app.getAppPath(),
+    }),
+    webPreferences: {
+      preload: fileURLToPath(new URL('./preload.cjs', import.meta.url)),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  })
+  window.once('closed', () => {
+    if (mainWindow === window) mainWindow = undefined
+  })
+  installExternalNavigation(window)
   const disposePermissions = installRendererPermissions(window, url)
   window.once('closed', disposePermissions)
   window.webContents.on('will-navigate', (event, target) => {
@@ -149,6 +175,19 @@ async function loadBackendPage(window: BrowserWindow, url: string): Promise<void
     if (targetOrigin !== new URL(url).origin) event.preventDefault()
   })
   await window.loadURL(url)
+  return window
+}
+
+/** Publish and focus the fully loaded ordinary application window. */
+function showApplicationWindow(window: BrowserWindow): void {
+  mainWindow = window
+  window.show()
+  window.focus()
+}
+
+/** Immediately dispose a startup or hidden application window. */
+function destroyWindow(window: BrowserWindow): void {
+  if (!window.isDestroyed()) window.destroy()
 }
 
 ipcMain.handle(UPDATE_CHANNELS.getState, () => updates.getState())
@@ -161,11 +200,13 @@ if (!app.requestSingleInstanceLock()) {
 } else {
   app.setAppUserModelId('ai.deepseek.dsh.teacher')
   app.on('second-instance', () => {
-    if (mainWindow?.isMinimized() === true) mainWindow.restore()
-    mainWindow?.show()
-    mainWindow?.focus()
+    const window = mainWindow ?? startupWindow
+    if (window?.isMinimized() === true) window.restore()
+    window?.show()
+    window?.focus()
   })
   app.on('before-quit', (event) => {
+    updates.stop()
     if (allowQuit) return
     quitRequested = true
     event.preventDefault()
@@ -177,10 +218,12 @@ if (!app.requestSingleInstanceLock()) {
   app.on('window-all-closed', () => { app.quit() })
   void app.whenReady().then(async () => {
     try {
-      await runDesktopStartup({
-        createWindow,
+      await runDesktopStartup<BrowserWindow>({
+        createStartupWindow,
         startBackend,
-        loadBackendPage,
+        createApplicationWindow,
+        showApplicationWindow,
+        destroyWindow,
         startUpdates: async () => { await updates.start() },
         shouldStop: () => quitRequested,
       })

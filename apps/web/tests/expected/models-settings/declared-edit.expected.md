@@ -10,6 +10,8 @@
     - button "插件":
       - img
       - text: 插件
+    - button "技能"
+    - button "MCP"
     - button "Agent 预设":
       - img
       - text: Agent 预设
@@ -24,6 +26,10 @@
   - paragraph: 用于整理课程表等后台 AI 任务，只能从已配置的模型中选择。
   - combobox "工具模型"
   - status: 工具模型已保存。
+  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
+  - 'button "展开设置: 语音模型"':
+    - strong: 语音模型
+    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。
   - list:
     - listitem:
       - text: minimax-cn
@@ -60,7 +66,7 @@
             - text: acme-large
           - textbox "显示名称 1":
             - /placeholder: 显示名称
-          - button "模型详情 1" [expanded]: 模型详情
+          - button "容量 1" [expanded]: 容量
           - button "删除模型 1"
           - text: 上下文窗口
           - textbox "上下文窗口 1":

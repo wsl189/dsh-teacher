@@ -47,6 +47,7 @@ The kernel packages boot and serve the page; the UI feature packages present it.
 | [`ui-chat/`](ui-chat/README.md) | Projects and renders the Chat conversation target | — |
 | [`ui-approval/`](ui-approval/README.md) | Presents approval requests and returns user decisions | — |
 | [`ui-tool/`](ui-tool/README.md) | Composes Tool call trees and keyed per-Tool views | — |
+| [`ui-image-generation/`](ui-image-generation/README.md) | Keeps generated-image previews beside the final answer | — |
 | [`ui-workflow-run/`](ui-workflow-run/README.md) | Replays durable workflow runs as nested chat disclosures | — |
 | [`ui-goal/`](ui-goal/README.md) | Presents and manages the current goal | — |
 | [`ui-trajectory/`](ui-trajectory/README.md) | Presents alternate views of agent activity | — |

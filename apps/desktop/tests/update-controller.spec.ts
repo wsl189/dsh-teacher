@@ -1,8 +1,11 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
-  DesktopUpdateController, type AutoUpdaterEventMap, type AutoUpdaterLike,
+  DESKTOP_UPDATE_CHECK_INTERVAL_MS, DesktopUpdateController,
+  type AutoUpdaterEventMap, type AutoUpdaterLike,
 } from '../src/update-controller.ts'
 import { isDesktopUpdateState, type DesktopUpdateState } from '../src/update-protocol.ts'
+
+const controllers: DesktopUpdateController[] = []
 
 class FakeUpdater implements AutoUpdaterLike {
   autoDownload = true
@@ -51,8 +54,14 @@ function setup(enabled = true, currentVersion = '1.0.0') {
     beforeInstall,
     logger,
   })
+  controllers.push(controller)
   return { updater, published, beforeInstall, logger, controller }
 }
+
+afterEach(() => {
+  for (const controller of controllers.splice(0)) controller.stop()
+  vi.useRealTimers()
+})
 
 describe('DesktopUpdateController', () => {
   it('configures manual download and skips the provider outside an installed build', async () => {
@@ -84,7 +93,7 @@ describe('DesktopUpdateController', () => {
 
   it('hides a background check failure and keeps a failed download retryable', async () => {
     const b = setup()
-    b.updater.checkForUpdates.mockRejectedValueOnce(new Error('no releases'))
+    b.updater.checkForUpdates.mockRejectedValueOnce('no releases')
     await b.controller.start()
     expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
     expect(b.logger.warn).toHaveBeenCalledWith('desktop update check failed: no releases')
@@ -95,10 +104,45 @@ describe('DesktopUpdateController', () => {
     expect(b.controller.getState()).toEqual({ status: 'error', version: '2.0.0', message: 'offline' })
   })
 
+  it('retries every five minutes without overlapping or polling after availability', async () => {
+    vi.useFakeTimers()
+    const b = setup()
+    const first = Promise.withResolvers<unknown>()
+    b.updater.checkForUpdates.mockReturnValueOnce(first.promise)
+
+    const started = b.controller.start()
+    const duplicateStart = b.controller.start()
+    expect(b.updater.checkForUpdates).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(DESKTOP_UPDATE_CHECK_INTERVAL_MS * 2)
+    expect(b.updater.checkForUpdates).toHaveBeenCalledOnce()
+
+    first.reject(new Error('offline'))
+    await Promise.all([started, duplicateStart])
+    expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
+    await b.controller.start()
+    expect(b.updater.checkForUpdates).toHaveBeenCalledOnce()
+
+    await vi.advanceTimersByTimeAsync(DESKTOP_UPDATE_CHECK_INTERVAL_MS - 1)
+    expect(b.updater.checkForUpdates).toHaveBeenCalledOnce()
+    await vi.advanceTimersByTimeAsync(1)
+    expect(b.updater.checkForUpdates).toHaveBeenCalledTimes(2)
+
+    b.updater.emitAvailable('1.1.0')
+    await vi.advanceTimersByTimeAsync(DESKTOP_UPDATE_CHECK_INTERVAL_MS)
+    expect(b.updater.checkForUpdates).toHaveBeenCalledTimes(2)
+    b.updater.emitUnavailable('1.0.0')
+    b.controller.stop()
+    b.controller.stop()
+    await vi.advanceTimersByTimeAsync(DESKTOP_UPDATE_CHECK_INTERVAL_MS)
+    expect(b.updater.checkForUpdates).toHaveBeenCalledTimes(2)
+  })
+
   it('rejects actions that have no matching update state', async () => {
     const b = setup()
     await expect(b.controller.download()).rejects.toThrow('no desktop update is available')
     await expect(b.controller.install()).rejects.toThrow('desktop update is not downloaded')
+    b.updater.emitProgress(12)
+    expect(b.controller.getState()).toEqual({ status: 'checking' })
     b.updater.emitError(new Error('provider unavailable'))
     expect(b.controller.getState()).toEqual({ status: 'up-to-date', version: '1.0.0' })
     b.updater.emitUnavailable('1.0.0')

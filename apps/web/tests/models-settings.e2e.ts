@@ -26,6 +26,7 @@ import {
 import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
+const IMAGE_GENERATION_EXPECTED = join(SNAPSHOT_DIR, 'image-generation.expected.md')
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
@@ -55,6 +56,84 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     await browser?.close()
     await scaffold?.close()
   })
+
+  it('places image and speech configuration below Tool model and keeps both collapsed', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-voice-model'))
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '插件', exact: true }).click()
+    await dialog.getByRole('tab', { name: '连接平台', exact: true }).click()
+    await dialog.getByRole('tab', { name: 'QQ', exact: true }).click()
+    await dialog.getByRole('region', { name: 'QQ 设置' }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
+    await dialog.getByRole('button', { name: '模型' }).click()
+    await dialog.getByText('填入各提供方的 API 密钥即可使用其模型。').waitFor({ timeout: 10_000 })
+
+    const toolModel = dialog.getByText('工具模型', { exact: true }).first()
+    const imageModel = dialog.getByRole('button', { name: '展开: 生图模型' })
+    const voiceModel = dialog.getByRole('button', { name: '展开设置: 语音模型' })
+    const addProvider = dialog.getByRole('button', { name: '添加提供方', exact: true })
+    await imageModel.waitFor({ timeout: 10_000 })
+    await voiceModel.waitFor({ timeout: 10_000 })
+    const toolBox = await toolModel.boundingBox()
+    const imageBox = await imageModel.boundingBox()
+    const voiceBox = await voiceModel.boundingBox()
+    const addBox = await addProvider.boundingBox()
+    expect(toolBox).not.toBeNull()
+    expect(imageBox).not.toBeNull()
+    expect(voiceBox).not.toBeNull()
+    expect(addBox).not.toBeNull()
+    expect(imageBox!.y).toBeGreaterThan(toolBox!.y)
+    expect(voiceBox!.y).toBeGreaterThan(imageBox!.y)
+    expect(voiceBox!.y).toBeLessThan(addBox!.y)
+    expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
+    expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
+
+    await imageModel.click()
+    await dialog.getByText('渠道', { exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '+ 添加提供方', exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '+ 添加自定义渠道', exact: true }).waitFor({ timeout: 10_000 })
+    const imageGenerationSnapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(IMAGE_GENERATION_EXPECTED, imageGenerationSnapshot, MODE)
+    await dialog.getByRole('button', { name: '收起: 生图模型' }).click()
+    expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
+
+    await voiceModel.click()
+    const baseUrl = dialog.getByLabel('ASR Base URL')
+    await baseUrl.waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '启用语音识别' }).click()
+    await baseUrl.fill('http://127.0.0.1:9001/v1/')
+    await dialog.getByLabel('模型', { exact: true }).fill('faster-whisper-small')
+    await dialog.getByLabel('语言', { exact: true }).fill('zh')
+    await dialog.getByLabel('API Key', { exact: true }).fill('voice-model-e2e-key')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByText('语音模型设置已保存。', { exact: true }).waitFor({ timeout: 10_000 })
+
+    const qqConfigPath = join(scaffold.harnessHome, 'integrations', 'dsh-qq', 'config.json')
+    await expect.poll(async () => {
+      const document: unknown = JSON.parse(await readFile(qqConfigPath, 'utf8'))
+      if (typeof document !== 'object' || document === null || !('speech' in document)) return undefined
+      return document.speech
+    })
+      .toEqual({
+        enabled: true,
+        baseUrl: 'http://127.0.0.1:9001/v1/',
+        model: 'faster-whisper-small',
+        language: 'zh',
+      })
+    await expect.poll(
+      async () => readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8').catch(() => ''),
+      { timeout: 10_000 },
+    ).toContain('DSH_QQ_ASR_API_KEY: voice-model-e2e-key')
+    expect(await page.content()).not.toContain('voice-model-e2e-key')
+
+    await dialog.getByRole('button', { name: '收起设置: 语音模型' }).click()
+    expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
+    await dialog.getByRole('button', { name: '关闭', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden' })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
 
   it('opens the add card over the dormant directory vocabulary', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-empty'))
@@ -230,7 +309,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await dialog.getByRole('button', { name: '添加模型' }).click()
     await dialog.getByLabel('模型 ID 1').fill('acme-large')
-    await dialog.getByRole('button', { name: '模型详情 1' }).click()
+    await dialog.getByRole('button', { name: '容量 1' }).click()
     await dialog.getByLabel('输入类型 1').selectOption('image')
     await dialog.getByRole('button', { name: '创建提供方', exact: true }).click()
 
@@ -280,7 +359,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
     expect(await protocol.inputValue()).toBe('openai-completions')
     const name = dialog.getByLabel('显示名称', { exact: true })
     expect(await name.inputValue()).toBe('Acme Gateway')
-    await dialog.getByRole('button', { name: '模型详情 1' }).click()
+    await dialog.getByRole('button', { name: '容量 1' }).click()
     expect(await dialog.getByLabel('输入类型 1').inputValue()).toBe('image')
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DECLARED_EDIT_EXPECTED, snapshot, MODE)
@@ -338,7 +417,7 @@ describe('web e2e: Models settings page configures a dormant provider', () => {
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
-      'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
+      'delete.expected.md', 'empty.expected.md', 'image-generation.expected.md', 'model-picker.expected.md',
       'native-delete.expected.md',
     ])
   })

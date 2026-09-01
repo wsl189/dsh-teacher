@@ -53,7 +53,7 @@ const transcriptSchema = validation.union([
 export interface Config {
   /** Absolute dsh-im QQ configuration document path. */
   readonly configPath: string
-  /** Credential reference written by the QQ settings surface. */
+  /** Credential reference written by the Voice model settings card. */
   readonly credentialRef: string
   /** Per-transcription network deadline in milliseconds. */
   readonly timeoutMs: number
@@ -109,7 +109,7 @@ export class QqConfiguredSpeechProvider implements SpeechProvider {
     this.credential = credentialRef(config.credentialRef)
   }
 
-  /** @returns true because configuration can be enabled through the QQ settings surface at any time. */
+  /** @returns true because configuration can be enabled through the Voice model settings card at any time. */
   available(): boolean {
     return true
   }

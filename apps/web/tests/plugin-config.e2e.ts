@@ -19,6 +19,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/plugin-config', import.meta.url))
 const SECTION_EXPECTED = join(SNAPSHOT_DIR, 'section.expected.md')
 const MODE = webSnapshotMode()
+const ANYSEARCH_TEST_KEY_REF = 'DSH_PLUGIN_CONFIG_ANYSEARCH_KEY'
 
 describe('web e2e: plugin configuration section', () => {
   let scaffold: WebScaffold
@@ -27,7 +28,12 @@ describe('web e2e: plugin configuration section', () => {
   let tripwire: ReturnType<typeof watchConsole>
 
   beforeAll(async () => {
-    scaffold = await launchWebScaffold({})
+    scaffold = await launchWebScaffold({
+      anySearch: {
+        apiKeyEnv: ANYSEARCH_TEST_KEY_REF,
+        baseURL: 'https://api.anysearch.com',
+      },
+    })
     browser = await chromium.launch()
     // Chinese browser: the section asserts the localized copy the client
     // derives from it, as the rest of the settings surface does.
@@ -73,12 +79,17 @@ describe('web e2e: plugin configuration section', () => {
     return readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8').catch(() => '')
   }
 
-  it('shows one card per exposed host-plane namespace', async () => {
+  /** The credential document as the Host has written it so far. */
+  async function credentialsDocument(): Promise<string> {
+    return readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8').catch(() => '')
+  }
+
+  it('shows claimed cards and omits built-in Windows desktop control', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-cards'))
     const dialog = await openPlugins()
 
-    // Every card the shipped Web composition exposes, including the dormant
-    // Windows desktop integration whose runtime exists only in the installer.
+    // Every card the shipped Web composition exposes. Windows desktop control
+    // remains a Host integration but is intentionally absent from this tab.
     await dialog.getByText('Subagent', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('button', { name: '展开设置: Subagent' }).count()).toBe(1)
     await dialog.getByText('终端', { exact: true }).waitFor({ timeout: 10_000 })
@@ -86,7 +97,9 @@ describe('web e2e: plugin configuration section', () => {
     expect(await dialog.getByText('网页搜索', { exact: true }).count()).toBe(1)
     expect(await dialog.getByText('文档提取', { exact: true }).count()).toBe(1)
     expect(await dialog.getByText('试题切割工作区', { exact: true }).count()).toBe(1)
-    expect(await dialog.getByText('Windows 桌面控制', { exact: true }).count()).toBe(1)
+    expect(await dialog.getByText('Windows 桌面控制', { exact: true }).count()).toBe(0)
+    expect(await dialog.getByText('生图模型', { exact: true }).count()).toBe(0)
+    expect(await dialog.getByText('AI 生图（dsh-imagegen）', { exact: true }).count()).toBe(0)
     // Collapsed: a card's fields appear only once it is expanded.
     expect(await dialog.getByLabel('命令超时（毫秒）').count()).toBe(0)
 
@@ -95,18 +108,26 @@ describe('web e2e: plugin configuration section', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('keeps Windows desktop control unavailable without the packaged runtime', async () => {
-    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-windows-mcp'))
+  it('stores the AnySearch key from the web-search card', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-plugin-config-anysearch-key'))
     const dialog = await openPlugins()
-    await dialog.getByText('Windows 桌面控制', { exact: true }).click()
+    await dialog.getByText('网页搜索', { exact: true }).click()
 
-    const toggle = dialog.getByRole('switch', { name: '启用 Windows 桌面工具' })
-    await toggle.waitFor({ timeout: 10_000 })
-    expect(await toggle.isDisabled()).toBe(true)
-    expect(await dialog.getByText('内置运行时不可用；请安装并运行 Windows 桌面版后再启用。').count()).toBe(1)
-    expect(await dialog.getByText('Full access 会开放全部 20 项工具', { exact: false }).count()).toBe(1)
-    expect(await dialog.getByText('仍受 Windows 权限和其他 DSH 策略约束', { exact: false }).count()).toBe(1)
-    expect(await settingsDocument()).not.toContain('windows-mcp')
+    const key = dialog.getByLabel('API Key（可选）')
+    await key.waitFor({ timeout: 10_000 })
+    expect(await dialog.getByLabel('接口地址').inputValue()).toBe('https://api.anysearch.com')
+    expect(await dialog.getByText('未配置密钥；当前使用匿名访问。').count()).toBe(1)
+    await key.fill('fixture-anysearch-key')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+
+    await expect.poll(async () => (await credentialsDocument()).includes(ANYSEARCH_TEST_KEY_REF), { timeout: 10_000 })
+      .toBe(true)
+    expect(await credentialsDocument()).toContain('fixture-anysearch-key')
+    expect(await settingsDocument()).not.toContain('fixture-anysearch-key')
+    const expand = dialog.getByRole('button', { name: '展开设置: 网页搜索' })
+    await expand.waitFor({ timeout: 5_000 })
+    await expand.click()
+    expect(await dialog.getByText('已配置密钥。').count()).toBe(1)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

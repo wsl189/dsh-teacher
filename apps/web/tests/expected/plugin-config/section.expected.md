@@ -42,7 +42,7 @@
           - img
       - listitem:
         - 'button "展开设置: 网页搜索"':
-          - text: 网页搜索 DeepSeek 搜索提供方。
+          - text: 网页搜索 使用 AnySearch 进行网页搜索和正文提取。
           - img
       - listitem:
         - 'button "展开设置: 文档提取"':
@@ -52,11 +52,5 @@
         - 'button "展开设置: 试题切割工作区"':
           - text: 试题切割工作区 设置切题试卷和学生试题副本的存储策略。
           - img
-      - listitem:
-        - 'button "展开设置: Windows 桌面控制"':
-          - text: Windows 桌面控制 通过安装包内置的 Windows-MCP 运行时控制 Windows 应用并使用系统工具。
-          - img
-      - listitem:
-        - 'button "展开: AI 生图（dsh-imagegen）"': AI 生图（dsh-imagegen） 配置图像生成 API 地址与密钥 ▾
       - listitem:
         - 'button "展开: Univer Office"': Univer Office 控制文档编辑期间的实时预览体验。

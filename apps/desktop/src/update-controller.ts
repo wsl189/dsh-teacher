@@ -2,6 +2,9 @@
 
 import type { DesktopUpdateState } from './update-protocol.ts'
 
+/** Polling cadence for installed builds that have not found a newer Release. */
+export const DESKTOP_UPDATE_CHECK_INTERVAL_MS = 5 * 60_000
+
 /** Minimal update metadata consumed from electron-updater events. */
 interface UpdateInfoLike {
   /** SemVer selected by the provider. */
@@ -61,6 +64,8 @@ export interface DesktopUpdateControllerOptions {
 export class DesktopUpdateController {
   private snapshot: DesktopUpdateState = Object.freeze({ status: 'checking' })
   private targetVersion: string | undefined
+  private checkInterval: ReturnType<typeof setInterval> | undefined
+  private checkInFlight: Promise<void> | undefined
 
   /**
    * @param updater - electron-updater adapter.
@@ -96,13 +101,39 @@ export class DesktopUpdateController {
   /** Return the current immutable updater projection. */
   getState = (): DesktopUpdateState => this.snapshot
 
-  /** Start the one automatic check performed at app startup. */
+  /** Check at startup and every five minutes until a newer Release is found. */
   async start(): Promise<void> {
     if (!this.options.enabled) {
       this.set({ status: 'up-to-date', version: this.options.currentVersion })
       return
     }
+    if (this.checkInterval !== undefined) {
+      if (this.checkInFlight !== undefined) await this.checkInFlight
+      return
+    }
+    this.checkInterval = setInterval(() => { void this.check() }, DESKTOP_UPDATE_CHECK_INTERVAL_MS)
+    await this.check()
+  }
+
+  /** Stop periodic checks before application shutdown. */
+  stop(): void {
+    if (this.checkInterval === undefined) return
+    clearInterval(this.checkInterval)
+    this.checkInterval = undefined
+  }
+
+  /** Share an active provider request and skip checks after finding an update. */
+  private check(): Promise<void> {
+    if (this.checkInFlight !== undefined) return this.checkInFlight
+    if (this.targetVersion !== undefined) return Promise.resolve()
     this.set({ status: 'checking' })
+    const operation = this.performCheck().finally(() => { this.checkInFlight = undefined })
+    this.checkInFlight = operation
+    return operation
+  }
+
+  /** Run one recoverable provider request. */
+  private async performCheck(): Promise<void> {
     try {
       await this.updater.checkForUpdates()
     } catch (error) {

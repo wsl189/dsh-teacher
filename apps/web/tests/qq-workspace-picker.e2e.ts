@@ -101,6 +101,8 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
 
   it('initializes an unassigned bot on the desktop without replacing an existing workspace', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-qq-desktop-default'))
+    expect(await page.getByText('语音模型', { exact: true }).count()).toBe(0)
+    expect(await page.getByLabel('ASR Base URL').count()).toBe(0)
     const newWorkspace = page.locator(`[data-bot-id="${newBotId}"] .dim-workspacePath`)
     const existingWorkspace = page.locator(`[data-bot-id="${savedBotId}"] .dim-workspacePath`)
     await expect.poll(() => newWorkspace.textContent()).toBe(desktop)

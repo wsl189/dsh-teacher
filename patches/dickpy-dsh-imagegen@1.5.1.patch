@@ -1,0 +1,220 @@
+diff --git a/lib/index.js b/lib/index.js
+index 11d7d6d..1fb8bc2 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -736,6 +736,6 @@ async function generateImage(upstream, request, options = {}) {
+ 	const baseUrl = upstream.apiUrl.trim().replace(/\/+$/, "");
+-	if (baseUrl === "") throw new ImageGenError("api_url 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
+-	if (upstream.apiKey.trim() === "") throw new ImageGenError("api_key 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
++	if (baseUrl === "") throw new ImageGenError("api_url 未配置：请先在「设置 → 模型 → 生图模型」中填写", "config-missing");
++	if (upstream.apiKey.trim() === "") throw new ImageGenError("api_key 未配置：请先在「设置 → 模型 → 生图模型」中填写", "config-missing");
+ 	if (request.mode === "edit" && isZhipuImage(wireModel(request))) throw new ImageGenError("智谱 GLM-Image 当前仅支持文生图，请切换到文生图模式或选择支持图生图的模型", "edit-unsupported");
+ 	const params = effectiveParams(request);
+ 	const count = effectiveCount(request);
+@@ -1090,7 +1090,7 @@ var ImageGenService = class {
+ 	async run(request, signal) {
+ 		const view = this.resolve();
+ 		const channel = view.channels.find((candidate) => candidate.id === request.channelId) ?? view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
+-		if (channel === void 0) throw new ImageGenError("尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥", "no-channels");
++		if (channel === void 0) throw new ImageGenError("尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥", "no-channels");
+ 		const result = await generateImage({
+ 			apiUrl: channel.apiUrl,
+ 			apiKey: channel.apiKey
+@@ -2054,7 +2054,7 @@ function applyGenerationRoutes(ctx, channelViewOf, options = {}) {
+ 		if (view.channels.length === 0) return {
+ 			ok: false,
+ 			code: "no-channels",
+-			message: "尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥"
++			message: "尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥"
+ 		};
+ 		const explicit = view.channels.find((candidate) => candidate.id === request.channelId);
+ 		const defaults = view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
+@@ -2967,9 +2967,9 @@ const READ_IMAGE_TOOL = "read_image";
+ /** Agent calls stay pending until the provider and history write settle. */
+ const AGENT_GENERATION_TIMEOUT_MS = 3e5;
+ function ensureAgentImageConfigured(config) {
+-	if (!config.enabled) throw new ImageGenError("AI image generation is disabled. Open Settings > Plugins > AI Image and enable it.", "plugin-disabled");
+-	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled in Settings > Plugins > AI Image.", "agent-generation-disabled");
+-	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "" && channel.apiKey.trim() !== "")) throw new ImageGenError("Image API credentials are not configured. Open Settings > Plugins > AI Image, add a channel and fill in its API URL and API key.", "image-api-not-configured");
++	if (!config.enabled) throw new ImageGenError("AI image generation is disabled. Open Settings > Models > Image generation model and enable it.", "plugin-disabled");
++	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled in Settings > Models > Image generation model.", "agent-generation-disabled");
++	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "" && channel.apiKey.trim() !== "")) throw new ImageGenError("Image API credentials are not configured. Open Settings > Models > Image generation model, add a channel and fill in its API URL and API key.", "image-api-not-configured");
+ }
+ /** Resolve a configured image alias and its owning channel. */
+ function resolveAgentImageModel(config, requested) {
+@@ -2978,7 +2978,7 @@ function resolveAgentImageModel(config, requested) {
+ 		alias: model.alias,
+ 		upstream: model.id
+ 	})));
+-	if (entries.length === 0) throw new ImageGenError("No image models are configured. Open Settings > Plugins > AI Image and add a channel with at least one model.", "no-models-configured");
++	if (entries.length === 0) throw new ImageGenError("No image models are configured. Open Settings > Models > Image generation model and add a channel with at least one model.", "no-models-configured");
+ 	const wanted = typeof requested === "string" && requested.trim() !== "" ? requested.trim() : "";
+ 	if (wanted === "") {
+ 		if (entries.length === 1) return entries[0];
+@@ -3504,7 +3504,7 @@ const SECTION_ORDER = 150;
+ const IMAGEGEN_GUIDANCE = "本机已安装 dsh-imagegen 插件（DSH AI 生图）：侧边栏「AI 生图」入口。能力：通过「渠道」对接 OpenAI 兼容图像生成 API（每个渠道 = 一个 API 端点 + 各自的模型目录），支持文生图（/images/generations）与图生图（/images/edits，上传参考图，grok-imagine 模型按官方 JSON image_url 协议发送，nanobanana 系列按 aspect_ratio / image_size 参数协议发送；seedream 系列统一走 /images/generations，参考图以 JSON image 数组发送；智谱 `glm-image` 使用官方 `/api/paas/v4/images/generations`，当前仅支持文生图）。API 地址与密钥在 GUI 设置中按渠道配置，密钥仅存于本机设置文档；生成请求由本地宿主代理转发，结果以 base64 返回面板，可预览与下载。模型只能使用用户在各渠道配置目录中的模型；检测模型时会过滤聊天、Embedding 等非图片模型，但模型出现在 /models 中仍不等于其网关原生支持生图协议，遇到 Qwen、Gemini 等非 OpenAI 生图协议时应如实说明上游兼容性。可一键把满意的图片加入「画廊」。内置「提示词模板库」（面板提示词框左下角「模板库」按钮）：打包 awesome-gpt-image-2 的数百条提示词案例，可搜索、筛选与复用。Agent 可直接调用 `generate_image` 提交文生图，也可用 `edit_image` 图生图；默认保持工具调用等待直到任务完成，完成图片显示在工具调用对应的左侧结果区域，模型收到状态和附件引用，不会额外伪造用户消息。用户也可以使用 `/edit_image <修改描述>`，命令会直接读取当前对话最近图片并调用插件图片模型，不经过对话模型的图片能力检查。若明确需要后台执行，可传 `wait_for_completion: false`，之后再用 `get_image_generation_task` 查询；不要反复轮询。限制：生成消耗上游 API 额度；图片内容由上游模型生成，可能不符合预期或包含不适宜内容；api_key 以明文存储在设置文档中；参考图会发送至所配置的 API 服务；模板库在线刷新与参考图首次加载需要访问 vibeui.top。用户提到「生图 / 绘画 / 生成图片 / 文生图 / 图生图 / 画廊 / 提示词模板」时即指本插件，请据此协作。";
+ /** Append the live channel × model table so an Agent can honor user choices. */
+ function guidanceFor(channels, defaultChannelId) {
+-	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥。`;
++	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥。`;
+ 	const table = channels.map((channel) => {
+ 		const aliases = channel.models.map((model) => model.alias).join("、");
+ 		const mark = channel.id === defaultChannelId ? "（默认渠道）" : "";
+diff --git a/lib/client.js b/lib/client.js
+index c46d3f1..bfa0b5a 100644
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -384,7 +384,7 @@ window.__ModuleLoader__.load({
+ 			"prompt.enhancing": "增强中…",
+ 			"prompt.enhanceHint": "使用已配置的对话模型扩写提示词",
+ 			"prompt.configTitle": "请先配置提示词增强模型",
+-			"prompt.configHint": "已打开设置。进入「插件 → AI 生图」，填写或复用 API 地址和密钥，选择对话模型并保存。",
++			"prompt.configHint": "已打开设置。进入「模型 → 生图模型」，填写或复用 API 地址和密钥，选择对话模型并保存。",
+ 			"tasks.title": "生成任务",
+ 			"tasks.queued": "排队中",
+ 			"tasks.running": "生成中",
+@@ -509,13 +509,13 @@ window.__ModuleLoader__.load({
+ 			"preview.copyPrompt": "复制提示词",
+ 			"preview.copied": "已复制",
+ 			"preview.addToEdit": "添加到图生图",
+-			"config.missing": "尚未配置 API：请前往「设置 → 插件 → 可配置」为 AI 生图填写 api_url 与 api_key。",
++			"config.missing": "尚未配置 API：请前往「设置 → 模型 → 生图模型」配置生图渠道。",
+ 			"config.generationTitle": "请先配置生图 API",
+-			"config.generationHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。填写生图 API 地址与 API 密钥，保存后即可开始生成。",
++			"config.generationHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。填写生图 API 地址与 API 密钥，保存后即可开始生成。",
+ 			"config.enhancementTitle": "请先配置提示词增强模型",
+-			"config.enhancementHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。填写或复用对话 API 地址和密钥，选择对话模型并保存。",
++			"config.enhancementHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。填写或复用对话 API 地址和密钥，选择对话模型并保存。",
+ 			"config.disabledTitle": "AI 生图插件已停用",
+-			"config.disabledHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。开启「启用插件」后即可生成图片。",
++			"config.disabledHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。开启「启用插件」后即可生成图片。",
+ 			"config.configured": "已连接 {url}",
+ 			"config.disabled": "插件已停用，请在设置中重新启用。",
+ 			"connection.connected": "已连接",
+@@ -528,8 +528,8 @@ window.__ModuleLoader__.load({
+ 			"update.success": "已更新到 {version}，请重启 DSH",
+ 			"update.failed": "更新失败，请重试",
+ 			"update.release": "查看 Release",
+-			"settings.title": "AI 生图（dsh-imagegen）",
+-			"settings.description": "配置图像生成 API 地址与密钥",
++			"settings.title": "生图模型",
++			"settings.description": "配置生图渠道、模型、API 地址与密钥",
+ 			"settings.currentVersion": "当前版本",
+ 			"settings.apiUrl": "API 地址（api_url）",
+ 			"settings.apiUrlHint": "OpenAI 兼容接口基址，如 https://api.openai.com/v1；将自动拼接 /images/generations 与 /images/edits",
+@@ -745,7 +745,7 @@ window.__ModuleLoader__.load({
+ 			"prompt.enhancing": "Enhancing…",
+ 			"prompt.enhanceHint": "Expand the prompt with the configured chat model",
+ 			"prompt.configTitle": "Configure a prompt enhancement model first",
+-			"prompt.configHint": "Settings has opened. Go to Plugins → AI Image, configure or reuse an API URL and key, choose a chat model, then save.",
++			"prompt.configHint": "Settings has opened. Go to Models → Image generation model, configure or reuse an API URL and key, choose a chat model, then save.",
+ 			"tasks.title": "Generation tasks",
+ 			"tasks.queued": "Queued",
+ 			"tasks.running": "Generating",
+@@ -870,13 +870,13 @@ window.__ModuleLoader__.load({
+ 			"preview.copyPrompt": "Copy prompt",
+ 			"preview.copied": "Copied",
+ 			"preview.addToEdit": "Add to image to image",
+-			"config.missing": "API not configured: open \"Settings → Plugins → Configurable\" and fill in api_url and api_key for AI Image.",
++			"config.missing": "API not configured: open Settings → Models → Image generation model and configure an image provider.",
+ 			"config.generationTitle": "Configure the image API first",
+-			"config.generationHint": "DSH Settings → Plugins → AI Image has opened. Enter the image API URL and API key, then save before generating.",
++			"config.generationHint": "DSH Settings → Models → Image generation model has opened. Enter the image API URL and API key, then save before generating.",
+ 			"config.enhancementTitle": "Configure a prompt enhancement model first",
+-			"config.enhancementHint": "DSH Settings → Plugins → AI Image has opened. Configure or reuse a chat API URL and key, choose a chat model, then save.",
++			"config.enhancementHint": "DSH Settings → Models → Image generation model has opened. Configure or reuse a chat API URL and key, choose a chat model, then save.",
+ 			"config.disabledTitle": "The AI Image plugin is disabled",
+-			"config.disabledHint": "DSH Settings → Plugins → AI Image has opened. Enable the plugin, then generate images.",
++			"config.disabledHint": "DSH Settings → Models → Image generation model has opened. Enable the plugin, then generate images.",
+ 			"config.configured": "Connected to {url}",
+ 			"config.disabled": "The plugin is disabled — re-enable it in Settings.",
+ 			"connection.connected": "Connected",
+@@ -889,8 +889,8 @@ window.__ModuleLoader__.load({
+ 			"update.success": "Updated to {version}; restart DSH to load it",
+ 			"update.failed": "Update failed; please try again",
+ 			"update.release": "View Release",
+-			"settings.title": "AI Image (dsh-imagegen)",
+-			"settings.description": "Configure the image generation API endpoint and key",
++			"settings.title": "Image generation model",
++			"settings.description": "Configure image providers, models, API endpoints, and keys",
+ 			"settings.currentVersion": "Current version",
+ 			"settings.apiUrl": "API URL (api_url)",
+ 			"settings.apiUrlHint": "OpenAI-compatible base URL, e.g. https://api.openai.com/v1; /images/generations and /images/edits are appended",
+@@ -2885,16 +2885,16 @@ window.__ModuleLoader__.load({
+ 			};
+ 			const openSettingsGuide = (kind) => {
+ 				setConfigGuide(kind);
+-				const openPluginSettings = () => {
+-					Array.from(document.querySelectorAll("button")).find((button) => /^(插件|Plugins)$/.test(button.textContent?.trim() ?? ""))?.click();
++				const openModelSettings = () => {
++					Array.from(document.querySelectorAll("button")).find((button) => /^(模型|Models)$/.test(button.textContent?.trim() ?? ""))?.click();
+ 					window.setTimeout(() => {
+-						const imageGenButton = Array.from(document.querySelectorAll("button")).find((button) => /dsh-imagegen/i.test(button.textContent ?? ""));
++						const imageGenButton = Array.from(document.querySelectorAll("button")).find((button) => /^(生图模型|Image generation model)/.test(button.textContent?.trim() ?? ""));
+ 						if (imageGenButton?.getAttribute("aria-expanded") !== "true") imageGenButton?.click();
+ 					}, 0);
+ 				};
+ 				const settingsButton = Array.from(document.querySelectorAll("button")).find((button) => /^(设置|Settings)$/.test(button.textContent?.trim() ?? ""));
+ 				if (settingsButton?.getAttribute("aria-expanded") !== "true") settingsButton?.click();
+-				window.setTimeout(openPluginSettings, 0);
++				window.setTimeout(openModelSettings, 0);
+ 			};
+ 			const enhanceCurrentPrompt = async () => {
+ 				if (prompt.trim() === "" || enhancing) return;
+@@ -6751,9 +6751,9 @@ window.__ModuleLoader__.load({
+ 		* The dsh-imagegen settings card: channel management (list rows with status
+ 		* dots, an editor dialog with the model-catalog alias → upstream mapping, and
+ 		* built-in provider presets), plus the prompt-enhancement model and the plugin
+-		* switches. Registers into the official `settings.plugin.item` slot (the
+-		* Settings → Plugins → Configurable tab), independent of the dsh-web-ui family
+-		* group, bound to the plugin's own bridge settings scope.
++		* switches. Registers into the official `settings.models.specialized-model`
++		* slot immediately below Tool model, bound to the plugin's own bridge settings
++		* scope.
+ 		*
+ 		* The interaction mirrors the host's model-provider page: one row per channel
+ 		* (status dot + edit/delete), two add buttons (built-in provider / custom),
+@@ -6852,7 +6852,7 @@ window.__ModuleLoader__.load({
+ 				invalidLabel: t("settings.invalidNumber"),
+ 				disabled
+ 			};
+-			if (!state.exposed) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
++			if (!state.exposed) return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+ 				className: settings_card_module_css_default.card,
+ 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+ 					type: "button",
+@@ -6886,7 +6886,7 @@ window.__ModuleLoader__.load({
+ 			});
+ 			const channels = state.channels.channels;
+ 			const editing = editingId === null ? void 0 : channels.find((channel) => channel.id === editingId);
+-			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("li", {
++			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("section", {
+ 				className: settings_card_module_css_default.card,
+ 				children: [
+ 					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
+@@ -8219,9 +8219,10 @@ window.__ModuleLoader__.load({
+ 				};
+ 			}, "dsh-imagegen: settings scope invalidation");
+ 			const settingsCard = new ImageGenSettingsCardController(scope);
+-			ctx.slots.inject("settings.plugin.item", () => ctx.slots.register({
+-				name: "settings.plugin.item",
+-				key: "dsh-imagegen",
++			ctx.slots.inject("settings.models.specialized-model", () => ctx.slots.register({
++				name: "settings.models.specialized-model",
++				id: "image-generation",
++				order: -10,
+ 				locale: NS,
+ 				inject: () => settingsCard.inject()
+ 			}, ImageGenSettingsCard));
+diff --git a/package.json b/package.json
+index 3db501b..03eafa7 100644
+--- a/package.json
++++ b/package.json
+@@ -22,6 +22,7 @@
+         "@deepseek-ai/dsh-client-ui-conversation",
+         "@deepseek-ai/dsh-client-ui-renderer",
+         "@deepseek-ai/dsh-client-ui-settings",
++        "@deepseek-ai/dsh-client-ui-settings-models",
+         "@deepseek-ai/dsh-client-ui-tool"
+       ],
+       "platform": "web"

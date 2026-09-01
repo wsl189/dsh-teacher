@@ -153,6 +153,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
 - `@anysearch/anysearch-dsh@0.1.4` — [`patches/anysearch-anysearch-dsh@0.1.4.patch`](patches/anysearch-anysearch-dsh@0.1.4.patch)
+- `@dickpy/dsh-imagegen@1.5.1` — [`patches/dickpy-dsh-imagegen@1.5.1.patch`](patches/dickpy-dsh-imagegen@1.5.1.patch)
 - `@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2` — [`patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch`](patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch)
 - `@xmanrui/dsh-im@1.0.3` — [`patches/xmanrui-dsh-im@1.0.3.patch`](patches/xmanrui-dsh-im@1.0.3.patch)
 - `dsh-better-sidebar@0.17.1` — [`patches/dsh-better-sidebar@0.17.1.patch`](patches/dsh-better-sidebar@0.17.1.patch)

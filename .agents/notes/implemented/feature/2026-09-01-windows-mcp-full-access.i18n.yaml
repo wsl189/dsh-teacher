@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-windows-mcp-full-access.md
-2026-09-01-windows-mcp-full-access.md: c9f750d7e84c27420dfd278eb8e03c680b08bea0
-2026-09-01-windows-mcp-full-access.zh.md: f487f01c6da08250a6949595187d87c0df084cbf
+2026-09-01-windows-mcp-full-access.md: 641681767f49365afc9c919eefa3b9aa2034f444
+2026-09-01-windows-mcp-full-access.zh.md: 8d7533cd93f831f86ed455c1ec12c594ceb863f2

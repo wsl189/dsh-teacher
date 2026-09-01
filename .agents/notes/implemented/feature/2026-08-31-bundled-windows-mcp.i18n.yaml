@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-31-bundled-windows-mcp.md
-2026-08-31-bundled-windows-mcp.md: 54991037997ee5d42a893061427c8780e222cbe8
-2026-08-31-bundled-windows-mcp.zh.md: 281ee96fb463ea3f4fd3f08266bab3d8d0c650a6
+2026-08-31-bundled-windows-mcp.md: c8b47721f5a78f4ba0ef63c090d81611fef3b8a8
+2026-08-31-bundled-windows-mcp.zh.md: e73de5ec1485c7f655215cfcb61f3d09fd0d9517

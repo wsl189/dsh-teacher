@@ -1,0 +1,69 @@
+.gallery {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(160px, 100%), max-content));
+  gap: 10px;
+  max-width: 520px;
+}
+
+.card {
+  box-sizing: border-box;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  max-width: 100%;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+  background: var(--dsw-alias-bg-layer-2);
+  color: var(--dsw-alias-label-tertiary);
+}
+
+.card[data-variant='single'] {
+  justify-self: start;
+}
+
+.card[data-variant='tile'] {
+  width: 160px;
+  height: 160px;
+}
+
+.link {
+  text-decoration: none;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.link:hover {
+  border-color: var(--dsw-alias-label-dimmed);
+}
+
+.link:focus-visible,
+.retry:focus-visible {
+  outline: 2px solid var(--dsw-alias-brand-primary);
+  outline-offset: 2px;
+}
+
+.image {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.link[data-variant='tile'] .image {
+  object-fit: cover;
+}
+
+.status,
+.retry {
+  min-width: 160px;
+  min-height: 96px;
+  padding: 12px;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.5;
+  text-align: center;
+}
+
+.retry {
+  cursor: pointer;
+}

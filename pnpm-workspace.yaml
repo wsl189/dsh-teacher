@@ -22,6 +22,7 @@ overrides:
   # AnySearch's pre-1.0 peers share the application's tested web/tool services.
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-credentials': 'link:packages/credentials/credentials'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-system-prompt': 'link:packages/core/system-prompt'
+  '@anysearch/anysearch-dsh>@deepseek-ai/dsh-settings': 'link:packages/settings/settings'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': 'link:packages/web/tool-web'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tools': 'link:packages/core/tools'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': 'link:packages/web/web'
@@ -47,6 +48,12 @@ overrides:
   # app-builder-lib 26.15.x reads the cache-mode enum introduced in 3.1.0,
   # but its ^3 range can preserve an older 3.0.0 lock without that export.
   'app-builder-lib>@electron/get': '3.1.0'
+
+packageExtensions:
+  # The reviewed AnySearch patch projects its editable subset through DSH settings.
+  '@anysearch/anysearch-dsh@0.1.4':
+    peerDependencies:
+      '@deepseek-ai/dsh-settings': '>=1.0.9 <2'
 
 peerDependencyRules:
   allowedVersions:
@@ -125,6 +132,7 @@ minimumReleaseAgeExclude:
 
 patchedDependencies:
   '@anysearch/anysearch-dsh@0.1.4': patches/anysearch-anysearch-dsh@0.1.4.patch
+  '@dickpy/dsh-imagegen@1.5.1': patches/dickpy-dsh-imagegen@1.5.1.patch
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch
   '@xmanrui/dsh-im@1.0.3': patches/xmanrui-dsh-im@1.0.3.patch
   'dsh-better-sidebar@0.17.1': patches/dsh-better-sidebar@0.17.1.patch

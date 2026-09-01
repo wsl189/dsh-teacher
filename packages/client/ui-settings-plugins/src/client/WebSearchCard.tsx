@@ -1,6 +1,6 @@
 /**
- * The web-search provider's card: its endpoint, its per-request search budget,
- * and the key — which is written through the credentials domain, never into
+ * The web-search provider's card: its endpoint and key. The key is written
+ * through the credentials domain, never into
  * the settings section, so the literal never rides a response.
  */
 
@@ -59,19 +59,6 @@ export function WebSearchCard(props: WebSearchCardProps) {
         {...state.baseURL}
         onEdit={(text) => { props.edit('baseURL', text) }}
         onReset={() => { props.resetField('baseURL') }}
-      />
-      <ValueField
-        id="plugin-config-web-search-max-uses"
-        label={t('webSearchMaxUses')}
-        hint={t('webSearchMaxUsesHint')}
-        overriddenLabel={t('overridden')}
-        resetLabel={t('reset')}
-        invalidLabel={t('invalidNumber')}
-        numeric
-        disabled={disabled}
-        {...state.maxUses}
-        onEdit={(text) => { props.edit('maxUses', text) }}
-        onReset={() => { props.resetField('maxUses') }}
       />
     </PluginCard>
   )

@@ -1,309 +1,3 @@
-diff --git a/package.json b/package.json
-index d0db800..d3ca353 100644
---- a/package.json
-+++ b/package.json
-@@ -46,9 +46,9 @@
-   "bin": {
-     "dsh-im": "bin/dsh-im.mjs"
-   },
--  "main": "./lib/index.js",
-+  "main": "./desktop-workspace.mjs",
-   "exports": {
--    ".": "./lib/index.js",
-+    ".": "./desktop-workspace.mjs",
-     "./client": "./lib/client.js",
-     "./package.json": "./package.json"
-   },
-@@ -56,6 +56,7 @@
-     "assets",
-     "bin",
-     "cordis.patch.yml",
-+    "desktop-workspace.mjs",
-     "lib",
-     "plugin-src",
-     "scripts",
-@@ -72,9 +73,9 @@
-     "client": {
-       "inject": [
-         "@deepseek-ai/dsh-client-connection",
--        "@deepseek-ai/dsh-client-runtime",
-+        "@deepseek-ai/dsh-client-ui-workspace",
-         "@deepseek-ai/dsh-client-ui-settings",
--        "@deepseek-ai/dsh-client-ui-slots",
-+        "@deepseek-ai/dsh-client-ui-renderer",
-         "@deepseek-ai/dsh-client-locale"
-       ],
-       "platform": "web"
-diff --git a/plugin-src/client/index.js b/plugin-src/client/index.js
---- a/plugin-src/client/index.js
-+++ b/plugin-src/client/index.js
-@@ -46,7 +46,7 @@
- import { WorkspaceDirectoryPickerContext } from './workspace-editor.js';
-
- export const name = 'im-settings';
--export const inject = ['slots', 'connection', 'locale', 'workspaces'];
-+export const inject = ['slots', 'connection', 'locale', 'uiWorkspace'];
-
- const CHANNELS = Object.freeze([
-   { id: 'weixin', label: '微信' },
-@@ -254,8 +254,9 @@
-   const officeRpcCall = (endpoint, payload, signal) =>
-     ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
-   const workspaceDirectoryPicker = Object.freeze({
--    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
--    pickDirectory: () => ctx.workspaces.pickDirectory(),
-+    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
-+    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
-+    pickDirectory: () => ctx.uiWorkspace.pickDirectory(),
-   });
-
-   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-diff --git a/plugin-src/client/styles.js b/plugin-src/client/styles.js
---- a/plugin-src/client/styles.js
-+++ b/plugin-src/client/styles.js
-@@ -154,7 +154,10 @@
- .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
- .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
- .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
--.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
-+.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
-+.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
-+.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
-+.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
- .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
- .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
- .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-diff --git a/plugin-src/client/workspace-directory-picker.js b/plugin-src/client/workspace-directory-picker.js
---- a/plugin-src/client/workspace-directory-picker.js
-+++ b/plugin-src/client/workspace-directory-picker.js
-@@ -36,6 +36,10 @@
-   return listing.crumbs.slice(homeIndex);
- }
-
-+function rootKey(path) {
-+  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
-+}
-+
- export function WorkspaceDirectoryPicker({
-   open,
-   startPath,
-@@ -46,12 +50,15 @@
-   onCancel,
- }) {
-   const [listing, setListing] = React.useState(null);
-+  const [roots, setRoots] = React.useState([]);
-+  const [rootError, setRootError] = React.useState(null);
-   const [loading, setLoading] = React.useState(false);
-   const [error, setError] = React.useState(null);
-   const [showHidden, setShowHidden] = React.useState(false);
-   const [retryKey, setRetryKey] = React.useState(0);
-   const requestRef = React.useRef(0);
-   const controllerRef = React.useRef(null);
-+  const rootsControllerRef = React.useRef(null);
-   const dialogRef = React.useRef(null);
-   const bodyRef = React.useRef(null);
-   const titleId = React.useId();
-@@ -93,6 +100,8 @@
-     if (!open) return undefined;
-     let active = true;
-     setListing(null);
-+    setRoots([]);
-+    setRootError(null);
-     setError(null);
-     setShowHidden(false);
-     dialogRef.current?.focus?.();
-@@ -101,6 +110,17 @@
-     };
-     if (typeof document !== 'undefined') document.addEventListener('keydown', handleKeyDown);
-
-+    const rootsController = new AbortController();
-+    rootsControllerRef.current?.abort();
-+    rootsControllerRef.current = rootsController;
-+    if (typeof picker.listDirectoryRoots === 'function') {
-+      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
-+        if (active && !rootsController.signal.aborted) setRoots(next);
-+      }, (cause) => {
-+        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
-+      });
-+    }
-+
-     const start = async () => {
-       const initialPath = initialPathRef.current;
-       const initial = await loadDirectory(initialPath || undefined, { reportError: false });
-@@ -138,13 +158,21 @@
-       if (typeof document !== 'undefined') document.removeEventListener('keydown', handleKeyDown);
-       requestRef.current += 1;
-       controllerRef.current?.abort();
-+      rootsController.abort();
-     };
-   }, [loadDirectory, open, picker, retryKey]);
-
-   if (!open) return null;
-   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
-   const crumbs = listing ? displayCrumbs(listing) : [];
--  const presentedError = saveError ?? error;
-+  const currentRoot = listing?.crumbs?.[0] ?? null;
-+  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path))
-+    ? [...roots, currentRoot]
-+    : roots;
-+  const activeRootPath = currentRoot
-+    ? (rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path)
-+    : '';
-+  const presentedError = saveError ?? error ?? rootError;
-
-   const content = h('div', {
-     className: 'dim-directoryPickerBackdrop',
-@@ -162,7 +190,20 @@
-     tabIndex: -1,
-   },
-   h('header', { className: 'dim-directoryPickerHeader' },
--    h('h3', { id: titleId }, '选择机器人工作区目录'),
-+    h('div', { className: 'dim-directoryPickerTitleRow' },
-+      h('h3', { id: titleId }, '选择机器人工作区目录'),
-+      rootOptions.length > 1 && currentRoot
-+        ? React.createElement('select', {
-+            className: 'dim-directoryRootSelect',
-+            'aria-label': '选择磁盘',
-+            value: activeRootPath,
-+            disabled: loading || busy,
-+            onChange: (event) => void loadDirectory(event.target.value),
-+          }, rootOptions.map((root) => React.createElement('option', {
-+            key: root.path,
-+            value: root.path,
-+          }, root.name)))
-+        : null),
-     listing
-       ? h('nav', { className: 'dim-directoryCrumbs', 'aria-label': '当前目录' },
-           crumbs.map((crumb, index) => h(React.Fragment, { key: crumb.path },
-diff --git a/lib/client.js b/lib/client.js
---- a/lib/client.js
-+++ b/lib/client.js
-@@ -1375,6 +1375,9 @@
-   if (homeIndex < 0) return listing.crumbs;
-   return listing.crumbs.slice(homeIndex);
- }
-+function rootKey(path) {
-+  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
-+}
- function WorkspaceDirectoryPicker({
-   open,
-   startPath,
-@@ -1385,12 +1388,15 @@
-   onCancel
- }) {
-   const [listing, setListing] = React5.useState(null);
-+  const [roots, setRoots] = React5.useState([]);
-+  const [rootError, setRootError] = React5.useState(null);
-   const [loading, setLoading] = React5.useState(false);
-   const [error, setError] = React5.useState(null);
-   const [showHidden, setShowHidden] = React5.useState(false);
-   const [retryKey, setRetryKey] = React5.useState(0);
-   const requestRef = React5.useRef(0);
-   const controllerRef = React5.useRef(null);
-+  const rootsControllerRef = React5.useRef(null);
-   const dialogRef = React5.useRef(null);
-   const bodyRef = React5.useRef(null);
-   const titleId = React5.useId();
-@@ -1429,6 +1435,8 @@
-     if (!open) return void 0;
-     let active = true;
-     setListing(null);
-+    setRoots([]);
-+    setRootError(null);
-     setError(null);
-     setShowHidden(false);
-     dialogRef.current?.focus?.();
-@@ -1436,6 +1444,16 @@
-       if (event.key === "Escape" && !busyRef.current) onCancelRef.current?.();
-     };
-     if (typeof document !== "undefined") document.addEventListener("keydown", handleKeyDown);
-+    const rootsController = new AbortController();
-+    rootsControllerRef.current?.abort();
-+    rootsControllerRef.current = rootsController;
-+    if (typeof picker.listDirectoryRoots === "function") {
-+      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
-+        if (active && !rootsController.signal.aborted) setRoots(next);
-+      }, (cause) => {
-+        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
-+      });
-+    }
-     const start = async () => {
-       const initialPath = initialPathRef.current;
-       const initial = await loadDirectory(initialPath || void 0, { reportError: false });
-@@ -1470,12 +1488,16 @@
-       if (typeof document !== "undefined") document.removeEventListener("keydown", handleKeyDown);
-       requestRef.current += 1;
-       controllerRef.current?.abort();
-+      rootsController.abort();
-     };
-   }, [loadDirectory, open, picker, retryKey]);
-   if (!open) return null;
-   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
-   const crumbs = listing ? displayCrumbs(listing) : [];
--  const presentedError = saveError ?? error;
-+  const currentRoot = listing?.crumbs?.[0] ?? null;
-+  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path)) ? [...roots, currentRoot] : roots;
-+  const activeRootPath = currentRoot ? rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path : "";
-+  const presentedError = saveError ?? error ?? rootError;
-   const content = h2(
-     "div",
-     {
-@@ -1498,7 +1520,21 @@
-       h2(
-         "header",
-         { className: "dim-directoryPickerHeader" },
--        h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
-+        h2(
-+          "div",
-+          { className: "dim-directoryPickerTitleRow" },
-+          h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
-+          rootOptions.length > 1 && currentRoot ? React5.createElement("select", {
-+            className: "dim-directoryRootSelect",
-+            "aria-label": "\u9009\u62E9\u78C1\u76D8",
-+            value: activeRootPath,
-+            disabled: loading || busy,
-+            onChange: (event) => void loadDirectory(event.target.value)
-+          }, rootOptions.map((root) => React5.createElement("option", {
-+            key: root.path,
-+            value: root.path
-+          }, root.name))) : null
-+        ),
-         listing ? h2(
-           "nav",
-           { className: "dim-directoryCrumbs", "aria-label": "\u5F53\u524D\u76EE\u5F55" },
-@@ -10241,7 +10277,10 @@
- .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
- .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
- .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
--.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
-+.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
-+.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
-+.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
-+.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
- .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
- .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
- .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
-@@ -10367,7 +10406,7 @@
-
- // plugin-src/client/index.js
- var name = "im-settings";
--var inject = ["slots", "connection", "locale", "workspaces"];
-+var inject = ["slots", "connection", "locale", "uiWorkspace"];
- var CHANNELS = Object.freeze([
-   { id: "weixin", label: "\u5FAE\u4FE1" },
-   { id: "feishu", label: "\u98DE\u4E66" },
-@@ -10581,8 +10620,9 @@
-   const slackRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
-   const officeRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
-   const workspaceDirectoryPicker = Object.freeze({
--    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
--    pickDirectory: () => ctx.workspaces.pickDirectory()
-+    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
-+    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
-+    pickDirectory: () => ctx.uiWorkspace.pickDirectory()
-   });
-   ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
-     name: "settings.plugins.tab",
 diff --git a/desktop-workspace.mjs b/desktop-workspace.mjs
 new file mode 100644
 index 0000000..789f1df
@@ -355,3 +49,1077 @@ index 0000000..789f1df
 +export async function apply(ctx, config) {
 +  return createImHostPlugin().apply(ctx, config);
 +}
+diff --git a/lib/client.js b/lib/client.js
+index e9a72dc..caa007b 100644
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -321,8 +321,11 @@ var EN = Object.freeze({
+   "\u4FDD\u5B58\u4E2D\u2026": "Saving\u2026",
+   "\u673A\u5668\u4EBA\u540D\u79F0": "Bot name",
+   "\u540D\u79F0\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u7A0D\u540E\u91CD\u8BD5\u3002": "Could not save the bot name. Try again later.",
+-  "QQ \u8BED\u97F3\u8BC6\u522B": "QQ speech recognition",
+-  "QQ \u8BED\u97F3\u4F1A\u7531\u672C\u673A\u4E0B\u8F7D\uFF0C\u518D\u53D1\u9001\u5230\u4F60\u914D\u7F6E\u7684 OpenAI \u517C\u5BB9\u8BED\u97F3\u8F6C\u5199\u670D\u52A1\u3002": "QQ voice messages are downloaded by this machine, then sent to your configured OpenAI-compatible transcription service.",
++  "\u8BED\u97F3\u6A21\u578B": "Voice model",
++  "\u5C55\u5F00\u8BBE\u7F6E: \u8BED\u97F3\u6A21\u578B": "Expand settings: Voice model",
++  "\u6536\u8D77\u8BBE\u7F6E: \u8BED\u97F3\u6A21\u578B": "Collapse settings: Voice model",
++  "\u914D\u7F6E\u8BED\u97F3\u8BC6\u522B\u670D\u52A1\uFF0C\u4F9B QQ\u3001\u5BF9\u8BDD\u8F93\u5165\u6846\u548C\u65E5\u5E38\u7BA1\u7406\u5171\u7528\u3002": "Configure the speech-recognition service shared by QQ, the conversation composer, and Daily Management.",
++  "QQ\u3001\u5BF9\u8BDD\u8F93\u5165\u6846\u548C\u65E5\u5E38\u7BA1\u7406\u4F1A\u628A\u5F55\u97F3\u53D1\u9001\u5230\u4F60\u914D\u7F6E\u7684 OpenAI \u517C\u5BB9\u8BED\u97F3\u8F6C\u5199\u670D\u52A1\u3002": "QQ, the conversation composer, and Daily Management send recordings to your configured OpenAI-compatible transcription service.",
+   "\u542F\u7528\u8BED\u97F3\u8BC6\u522B": "Enable speech recognition",
+   "\u5DF2\u542F\u7528\u8BED\u97F3\u8BC6\u522B": "Speech recognition enabled",
+   "\u6A21\u578B": "Model",
+@@ -331,7 +334,11 @@ var EN = Object.freeze({
+   "\u5220\u9664\u5DF2\u4FDD\u5B58\u7684 API Key": "Delete the saved API Key",
+   "\u4FDD\u7559\u5DF2\u4FDD\u5B58\u7684 API Key": "Keep the saved API Key",
+   "API Key \u53EA\u4FDD\u5B58\u5728\u672C\u673A\u51ED\u636E\u5B58\u50A8\u4E2D\u3002": "The API Key is stored only in the local credential store.",
+-  "QQ \u8BED\u97F3\u8BC6\u522B\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002": "QQ speech-recognition settings saved.",
++  "\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002": "Voice model settings saved.",
++  "\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u670D\u52A1\u5730\u5740\u3001\u6A21\u578B\u3001\u8BED\u8A00\u548C API Key\u3002": "The Voice model settings are invalid. Check the service URL, model, language, and API Key.",
++  "\u6B63\u5728\u8BFB\u53D6\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u2026": "Loading Voice model settings\u2026",
++  "\u65E0\u6CD5\u8BFB\u53D6\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E": "Could not load Voice model settings",
++  "\u8BED\u97F3\u6A21\u578B\u7F3A\u5C11 RPC \u8FDE\u63A5": "The Voice model is missing its RPC connection",
+   "QQ \u8BED\u97F3\u8BC6\u522B\u8BBE\u7F6E\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u670D\u52A1\u5730\u5740\u3001\u6A21\u578B\u3001\u8BED\u8A00\u548C API Key\u3002": "The QQ speech-recognition settings are invalid. Check the service URL, model, language, and API Key.",
+   "\u672A\u8BBE\u7F6E": "Not set",
+   "\u5DE5\u4F5C\u533A\u4FEE\u6539\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5\u3002": "Could not update the workspace. Try again.",
+@@ -1375,6 +1382,9 @@ function displayCrumbs(listing) {
+   if (homeIndex < 0) return listing.crumbs;
+   return listing.crumbs.slice(homeIndex);
+ }
++function rootKey(path) {
++  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
++}
+ function WorkspaceDirectoryPicker({
+   open,
+   startPath,
+@@ -1385,12 +1395,15 @@ function WorkspaceDirectoryPicker({
+   onCancel
+ }) {
+   const [listing, setListing] = React5.useState(null);
++  const [roots, setRoots] = React5.useState([]);
++  const [rootError, setRootError] = React5.useState(null);
+   const [loading, setLoading] = React5.useState(false);
+   const [error, setError] = React5.useState(null);
+   const [showHidden, setShowHidden] = React5.useState(false);
+   const [retryKey, setRetryKey] = React5.useState(0);
+   const requestRef = React5.useRef(0);
+   const controllerRef = React5.useRef(null);
++  const rootsControllerRef = React5.useRef(null);
+   const dialogRef = React5.useRef(null);
+   const bodyRef = React5.useRef(null);
+   const titleId = React5.useId();
+@@ -1429,6 +1442,8 @@ function WorkspaceDirectoryPicker({
+     if (!open) return void 0;
+     let active = true;
+     setListing(null);
++    setRoots([]);
++    setRootError(null);
+     setError(null);
+     setShowHidden(false);
+     dialogRef.current?.focus?.();
+@@ -1436,6 +1451,16 @@ function WorkspaceDirectoryPicker({
+       if (event.key === "Escape" && !busyRef.current) onCancelRef.current?.();
+     };
+     if (typeof document !== "undefined") document.addEventListener("keydown", handleKeyDown);
++    const rootsController = new AbortController();
++    rootsControllerRef.current?.abort();
++    rootsControllerRef.current = rootsController;
++    if (typeof picker.listDirectoryRoots === "function") {
++      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
++        if (active && !rootsController.signal.aborted) setRoots(next);
++      }, (cause) => {
++        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
++      });
++    }
+     const start = async () => {
+       const initialPath = initialPathRef.current;
+       const initial = await loadDirectory(initialPath || void 0, { reportError: false });
+@@ -1470,12 +1495,16 @@ function WorkspaceDirectoryPicker({
+       if (typeof document !== "undefined") document.removeEventListener("keydown", handleKeyDown);
+       requestRef.current += 1;
+       controllerRef.current?.abort();
++      rootsController.abort();
+     };
+   }, [loadDirectory, open, picker, retryKey]);
+   if (!open) return null;
+   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
+   const crumbs = listing ? displayCrumbs(listing) : [];
+-  const presentedError = saveError ?? error;
++  const currentRoot = listing?.crumbs?.[0] ?? null;
++  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path)) ? [...roots, currentRoot] : roots;
++  const activeRootPath = currentRoot ? rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path : "";
++  const presentedError = saveError ?? error ?? rootError;
+   const content = h2(
+     "div",
+     {
+@@ -1498,7 +1527,21 @@ function WorkspaceDirectoryPicker({
+       h2(
+         "header",
+         { className: "dim-directoryPickerHeader" },
+-        h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
++        h2(
++          "div",
++          { className: "dim-directoryPickerTitleRow" },
++          h2("h3", { id: titleId }, "\u9009\u62E9\u673A\u5668\u4EBA\u5DE5\u4F5C\u533A\u76EE\u5F55"),
++          rootOptions.length > 1 && currentRoot ? React5.createElement("select", {
++            className: "dim-directoryRootSelect",
++            "aria-label": "\u9009\u62E9\u78C1\u76D8",
++            value: activeRootPath,
++            disabled: loading || busy,
++            onChange: (event) => void loadDirectory(event.target.value)
++          }, rootOptions.map((root) => React5.createElement("option", {
++            key: root.path,
++            value: root.path
++          }, root.name))) : null
++        ),
+         listing ? h2(
+           "nav",
+           { className: "dim-directoryCrumbs", "aria-label": "\u5F53\u524D\u76EE\u5F55" },
+@@ -5799,11 +5842,20 @@ var CSS4 = String.raw`
+ .dqq-nameControls input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgb(22 119 255 / 12%); }
+ .dqq-nameControls .dqq-nameSave { min-height: 32px; padding: 0 11px; }
+ .dqq-nameError { margin: 0; color: var(--dsw-alias-state-error-primary, #d54941); font-size: 12px; line-height: 1.4; }
+-.dqq-speechCard { margin-bottom: 16px; }
++.dqq-voiceModelCard { overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 12px; color: var(--dsw-alias-label-primary, #1f2329); background: transparent; }
++.dqq-voiceModelToggle { box-sizing: border-box; width: 100%; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
++.dqq-voiceModelToggle:hover { background: var(--dsw-alias-interactive-bg-hover, rgb(31 35 41 / 5%)); }
++.dqq-voiceModelToggle:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--dsw-alias-border-l3, #bbbfc4); }
++.dqq-voiceModelCopy { min-width: 0; display: grid; gap: 2px; }
++.dqq-voiceModelCopy strong { font-size: 14px; line-height: 22px; font-weight: 500; }
++.dqq-voiceModelCopy small { color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 12px; line-height: 18px; }
++.dqq-voiceModelChevron { flex: none; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 18px; transition: transform 160ms ease; }
++.dqq-voiceModelToggle[aria-expanded="true"] .dqq-voiceModelChevron { transform: rotate(180deg); }
++.dqq-voiceModelBody { padding: 16px; border-top: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
++.dqq-voiceModelState { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 20px; }
+ .dqq-speechForm { display: grid; gap: 16px; }
+ .dqq-speechHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+-.dqq-speechHeading h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 17px; line-height: 1.4; }
+-.dqq-speechHeading p { margin: 4px 0 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 1.6; }
++.dqq-speechHeading p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 1.6; }
+ .dqq-speechToggle, .dqq-clearKey { white-space: nowrap; }
+ .dqq-speechToggle[aria-pressed="true"] { border-color: #1677ff; color: #0958d9; background: #eaf3ff; }
+ .dqq-clearKey { min-height: 28px; justify-self: start; padding: 0 8px; font-size: 12px; }
+@@ -5841,6 +5893,13 @@ function installQqStyles() {
+
+ // plugin-src/client/channels/qq/index.js
+ var ACTIVE_STATES = /* @__PURE__ */ new Set(["pending", "refreshing", "connecting"]);
++var DEFAULT_SPEECH_SETTINGS = Object.freeze({
++  enabled: false,
++  baseUrl: "http://127.0.0.1:8000/v1/",
++  model: "whisper-1",
++  language: "zh",
++  hasApiKey: false
++});
+ var Button7 = React12.forwardRef(function Button8({ children, kind = "secondary", className = "", ...props }, ref) {
+   return h2("button", {
+     ...props,
+@@ -6096,7 +6155,7 @@ function BotNameEditor({ botId, name: name2, disabled, saving, onSave }) {
+     error ? h2("p", { className: "dqq-nameError", role: "alert" }, error) : null
+   );
+ }
+-function SpeechSettingsCard({ settings, onSave }) {
++function SpeechSettingsForm({ settings, onSave }) {
+   const [draft, setDraft] = React12.useState({
+     enabled: settings.enabled,
+     baseUrl: settings.baseUrl,
+@@ -6136,124 +6195,196 @@ function SpeechSettingsCard({ settings, onSave }) {
+         ...draft.clearApiKey ? { clearApiKey: true } : {}
+       });
+       setDraft((current) => ({ ...current, apiKey: "", clearApiKey: false }));
+-      setFeedback({ tone: "success", message: "QQ \u8BED\u97F3\u8BC6\u522B\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002" });
++      setFeedback({ tone: "success", message: "\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u5DF2\u4FDD\u5B58\u3002" });
+     } catch (error) {
+-      setFeedback({ tone: "error", message: presentError4(error).message });
++      const failure = presentError4(error);
++      setFeedback({
++        tone: "error",
++        message: failure.code === "qq-speech-settings-invalid" ? "\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u65E0\u6548\uFF0C\u8BF7\u68C0\u67E5\u670D\u52A1\u5730\u5740\u3001\u6A21\u578B\u3001\u8BED\u8A00\u548C API Key\u3002" : failure.message
++      });
+     } finally {
+       setBusy(false);
+     }
+   };
+   return h2(
+-    "section",
+-    { className: "ddt-card dim-surfaceCard dqq-speechCard" },
++    "form",
++    {
++      className: "dqq-speechForm",
++      onSubmit: (event) => {
++        event.preventDefault();
++        void submit();
++      }
++    },
+     h2(
+-      "form",
+-      {
+-        className: "ddt-cardBody dim-surfaceBody dqq-speechForm",
+-        onSubmit: (event) => {
+-          event.preventDefault();
+-          void submit();
+-        }
+-      },
++      "div",
++      { className: "dqq-speechHeading" },
++      h2("p", null, "QQ\u3001\u5BF9\u8BDD\u8F93\u5165\u6846\u548C\u65E5\u5E38\u7BA1\u7406\u4F1A\u628A\u5F55\u97F3\u53D1\u9001\u5230\u4F60\u914D\u7F6E\u7684 OpenAI \u517C\u5BB9\u8BED\u97F3\u8F6C\u5199\u670D\u52A1\u3002"),
++      h2(Button7, {
++        className: "dqq-speechToggle",
++        "aria-pressed": draft.enabled,
++        disabled: busy,
++        onClick: () => update("enabled", !draft.enabled)
++      }, draft.enabled ? "\u5DF2\u542F\u7528\u8BED\u97F3\u8BC6\u522B" : "\u542F\u7528\u8BED\u97F3\u8BC6\u522B")
++    ),
++    h2(
++      "div",
++      { className: "dqq-speechGrid" },
+       h2(
+-        "div",
+-        { className: "dqq-speechHeading" },
+-        h2(
+-          "div",
+-          null,
+-          h2("h3", null, "QQ \u8BED\u97F3\u8BC6\u522B"),
+-          h2("p", null, "QQ \u8BED\u97F3\u4F1A\u7531\u672C\u673A\u4E0B\u8F7D\uFF0C\u518D\u53D1\u9001\u5230\u4F60\u914D\u7F6E\u7684 OpenAI \u517C\u5BB9\u8BED\u97F3\u8F6C\u5199\u670D\u52A1\u3002")
+-        ),
+-        h2(Button7, {
+-          className: "dqq-speechToggle",
+-          "aria-pressed": draft.enabled,
++        "label",
++        { className: "dqq-speechField dqq-speechWide" },
++        h2("span", null, "ASR Base URL"),
++        h2("input", {
++          type: "url",
++          value: draft.baseUrl,
+           disabled: busy,
+-          onClick: () => update("enabled", !draft.enabled)
+-        }, draft.enabled ? "\u5DF2\u542F\u7528\u8BED\u97F3\u8BC6\u522B" : "\u542F\u7528\u8BED\u97F3\u8BC6\u522B")
++          maxLength: 2048,
++          placeholder: "http://127.0.0.1:8000/v1/",
++          onChange: (event) => update("baseUrl", event.target.value)
++        })
+       ),
+       h2(
+-        "div",
+-        { className: "dqq-speechGrid" },
+-        h2(
+-          "label",
+-          { className: "dqq-speechField dqq-speechWide" },
+-          h2("span", null, "ASR Base URL"),
+-          h2("input", {
+-            type: "url",
+-            value: draft.baseUrl,
+-            disabled: busy,
+-            maxLength: 2048,
+-            placeholder: "http://127.0.0.1:8000/v1/",
+-            onChange: (event) => update("baseUrl", event.target.value)
+-          })
+-        ),
+-        h2(
+-          "label",
+-          { className: "dqq-speechField" },
+-          h2("span", null, "\u6A21\u578B"),
+-          h2("input", {
+-            value: draft.model,
+-            disabled: busy,
+-            maxLength: 200,
+-            placeholder: "whisper-1",
+-            onChange: (event) => update("model", event.target.value)
+-          })
+-        ),
+-        h2(
+-          "label",
+-          { className: "dqq-speechField" },
+-          h2("span", null, "\u8BED\u8A00"),
+-          h2("input", {
+-            value: draft.language,
+-            disabled: busy,
+-            maxLength: 32,
+-            placeholder: "zh",
+-            onChange: (event) => update("language", event.target.value)
+-          })
+-        ),
+-        h2(
+-          "label",
+-          { className: "dqq-speechField dqq-speechWide" },
+-          h2("span", null, "API Key"),
+-          h2("input", {
+-            type: "password",
+-            value: draft.apiKey,
+-            disabled: busy || draft.clearApiKey,
+-            maxLength: 4096,
+-            autoComplete: "new-password",
+-            placeholder: settings.hasApiKey ? "\u5DF2\u5B89\u5168\u4FDD\u5B58\uFF1B\u7559\u7A7A\u4FDD\u6301\u4E0D\u53D8" : "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\u65F6\u53EF\u7559\u7A7A",
+-            onChange: (event) => update("apiKey", event.target.value)
+-          })
+-        )
++        "label",
++        { className: "dqq-speechField" },
++        h2("span", null, "\u6A21\u578B"),
++        h2("input", {
++          value: draft.model,
++          disabled: busy,
++          maxLength: 200,
++          placeholder: "whisper-1",
++          onChange: (event) => update("model", event.target.value)
++        })
+       ),
+       h2(
+-        "div",
+-        { className: "dqq-speechFooter" },
+-        h2(
+-          "div",
+-          { className: "dqq-speechMeta" },
+-          settings.hasApiKey ? h2(Button7, {
+-            kind: "quiet",
+-            className: "dqq-clearKey",
+-            "aria-pressed": draft.clearApiKey,
+-            disabled: busy,
+-            onClick: () => update("clearApiKey", !draft.clearApiKey)
+-          }, draft.clearApiKey ? "\u4FDD\u7559\u5DF2\u4FDD\u5B58\u7684 API Key" : "\u5220\u9664\u5DF2\u4FDD\u5B58\u7684 API Key") : h2("span", null, "API Key \u53EA\u4FDD\u5B58\u5728\u672C\u673A\u51ED\u636E\u5B58\u50A8\u4E2D\u3002"),
+-          feedback ? h2("span", {
+-            className: "dqq-speechFeedback",
+-            "data-tone": feedback.tone,
+-            role: feedback.tone === "error" ? "alert" : "status"
+-          }, feedback.message) : null
+-        ),
+-        h2(Button7, {
+-          kind: "primary",
+-          onClick: () => void submit(),
+-          disabled: busy || !canSave
+-        }, busy ? "\u4FDD\u5B58\u4E2D\u2026" : "\u4FDD\u5B58")
++        "label",
++        { className: "dqq-speechField" },
++        h2("span", null, "\u8BED\u8A00"),
++        h2("input", {
++          value: draft.language,
++          disabled: busy,
++          maxLength: 32,
++          placeholder: "zh",
++          onChange: (event) => update("language", event.target.value)
++        })
++      ),
++      h2(
++        "label",
++        { className: "dqq-speechField dqq-speechWide" },
++        h2("span", null, "API Key"),
++        h2("input", {
++          type: "password",
++          value: draft.apiKey,
++          disabled: busy || draft.clearApiKey,
++          maxLength: 4096,
++          autoComplete: "new-password",
++          placeholder: settings.hasApiKey ? "\u5DF2\u5B89\u5168\u4FDD\u5B58\uFF1B\u7559\u7A7A\u4FDD\u6301\u4E0D\u53D8" : "\u672C\u5730\u670D\u52A1\u65E0\u9700\u5BC6\u94A5\u65F6\u53EF\u7559\u7A7A",
++          onChange: (event) => update("apiKey", event.target.value)
++        })
+       )
++    ),
++    h2(
++      "div",
++      { className: "dqq-speechFooter" },
++      h2(
++        "div",
++        { className: "dqq-speechMeta" },
++        settings.hasApiKey ? h2(Button7, {
++          kind: "quiet",
++          className: "dqq-clearKey",
++          "aria-pressed": draft.clearApiKey,
++          disabled: busy,
++          onClick: () => update("clearApiKey", !draft.clearApiKey)
++        }, draft.clearApiKey ? "\u4FDD\u7559\u5DF2\u4FDD\u5B58\u7684 API Key" : "\u5220\u9664\u5DF2\u4FDD\u5B58\u7684 API Key") : h2("span", null, "API Key \u53EA\u4FDD\u5B58\u5728\u672C\u673A\u51ED\u636E\u5B58\u50A8\u4E2D\u3002"),
++        feedback ? h2("span", {
++          className: "dqq-speechFeedback",
++          "data-tone": feedback.tone,
++          role: feedback.tone === "error" ? "alert" : "status"
++        }, feedback.message) : null
++      ),
++      h2(Button7, {
++        kind: "primary",
++        onClick: () => void submit(),
++        disabled: busy || !canSave
++      }, busy ? "\u4FDD\u5B58\u4E2D\u2026" : "\u4FDD\u5B58")
+     )
+   );
+ }
++function VoiceModelCard({ rpcCall }) {
++  const [expanded, setExpanded] = React12.useState(false);
++  const [phase, setPhase] = React12.useState("idle");
++  const [settings, setSettings] = React12.useState(DEFAULT_SPEECH_SETTINGS);
++  const [error, setError] = React12.useState(null);
++  const mounted = React12.useRef(true);
++  const loadController = React12.useRef(null);
++  React12.useEffect(() => {
++    mounted.current = true;
++    return () => {
++      mounted.current = false;
++      loadController.current?.abort();
++    };
++  }, []);
++  const invoke = React12.useCallback(async (endpoint, payload = {}, signal) => {
++    if (typeof rpcCall !== "function") throw new TypeError("\u8BED\u97F3\u6A21\u578B\u7F3A\u5C11 RPC \u8FDE\u63A5");
++    return unwrapRpcResult4(await rpcCall(endpoint, payload, signal));
++  }, [rpcCall]);
++  const load = React12.useCallback(async () => {
++    loadController.current?.abort();
++    const controller = new AbortController();
++    loadController.current = controller;
++    setPhase("loading");
++    setError(null);
++    try {
++      const snapshot = normalizeSnapshot3(await invoke(QQ_ENDPOINTS.status, {}, controller.signal));
++      if (!mounted.current || controller.signal.aborted) return;
++      setSettings(snapshot.speech);
++      setPhase("ready");
++    } catch (cause) {
++      if (!mounted.current || controller.signal.aborted || cause?.name === "AbortError") return;
++      setError(presentError4(cause));
++      setPhase("error");
++    }
++  }, [invoke]);
++  const save = React12.useCallback(async (payload) => {
++    const snapshot = normalizeSnapshot3(await invoke(QQ_ENDPOINTS.configureSpeech, payload));
++    if (mounted.current) setSettings(snapshot.speech);
++    return snapshot.speech;
++  }, [invoke]);
++  const toggle = () => {
++    const next = !expanded;
++    setExpanded(next);
++    if (next) void load();
++  };
++  return h2(
++    "section",
++    { className: "dqq-voiceModelCard" },
++    h2(
++      "button",
++      {
++        type: "button",
++        className: "dqq-voiceModelToggle",
++        "aria-expanded": expanded,
++        "aria-label": expanded ? "\u6536\u8D77\u8BBE\u7F6E: \u8BED\u97F3\u6A21\u578B" : "\u5C55\u5F00\u8BBE\u7F6E: \u8BED\u97F3\u6A21\u578B",
++        onClick: toggle
++      },
++      h2(
++        "span",
++        { className: "dqq-voiceModelCopy" },
++        h2("strong", null, "\u8BED\u97F3\u6A21\u578B"),
++        h2("small", null, "\u914D\u7F6E\u8BED\u97F3\u8BC6\u522B\u670D\u52A1\uFF0C\u4F9B QQ\u3001\u5BF9\u8BDD\u8F93\u5165\u6846\u548C\u65E5\u5E38\u7BA1\u7406\u5171\u7528\u3002")
++      ),
++      h2("span", { className: "dqq-voiceModelChevron", "aria-hidden": "true" }, "\u2304")
++    ),
++    expanded ? h2(
++      "div",
++      { className: "dqq-voiceModelBody" },
++      phase === "loading" ? h2("p", { className: "dqq-voiceModelState", role: "status" }, "\u6B63\u5728\u8BFB\u53D6\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E\u2026") : phase === "error" ? h2(
++        "div",
++        { className: "dqq-voiceModelState", role: "alert" },
++        h2("span", null, error?.message ?? "\u65E0\u6CD5\u8BFB\u53D6\u8BED\u97F3\u6A21\u578B\u8BBE\u7F6E"),
++        h2(Button7, { onClick: () => void load() }, "\u91CD\u8BD5")
++      ) : phase === "ready" ? h2(SpeechSettingsForm, { settings, onSave: save }) : null
++    ) : null
++  );
++}
+ function AccountCard2({
+   account,
+   busy,
+@@ -6351,13 +6479,6 @@ function QqSettingsTab({ rpcCall }) {
+     bots: [],
+     totals: { configured: 0, connected: 0 },
+     error: null,
+-    speech: {
+-      enabled: false,
+-      baseUrl: "http://127.0.0.1:8000/v1/",
+-      model: "whisper-1",
+-      language: "zh",
+-      hasApiKey: false
+-    },
+     agentPresetCatalog: EMPTY_AGENT_PRESET_CATALOG
+   });
+   const [provision, setProvision] = React12.useState(null);
+@@ -6397,7 +6518,6 @@ function QqSettingsTab({ rpcCall }) {
+         bots: snapshot.bots,
+         totals: snapshot.totals,
+         error: null,
+-        speech: snapshot.speech,
+         agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG
+       });
+       if (restore && snapshot.provisioning) setProvision({
+@@ -6465,7 +6585,6 @@ function QqSettingsTab({ rpcCall }) {
+           bots: snapshot.bots,
+           totals: snapshot.totals,
+           error: null,
+-          speech: snapshot.speech,
+           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG
+         });
+       }
+@@ -6530,7 +6649,6 @@ function QqSettingsTab({ rpcCall }) {
+           bots: snapshot.bots,
+           totals: snapshot.totals,
+           error: null,
+-          speech: snapshot.speech,
+           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG
+         });
+       }
+@@ -6573,23 +6691,6 @@ function QqSettingsTab({ rpcCall }) {
+       }
+     }
+   }, [botAction]);
+-  const saveSpeechSettings = React12.useCallback(async (payload) => {
+-    const snapshotVersion = workspaceFence.beginMutation();
+-    try {
+-      const snapshot = normalizeSnapshot3(await invoke(QQ_ENDPOINTS.configureSpeech, payload));
+-      if (mounted.current && workspaceFence.canCommitMutation(snapshotVersion)) {
+-        setModel((current) => ({
+-          ...current,
+-          speech: snapshot.speech,
+-          revision: snapshot.revision
+-        }));
+-      }
+-      return snapshot.speech;
+-    } finally {
+-      const shouldRefresh = workspaceFence.endMutation();
+-      if (shouldRefresh && mounted.current) void loadStatus({ silent: true });
+-    }
+-  }, [invoke, loadStatus, workspaceFence]);
+   let provisionView = null;
+   if (provision?.status === "starting") provisionView = h2("div", { className: "ddt-card ddt-loading dim-surfaceCard" }, h2("div", { className: "ddt-spinner" }), "\u6B63\u5728\u7533\u8BF7 QQ \u4E8C\u7EF4\u7801\u2026");
+   else if (["pending", "refreshing"].includes(provision?.status)) provisionView = h2(QrPanel2, {
+@@ -6681,10 +6782,6 @@ function QqSettingsTab({ rpcCall }) {
+       null,
+       credentialView,
+       provisionView,
+-      h2(SpeechSettingsCard, {
+-        settings: model.speech,
+-        onSave: saveSpeechSettings
+-      }),
+       model.bots.length === 0 && !provision && !credentialOpen ? h2(EmptyView3, { busy, onStart: () => void startProvisioning() }) : null,
+       botList
+     )
+@@ -10241,7 +10338,10 @@ var CSS11 = String.raw`
+ .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
+ .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
+ .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
+-.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
++.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
++.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
+ .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
+ .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+ .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+@@ -10367,7 +10467,7 @@ function installImStyles() {
+
+ // plugin-src/client/index.js
+ var name = "im-settings";
+-var inject = ["slots", "connection", "locale", "workspaces"];
++var inject = ["slots", "connection", "locale", "uiWorkspace"];
+ var CHANNELS = Object.freeze([
+   { id: "weixin", label: "\u5FAE\u4FE1" },
+   { id: "feishu", label: "\u98DE\u4E66" },
+@@ -10581,8 +10681,9 @@ function apply(ctx) {
+   const slackRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(SLACK_RPC_CHANNEL, endpoint, payload, signal);
+   const officeRpcCall = (endpoint, payload, signal) => ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
+   const workspaceDirectoryPicker = Object.freeze({
+-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
+-    pickDirectory: () => ctx.workspaces.pickDirectory()
++    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
++    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
++    pickDirectory: () => ctx.uiWorkspace.pickDirectory()
+   });
+   ctx.slots.inject("settings.plugins.tab", () => ctx.slots.register({
+     name: "settings.plugins.tab",
+@@ -10604,6 +10705,13 @@ function apply(ctx) {
+       workspaceDirectoryPicker
+     })
+   }, IMSettingsTab));
++  ctx.slots.inject("settings.models.specialized-model", () => ctx.slots.register({
++    name: "settings.models.specialized-model",
++    id: "voice",
++    order: 0,
++    locale: IM_LOCALE_NAMESPACE,
++    inject: () => ({ rpcCall: qqRpcCall })
++  }, VoiceModelCard));
+ }
+
+     return module.exports;
+diff --git a/package.json b/package.json
+index d0db800..8f7dc12 100644
+--- a/package.json
++++ b/package.json
+@@ -46,9 +46,9 @@
+   "bin": {
+     "dsh-im": "bin/dsh-im.mjs"
+   },
+-  "main": "./lib/index.js",
++  "main": "./desktop-workspace.mjs",
+   "exports": {
+-    ".": "./lib/index.js",
++    ".": "./desktop-workspace.mjs",
+     "./client": "./lib/client.js",
+     "./package.json": "./package.json"
+   },
+@@ -56,6 +56,7 @@
+     "assets",
+     "bin",
+     "cordis.patch.yml",
++    "desktop-workspace.mjs",
+     "lib",
+     "plugin-src",
+     "scripts",
+@@ -72,9 +73,10 @@
+     "client": {
+       "inject": [
+         "@deepseek-ai/dsh-client-connection",
+-        "@deepseek-ai/dsh-client-runtime",
++        "@deepseek-ai/dsh-client-ui-workspace",
+         "@deepseek-ai/dsh-client-ui-settings",
+-        "@deepseek-ai/dsh-client-ui-slots",
++        "@deepseek-ai/dsh-client-ui-settings-models",
++        "@deepseek-ai/dsh-client-ui-renderer",
+         "@deepseek-ai/dsh-client-locale"
+       ],
+       "platform": "web"
+diff --git a/plugin-src/client/channels/qq/index.js b/plugin-src/client/channels/qq/index.js
+index 6964d1a..b40f09b 100644
+--- a/plugin-src/client/channels/qq/index.js
++++ b/plugin-src/client/channels/qq/index.js
+@@ -25,6 +25,13 @@ import {
+ import { installQqStyles } from './styles.js';
+
+ const ACTIVE_STATES = new Set(['pending', 'refreshing', 'connecting']);
++const DEFAULT_SPEECH_SETTINGS = Object.freeze({
++  enabled: false,
++  baseUrl: 'http://127.0.0.1:8000/v1/',
++  model: 'whisper-1',
++  language: 'zh',
++  hasApiKey: false,
++});
+
+ const Button = React.forwardRef(function Button({ children, kind = 'secondary', className = '', ...props }, ref) {
+   return h('button', {
+@@ -191,7 +198,7 @@ function BotNameEditor({ botId, name, disabled, saving, onSave }) {
+     error ? h('p', { className: 'dqq-nameError', role: 'alert' }, error) : null);
+ }
+
+-export function SpeechSettingsCard({ settings, onSave }) {
++export function SpeechSettingsForm({ settings, onSave }) {
+   const [draft, setDraft] = React.useState({
+     enabled: settings.enabled,
+     baseUrl: settings.baseUrl,
+@@ -234,23 +241,26 @@ export function SpeechSettingsCard({ settings, onSave }) {
+         ...(draft.clearApiKey ? { clearApiKey: true } : {}),
+       });
+       setDraft((current) => ({ ...current, apiKey: '', clearApiKey: false }));
+-      setFeedback({ tone: 'success', message: 'QQ 语音识别设置已保存。' });
++      setFeedback({ tone: 'success', message: '语音模型设置已保存。' });
+     } catch (error) {
+-      setFeedback({ tone: 'error', message: presentError(error).message });
++      const failure = presentError(error);
++      setFeedback({
++        tone: 'error',
++        message: failure.code === 'qq-speech-settings-invalid'
++          ? '语音模型设置无效，请检查服务地址、模型、语言和 API Key。'
++          : failure.message,
++      });
+     } finally {
+       setBusy(false);
+     }
+   };
+
+-  return h('section', { className: 'ddt-card dim-surfaceCard dqq-speechCard' },
+-    h('form', {
+-      className: 'ddt-cardBody dim-surfaceBody dqq-speechForm',
+-      onSubmit: (event) => { event.preventDefault(); void submit(); },
+-    },
++  return h('form', {
++    className: 'dqq-speechForm',
++    onSubmit: (event) => { event.preventDefault(); void submit(); },
++  },
+       h('div', { className: 'dqq-speechHeading' },
+-        h('div', null,
+-          h('h3', null, 'QQ 语音识别'),
+-          h('p', null, 'QQ 语音会由本机下载，再发送到你配置的 OpenAI 兼容语音转写服务。')),
++        h('p', null, 'QQ、对话输入框和日常管理会把录音发送到你配置的 OpenAI 兼容语音转写服务。'),
+         h(Button, {
+           className: 'dqq-speechToggle',
+           'aria-pressed': draft.enabled,
+@@ -317,7 +327,84 @@ export function SpeechSettingsCard({ settings, onSave }) {
+           kind: 'primary',
+           onClick: () => void submit(),
+           disabled: busy || !canSave,
+-        }, busy ? '保存中…' : '保存'))));
++        }, busy ? '保存中…' : '保存')));
++}
++
++export function VoiceModelCard({ rpcCall }) {
++  const [expanded, setExpanded] = React.useState(false);
++  const [phase, setPhase] = React.useState('idle');
++  const [settings, setSettings] = React.useState(DEFAULT_SPEECH_SETTINGS);
++  const [error, setError] = React.useState(null);
++  const mounted = React.useRef(true);
++  const loadController = React.useRef(null);
++
++  React.useEffect(() => {
++    mounted.current = true;
++    return () => {
++      mounted.current = false;
++      loadController.current?.abort();
++    };
++  }, []);
++
++  const invoke = React.useCallback(async (endpoint, payload = {}, signal) => {
++    if (typeof rpcCall !== 'function') throw new TypeError('语音模型缺少 RPC 连接');
++    return unwrapRpcResult(await rpcCall(endpoint, payload, signal));
++  }, [rpcCall]);
++
++  const load = React.useCallback(async () => {
++    loadController.current?.abort();
++    const controller = new AbortController();
++    loadController.current = controller;
++    setPhase('loading');
++    setError(null);
++    try {
++      const snapshot = normalizeSnapshot(await invoke(QQ_ENDPOINTS.status, {}, controller.signal));
++      if (!mounted.current || controller.signal.aborted) return;
++      setSettings(snapshot.speech);
++      setPhase('ready');
++    } catch (cause) {
++      if (!mounted.current || controller.signal.aborted || cause?.name === 'AbortError') return;
++      setError(presentError(cause));
++      setPhase('error');
++    }
++  }, [invoke]);
++
++  const save = React.useCallback(async (payload) => {
++    const snapshot = normalizeSnapshot(await invoke(QQ_ENDPOINTS.configureSpeech, payload));
++    if (mounted.current) setSettings(snapshot.speech);
++    return snapshot.speech;
++  }, [invoke]);
++
++  const toggle = () => {
++    const next = !expanded;
++    setExpanded(next);
++    if (next) void load();
++  };
++
++  return h('section', { className: 'dqq-voiceModelCard' },
++    h('button', {
++      type: 'button',
++      className: 'dqq-voiceModelToggle',
++      'aria-expanded': expanded,
++      'aria-label': expanded ? '收起设置: 语音模型' : '展开设置: 语音模型',
++      onClick: toggle,
++    },
++      h('span', { className: 'dqq-voiceModelCopy' },
++        h('strong', null, '语音模型'),
++        h('small', null, '配置语音识别服务，供 QQ、对话输入框和日常管理共用。')),
++      h('span', { className: 'dqq-voiceModelChevron', 'aria-hidden': 'true' }, '⌄')),
++    expanded
++      ? h('div', { className: 'dqq-voiceModelBody' },
++          phase === 'loading'
++            ? h('p', { className: 'dqq-voiceModelState', role: 'status' }, '正在读取语音模型设置…')
++            : phase === 'error'
++              ? h('div', { className: 'dqq-voiceModelState', role: 'alert' },
++                  h('span', null, error?.message ?? '无法读取语音模型设置'),
++                  h(Button, { onClick: () => void load() }, '重试'))
++              : phase === 'ready'
++                ? h(SpeechSettingsForm, { settings, onSave: save })
++                : null)
++      : null);
+ }
+
+ export function AccountCard({
+@@ -383,13 +467,6 @@ export function AccountCard({
+ export function QqSettingsTab({ rpcCall }) {
+   const [model, setModel] = React.useState({
+     phase: 'loading', bots: [], totals: { configured: 0, connected: 0 }, error: null,
+-    speech: {
+-      enabled: false,
+-      baseUrl: 'http://127.0.0.1:8000/v1/',
+-      model: 'whisper-1',
+-      language: 'zh',
+-      hasApiKey: false,
+-    },
+     agentPresetCatalog: EMPTY_AGENT_PRESET_CATALOG,
+   });
+   const [provision, setProvision] = React.useState(null);
+@@ -430,7 +507,6 @@ export function QqSettingsTab({ rpcCall }) {
+         || !workspaceFence.canCommitStatus(workspaceVersion)) return undefined;
+       setModel({
+         phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
+-        speech: snapshot.speech,
+         agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+       });
+       if (restore && snapshot.provisioning) setProvision({
+@@ -498,7 +574,6 @@ export function QqSettingsTab({ rpcCall }) {
+       if (workspaceFence.canCommitMutation(snapshotVersion)) {
+         setModel({
+           phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
+-          speech: snapshot.speech,
+           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+         });
+       }
+@@ -562,7 +637,6 @@ export function QqSettingsTab({ rpcCall }) {
+       if (mounted.current && workspaceFence.canCommitMutation(snapshotVersion)) {
+         setModel({
+           phase: 'ready', bots: snapshot.bots, totals: snapshot.totals, error: null,
+-          speech: snapshot.speech,
+           agentPresetCatalog: snapshot.agentPresetCatalog ?? EMPTY_AGENT_PRESET_CATALOG,
+         });
+       }
+@@ -605,24 +679,6 @@ export function QqSettingsTab({ rpcCall }) {
+     }
+   }, [botAction]);
+
+-  const saveSpeechSettings = React.useCallback(async (payload) => {
+-    const snapshotVersion = workspaceFence.beginMutation();
+-    try {
+-      const snapshot = normalizeSnapshot(await invoke(QQ_ENDPOINTS.configureSpeech, payload));
+-      if (mounted.current && workspaceFence.canCommitMutation(snapshotVersion)) {
+-        setModel((current) => ({
+-          ...current,
+-          speech: snapshot.speech,
+-          revision: snapshot.revision,
+-        }));
+-      }
+-      return snapshot.speech;
+-    } finally {
+-      const shouldRefresh = workspaceFence.endMutation();
+-      if (shouldRefresh && mounted.current) void loadStatus({ silent: true });
+-    }
+-  }, [invoke, loadStatus, workspaceFence]);
+-
+   let provisionView = null;
+   if (provision?.status === 'starting') provisionView = h('div', { className: 'ddt-card ddt-loading dim-surfaceCard' }, h('div', { className: 'ddt-spinner' }), '正在申请 QQ 二维码…');
+   else if (['pending', 'refreshing'].includes(provision?.status)) provisionView = h(QrPanel, {
+@@ -702,10 +758,6 @@ export function QqSettingsTab({ rpcCall }) {
+         : h(React.Fragment, null,
+             credentialView,
+             provisionView,
+-            h(SpeechSettingsCard, {
+-              settings: model.speech,
+-              onSave: saveSpeechSettings,
+-            }),
+             model.bots.length === 0 && !provision && !credentialOpen
+               ? h(EmptyView, { busy, onStart: () => void startProvisioning() }) : null,
+             botList)));
+diff --git a/plugin-src/client/channels/qq/styles.js b/plugin-src/client/channels/qq/styles.js
+index 8966168..7d1364a 100644
+--- a/plugin-src/client/channels/qq/styles.js
++++ b/plugin-src/client/channels/qq/styles.js
+@@ -11,11 +11,20 @@ const CSS = String.raw`
+ .dqq-nameControls input:focus { border-color: #1677ff; box-shadow: 0 0 0 2px rgb(22 119 255 / 12%); }
+ .dqq-nameControls .dqq-nameSave { min-height: 32px; padding: 0 11px; }
+ .dqq-nameError { margin: 0; color: var(--dsw-alias-state-error-primary, #d54941); font-size: 12px; line-height: 1.4; }
+-.dqq-speechCard { margin-bottom: 16px; }
++.dqq-voiceModelCard { overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 12px; color: var(--dsw-alias-label-primary, #1f2329); background: transparent; }
++.dqq-voiceModelToggle { box-sizing: border-box; width: 100%; min-height: 72px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 16px; border: 0; color: inherit; background: transparent; font: inherit; text-align: left; cursor: pointer; }
++.dqq-voiceModelToggle:hover { background: var(--dsw-alias-interactive-bg-hover, rgb(31 35 41 / 5%)); }
++.dqq-voiceModelToggle:focus-visible { outline: none; box-shadow: inset 0 0 0 2px var(--dsw-alias-border-l3, #bbbfc4); }
++.dqq-voiceModelCopy { min-width: 0; display: grid; gap: 2px; }
++.dqq-voiceModelCopy strong { font-size: 14px; line-height: 22px; font-weight: 500; }
++.dqq-voiceModelCopy small { color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 12px; line-height: 18px; }
++.dqq-voiceModelChevron { flex: none; color: var(--dsw-alias-label-tertiary, #8f959e); font-size: 18px; transition: transform 160ms ease; }
++.dqq-voiceModelToggle[aria-expanded="true"] .dqq-voiceModelChevron { transform: rotate(180deg); }
++.dqq-voiceModelBody { padding: 16px; border-top: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
++.dqq-voiceModelState { margin: 0; display: flex; align-items: center; justify-content: space-between; gap: 12px; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 20px; }
+ .dqq-speechForm { display: grid; gap: 16px; }
+ .dqq-speechHeading { display: flex; align-items: flex-start; justify-content: space-between; gap: 20px; }
+-.dqq-speechHeading h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 17px; line-height: 1.4; }
+-.dqq-speechHeading p { margin: 4px 0 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 1.6; }
++.dqq-speechHeading p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; line-height: 1.6; }
+ .dqq-speechToggle, .dqq-clearKey { white-space: nowrap; }
+ .dqq-speechToggle[aria-pressed="true"] { border-color: #1677ff; color: #0958d9; background: #eaf3ff; }
+ .dqq-clearKey { min-height: 28px; justify-self: start; padding: 0 8px; font-size: 12px; }
+diff --git a/plugin-src/client/i18n.js b/plugin-src/client/i18n.js
+index a1e2143..cac8860 100644
+--- a/plugin-src/client/i18n.js
++++ b/plugin-src/client/i18n.js
+@@ -131,8 +131,11 @@ const EN = Object.freeze({
+   '保存中…': 'Saving…',
+   '机器人名称': 'Bot name',
+   '名称保存失败，请稍后重试。': 'Could not save the bot name. Try again later.',
+-  'QQ 语音识别': 'QQ speech recognition',
+-  'QQ 语音会由本机下载，再发送到你配置的 OpenAI 兼容语音转写服务。': 'QQ voice messages are downloaded by this machine, then sent to your configured OpenAI-compatible transcription service.',
++  '语音模型': 'Voice model',
++  '展开设置: 语音模型': 'Expand settings: Voice model',
++  '收起设置: 语音模型': 'Collapse settings: Voice model',
++  '配置语音识别服务，供 QQ、对话输入框和日常管理共用。': 'Configure the speech-recognition service shared by QQ, the conversation composer, and Daily Management.',
++  'QQ、对话输入框和日常管理会把录音发送到你配置的 OpenAI 兼容语音转写服务。': 'QQ, the conversation composer, and Daily Management send recordings to your configured OpenAI-compatible transcription service.',
+   '启用语音识别': 'Enable speech recognition',
+   '已启用语音识别': 'Speech recognition enabled',
+   '模型': 'Model',
+@@ -141,7 +144,11 @@ const EN = Object.freeze({
+   '删除已保存的 API Key': 'Delete the saved API Key',
+   '保留已保存的 API Key': 'Keep the saved API Key',
+   'API Key 只保存在本机凭据存储中。': 'The API Key is stored only in the local credential store.',
+-  'QQ 语音识别设置已保存。': 'QQ speech-recognition settings saved.',
++  '语音模型设置已保存。': 'Voice model settings saved.',
++  '语音模型设置无效，请检查服务地址、模型、语言和 API Key。': 'The Voice model settings are invalid. Check the service URL, model, language, and API Key.',
++  '正在读取语音模型设置…': 'Loading Voice model settings…',
++  '无法读取语音模型设置': 'Could not load Voice model settings',
++  '语音模型缺少 RPC 连接': 'The Voice model is missing its RPC connection',
+   'QQ 语音识别设置无效，请检查服务地址、模型、语言和 API Key。': 'The QQ speech-recognition settings are invalid. Check the service URL, model, language, and API Key.',
+   '未设置': 'Not set',
+   '工作区修改失败，请重试。': 'Could not update the workspace. Try again.',
+diff --git a/plugin-src/client/index.js b/plugin-src/client/index.js
+index b79ca8b..0fc09c6 100644
+--- a/plugin-src/client/index.js
++++ b/plugin-src/client/index.js
+@@ -21,7 +21,7 @@ import { FeishuSettingsTab } from './channels/feishu/index.js';
+ import { FEISHU_RPC_CHANNEL } from './channels/feishu/api.js';
+ import { installFeishuStyles } from './channels/feishu/styles.js';
+ import { QQ_RPC_CHANNEL } from './channels/qq/api.js';
+-import { QqSettingsTab } from './channels/qq/index.js';
++import { QqSettingsTab, VoiceModelCard } from './channels/qq/index.js';
+ import { installQqStyles } from './channels/qq/styles.js';
+ import { OFFICE_RPC_CHANNEL } from './channels/office/api.js';
+ import { OfficeSettingsTab } from './channels/office/index.js';
+@@ -46,7 +46,7 @@ import { installImStyles } from './styles.js';
+ import { WorkspaceDirectoryPickerContext } from './workspace-editor.js';
+
+ export const name = 'im-settings';
+-export const inject = ['slots', 'connection', 'locale', 'workspaces'];
++export const inject = ['slots', 'connection', 'locale', 'uiWorkspace'];
+
+ const CHANNELS = Object.freeze([
+   { id: 'weixin', label: '微信' },
+@@ -254,8 +254,9 @@ export function apply(ctx) {
+   const officeRpcCall = (endpoint, payload, signal) =>
+     ctx.connection.rpc.call(OFFICE_RPC_CHANNEL, endpoint, payload, signal);
+   const workspaceDirectoryPicker = Object.freeze({
+-    listDirectory: (path, signal) => ctx.workspaces.listDirectory(path, signal),
+-    pickDirectory: () => ctx.workspaces.pickDirectory(),
++    listDirectoryRoots: (signal) => ctx.uiWorkspace.listDirectoryRoots(signal),
++    listDirectory: (path, signal) => ctx.uiWorkspace.listDirectory(path, signal),
++    pickDirectory: () => ctx.uiWorkspace.pickDirectory(),
+   });
+
+   ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
+@@ -278,4 +279,11 @@ export function apply(ctx) {
+       workspaceDirectoryPicker,
+     }),
+   }, IMSettingsTab));
++  ctx.slots.inject('settings.models.specialized-model', () => ctx.slots.register({
++    name: 'settings.models.specialized-model',
++    id: 'voice',
++    order: 0,
++    locale: IM_LOCALE_NAMESPACE,
++    inject: () => ({ rpcCall: qqRpcCall }),
++  }, VoiceModelCard));
+ }
+diff --git a/plugin-src/client/styles.js b/plugin-src/client/styles.js
+index d4be2bc..59f0d8d 100644
+--- a/plugin-src/client/styles.js
++++ b/plugin-src/client/styles.js
+@@ -154,7 +154,10 @@ const CSS = String.raw`
+ .dim-directoryPickerBackdrop, .dim-directoryPickerBackdrop *, .dim-directoryPickerBackdrop *::before, .dim-directoryPickerBackdrop *::after { box-sizing: border-box; }
+ .dim-directoryPicker { width: min(720px, 100%); height: min(620px, calc(100vh - 48px)); min-height: 420px; display: grid; grid-template-rows: auto minmax(0, 1fr) auto; overflow: hidden; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 18px; outline: none; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); box-shadow: 0 24px 72px rgb(15 17 21 / 24%); }
+ .dim-directoryPickerHeader { min-width: 0; padding: 22px 24px 17px; border-bottom: 1px solid var(--dsw-alias-border-l1, #eef0f3); }
+-.dim-directoryPickerHeader h3 { margin: 0 0 14px; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryPickerTitleRow { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin: 0 0 14px; }
++.dim-directoryPickerHeader h3 { margin: 0; color: var(--dsw-alias-label-primary, #1f2329); font-size: 20px; line-height: 1.35; font-weight: 680; }
++.dim-directoryRootSelect { min-width: 82px; height: 32px; padding: 0 28px 0 10px; border: 1px solid var(--dsw-alias-border-l2, #dfe1e5); border-radius: 8px; color: var(--dsw-alias-label-primary, #1f2329); background: var(--dsw-alias-bg-layer-1, #fff); font: inherit; font-size: 13px; cursor: pointer; }
++.dim-directoryRootSelect:disabled { cursor: wait; opacity: .55; }
+ .dim-directoryPickerHeader > p { margin: 0; color: var(--dsw-alias-label-secondary, #646a73); font-size: 13px; }
+ .dim-directoryCrumbs { min-width: 0; display: flex; align-items: center; flex-wrap: wrap; gap: 4px; color: var(--dsw-alias-label-tertiary, #8f959e); }
+ .dim-directoryCrumbs button { max-width: 210px; overflow: hidden; padding: 3px 5px; border: 0; border-radius: 6px; color: var(--dsw-alias-label-secondary, #646a73); background: transparent; font: inherit; font-size: 12px; line-height: 18px; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+diff --git a/plugin-src/client/workspace-directory-picker.js b/plugin-src/client/workspace-directory-picker.js
+index 5bab829..5a2d6a6 100644
+--- a/plugin-src/client/workspace-directory-picker.js
++++ b/plugin-src/client/workspace-directory-picker.js
+@@ -36,6 +36,10 @@ function displayCrumbs(listing) {
+   return listing.crumbs.slice(homeIndex);
+ }
+
++function rootKey(path) {
++  return /^(?:[A-Za-z]:[\\/]|[\\/]{2})/.test(path) ? path.toLowerCase() : path;
++}
++
+ export function WorkspaceDirectoryPicker({
+   open,
+   startPath,
+@@ -46,12 +50,15 @@ export function WorkspaceDirectoryPicker({
+   onCancel,
+ }) {
+   const [listing, setListing] = React.useState(null);
++  const [roots, setRoots] = React.useState([]);
++  const [rootError, setRootError] = React.useState(null);
+   const [loading, setLoading] = React.useState(false);
+   const [error, setError] = React.useState(null);
+   const [showHidden, setShowHidden] = React.useState(false);
+   const [retryKey, setRetryKey] = React.useState(0);
+   const requestRef = React.useRef(0);
+   const controllerRef = React.useRef(null);
++  const rootsControllerRef = React.useRef(null);
+   const dialogRef = React.useRef(null);
+   const bodyRef = React.useRef(null);
+   const titleId = React.useId();
+@@ -93,6 +100,8 @@ export function WorkspaceDirectoryPicker({
+     if (!open) return undefined;
+     let active = true;
+     setListing(null);
++    setRoots([]);
++    setRootError(null);
+     setError(null);
+     setShowHidden(false);
+     dialogRef.current?.focus?.();
+@@ -101,6 +110,17 @@ export function WorkspaceDirectoryPicker({
+     };
+     if (typeof document !== 'undefined') document.addEventListener('keydown', handleKeyDown);
+
++    const rootsController = new AbortController();
++    rootsControllerRef.current?.abort();
++    rootsControllerRef.current = rootsController;
++    if (typeof picker.listDirectoryRoots === 'function') {
++      void picker.listDirectoryRoots(rootsController.signal).then((next) => {
++        if (active && !rootsController.signal.aborted) setRoots(next);
++      }, (cause) => {
++        if (active && !rootsController.signal.aborted) setRootError(pickerErrorMessage(cause));
++      });
++    }
++
+     const start = async () => {
+       const initialPath = initialPathRef.current;
+       const initial = await loadDirectory(initialPath || undefined, { reportError: false });
+@@ -138,13 +158,21 @@ export function WorkspaceDirectoryPicker({
+       if (typeof document !== 'undefined') document.removeEventListener('keydown', handleKeyDown);
+       requestRef.current += 1;
+       controllerRef.current?.abort();
++      rootsController.abort();
+     };
+   }, [loadDirectory, open, picker, retryKey]);
+
+   if (!open) return null;
+   const entries = (listing?.entries ?? []).filter((entry) => showHidden || !entry.hidden);
+   const crumbs = listing ? displayCrumbs(listing) : [];
+-  const presentedError = saveError ?? error;
++  const currentRoot = listing?.crumbs?.[0] ?? null;
++  const rootOptions = currentRoot && !roots.some((root) => rootKey(root.path) === rootKey(currentRoot.path))
++    ? [...roots, currentRoot]
++    : roots;
++  const activeRootPath = currentRoot
++    ? (rootOptions.find((root) => rootKey(root.path) === rootKey(currentRoot.path))?.path ?? currentRoot.path)
++    : '';
++  const presentedError = saveError ?? error ?? rootError;
+
+   const content = h('div', {
+     className: 'dim-directoryPickerBackdrop',
+@@ -162,7 +190,20 @@ export function WorkspaceDirectoryPicker({
+     tabIndex: -1,
+   },
+   h('header', { className: 'dim-directoryPickerHeader' },
+-    h('h3', { id: titleId }, '选择机器人工作区目录'),
++    h('div', { className: 'dim-directoryPickerTitleRow' },
++      h('h3', { id: titleId }, '选择机器人工作区目录'),
++      rootOptions.length > 1 && currentRoot
++        ? React.createElement('select', {
++            className: 'dim-directoryRootSelect',
++            'aria-label': '选择磁盘',
++            value: activeRootPath,
++            disabled: loading || busy,
++            onChange: (event) => void loadDirectory(event.target.value),
++          }, rootOptions.map((root) => React.createElement('option', {
++            key: root.path,
++            value: root.path,
++          }, root.name)))
++        : null),
+     listing
+       ? h('nav', { className: 'dim-directoryCrumbs', 'aria-label': '当前目录' },
+           crumbs.map((crumb, index) => h(React.Fragment, { key: crumb.path },

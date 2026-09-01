@@ -1,5 +1,5 @@
 ---
-description: "使用 QQ 配置的 OpenAI 兼容语音提供方：复用 dsh-im ASR 设置与凭据处理浏览器录音。"
+description: "由语音模型卡片配置、使用 dsh-im ASR 设置与凭据的 OpenAI 兼容语音提供方。"
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-该插件把 `qq-config` 提供方注册到 `ctx.speech`。它读取与 `@xmanrui/dsh-im` 相同的 `integrations/dsh-qq/config.json` 文档和 `DSH_QQ_ASR_API_KEY` 凭据引用。每次录音都会重新解析二者，因此保存 QQ 设置后，下一次输入框或工作台录音无需重启 Host 即可使用新值。
+该插件把 `qq-config` 提供方注册到 `ctx.speech`。**设置 → 模型 → 语音模型**卡片写入由 `@xmanrui/dsh-im` 持有的 `integrations/dsh-qq/config.json` 文档和 `DSH_QQ_ASR_API_KEY` 凭据引用。每次录音都会重新解析二者，因此保存后，下一次输入框或工作台录音无需重启 Host 即可使用新值。
 
 ## 目录
 
@@ -25,14 +25,14 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-将本提供方与 `dsh-speech` 及 dsh-im QQ 设置表层一同挂载。提供方接受 WebM、Ogg、M4A、MP3 与 WAV，在网络 I/O 前校验规范 base64 与解码大小，再向 `<baseUrl>/audio/transcriptions` 发送一次 OpenAI 兼容 multipart 请求。
+将本提供方与 `dsh-speech` 及 dsh-im 语音模型设置卡片一同挂载。提供方接受 WebM、Ogg、M4A、MP3 与 WAV，在网络 I/O 前校验规范 base64 与解码大小，再向 `<baseUrl>/audio/transcriptions` 发送一次 OpenAI 兼容 multipart 请求。
 
 ### 配置
 
 | 字段 | 发行版值 | 含义 |
 |---|---:|---|
 | `configPath` | `<DSH_HOME>/integrations/dsh-qq/config.json` | dsh-im QQ 设置文档的绝对路径。 |
-| `credentialRef` | `DSH_QQ_ASR_API_KEY` | QQ 设置界面写入的凭据引用。 |
+| `credentialRef` | `DSH_QQ_ASR_API_KEY` | 语音模型卡片写入的凭据引用。 |
 | `timeoutMs` | `120000` | 完整上游请求截止时间。 |
 | `maxAudioBytes` | `20971520` | 解码后录音大小上限。 |
 | `maxResponseBytes` | `65536` | 可接受 JSON 响应大小上限。 |
@@ -76,9 +76,9 @@ QQ 设置文档必须使用 `version: 1`，并包含具有 `enabled`、`baseUrl`
 - **ASR 服务器仍是外部服务**：可执行文件包含该适配器，不包含 Whisper、模型权重、GPU 驱动或服务进程。
 - **模型选择是显式配置**：`speech.model` 必须命名已配置服务能够提供的模型；适配器不会推断或重试另一个模型。
 - **没有流式转写**：浏览器停止录音后才发起一次上游请求。
-- **配置归 QQ 所有**：缺少有效且已启用的 dsh-im QQ 文档时会返回 `provider-disabled`；项目有意不提供第二套语音设置页。
+- **配置归 dsh-im 所有**：缺少有效且已启用的 dsh-im QQ 文档时会返回 `provider-disabled`；模型页只迁移唯一的设置卡片。
 
 <a id="dev-note"></a>
 ### 开发备注
 
-QQ 配置所有权保留在 dsh-im；本适配器只校验并消费其公开 ASR 设置。
+语音配置持久化所有权保留在 dsh-im；本适配器只校验并消费其公开 ASR 设置。

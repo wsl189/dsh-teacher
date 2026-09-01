@@ -16,7 +16,7 @@
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"windows-call-1","name":"mcp__windows__Snapshot","arguments":"{}"}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":1,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}}
-{"type":"assistant/message","data":{"turn":1,"step":1,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-1","name":"mcp__windows__Snapshot","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:3}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[[12,16]],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":1,"step":1,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-1","name":"mcp__windows__Snapshot","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:3}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[12,13,14,15,16],"surfaceOp":"append"}
 {"type":"tool/call","data":{"turn":1,"step":1,"callId":"windows-call-1","name":"mcp__windows__Snapshot","arguments":"{}"}}
 {"type":"permission/preset","data":{"preset":"workspace-write"}}
 {"type":"sandbox/mode","data":{"mode":"workspace-write"}}
@@ -31,7 +31,7 @@
 {"type":"assistant/chunk","data":{"turn":1,"step":2,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"windows-call-2","name":"mcp__windows__PowerShell","arguments":"{}"}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":2,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":2,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}}
-{"type":"assistant/message","data":{"turn":1,"step":2,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-2","name":"mcp__windows__PowerShell","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:6}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[[27,31]],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":1,"step":2,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-2","name":"mcp__windows__PowerShell","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:6}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[27,28,29,30,31],"surfaceOp":"append"}
 {"type":"tool/call","data":{"turn":1,"step":2,"callId":"windows-call-2","name":"mcp__windows__PowerShell","arguments":"{}"}}
 {"type":"tool/result","data":{"turn":1,"step":2,"message":{"source":{"kind":"tool","callId":"windows-call-2"},"content":[{"type":"tool-result","toolCallId":"windows-call-2","content":[{"type":"text","text":"Error: Windows MCP tool \"mcp__windows__PowerShell\" requires Full access in the calling session"}],"isError":true}],"role":"user","id":"{{message:7}}"}},"sourceEventSeqs":[33],"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":1,"step":2}}
@@ -41,7 +41,7 @@
 {"type":"assistant/chunk","data":{"turn":1,"step":3,"chunk":{"type":"block-end","index":0,"block":{"type":"tool-call","id":"windows-call-3","name":"mcp__windows__Snapshot","arguments":"{}"}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":3,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":5}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":3,"chunk":{"type":"finish","reason":{"kind":"tool-calls"}}}}
-{"type":"assistant/message","data":{"turn":1,"step":3,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-3","name":"mcp__windows__Snapshot","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:8}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[[37,41]],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":1,"step":3,"message":{"role":"assistant","content":[{"type":"tool-call","id":"windows-call-3","name":"mcp__windows__Snapshot","arguments":"{}"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:8}}"},"usage":{"inputTokens":10,"outputTokens":5}},"sourceEventSeqs":[37,38,39,40,41],"surfaceOp":"append"}
 {"type":"tool/call","data":{"turn":1,"step":3,"callId":"windows-call-3","name":"mcp__windows__Snapshot","arguments":"{}"}}
 {"type":"approval/asked","data":{"id":"{{approval:1}}","toolName":"mcp__windows__Snapshot","callId":"windows-call-3","reason":"Windows desktop automation can read or control applications outside the DSH sandbox"}}
 {"type":"approval/decided","data":{"id":"{{approval:1}}","outcome":"unavailable"}}
@@ -53,6 +53,6 @@
 {"type":"assistant/chunk","data":{"turn":1,"step":4,"chunk":{"type":"block-end","index":0,"block":{"type":"text","text":"DONE"}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":4,"chunk":{"type":"usage","usage":{"inputTokens":10,"outputTokens":3}}}}
 {"type":"assistant/chunk","data":{"turn":1,"step":4,"chunk":{"type":"finish","reason":{"kind":"stop"}}}}
-{"type":"assistant/message","data":{"turn":1,"step":4,"message":{"role":"assistant","content":[{"type":"text","text":"DONE"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:10}}"},"usage":{"inputTokens":10,"outputTokens":3}},"sourceEventSeqs":[[49,53]],"surfaceOp":"append"}
+{"type":"assistant/message","data":{"turn":1,"step":4,"message":{"role":"assistant","content":[{"type":"text","text":"DONE"}],"source":{"kind":"model","provider":"deepseek-official","model":"deepseek-v4-pro"},"id":"{{message:10}}"},"usage":{"inputTokens":10,"outputTokens":3}},"sourceEventSeqs":[49,50,51,52,53],"surfaceOp":"append"}
 {"type":"step/end","data":{"turn":1,"step":4}}
 {"type":"turn/end","data":{"turn":1,"reason":{"kind":"completed"}}}

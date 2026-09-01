@@ -1,5 +1,5 @@
 /**
- * The web-search card's staged form over the `web-search-deepseek` settings
+ * The web-search card's staged form over the `web-search-anysearch` settings
  * namespace.
  *
  * The key is the one control that does not live in the section: its literal
@@ -13,18 +13,18 @@ import type { ClientRemote } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsScope, SettingsScopeSnapshot } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
-  CardForm, numberField, textField,
+  CardForm, textField,
   type CardActions, type CardFieldState, type CardShell,
 } from './card-form.ts'
 
 /**
- * Namespace of the DeepSeek search provider. Spelled here rather than
+ * Namespace of the bundled AnySearch provider. Spelled here rather than
  * imported: a client package must not depend on a Host package.
  */
-export const WEB_SEARCH_NS = 'web-search-deepseek'
+export const WEB_SEARCH_NS = 'web-search-anysearch'
 
 /** Credential reference the provider resolves when the section names none. */
-const DEFAULT_API_KEY_REF = 'DEEPSEEK_API_KEY'
+const DEFAULT_API_KEY_REF = 'ANYSEARCH_API_KEY'
 
 /** Form field the credential control stages under. */
 const API_KEY_FIELD = 'apiKey'
@@ -35,8 +35,6 @@ export interface WebSearchSettings {
   apiKeyEnv?: string
   /** Provider endpoint; blank inherits the provider default. */
   baseURL?: string
-  /** Maximum searches served within one request. */
-  maxUses?: number
 }
 
 /** The credentials Remote methods this card reads and writes through. */
@@ -56,8 +54,6 @@ interface CredentialState {
 export interface WebSearchCardState extends CardShell {
   /** Provider endpoint. */
   baseURL: CardFieldState
-  /** Searches allowed per request. */
-  maxUses: CardFieldState
   /** The staged credential, which starts blank on every load. */
   apiKey: CardFieldState
   /** Whether the Host reports a credential configured for the referenced key. */
@@ -74,14 +70,14 @@ export interface WebSearchCardFace extends CardActions {
   }
 }
 
-/** Bridges the `web-search-deepseek` scope and the credentials domain onto the card. */
+/** Bridges the `web-search-anysearch` scope and the credentials domain onto the card. */
 export class WebSearchCardController {
   private readonly form: CardForm<WebSearchSettings>
   private readonly store: SnapshotStore<WebSearchCardState>
   private credential: CredentialState = { ref: '', configured: false, writable: true }
 
   /**
-   * @param scope - the bound settings scope for the `web-search-deepseek` namespace.
+   * @param scope - the bound settings scope for the `web-search-anysearch` namespace.
    * @param credentials - Remote face used for the credential the section references.
    */
   constructor(
@@ -90,7 +86,7 @@ export class WebSearchCardController {
   ) {
     this.form = new CardForm(
       scope,
-      [textField('baseURL'), numberField('maxUses')],
+      [textField('baseURL')],
       [{ field: API_KEY_FIELD, write: text => this.writeKey(text) }],
     )
     this.store = this.form.bind(() => this.projection())
@@ -102,7 +98,6 @@ export class WebSearchCardController {
     return {
       ...this.form.shell(),
       baseURL: this.form.field('baseURL'),
-      maxUses: this.form.field('maxUses'),
       apiKey: this.form.field(API_KEY_FIELD),
       apiKeyConfigured: this.credential.configured,
       apiKeyWritable: this.credential.writable,
@@ -191,6 +186,6 @@ export class WebSearchCardController {
  * @returns the reference to address.
  */
 function refOf(snapshot: SettingsScopeSnapshot<WebSearchSettings>): string {
-  const declared = snapshot.value?.apiKeyEnv
+  const declared = snapshot.value?.apiKeyEnv?.trim()
   return declared !== undefined && declared.length > 0 ? declared : DEFAULT_API_KEY_REF
 }

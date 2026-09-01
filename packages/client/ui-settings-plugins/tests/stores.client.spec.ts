@@ -19,7 +19,6 @@ import {
   type SubagentModelSelectionSettings,
 } from '../src/client/subagent-model-selection-card-controller.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
-import { WindowsMcpCardController, type WindowsMcpSettings } from '../src/client/windows-mcp-card-controller.ts'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -50,7 +49,7 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
 function credentialsApi(configured: boolean) {
   const describe = vi.fn(() => Promise.resolve({
     ok: true as const,
-    value: { DEEPSEEK_API_KEY: { configured, writable: true } },
+    value: { ANYSEARCH_API_KEY: { configured, writable: true } },
   }))
   const set = vi.fn(() => Promise.resolve({ ok: true as const, value: undefined }))
   return { api: { describe, set } as never, describe, set }
@@ -337,47 +336,6 @@ describe('CardForm', () => {
     const spec = booleanField('enabled')
     expect(spec.parse('false')).toEqual({ kind: 'set', value: false })
     expect(spec.parse('invalid')).toBeUndefined()
-  })
-})
-
-describe('WindowsMcpCardController', () => {
-  it('stages the opt-in and reports launcher runtime availability', async () => {
-    const host = stubSettingsScope<WindowsMcpSettings>()
-    acceptWrites(host)
-    const controller = new WindowsMcpCardController(host.scope)
-    host.publish({
-      status: 'ready',
-      writable: true,
-      value: { enabled: false, runtimeCommand: 'C:/DSH/windows-mcp/python.exe' },
-      base: { enabled: false, runtimeCommand: 'C:/DSH/windows-mcp/python.exe' },
-      user: {},
-    })
-    const face = controller.inject()
-
-    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({
-      available: true,
-      runtimeAvailable: true,
-      enabled: false,
-      dirty: false,
-    })
-    face.toggleEnabled()
-    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({ enabled: true, dirty: true })
-
-    face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledWith('enabled', true) })
-    expect(face.hooks.windowsMcpCard.getSnapshot()).toMatchObject({ enabled: true, dirty: false })
-  })
-
-  it('reports an absent bundled runtime without making the namespace disappear', () => {
-    const host = stubSettingsScope<WindowsMcpSettings>()
-    const controller = new WindowsMcpCardController(host.scope)
-    host.publish({ status: 'ready', writable: true, value: { enabled: false, runtimeCommand: '' } })
-
-    expect(controller.inject().hooks.windowsMcpCard.getSnapshot()).toMatchObject({
-      available: true,
-      runtimeAvailable: false,
-      enabled: false,
-    })
   })
 })
 
@@ -937,12 +895,12 @@ describe('WebSearchCardController', () => {
 
     credentials.describe.mockImplementation(() => Promise.resolve({
       ok: true as const,
-      value: { DEEPSEEK_API_KEY: { configured: true, writable: true } },
+      value: { ANYSEARCH_API_KEY: { configured: true, writable: true } },
     }))
     face.save()
     await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
 
-    expect(credentials.set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'ds-secret')
+    expect(credentials.set).toHaveBeenCalledWith('ANYSEARCH_API_KEY', 'ds-secret')
     expect(host.set).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({ dirty: false, apiKeyConfigured: true })
@@ -979,9 +937,9 @@ describe('WebSearchCardController', () => {
     // A key written on another surface reaches this card only through this signal.
     credentials.describe.mockImplementation(() => Promise.resolve({
       ok: true as const,
-      value: { DEEPSEEK_API_KEY: { configured: true, writable: true } },
+      value: { ANYSEARCH_API_KEY: { configured: true, writable: true } },
     }))
-    controller.refreshCredential('DEEPSEEK_API_KEY')
+    controller.refreshCredential('ANYSEARCH_API_KEY')
 
     await vi.waitFor(() => {
       expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(true)
@@ -992,7 +950,7 @@ describe('WebSearchCardController', () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(false)
     const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: 'SEARCH_KEY' }, user: {} })
+    host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: ' SEARCH_KEY ' }, user: {} })
     const face = controller.inject()
 
     face.edit('apiKey', 'ds-secret')
@@ -1049,7 +1007,7 @@ describe('WebSearchCardController', () => {
     expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(false)
   })
 
-  it('saves the endpoint and the search budget together', async () => {
+  it('saves the endpoint through the AnySearch settings section', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     acceptWrites(host)
     const credentials = credentialsApi(true)
@@ -1058,11 +1016,10 @@ describe('WebSearchCardController', () => {
     const face = controller.inject()
 
     face.edit('baseURL', 'https://other.test')
-    face.edit('maxUses', '3')
     face.save()
-    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
+    await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(1) })
 
-    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test'], ['maxUses', 3]])
+    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test']])
     expect(credentials.set).not.toHaveBeenCalled()
   })
 })
@@ -1102,7 +1059,7 @@ describe('ConfigurablePluginsTabController', () => {
 
   it('never dispatches a card whose namespace this deployment does not serve', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash', 'web-search-deepseek'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash', 'web-search-anysearch'))
 
     await settings.mirror.ensure()
 

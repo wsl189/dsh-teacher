@@ -47,6 +47,7 @@ kind: "package-group"
 | [`ui-chat/`](ui-chat/README.zh.md) | 投影并渲染 Chat 对话 target | — |
 | [`ui-approval/`](ui-approval/README.zh.md) | 展示批准请求并返回用户决策 | — |
 | [`ui-tool/`](ui-tool/README.zh.md) | 编排工具调用树与按工具键控的视图 | — |
+| [`ui-image-generation/`](ui-image-generation/README.zh.md) | 让生成图片预览留在最终回答旁 | — |
 | [`ui-workflow-run/`](ui-workflow-run/README.zh.md) | 把持久工作流运行回放为嵌套对话折叠项 | — |
 | [`ui-goal/`](ui-goal/README.zh.md) | 展示与管理当前目标 | — |
 | [`ui-trajectory/`](ui-trajectory/README.zh.md) | 提供 agent（智能体）活动的其他视图 | — |

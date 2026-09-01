@@ -10,9 +10,9 @@ Status: implemented
 
 ## 决策
 
-本记录只取代[内置集成记录](2026-08-31-bundled-windows-mcp.zh.md)中默认关闭的启用决策。原记录继续拥有运行时发行、许可与 Loader 生命周期；[按会话控制的 Full access](2026-09-01-windows-mcp-full-access.zh.md)拥有工具可见性与批准规则。
+本记录只取代[内置集成记录](2026-08-31-bundled-windows-mcp.zh.md)中默认关闭的启用决策。原记录继续拥有运行时发行、许可与 Loader 生命周期；[按会话控制的 Full access](2026-09-01-windows-mcp-full-access.zh.md)拥有工具可见性与批准规则；[隐藏设置卡片](../simplification/2026-09-01-hide-windows-mcp-settings-card.zh.md)拥有通用设置呈现。
 
-插件的 `enabled` 默认值为 true。发行 Web profile 根据 `DSH_WINDOWS_MCP_COMMAND` 是否为非空白命令设置组合默认值，安装版桌面启动器只为受信任载荷提供该命令。没有命令的部署保持关闭。设置提供方把已保存的用户值合并在组合默认值之上，因此显式 `enabled: false` 会在插件重新挂载和后续启动后继续生效。现有设置卡片无需重启 DSH 即可关闭或重新开启子进程。
+插件的 `enabled` 默认值为 true。发行 Web profile 根据 `DSH_WINDOWS_MCP_COMMAND` 是否为非空白命令设置组合默认值，安装版桌面启动器只为受信任载荷提供该命令。没有命令的部署保持关闭。设置提供方把已保存的用户值合并在组合默认值之上，因此显式 `enabled: false` 会在插件重新挂载和后续启动后继续生效。通用「插件配置」标签页不展示该值。
 
 启动器提供 `ctx.appReady` 时，插件会在 profile 激活期间注册设置区，但在应用成功就绪后才调度首次 MCP 子进程协调。就绪前的设置变化会更新首次协调所使用的来源，profile 释放则会取消尚未开始的就绪与事件循环工作。没有 `appReady` 的手工组合会保留阻塞式激活，使 Loader 调用方在插件 settle 前取得初始子进程结果。两种模式下，之后的设置变化都会立即协调。
 

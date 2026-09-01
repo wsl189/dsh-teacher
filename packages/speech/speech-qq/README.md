@@ -1,5 +1,5 @@
 ---
-description: "QQ-configured OpenAI-compatible speech provider that reuses dsh-im ASR settings and credentials for browser recordings."
+description: "OpenAI-compatible speech provider configured by the Voice model card and backed by dsh-im ASR settings and credentials."
 kind: "package-reference"
 ---
 
@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This plugin registers provider id `qq-config` on `ctx.speech`. It reads the same `integrations/dsh-qq/config.json` document and `DSH_QQ_ASR_API_KEY` credential reference that `@xmanrui/dsh-im` owns. Both are resolved again for every recording, so the next composer or Workbench recording uses saved QQ settings without a Host restart.
+This plugin registers provider id `qq-config` on `ctx.speech`. The **Settings → Models → Voice model** card writes the `integrations/dsh-qq/config.json` document and `DSH_QQ_ASR_API_KEY` credential reference that `@xmanrui/dsh-im` owns. Both are resolved again for every recording, so the next composer or Workbench recording uses saved values without a Host restart.
 
 ## Table of Contents
 
@@ -25,14 +25,14 @@ This plugin registers provider id `qq-config` on `ctx.speech`. It reads the same
 <a id="use-this-package"></a>
 ## Use this package
 
-Mount this provider with `dsh-speech` and the dsh-im QQ settings surface. The provider accepts WebM, Ogg, M4A, MP3, and WAV, validates canonical base64 and decoded size before network I/O, and sends one OpenAI-compatible multipart request to `<baseUrl>/audio/transcriptions`.
+Mount this provider with `dsh-speech` and the dsh-im Voice model settings card. The provider accepts WebM, Ogg, M4A, MP3, and WAV, validates canonical base64 and decoded size before network I/O, and sends one OpenAI-compatible multipart request to `<baseUrl>/audio/transcriptions`.
 
 ### Configuration
 
 | Field | Shipped value | Meaning |
 |---|---:|---|
 | `configPath` | `<DSH_HOME>/integrations/dsh-qq/config.json` | Absolute dsh-im QQ settings document. |
-| `credentialRef` | `DSH_QQ_ASR_API_KEY` | Credential reference written by the QQ settings UI. |
+| `credentialRef` | `DSH_QQ_ASR_API_KEY` | Credential reference written by the Voice model card. |
 | `timeoutMs` | `120000` | Complete upstream request deadline. |
 | `maxAudioBytes` | `20971520` | Maximum decoded recording size. |
 | `maxResponseBytes` | `65536` | Maximum accepted JSON response bytes. |
@@ -74,9 +74,9 @@ None until a user submits the edited transcript through an ordinary message path
 - **The ASR server is external** — the executable includes this adapter, not Whisper, model weights, GPU drivers, or a service process.
 - **Model selection is explicit** — `speech.model` must name a model the configured service can serve; the adapter does not infer or retry another model.
 - **No streaming transcript** — one upstream request begins only after the browser stops recording.
-- **QQ owns configuration** — without a valid enabled dsh-im QQ document the provider returns `provider-disabled`; there is intentionally no second speech settings page.
+- **dsh-im owns configuration** — without a valid enabled dsh-im QQ document the provider returns `provider-disabled`; the Models page only relocates its single settings card.
 
 <a id="dev-note"></a>
 ### Dev Note
 
-Keep QQ configuration ownership in dsh-im; this adapter only validates and consumes its public ASR settings.
+Keep speech configuration persistence in dsh-im; this adapter only validates and consumes its public ASR settings.

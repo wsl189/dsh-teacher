@@ -29,7 +29,6 @@ import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './
 import { SubagentModelSelectionCard } from './SubagentModelSelectionCard.tsx'
 import { TeacherWorkbenchCard } from './TeacherWorkbenchCard.tsx'
 import { WebSearchCard } from './WebSearchCard.tsx'
-import { WindowsMcpCard } from './WindowsMcpCard.tsx'
 import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
 import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
@@ -39,7 +38,6 @@ import {
 } from './subagent-model-selection-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { TEACHER_WORKBENCH_NS, TeacherWorkbenchCardController } from './teacher-workbench-card-controller.ts'
-import { WINDOWS_MCP_NS, WindowsMcpCardController } from './windows-mcp-card-controller.ts'
 import { en, zh } from './locales.ts'
 
 export type { PluginsSettingsSectionInjected, PluginsSettingsSectionProps } from './PluginsSettingsSection.tsx'
@@ -56,7 +54,6 @@ export type { BashCardFace, BashCardState } from './bash-card-controller.ts'
 export type { MinerUCardFace, MinerUCardState } from './mineru-card-controller.ts'
 export type { WebSearchCardFace, WebSearchCardState } from './web-search-card-controller.ts'
 export type { TeacherWorkbenchCardFace, TeacherWorkbenchCardState } from './teacher-workbench-card-controller.ts'
-export type { WindowsMcpCardFace, WindowsMcpCardState } from './windows-mcp-card-controller.ts'
 
 /** Dictionary namespace owned by this plugin. */
 const NS = 'settings.plugins'
@@ -81,9 +78,6 @@ export function apply(ctx: ClientContext): void {
   const mineru = new MinerUCardController(ctx.settingsScope.bind({ namespace: MINERU_NS }))
   const teacherWorkbench = new TeacherWorkbenchCardController(
     ctx.settingsScope.bind({ namespace: TEACHER_WORKBENCH_NS }),
-  )
-  const windowsMcp = new WindowsMcpCardController(
-    ctx.settingsScope.bind({ namespace: WINDOWS_MCP_NS }),
   )
   const subagentModelSelection = new SubagentModelSelectionCardController(
     ctx.settingsScope.bind({ namespace: SUBAGENT_MODEL_SELECTION_NS }),
@@ -217,11 +211,5 @@ export function apply(ctx: ClientContext): void {
       locale: NS,
       inject: () => teacherWorkbench.inject(),
     }, TeacherWorkbenchCard)
-    yield ctx.slots.register({
-      name: 'settings.plugin.item',
-      key: WINDOWS_MCP_NS,
-      locale: NS,
-      inject: () => windowsMcp.inject(),
-    }, WindowsMcpCard)
   })
 }
