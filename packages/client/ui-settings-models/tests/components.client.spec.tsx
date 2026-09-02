@@ -435,6 +435,58 @@ describe('ModelsSection', () => {
     expect(fullURL.value).toBe('https://coding.dashscope.aliyuncs.com/apps/anthropic/v1/messages')
   })
 
+  it('keeps a new preset model visible when its input changes to text and images', async () => {
+    const { mutate } = await mountSection()
+    const suppliers = screen.getByLabelText(en.supplierListLabel)
+    fireEvent.click(within(suppliers).getByRole('button', { name: /Kimi/ }))
+    fireEvent.click(screen.getByRole('button', { name: /Configure .*moonshotai-cn/ }))
+
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'keep-chat' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expandRow(2)
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 2`), { target: { value: 'image' } })
+
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('vision')
+    expandRow(1)
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'text' } })
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('chat')
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 2`).value).toBe('text')
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 2`), { target: { value: 'image' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'kimi-vision' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-pi-ai',
+      [{
+        op: 'set',
+        path: ['providers', 'moonshotai-cn', 'models'],
+        value: [
+          { id: 'keep-chat', input: ['text'] },
+          { id: 'kimi-vision', input: ['text', 'image'] },
+        ],
+      }],
+      0,
+    ])
+  })
+
+  it('disables image input when a preset route has no vision catalog', async () => {
+    await mountSection()
+    const suppliers = screen.getByLabelText(en.supplierListLabel)
+    fireEvent.click(within(suppliers).getByRole('button', { name: /Zhipu GLM/ }))
+    const access = screen.getByLabelText<HTMLSelectElement>(en.accessMethod)
+    fireEvent.change(access, { target: { value: 'zai-coding-cn' } })
+    fireEvent.click(screen.getByRole('button', { name: /Configure .*zai-coding-cn/ }))
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expandRow(1)
+
+    const input = screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`)
+    const image = [...input.options].find(option => option.value === 'image')
+    expect(image?.disabled).toBe(true)
+  })
+
   it('chooses the default conversation model from usable service routes', async () => {
     const scripted = scriptedFace()
     const defaultModelNamespace: SettingsNamespaceView = {
@@ -1264,6 +1316,33 @@ describe('ModelsSection', () => {
       0,
     ])
     await waitFor(() => { expect(set).toHaveBeenCalledWith('ANTHROPIC_API_KEY', 'sk-ant') })
+  })
+
+  it('keeps an added catalog provider model reachable when it accepts images', async () => {
+    const { mutate } = await mountSection()
+    fireEvent.click(screen.getByText(en.add))
+    await screen.findByLabelText(en.provider)
+    revealAdvancedFields()
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expandRow(1)
+
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'image' } })
+
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('vision')
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'claude-vision' } })
+    fireEvent.click(screen.getByText(en.apply))
+
+    await waitFor(() => { expect(mutate).toHaveBeenCalledOnce() })
+    expect(mutate.mock.calls[0]).toEqual([
+      'llm-pi-ai',
+      [{
+        op: 'set',
+        path: ['providers', 'anthropic', 'models'],
+        value: [{ id: 'claude-vision', input: ['text', 'image'] }],
+      }],
+      0,
+    ])
   })
 
   it('keeps pi-ai provider-native authentication when no key is entered', async () => {

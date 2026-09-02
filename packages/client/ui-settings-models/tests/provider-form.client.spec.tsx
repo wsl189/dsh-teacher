@@ -812,16 +812,23 @@ describe('hand-declared providers', () => {
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme-gateway' } })
     fireEvent.change(screen.getByLabelText(en.customDisplayName), { target: { value: 'Acme Gateway' } })
-    fireEvent.change(screen.getByLabelText(en.requestType), { target: { value: 'vision' } })
     fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
       target: { value: 'https://gateway.acme.example/v1/chat/completions' },
     })
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key' } })
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-chat' } })
+    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
+    expandModel(2)
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 2`), { target: { value: 'image' } })
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('vision')
     expandModel(1)
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
+    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'image' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'text' } })
+    expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('chat')
+    fireEvent.change(screen.getByLabelText(`${en.modelInput} 2`), { target: { value: 'image' } })
     fireEvent.click(screen.getByText(en.create))
 
     await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
@@ -835,7 +842,10 @@ describe('hand-declared providers', () => {
           apiKeyEnv: 'ACME_GATEWAY_API_KEY',
           api: 'openai-completions',
           baseURL: 'https://gateway.acme.example/v1',
-          models: [{ id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] }],
+          models: [
+            { id: 'acme-chat', input: ['text'] },
+            { id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] },
+          ],
         },
       }],
       // The section this card was drafted over: a route another tab declared

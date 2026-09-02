@@ -74,6 +74,10 @@ export interface ModelListEditorProps {
   overridden?: boolean
   /** Replace the drafted rows. */
   onChange: (models: ModelDraft[]) => void
+  /** Move one row between the text-only and image-capable catalog views. */
+  onInputChange: (index: number, acceptsImages: boolean) => void
+  /** Whether this route exposes an image-capable catalog view. */
+  imageInputEnabled: boolean
   /** Remove the user-owned array and return to inheritance; absent on a create. */
   onReset?: () => void
   /** Endpoint facts for the fetch action. */
@@ -441,11 +445,13 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                     aria-label={`${t('modelInput')} ${index + 1}`}
                     disabled={disabled}
                     onChange={(event) => {
-                      patch(index, { input: event.target.value === 'image' ? ['text', 'image'] : ['text'] })
+                      props.onInputChange(index, event.target.value === 'image')
                     }}
                   >
                     <option value="text">{t('modelInputText')}</option>
-                    <option value="image">{t('modelInputImage')}</option>
+                    <option value="image" disabled={!props.imageInputEnabled}>
+                      {t('modelInputImage')}
+                    </option>
                   </select>
                 </label>
               </div>

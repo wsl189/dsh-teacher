@@ -155,6 +155,30 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
   const probeBaseURL = mediaType
     ? undefined
     : baseURLFromCompleteRequest(fullRequestURL, requestPath(protocol))
+  const selectedVision = modelType === 'vision'
+  const modelAcceptsImages = (model: ModelDraft): boolean => {
+    const input = model['input']
+    return Array.isArray(input) && input.includes('image')
+  }
+  const shownModels = models.filter(model => modelAcceptsImages(model) === selectedVision)
+  /** Replace the visible catalog while retaining rows of the other LLM type. */
+  const changeShownModels = (next: ModelDraft[]): void => {
+    const kept = models.filter(model => modelAcceptsImages(model) !== selectedVision)
+    const typed = next.map(model => ({
+      ...model,
+      input: selectedVision ? ['text', 'image'] : ['text'],
+    }))
+    setModels([...kept, ...typed])
+  }
+  /** Reclassify one row and follow it into the matching catalog view. */
+  const changeModelInput = (index: number, acceptsImages: boolean): void => {
+    const changed = shownModels.map((model, at) => at === index
+      ? { ...model, input: acceptsImages ? ['text', 'image'] : ['text'] }
+      : model)
+    const kept = models.filter(model => modelAcceptsImages(model) !== selectedVision)
+    setModels([...kept, ...changed])
+    setModelType(acceptsImages ? 'vision' : 'chat')
+  }
   const ready = route.length > 0 && !routeInvalid && !routeTaken && endpointValid
     && (mediaType ? serviceModels.length > 0 && mediaModelFailure === undefined : models.length > 0 && modelFailure === undefined)
     && keyFailure === undefined
@@ -195,10 +219,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         ...storesKey ? { apiKeyEnv: keyRef } : {},
         api: protocol,
         baseURL,
-        models: models.map(model => ({
-          ...model,
-          input: modelType === 'vision' ? ['text', 'image'] : ['text'],
-        })),
+        models: models.map(model => ({ ...model })),
       }
       // `taken` is a snapshot too, so the id check alone cannot see a route
       // declared after this card opened; the revision makes that race a
@@ -402,8 +423,10 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         )
         : (
           <ModelListEditor
-            models={models}
-            onChange={setModels}
+            models={shownModels}
+            onChange={changeShownModels}
+            onInputChange={changeModelInput}
+            imageInputEnabled
             probe={{
               settingsNs: NS,
               ...probeBaseURL === undefined ? {} : { baseURL: probeBaseURL },

@@ -1,0 +1,94 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "技能"
+    - button "MCP"
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "侧边卡片"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每种接入方式独立保存 API 密钥、协议、地址和模型目录。
+  - region "国内供应商预设":
+    - complementary "供应商":
+      - text: 供应商
+      - button "智谱 GLM 标准 API 与 GLM Coding Plan"
+      - button "Kimi / 月之暗面 Kimi 开放平台与 Kimi Code"
+      - button "DeepSeek 官方直连接口"
+      - button "阿里云百炼 / Qwen 标准 API、Coding Plan 与 Token Plan"
+      - button "MiniMax 标准 API 与 Token Plan" [pressed]
+    - article:
+      - text: MiniMax 标准 API 与 Token Plan 官方预设
+      - list:
+        - listitem:
+          - text: 接入方式
+          - combobox "接入方式":
+            - option "标准 API" [selected]
+            - option "MiniMax Token Plan"
+          - text: MiniMax 待完善
+          - button "配置 minimax-cn": 配置
+          - text: minimax-cn 接入凭证 API 协议与密钥都属于当前接入方式。 API 协议
+          - combobox "API 协议":
+            - option "Anthropic Messages" [selected]
+            - option "OpenAI Chat Completions"
+          - text: API 密钥
+          - textbox "API 密钥":
+            - /placeholder: 输入 API 密钥，或留空使用环境认证
+          - text: 请求路由 切换模型类型后会自动套用供应商的官方地址，也可以继续修改完整请求地址。 模型类型
+          - combobox "模型类型":
+            - option "对话 / 推理"
+            - option "视觉理解" [selected]
+            - option "图像生成"
+          - text: API 地址
+          - textbox "API 地址":
+            - /placeholder: https://api.minimaxi.com/anthropic
+          - text: 完整请求地址
+          - textbox "完整请求地址": https://api.minimaxi.com/anthropic/v1/messages
+          - paragraph: 是否支持图片由每个模型单独声明；视觉输入仍使用对话端点。
+          - region "模型目录":
+            - text: 模型目录 已自定义模型目录
+            - button "恢复默认模型"
+            - button "获取可用模型"
+            - textbox "模型 ID 1":
+              - /placeholder: 模型 ID
+            - textbox "显示名称 1":
+              - /placeholder: 显示名称
+            - button "容量 1" [expanded]: 容量
+            - button "删除模型 1"
+            - text: 上下文窗口
+            - textbox "上下文窗口 1":
+              - /placeholder: 256K
+            - text: 最大输出 token
+            - textbox "最大输出 token 1":
+              - /placeholder: 32K
+            - text: 输入类型
+            - combobox "输入类型 1":
+              - option "仅文本"
+              - option "文本和图片" [selected]
+            - button "添加模型"
+          - paragraph: "模型 1: 模型 ID 不能为空。"
+          - button "取消"
+          - button "保存" [disabled]
+  - list
+  - button "添加提供方":
+    - img
+    - text: 添加提供方
+  - button "添加自定义提供方":
+    - img
+    - text: 添加自定义提供方

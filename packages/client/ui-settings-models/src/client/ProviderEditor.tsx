@@ -592,6 +592,15 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
       },
       onReset: () => { setDraft(current => schema.deletePath(current, ['models'])) },
     }
+    /** Reclassify one row and follow it into the matching catalog view. */
+    const changeModelInput = (index: number, acceptsImages: boolean): void => {
+      const changed = models.map((model, at) => at === index
+        ? { ...model, input: acceptsImages ? ['text', 'image'] : ['text'] }
+        : model)
+      const kept = allModels.filter(model => isVisionModel(model) !== selectedVision)
+      setDraft(current => schema.setPath(current, ['models'], [...kept, ...changed]))
+      setRequestType(acceptsImages ? 'vision' : 'chat')
+    }
     const routeAndModels = (
       <>
         {ownsIdentity
@@ -701,7 +710,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                 defaultMaxTokens={typeof defaultMaxTokens === 'number' ? defaultMaxTokens : undefined}
               />
             )
-            : <ModelListEditor {...catalogProps} probe={probe} probeBlocked={keyFailure} api={api} />}
+            : (
+              <ModelListEditor
+                {...catalogProps}
+                probe={probe}
+                probeBlocked={keyFailure}
+                api={api}
+                imageInputEnabled={requestTypes.some(candidate => candidate.id === 'vision')}
+                onInputChange={changeModelInput}
+              />
+            )}
       </>
     )
     return (

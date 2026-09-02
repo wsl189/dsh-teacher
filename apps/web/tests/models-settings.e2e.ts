@@ -20,6 +20,7 @@ import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
+const IMAGE_INPUT_DRAFT_EXPECTED = join(SNAPSHOT_DIR, 'image-input-draft.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
 const DECLARED_EDIT_EXPECTED = join(SNAPSHOT_DIR, 'declared-edit.expected.md')
@@ -156,6 +157,30 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(EMPTY_EXPECTED, snapshot, MODE)
+  }, 60_000)
+
+  it('keeps an unfinished preset model reachable while its input type changes', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-models-image-input-draft'))
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: '添加模型' }).click()
+    await dialog.getByRole('button', { name: '容量 1' }).click()
+
+    const input = dialog.getByLabel('输入类型 1')
+    await input.selectOption('image')
+    await expect.poll(async () => dialog.getByLabel('模型类型').inputValue()).toBe('vision')
+    expect(await input.inputValue()).toBe('image')
+    expect(await dialog.getByLabel('模型 ID 1').inputValue()).toBe('')
+
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(IMAGE_INPUT_DRAFT_EXPECTED, snapshot, MODE)
+
+    await input.selectOption('text')
+    await expect.poll(async () => dialog.getByLabel('模型类型').inputValue()).toBe('chat')
+    expect(await dialog.getByLabel('输入类型 1').inputValue()).toBe('text')
+
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
+    await dialog.getByRole('button', { name: /配置 .*minimax-cn/u }).click()
+    await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).waitFor({ timeout: 10_000 })
   }, 60_000)
 
   it('refuses a key no HTTP header can carry before anything is written', async () => {
@@ -296,15 +321,17 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await declare.click()
     await dialog.getByLabel('Provider ID').fill('acme-gateway')
     await dialog.getByLabel('显示名称').fill('Acme Gateway')
-    await dialog.getByLabel('模型类型').selectOption('vision')
     await dialog.getByLabel('完整请求地址').fill('https://gateway.acme.example/v1/chat/completions')
     // No reasoning effort on a provider card at all: effort is a per-model
     // capability, the models under one provider disagree about it, and a
     // switch in the composer already records provider+model+effort together.
     expect(await dialog.getByLabel('推理强度').count()).toBe(0)
     await dialog.getByRole('button', { name: '添加模型' }).click()
-    await dialog.getByLabel('模型 ID 1').fill('acme-large')
     await dialog.getByRole('button', { name: '容量 1' }).click()
+    await dialog.getByLabel('输入类型 1').selectOption('image')
+    await expect.poll(async () => dialog.getByLabel('模型类型').inputValue()).toBe('vision')
+    expect(await dialog.getByLabel('输入类型 1').inputValue()).toBe('image')
+    await dialog.getByLabel('模型 ID 1').fill('acme-large')
     await dialog.getByRole('button', { name: '创建提供方', exact: true }).click()
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
@@ -420,7 +447,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
-      'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
+      'delete.expected.md', 'empty.expected.md', 'image-input-draft.expected.md', 'model-picker.expected.md',
       'native-delete.expected.md',
     ])
   })
