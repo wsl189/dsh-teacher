@@ -19,8 +19,8 @@ const CONFIG: TeacherQuestionSegmentationAgentConfig = {
   maxQuestionSourceChunkCharacters: 18_000,
   maxQuestionCompactBoundaryCharacters: 12_000,
   questionSegmentationInlineEvidence: false,
-  maxQuestionCompactBoundaryOutputTokens: 2_048,
-  maxQuestionCompactReviewOutputTokens: 4_096,
+  maxQuestionCompactBoundaryOutputTokens: 32_768,
+  maxQuestionCompactReviewOutputTokens: 32_768,
   maxSegmentedQuestions: 20,
   maxQuestionBoundarySubmissions: 3,
   maxQuestionBoundaryAgentRuns: 2,
@@ -151,20 +151,11 @@ async function segmentWithInlineDefaults(
       const protectedIds = new Set(metadata.semanticHints.protectedQuestionHeadIds)
       const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
       if (submit === undefined) throw new Error('boundary submission tool was not registered')
-      expect(submit.parameters).toHaveProperty('properties.questionOverrides')
-      expect(submit.parameters).not.toHaveProperty('properties.questions')
-      const firstProtectedId = metadata.semanticHints.protectedQuestionHeadIds[0]
-      if (firstProtectedId !== undefined) {
-        await expect(submit.execute({
-          headConvention: 'Visible top-level labels with an answer demand begin independent questions.',
-          questionOverrides: [{ headElementId: firstProtectedId }],
-          nonQuestionHeadElementIds: metadata.semanticHints.possibleQuestionHeadIds
-            .filter(id => !protectedIds.has(id)),
-        }, TOOL_CONTEXT)).resolves.toContain('repeats Host-default protected heads')
-      }
+      expect(submit.parameters).toHaveProperty('properties.questions')
+      expect(submit.parameters).not.toHaveProperty('properties.questionOverrides')
       const accepted = String(await submit.execute({
         headConvention: 'Visible top-level labels with an answer demand begin independent questions.',
-        questionOverrides: [],
+        questions: metadata.semanticHints.protectedQuestionHeadIds.map(headElementId => ({ headElementId })),
         nonQuestionHeadElementIds: metadata.semanticHints.possibleQuestionHeadIds
           .filter(id => !protectedIds.has(id)),
       }, TOOL_CONTEXT))
@@ -293,8 +284,8 @@ describe('segmentQuestionsWithAgent', () => {
       readonly agentOptions?: { readonly maxTokens?: number; readonly reasoningEffort?: string }
     }) => {
       expect(startRequest.prompt[0]?.text).toContain('"inlineSource"')
-      expect(startRequest.prompt[0]?.text).toContain('Focused compact OCR evidence')
-      expect(startRequest.prompt[0]?.text).toContain('unprotectedQuestionHeadIds is the exact remaining candidate list')
+      expect(startRequest.prompt[0]?.text).toContain('Complete compact OCR evidence')
+      expect(startRequest.prompt[0]?.text).toContain('questions must be the complete ordered list')
       expect(startRequest.prompt[0]?.text).toContain('"unprotectedQuestionHeadIds":["p0e1"]')
       expect(startRequest.prompt[0]?.text).toContain('excludedElementIds is unavailable in this OCR-only pass')
       const promptText = startRequest.prompt[0]?.text ?? ''
@@ -305,33 +296,33 @@ describe('segmentQuestionsWithAgent', () => {
       expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(0)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_layout_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_page_preview_'))).toBe(false)
-      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 2_048, reasoningEffort: 'off' })
+      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, reasoningEffort: 'off' })
       const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
       if (submit === undefined) throw new Error('boundary submission tool was not registered')
       expect(startRequest.persona).toContain(`The only callable tool in this run is ${submit.name}`)
       await expect(submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
-        questionOverrides: [{ headElementId: 'p1e0', additionalElementIds: ['p0e0'] }],
+        questions: [
+          { headElementId: 'p0e2' },
+          { headElementId: 'p0e6' },
+          { headElementId: 'p1e0', additionalElementIds: ['p0e0'] },
+        ],
         nonQuestionHeadElementIds: ['p0e1'],
       }, TOOL_CONTEXT)).resolves.toContain('precedes its question head')
       await expect(submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
-        questionOverrides: [{ headElementId: 'p1e3' }],
+        questions: [{ headElementId: 'p1e3' }],
         excludedElementIds: ['p0e1'],
         stopBeforeElementId: 'p1e2',
       }, TOOL_CONTEXT)).resolves.toContain('excludedElementIds is unavailable in the compact boundary pass')
       await expect(submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
-        questionOverrides: [],
+        questions: [],
         stopBeforeElementId: 'p1e2',
-      }, TOOL_CONTEXT)).resolves.toContain('every unprotected possible question head requires an explicit question or non-question decision: p0e1')
+      }, TOOL_CONTEXT)).resolves.toContain('every possible question head requires an explicit question or non-question decision')
       await expect(submit.execute({
         headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
-        questionOverrides: [{ headElementId: 'p0e1', stopBeforeElementId: 'p0e2' }],
-      }, TOOL_CONTEXT)).resolves.toContain('one-element questionOverrides without a visible learner answer demand')
-      await expect(submit.execute({
-        headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
-        questionOverrides: [],
+        questions: [{ headElementId: 'p0e2' }, { headElementId: 'p0e6' }],
         nonQuestionHeadElementIds: ['p0e1'],
         stopBeforeElementId: 'p1e2',
       }, TOOL_CONTEXT)).resolves.toContain('ACCEPTED')
@@ -363,6 +354,106 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('accepts a complete Agent draft with OCR-damaged heads absent from Host hints', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+        const promptText = startRequest.prompt[0]?.text ?? ''
+        const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
+          readonly semanticHints: { readonly possibleQuestionHeadIds: readonly string[] }
+        }
+        expect(metadata.semanticHints.possibleQuestionHeadIds).toEqual([])
+        expect(promptText).toContain('submit a genuine head even when it is absent from possibleQuestionHeadIds')
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (submit === undefined) throw new Error('boundary submission tool was not registered')
+        const accepted = String(await submit.execute({
+          headConvention: 'Each OCR-damaged bracketed 题 label followed by its own demand starts a question.',
+          questions: [
+            { headElementId: 'p0e0' },
+            { headElementId: 'p0e2' },
+            { headElementId: 'p0e4' },
+          ],
+        }, TOOL_CONTEXT))
+        if (!accepted.startsWith('ACCEPTED')) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('agent-owned-heads-child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [] }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'), fileName: '教材习题改编.pdf', padding: 5,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '［［题 1］教材习题改编］', bbox: [30, 30, 540, 55] },
+          { type: 'text', text: '求函数的最小值，并写出过程。', bbox: [40, 65, 540, 95] },
+          { type: 'text', text: '［［例］变式 2］', bbox: [30, 150, 540, 175] },
+          { type: 'text', text: '证明直线与平面垂直。', bbox: [40, 185, 540, 215] },
+          { type: 'text', text: '［［题 3］变式］', bbox: [30, 270, 540, 295] },
+          { type: 'text', text: '计算该事件的概率。', bbox: [40, 305, 540, 335] },
+        ],
+      }],
+    }, { ...CONFIG, questionSegmentationInlineEvidence: true })
+
+    expect(result.ok && result.value.questions.map(question => question.sourceHeadId)).toEqual([
+      'p0e0', 'p0e2', 'p0e4',
+    ])
+    await ctx.fiber.dispose()
+  })
+
+  it('uses the bounded source tool when complete OCR exceeds the inline character limit', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async (_mode: string, startRequest: {
+        readonly prompt: readonly { readonly text?: string }[]
+        readonly toolFilter: { readonly allow: readonly string[] }
+      }) => {
+        expect(startRequest.prompt[0]?.text).not.toContain('"inlineSource"')
+        const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (source === undefined || submit === undefined) throw new Error('boundary tools were not registered')
+        expect(startRequest.toolFilter.allow).toContain(source.name)
+        await source.execute({ chunk: 0 }, TOOL_CONTEXT)
+        const accepted = String(await submit.execute({
+          headConvention: 'Numbered learner demands begin independent questions.',
+          questions: [{ headElementId: 'p0e0' }],
+        }, TOOL_CONTEXT))
+        if (!accepted.startsWith('ACCEPTED')) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('complete-source-tool-child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [] }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'), fileName: '长题干.pdf', padding: 5,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [{
+          type: 'text',
+          text: `1. 求函数的值。${'完整条件'.repeat(3_100)}`,
+          bbox: [30, 30, 570, 760],
+        }],
+      }],
+    }, { ...CONFIG, questionSegmentationInlineEvidence: true })
+
+    expect(result.ok && result.value.questions.map(question => question.sourceHeadId)).toEqual(['p0e0'])
+    await ctx.fiber.dispose()
+  })
+
   it('omits unusable compact stops while preserving explicit candidate decisions', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
@@ -375,7 +466,7 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         const accepted = String(await submit.execute({
           headConvention: 'Answer-producing numbered stems begin independent questions.',
-          questionOverrides: [
+          questions: [
             { headElementId: 'p0e0', stopBeforeElementId: 'p0e0' },
             { headElementId: 'p0e2', stopBeforeElementId: 'p0e5' },
           ],
@@ -430,11 +521,11 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         await expect(submit.execute({
           headConvention: 'Numbered answer-producing stems begin independent questions.',
-          questionOverrides: [{ headElementId: 'p0e2', additionalElementIds: ['p0e0', 'p0e1'] }],
+          questions: [{ headElementId: 'p0e2', additionalElementIds: ['p0e0', 'p0e1'] }],
         }, TOOL_CONTEXT)).resolves.toContain('is preceding text in the question head\'s lane')
         const accepted = String(await submit.execute({
           headConvention: 'Numbered answer-producing stems begin independent questions.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e2' }],
         }, TOOL_CONTEXT))
         expect(accepted).toContain('ACCEPTED')
         return {
@@ -484,11 +575,11 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         await expect(submit.execute({
           headConvention: 'Example labels with answer-producing stems begin independent questions.',
-          questionOverrides: [{ headElementId: 'p0e4', additionalElementIds: ['p0e3'] }],
+          questions: [{ headElementId: 'p0e4', additionalElementIds: ['p0e3'] }],
         }, TOOL_CONTEXT)).resolves.toContain('belongs to an answer or explanation block before the question head')
         const accepted = String(await submit.execute({
           headConvention: 'Example labels with answer-producing stems begin independent questions.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e4' }],
         }, TOOL_CONTEXT))
         expect(accepted).toContain('ACCEPTED')
         return {
@@ -540,11 +631,15 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         await expect(submit.execute({
           headConvention: 'Numbered answer-producing stems begin independent questions.',
-          questionOverrides: [{ headElementId: 'p0e2' }],
+          questions: [
+            { headElementId: 'p0e0' },
+            { headElementId: 'p0e2' },
+            { headElementId: 'p0e3' },
+          ],
         }, TOOL_CONTEXT)).resolves.toContain('is inside protected question p0e0')
         const accepted = String(await submit.execute({
           headConvention: 'Numbered answer-producing stems begin independent questions.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e3' }],
         }, TOOL_CONTEXT))
         expect(accepted).toContain('ACCEPTED')
         return {
@@ -1040,11 +1135,11 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         await expect(submit.execute({
           headConvention: 'Worked examples begin at a visible response demand.',
-          questionOverrides: [{ headElementId: 'p0e0', additionalElementIds: ['p0e3'] }],
+          questions: [{ headElementId: 'p0e0', additionalElementIds: ['p0e3'] }],
         }, TOOL_CONTEXT)).resolves.toContain('claims p0e3 across semantic boundary p0e2')
         const accepted = String(await submit.execute({
           headConvention: 'Worked examples begin at a visible response demand.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e0' }],
         }, TOOL_CONTEXT))
         if (!accepted.startsWith('ACCEPTED')) throw new Error(`draft was not accepted: ${accepted}`)
         return {
@@ -1085,12 +1180,12 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('boundary submission tool was not registered')
         await expect(submit.execute({
           headConvention: 'Numbered theory and exercises are distinguished by a visible answer demand.',
-          questionOverrides: [],
+          questions: [],
           nonQuestionHeadElementIds: ['p0e0', 'p0e1', 'p0e3'],
         }, TOOL_CONTEXT)).resolves.toContain('p0e1 in nonQuestionHeadElementIds[1] has visible learner answer-demand evidence')
         const accepted = String(await submit.execute({
           headConvention: 'Numbered theory and exercises are distinguished by a visible answer demand.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e1' }, { headElementId: 'p0e3' }],
           nonQuestionHeadElementIds: ['p0e0'],
         }, TOOL_CONTEXT))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
@@ -1909,6 +2004,7 @@ describe('segmentQuestionsWithAgent', () => {
 
   it('requires a complete-group repair when a missing question is visible inside another crop', async () => {
     const ctx = new Context()
+    let observedRevision = ''
     const registered = provideTools(ctx)
     ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
     ctx.provide('agentDefaultModel', {
@@ -1918,7 +2014,9 @@ describe('segmentQuestionsWithAgent', () => {
     provideAttachments(ctx)
     ctx.provide('subagents', {
       start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
-        expect(startRequest.prompt[0]?.text).toContain('set missingQuestionHead to that problem\'s visible printed head')
+        expect(startRequest.prompt[0]?.text).toContain('set missingQuestionHead to its visible printed head')
+        expect(startRequest.prompt[0]?.text).toContain('inside a larger crop that combines several problems')
+        expect(startRequest.prompt[0]?.text).toContain('"suggestedUncoveredQuestionHeads":[]')
         const source = [...registered.values()].find(tool => tool.name.startsWith('question_review_context_'))
         const pages = [...registered.values()].find(tool => tool.name.startsWith('question_review_page_'))
         const crops = [...registered.values()].find(tool => tool.name.startsWith('question_review_crop_'))
@@ -1951,7 +2049,7 @@ describe('segmentQuestionsWithAgent', () => {
           }, {
             pageId: 'page-1',
             repairIntents: [],
-            missingQuestionHead: '5. 已知展开式中系数为 m',
+            missingQuestionHead: '［［题 5］已知展开式中系数为 m',
             issue: 'question 5 has no listed crop',
             evidence: 'its full stem and options are visible only inside crop-p0e2',
           }],
@@ -1971,6 +2069,7 @@ describe('segmentQuestionsWithAgent', () => {
             { headElementId: 'p0e6' },
           ],
         }, TOOL_CONTEXT))
+        observedRevision = accepted
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`review was not accepted: ${accepted}`)
         return {
@@ -1987,7 +2086,7 @@ describe('segmentQuestionsWithAgent', () => {
         { type: 'text' as const, text: 'A. 1  B. 2  C. 3  D. 4', bbox: [30, 35, 500, 70] as const },
         { type: 'text' as const, text: '4. 已知函数 f(x)，求参数', bbox: [20, 100, 500, 120] as const },
         { type: 'text' as const, text: 'A. 1  B. 2  C. 3  D. 4', bbox: [30, 125, 500, 145] as const },
-        { type: 'text' as const, text: '5. 已知展开式中系数为 m', bbox: [20, 150, 500, 170] as const },
+        { type: 'text' as const, text: '［［题 5］已知展开式中系数为 m', bbox: [20, 150, 500, 170] as const },
         { type: 'text' as const, text: 'A. 1  B. 2  C. 3  D. 4', bbox: [30, 175, 500, 210] as const },
         { type: 'text' as const, text: '6. 已知抛物线，求圆心角', bbox: [20, 230, 500, 250] as const },
         { type: 'text' as const, text: 'A. π/4  B. π/3  C. π/2  D. π', bbox: [30, 255, 500, 290] as const },
@@ -2037,6 +2136,7 @@ describe('segmentQuestionsWithAgent', () => {
     }, CONFIG)
 
     if (!result.ok) throw new Error(result.error.message)
+    expect(observedRevision).toContain('ACCEPTED')
     expect(result.value.decision).toBe('revised')
     expect(result.value.questions.map(question => question.sourceHeadId)).toEqual(['p0e0', 'p0e2', 'p0e4', 'p0e6'])
     expect(result.value.affectedQuestionIds).toContain('p0e4')
@@ -3571,11 +3671,12 @@ describe('segmentQuestionsWithAgent', () => {
     const start = vi.fn(async (_mode: string, startRequest: {
       readonly prompt: readonly { readonly type: string; readonly text?: string }[]
       readonly toolFilter: { readonly allow: readonly string[] }
+      readonly agentOptions?: { readonly maxTokens?: number }
     }) => {
       expect(startRequest.prompt[0]?.text).toContain('magenta rectangle')
       expect(startRequest.prompt[0]?.text).toContain('cyan frame')
       expect(startRequest.prompt[0]?.text).toContain('verifiedCrops')
-      expect(startRequest.prompt[0]?.text).toContain('it never proves that the crop is a learner question')
+      expect(startRequest.prompt[0]?.text).toContain('it never proves that the crop is one learner question')
       const promptText = startRequest.prompt[0]?.text ?? ''
       const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
         readonly fullGroupCoverage: boolean
@@ -3597,6 +3698,7 @@ describe('segmentQuestionsWithAgent', () => {
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_sheet_'))).toBe(true)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_page_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_crop_'))).toBe(false)
+      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768 })
       const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
       if (findings === undefined) throw new Error('crop findings tool was not registered')
       expect(findings.parameters).toHaveProperty('properties.verifiedCrops')
@@ -3661,7 +3763,7 @@ describe('segmentQuestionsWithAgent', () => {
           issue: 'Q1 is allegedly missing',
           evidence: 'the annotated page visibly labels this problem Q1',
         }],
-      }, TOOL_CONTEXT)).resolves.toContain('cites existing annotated crop Q1')
+      }, TOOL_CONTEXT)).resolves.toContain('forbidden during a crop-local recut')
       await expect(findings.execute({
         verifiedCrops: [{
           cropId: 'crop-p0e0',
@@ -3910,7 +4012,7 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
-  it('does not recover a formula-summary heading when no learner-question candidate is uncovered', async () => {
+  it('lets the visual Agent leave a formula-summary page without learner questions', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
     ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
@@ -3923,27 +4025,15 @@ describe('segmentQuestionsWithAgent', () => {
       start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
         const promptText = startRequest.prompt[0]?.text ?? ''
         const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
-          readonly missingQuestionCandidatePageIds: readonly string[]
-          readonly uncoveredMissingQuestionHeads: readonly unknown[]
+          readonly suggestedUncoveredQuestionHeads: readonly unknown[]
           readonly reviewSheetIds: readonly string[]
         }
-        expect(metadata.missingQuestionCandidatePageIds).toEqual([])
-        expect(metadata.uncoveredMissingQuestionHeads).toEqual([])
-        expect(promptText).toContain('formulas, theory summaries')
+        expect(metadata.suggestedUncoveredQuestionHeads).toEqual([])
+        expect(promptText).toContain('non-exhaustive OCR hint, never an allowlist')
         const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
         if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
         await sheets.execute({ ids: metadata.reviewSheetIds }, TOOL_CONTEXT)
-        await expect(findings.execute({
-          verifiedCrops: [],
-          findings: [{
-            pageId: 'page-1',
-            repairIntents: [],
-            missingQuestionHead: '专题八 数列——求数列通项公式',
-            issue: 'the topic allegedly has no crop',
-            evidence: 'the page visibly lists a sequence formula method',
-          }],
-        }, TOOL_CONTEXT)).resolves.toContain('no uncovered learner-question candidate')
         const accepted = String(await findings.execute({
           verifiedCrops: [],
           findings: [],
@@ -4000,9 +4090,11 @@ describe('segmentQuestionsWithAgent', () => {
       start: async (_mode: string, startRequest: {
         readonly signal: AbortSignal
         readonly toolFilter: { readonly allow: readonly string[] }
+        readonly agentOptions?: { readonly maxTokens?: number }
       }) => {
         childRun += 1
         childSignals.push(startRequest.signal)
+        expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768 })
         const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
         if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
@@ -4521,11 +4613,14 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('segmentation tool was not registered')
         await expect(submit.execute({
           headConvention: 'Numbered practice items start questions in each column.',
-          questionOverrides: [{ headElementId: 'p0e0', additionalElementIds: ['p0e2', 'p0e3'] }],
+          questions: [
+            { headElementId: 'p0e0', additionalElementIds: ['p0e2', 'p0e3'] },
+            { headElementId: 'p0e1' },
+          ],
         }, TOOL_CONTEXT)).resolves.toContain('assigns p0e2 away from its automatic same-page owner p0e1')
         const accepted = String(await submit.execute({
           headConvention: 'Numbered practice items start questions in each column.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p0e1' }],
         }, TOOL_CONTEXT))
         if (!accepted.startsWith('ACCEPTED')) throw new Error(`draft was not accepted: ${accepted}`)
         return {
@@ -4631,7 +4726,7 @@ describe('segmentQuestionsWithAgent', () => {
         if (submit === undefined) throw new Error('segmentation tool was not registered')
         const accepted = String(await submit.execute({
           headConvention: 'Arabic labels begin top-level questions; a page-bottom stem may continue at the top of the next column.',
-          questionOverrides: [],
+          questions: [{ headElementId: 'p0e0' }],
         }, TOOL_CONTEXT))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
@@ -5275,7 +5370,7 @@ describe('segmentQuestionsWithAgent', () => {
         for (let attempt = 0; attempt < CONFIG.maxQuestionRejectedToolCalls; attempt += 1) {
           const repeated = String(await submit.execute({
             headConvention: 'Numbered learner tasks are questions.',
-            questionOverrides: [],
+            questions: [],
             nonQuestionHeadElementIds: [],
           }, TOOL_CONTEXT))
           if (attempt === CONFIG.maxQuestionRejectedToolCalls - 1) {

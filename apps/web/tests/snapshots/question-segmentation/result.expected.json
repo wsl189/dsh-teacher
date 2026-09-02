@@ -23,6 +23,17 @@
     "cropReviewRevision": false,
     "structuredOutput": false
   },
+  "compactOutputTokenBudgets": {
+    "boundary": [
+      32768
+    ],
+    "review": [
+      32768
+    ]
+  },
+  "boundaryUsesCompleteDraft": true,
+  "boundaryHintsAreNonAuthoritative": true,
+  "cropReviewSplitsCombinedQuestions": true,
   "cropReviewPromptMentionsWhitePadding": true,
   "cropReviewPromptRequiresVisualEvidence": true,
   "cropReviewPromptRejectsMaskedLaneEvidence": true,

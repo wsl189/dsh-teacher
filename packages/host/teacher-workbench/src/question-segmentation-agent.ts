@@ -40,7 +40,7 @@ export interface TeacherQuestionSegmentationAgentConfig {
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one source-tool call. */
   maxQuestionSourceChunkCharacters: number
-  /** Maximum focused OCR characters placed directly in one compact boundary request. */
+  /** Maximum complete OCR characters placed directly in one compact boundary request. */
   maxQuestionCompactBoundaryCharacters: number
   /** Whether eligible OCR source and visual-review sheets travel directly in their respective child requests. */
   questionSegmentationInlineEvidence: boolean
@@ -394,6 +394,7 @@ const localQuestionContinuationStartPattern = new RegExp([
   '|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳]',
   ')',
 ].join(''), 'u')
+const subordinateQuestionFragmentPattern = /^\s*(?:[A-HＡ-Ｈ]\s*[.．、:：)]|[（(]\s*[1-9１-９一二三四五六七八九十]\s*[)）]|[①②③④⑤⑥⑦⑧⑨⑩⑪⑫⑬⑭⑮⑯⑰⑱⑲⑳])/u
 const answerDemandedAsMissingPattern = new RegExp([
   '(?:missing|omits?|omitted|without|not (?:include|contain)|cut[- ]?off).{0,64}(?:answer(?!\\s+(?:line|blank|space|box|area))|solution|explanation)',
   '|(?:answer(?!\\s+(?:line|blank|space|box|area))|solution|explanation).{0,64}(?:missing|omitted|not (?:included|present)|cut[- ]?off)',
@@ -858,61 +859,6 @@ function compactSourceRecord(elements: readonly IndexedElement[]) {
       ]),
     })),
   }
-}
-
-/**
- * Keep ambiguous heads, representative accepted heads, and page edges before
- * expanding their local OCR context within the configured prompt budget.
- * @param elements - Ordered OCR elements for the inspected page window.
- * @param focusElementIds - Priority elements that explain ambiguous decisions and source conventions.
- * @param maxCharacters - Maximum serialized focused-source characters.
- * @returns Compact page records in source order.
- */
-function compactBoundarySourceRecord(
-  elements: readonly IndexedElement[],
-  focusElementIds: readonly TeacherQuestionLayoutElementId[],
-  maxCharacters: number,
-) {
-  const selectedOrdinals = new Set<number>()
-  const byId = new Map(elements.map(element => [element.id as string, element] as const))
-  const pageElements = new Map<TeacherQuestionLayoutPage, readonly IndexedElement[]>()
-  for (const page of new Set(elements.map(element => element.page))) {
-    pageElements.set(page, elements.filter(element => element.page === page))
-  }
-  const focused = focusElementIds.flatMap((id) => {
-    const element = byId.get(id)
-    return element === undefined ? [] : [element]
-  })
-  const fits = (candidate: IndexedElement): boolean => {
-    if (selectedOrdinals.has(candidate.ordinal)) return true
-    selectedOrdinals.add(candidate.ordinal)
-    const selected = elements.filter(element => selectedOrdinals.has(element.ordinal))
-    if (JSON.stringify(compactSourceRecord(selected)).length <= maxCharacters) return true
-    selectedOrdinals.delete(candidate.ordinal)
-    return false
-  }
-  for (const element of focused) fits(element)
-
-  const positions = focused.flatMap((focus) => {
-    const onPage = pageElements.get(focus.page) ?? []
-    const index = onPage.indexOf(focus)
-    return index < 0 ? [] : [{ focus, index, onPage }]
-  })
-  const maximumDistance = Math.max(0, ...positions.map(position => position.onPage.length))
-  for (let distance = 1; distance < maximumDistance; distance += 1) {
-    let added = false
-    for (const position of positions) {
-      for (const index of [position.index - distance, position.index + distance]) {
-        const candidate = position.onPage[index]
-        if (candidate === undefined || selectedOrdinals.has(candidate.ordinal)) continue
-        if (fits(candidate)) added = true
-      }
-    }
-    if (!added && JSON.stringify(compactSourceRecord(
-      elements.filter(element => selectedOrdinals.has(element.ordinal)),
-    )).length >= maxCharacters) break
-  }
-  return compactSourceRecord(elements.filter(element => selectedOrdinals.has(element.ordinal)))
 }
 
 function sourceChunks(elements: readonly IndexedElement[], maxCharacters: number): readonly (readonly IndexedElement[])[] {
@@ -2037,7 +1983,8 @@ function validateBoundaryDraft(
                 || isContextualSemanticBoundaryElement(boundary, elements))
           ))
       ))
-      if (enclosingProtectedHead !== undefined) {
+      if (enclosingProtectedHead !== undefined
+        && subordinateQuestionFragmentPattern.test(head.element.text)) {
         errors.push(
           `${label}.headElementId is inside protected question ${String(enclosingProtectedHead.id)}; `
           + 'an option, subpart, response line, or continuation cannot become another top-level question',
@@ -2475,6 +2422,7 @@ function expandDefaultBoundaryDraft(
   minimumRepeatedImagePages: number,
   repeatedImagePositionToleranceRatio: number,
   forbiddenQuestionHeadIds: ReadonlySet<string>,
+  includeDefaultQuestionHeads = true,
 ): BoundaryDraft {
   const elementById = new Map(elements.map(element => [element.id as string, element] as const))
   const candidateIds = possibleQuestionHeadIds(elements, corePageIndexes)
@@ -2489,13 +2437,15 @@ function expandDefaultBoundaryDraft(
   const excludedIds = new Set(draft.excludedElementIds ?? [])
   const nonQuestionHeadElementIds = [...new Set([
     ...(draft.nonQuestionHeadElementIds ?? []).filter(id => !submittedHeadIds.has(id)),
-    ...candidateIds.flatMap(candidateId => (
-      protectedCandidateIds.has(candidateId as string)
-        || submittedHeadIds.has(candidateId as string)
-        || excludedIds.has(candidateId as string)
-        ? []
-        : [candidateId as string]
-    )),
+    ...(includeDefaultQuestionHeads
+      ? candidateIds.flatMap(candidateId => (
+        protectedCandidateIds.has(candidateId as string)
+          || submittedHeadIds.has(candidateId as string)
+          || excludedIds.has(candidateId as string)
+          ? []
+          : [candidateId as string]
+      ))
+      : []),
     ...draft.questions.flatMap((question) => {
       const element = elementById.get(question.headElementId)
       return element !== undefined
@@ -2508,14 +2458,16 @@ function expandDefaultBoundaryDraft(
   const nonQuestionHeadIds = new Set(nonQuestionHeadElementIds)
   const explicitlyClaimedIds = new Set(submittedQuestions.flatMap(question => question.additionalElementIds ?? []))
   const questions: BoundaryDraft['questions'] = [
-    ...candidateIds.flatMap(candidateId => (
-      !protectedCandidateIds.has(candidateId as string)
-        || submittedHeadIds.has(candidateId as string)
-        || nonQuestionHeadIds.has(candidateId as string)
-        || excludedIds.has(candidateId as string)
-        ? []
-        : [{ headElementId: candidateId }]
-    )),
+    ...(includeDefaultQuestionHeads
+      ? candidateIds.flatMap(candidateId => (
+        !protectedCandidateIds.has(candidateId as string)
+          || submittedHeadIds.has(candidateId as string)
+          || nonQuestionHeadIds.has(candidateId as string)
+          || excludedIds.has(candidateId as string)
+          ? []
+          : [{ headElementId: candidateId }]
+      ))
+      : []),
     ...submittedQuestions,
   ]
   const selectedHeads = questions.flatMap((question) => {
@@ -2601,7 +2553,7 @@ function submissionTool(
   accepted: Map<string, AcceptedBoundaryDraft>,
   state: BoundarySubmissionState,
   sourceComplete: () => boolean,
-  defaultCandidateDecisions: boolean,
+  automaticImageDecisions: boolean,
 ) {
   const corePageIndexes = request.corePageIndexes === undefined
     ? undefined
@@ -2643,37 +2595,31 @@ function submissionTool(
   } as const
   return defineTool({
     name,
-    description: defaultCandidateDecisions
-      ? 'Submit exception-only semantic decisions. Never repeat a protectedQuestionHeadId in questionOverrides unless it needs a non-default ownership or stop correction. Classify every other possibleQuestionHeadId in questionOverrides or nonQuestionHeadElementIds. The Host expands defaults and validates the complete draft.'
-      : 'Submit one complete semantic boundary draft. The Host validates element references, ordering, ownership, and crop geometry without imposing one numbering or document format.',
+    description: 'Submit one complete semantic boundary draft containing every independent learner question in source order, including heads absent from semanticHints. The Host validates element references, ordering, ownership, and crop geometry without imposing one numbering or document format.',
     parameters: {
       headConvention: { type: 'string', required: true },
-      ...(defaultCandidateDecisions
-        ? {
-          questionOverrides: {
-            ...questionSchema,
-            description: 'Exceptions only: genuine unprotected or missed heads, plus protected heads requiring non-default additionalElementIds or a stop before otherwise unrecognized material. Submit [] when no exception exists. Echoing default protected heads is rejected.',
-          },
-        }
-        : { questions: questionSchema }),
+      questions: {
+        ...questionSchema,
+        description: 'Complete ordered list of every independent learner question. A genuine head may be submitted even when semanticHints omitted it.',
+      },
       excludedElementIds: {
         type: 'array',
         items: { type: 'string' },
-        description: defaultCandidateDecisions
+        description: automaticImageDecisions
           ? 'Unavailable in the compact boundary pass. Any submitted id is rejected; later annotated visual review owns pixel removal.'
           : 'OCR elements whose pixels must be removed from every resulting crop.',
       },
       nonQuestionHeadElementIds: {
         type: 'array',
         items: { type: 'string' },
-        description: defaultCandidateDecisions
-          ? 'Every unprotected possible question-head candidate that does not begin an independent question. These elements remain eligible question content.'
+        description: automaticImageDecisions
+          ? 'Every semanticHints possibleQuestionHeadId that does not begin an independent question. These elements remain eligible question content.'
           : 'Possible question-head candidates explicitly classified as content that does not begin an independent question. These elements remain eligible question content.',
       },
       retainedImageElementIds: {
         type: 'array',
         items: { type: 'string' },
-        description: defaultCandidateDecisions
+        description: automaticImageDecisions
           ? 'Only explicit image-retention overrides. Unlisted images default to automatic geometric ownership; do not echo them.'
           : 'Image elements inspected in the page preview and retained for automatic geometric ownership. Do not list images assigned through additionalElementIds.',
       },
@@ -2687,22 +2633,9 @@ function submissionTool(
       render: (_args, value) => [{ type: 'text', text: value }],
     },
     execute(args, exec: ToolRunContext) {
-      const rawArgs = args as typeof args & {
-        readonly questionOverrides?: BoundaryDraft['questions']
-        readonly questions?: BoundaryDraft['questions']
-      }
-      const usesLegacyCompactQuestions = defaultCandidateDecisions
-        && rawArgs.questionOverrides === undefined
-        && rawArgs.questions !== undefined
-      const { questionOverrides: _ignoredQuestionOverrides, ...argsWithoutOverrides } = rawArgs
-      const submittedArgs = {
-        ...argsWithoutOverrides,
-        questions: defaultCandidateDecisions
-          ? rawArgs.questionOverrides ?? rawArgs.questions ?? []
-          : rawArgs.questions ?? [],
-      } as BoundaryDraft
+      const submittedArgs = args as BoundaryDraft
       if (!sourceComplete()) return Promise.resolve('REJECTED\ninspect every source chunk before submitting boundaries')
-      if (defaultCandidateDecisions && (submittedArgs.excludedElementIds?.length ?? 0) > 0) {
+      if (automaticImageDecisions && (submittedArgs.excludedElementIds?.length ?? 0) > 0) {
         return Promise.resolve('REJECTED\nexcludedElementIds is unavailable in the compact boundary pass; classify false-positive heads in nonQuestionHeadElementIds and leave pixel removal to Host defaults or annotated visual review')
       }
       const answerSectionHeadIds = submittedArgs.questions.flatMap((question) => {
@@ -2713,56 +2646,21 @@ function submissionTool(
       if (answerSectionHeadIds.length > 0) {
         return Promise.resolve(`REJECTED\nquestion heads inside a document answer section are solutions or explanations, not learner questions: ${answerSectionHeadIds.join(', ')}`)
       }
-      if (defaultCandidateDecisions) {
-        const redundantProtectedOverrides = submittedArgs.questions.flatMap((question) => {
-          if (!protectedCandidateIds.has(question.headElementId)
-            || (question.additionalElementIds?.length ?? 0) > 0) return []
-          if (question.stopBeforeElementId === undefined) return [question.headElementId]
-          const head = elements.find(element => element.id === question.headElementId)
-          const stop = elements.find(element => element.id === question.stopBeforeElementId)
-          if (head !== undefined && stop !== undefined && stop.ordinal <= head.ordinal) return []
-          return candidateIds.includes(question.stopBeforeElementId as TeacherQuestionLayoutElementId)
-            || (stop !== undefined && isContextualSemanticBoundaryElement(stop, elements))
-            ? [question.headElementId]
-            : []
-        })
-        if (!usesLegacyCompactQuestions && redundantProtectedOverrides.length > 0) {
-          return Promise.resolve(`REJECTED\nquestionOverrides repeats Host-default protected heads without a material ownership or stop exception: ${redundantProtectedOverrides.join(', ')}`)
-        }
-        const unsupportedSingleElementOverrides = submittedArgs.questions.flatMap((question) => {
-          if (protectedCandidateIds.has(question.headElementId)
-            || question.stopBeforeElementId === undefined) return []
-          const head = elements.find(element => element.id === question.headElementId)
-          const stop = elements.find(element => element.id === question.stopBeforeElementId)
-          if (head === undefined || stop === undefined || stop.ordinal <= head.ordinal
-            || hasVisibleAnswerDemand(head, elements)) return []
-          const ownedElements = elements.filter(element => (
-            element.ordinal >= head.ordinal
-              && element.ordinal < stop.ordinal
-              && (isSemanticTextElement(element.element)
-                || element.element.type === 'image'
-                || element.element.type === 'table')
-          ))
-          return ownedElements.length === 1 ? [question.headElementId] : []
-        })
-        if (unsupportedSingleElementOverrides.length > 0) {
-          return Promise.resolve(`REJECTED\none-element questionOverrides without a visible learner answer demand are headings or continuations: ${unsupportedSingleElementOverrides.join(', ')}`)
-        }
+      if (automaticImageDecisions) {
         const submittedQuestionIds = new Set(submittedArgs.questions.map(question => question.headElementId))
         const explicitNonQuestionIds = new Set(submittedArgs.nonQuestionHeadElementIds ?? [])
         const unclassifiedCandidateIds = candidateIds.filter(id => (
-          !protectedCandidateIds.has(id as string)
-            && !submittedQuestionIds.has(id as string)
+          !submittedQuestionIds.has(id as string)
             && !explicitNonQuestionIds.has(id as string)
         ))
         if (unclassifiedCandidateIds.length > 0) {
-          return Promise.resolve(`REJECTED\nevery unprotected possible question head requires an explicit question or non-question decision: ${unclassifiedCandidateIds.join(', ')}`)
+          return Promise.resolve(`REJECTED\nevery possible question head requires an explicit question or non-question decision: ${unclassifiedCandidateIds.join(', ')}`)
         }
       }
       const fingerprint = JSON.stringify(submittedArgs)
       if (state.seenDrafts.has(fingerprint)) return Promise.resolve('REJECTED\nthis identical rejected draft was already checked; change the reported decisions')
       state.seenDrafts.add(fingerprint)
-      const submittedDraft = defaultCandidateDecisions
+      const submittedDraft = automaticImageDecisions
         ? expandDefaultBoundaryDraft(
           submittedArgs,
           elements,
@@ -2771,6 +2669,7 @@ function submissionTool(
           config.minQuestionRepeatedImagePages,
           config.questionRepeatedImagePositionToleranceRatio,
           answerSectionElementIdSet,
+          false,
         )
         : submittedArgs
       const draft = removeUnsafeQuestionStops(submittedDraft, elements)
@@ -2785,7 +2684,7 @@ function submissionTool(
         config.maxQuestionAutoOwnedGapRatio,
         corePageIndexes,
         protectedCandidateIds,
-        !defaultCandidateDecisions,
+        true,
       )
       if (validated.referenceErrors.length === 0) {
         state.submissions += 1
@@ -2906,7 +2805,6 @@ function cropReviewFindingsTool(
   validCropIds: ReadonlySet<string>,
   validPageIds: ReadonlySet<string>,
   validMissingQuestionPageIds: ReadonlySet<string>,
-  missingQuestionCandidatePageIds: ReadonlySet<string>,
   answerSectionPageIds: ReadonlySet<string>,
   elements: readonly IndexedElement[],
   state: CropReviewState,
@@ -3121,26 +3019,11 @@ function cropReviewFindingsTool(
           if (finding.missingQuestionHead === undefined || finding.missingQuestionHead.trim() === '') {
             return Promise.resolve(`REJECTED\n${label} pageId-only finding requires missingQuestionHead for the source question with no listed crop`)
           }
-          const citedCropLabels = [...`${finding.missingQuestionHead}\n${issue}\n${evidence}`
-            .matchAll(/\bQ\s*([0-9]+)\b/giu)]
-          const citedExistingCrop = citedCropLabels.find((match) => {
-            const questionNo = Number(match[1])
-            return request.questions.some(question => (
-              question.questionNo === questionNo
-                && validCropIds.has(`crop-${String(question.sourceHeadId)}`)
-            ))
-          })
-          if (citedExistingCrop !== undefined) {
-            return Promise.resolve(`REJECTED\n${label} cites existing annotated crop ${citedExistingCrop[0]}; classify that crop instead of reporting its boxed problem as missing`)
-          }
           if (!allowMissingQuestionFindings) {
             return Promise.resolve(`REJECTED\n${label} pageId-only missing-question finding is forbidden during a crop-local recut; unlisted questions remain unchanged`)
           }
           if (repairIntents.length > 0) {
             return Promise.resolve(`REJECTED\n${label} pageId-only missing-question finding must not contain crop repairIntents`)
-          }
-          if (!missingQuestionCandidatePageIds.has(finding.pageId)) {
-            return Promise.resolve(`REJECTED\n${label} cites no uncovered learner-question candidate on that page; section, formula, theory, and solution content are not missing questions`)
           }
         } else if (finding.missingQuestionHead !== undefined) {
           return Promise.resolve(`REJECTED\n${label}.missingQuestionHead is only valid without cropId`)
@@ -3799,10 +3682,12 @@ function cropReviewRevisionTool(
         const current = currentById.get(id)
         const corrected = correctedById.get(id)
         if (current === undefined || corrected === undefined || removedQuestionIds.has(id)) continue
-        const lostRequiredTextIds = [...requiredQuestionTextIds(current, elements)].filter((elementId) => {
-          const element = elementById.get(elementId)
-          return element !== undefined && !questionFullyOwnsElement(corrected, element)
-        })
+        const lostRequiredTextIds = hasGroupFinding
+          ? []
+          : [...requiredQuestionTextIds(current, elements)].filter((elementId) => {
+            const element = elementById.get(elementId)
+            return element !== undefined && !questionFullyOwnsElement(corrected, element)
+          })
         if (lostRequiredTextIds.length > 0) {
           return Promise.resolve(
             `REJECTED\ncorrection for ${String(id)} clips learner-facing OCR before the next question or semantic boundary: ${lostRequiredTextIds.join(', ')}`,
@@ -3991,25 +3876,7 @@ export async function segmentQuestionsWithAgent(
     possibleAnswerHeadingIds: answerHeadingHints.map(element => element.id),
     possibleExplanationHeadingIds: explanationHeadingHints.map(element => element.id),
   }
-  const representativeProtectedHeadIds = request.pages.flatMap((page) => {
-    const head = elements.find(element => (
-      element.page === page && protectedHeadCandidates.has(element.id as string)
-    ))
-    return head === undefined ? [] : [head.id]
-  })
-  const pageEdgeElementIds = request.pages.flatMap((page) => {
-    const onPage = elements.filter(element => element.page === page)
-    const first = onPage[0]
-    const last = onPage.at(-1)
-    return first === undefined
-      ? []
-      : last === undefined || last === first ? [first.id] : [first.id, last.id]
-  })
-  const compactBoundaryFocusElementIds = [...new Set([
-    ...unprotectedHeadCandidates,
-    ...representativeProtectedHeadIds,
-    ...pageEdgeElementIds,
-  ])]
+  const completeInlineSource = compactSourceRecord(elements)
   const inspectedChunks = new Set<number>()
   const inspectedPreviews = new Set<string>()
   const toolSuffix = runToolSuffix()
@@ -4033,7 +3900,9 @@ export async function segmentQuestionsWithAgent(
     const modelInfo = await llm.resolveModelInfo(selected.provider, selected.model, deadline.signal)
     const previewSources = pagePreviewSources(request.pagePreviews ?? [])
     const attachments = ctx.get('attachments')
-    const inlineEvidence = config.questionSegmentationInlineEvidence && chunks.length === 1
+    const inlineEvidence = config.questionSegmentationInlineEvidence
+      && chunks.length === 1
+      && JSON.stringify(completeInlineSource).length <= config.maxQuestionCompactBoundaryCharacters
     if (!inlineEvidence && previewSources.length > 0 && modelInfo.inputModalities?.includes('image') !== true) {
       throw new QuestionSegmentationVisionError('the configured tool model does not declare image input')
     }
@@ -4099,17 +3968,13 @@ export async function segmentQuestionsWithAgent(
         ? ''
         : ' A previous child ended without a Host-accepted boundary result. Submit a corrected complete draft; the accepted boundary tool ends this run.'
       const evidenceInstruction = inlineEvidence
-        ? ' Focused compact OCR evidence around every ambiguous head, representative accepted heads, and page edges is included below. Visual validation follows in a separate annotated-page review, so this boundary pass uses no page images and calls no source or preview tool.'
+        ? ' Complete compact OCR evidence for every selected element is included below. Inspect the entire inlineSource before deciding boundaries. Visual validation follows in a separate annotated-page review, so this boundary pass uses no page images and calls no source or preview tool.'
         : ` Inspect every exact sourceChunkIndex through ${sourceToolName}. ${previewSources.length === 0 ? '' : `Inspect only the exact previewIds listed below through ${previewToolName}, requesting no more than ${String(maxImages)} ids per call. `}`
       const inlineSource = inlineEvidence
-        ? compactBoundarySourceRecord(
-          chunks[0] ?? [],
-          compactBoundaryFocusElementIds,
-          config.maxQuestionCompactBoundaryCharacters,
-        )
+        ? completeInlineSource
         : undefined
       const decisionInstruction = inlineEvidence
-        ? ' protectedQuestionHeadIds have visible learner answer-demand evidence and already become independent questions; never repeat them in questionOverrides unless one needs non-default additionalElementIds or must stop before otherwise unrecognized material. unprotectedQuestionHeadIds is the exact remaining candidate list: classify every listed id exactly once by putting a genuine independent task in questionOverrides or a false-positive head in nonQuestionHeadElementIds. Do not recompute this set by comparing the longer arrays. questionOverrides must be [] when there are no exceptions; the Host rejects a full question list. excludedElementIds is unavailable in this OCR-only pass because deleting unreviewed pixels can erase a stem; Host defaults and the later annotated visual review own pixel removal. questionOverrides also contains a missed head outside the candidate list. A numbered problem after a printed solution may be absent from the defaults: add it only when it visibly starts a new answer demand. An unusable stopBeforeElementId is omitted so Host ownership can use the next accepted head or semantic transition. Every unlisted image element receives automatic geometric ownership, except a page-spanning image that covers multiple accepted heads is treated as a background layer. Use retainedImageElementIds or additionalElementIds only to override that default for a required shared visual. Never attach an element across an answer, explanation, section, or theory boundary. The later visual review corrects diagrams, furniture, and edge pixels.'
+        ? ' questions must be the complete ordered list of independent learner questions discovered from inlineSource, not an exception list. semanticHints are incomplete recall aids: inspect every text element and submit a genuine head even when it is absent from possibleQuestionHeadIds, including OCR-damaged labels. Include every protectedQuestionHeadId; classify every other possibleQuestionHeadId either as a question or in nonQuestionHeadElementIds. Never combine several independently answerable numbered, example, or variant tasks into one question merely because one detected head precedes them: each independent answer demand needs its own head. excludedElementIds is unavailable in this OCR-only pass because deleting unreviewed pixels can erase a stem; Host defaults and the later annotated visual review own pixel removal. An unusable stopBeforeElementId is omitted so Host ownership can use the next accepted head or semantic transition. Every unlisted image element receives automatic geometric ownership, except a page-spanning image that covers multiple accepted heads is treated as a background layer. Use retainedImageElementIds or additionalElementIds only to override that default for a required shared visual. Never attach an element across an answer, explanation, section, or theory boundary. The later visual review corrects diagrams, furniture, and edge pixels.'
         : ' Every possibleQuestionHeadId requires one explicit decision: use it as headElementId, put it in nonQuestionHeadElementIds when it is not an independent head but should remain eligible content, or put it in excludedElementIds only when its pixels must be removed. Every imageElementId also requires an individual preview-backed decision: retain a question diagram in retainedImageElementIds, assign it through exactly one question\'s additionalElementIds when automatic ownership would be wrong, or exclude only visually confirmed furniture.'
       const prompt: SubagentStartRequest['prompt'] = [{
         type: 'text',
@@ -4274,7 +4139,6 @@ export async function reviewQuestionCropsWithAgent(
       }]
       : []
   ))
-  const missingQuestionCandidatePageIds = new Set(uncoveredMissingQuestionHeads.map(candidate => candidate.pageId))
   const toolSuffix = runToolSuffix()
   const sourceToolName = `question_review_context_${toolSuffix}`
   const sheetToolName = `question_review_sheet_${toolSuffix}`
@@ -4398,7 +4262,6 @@ export async function reviewQuestionCropsWithAgent(
         expectedCropIds,
         expectedPageIds,
         new Set(corePageIds),
-        missingQuestionCandidatePageIds,
         new Set(answerSectionPageIds),
         elements,
         reviewState,
@@ -4423,24 +4286,23 @@ export async function reviewQuestionCropsWithAgent(
       reviewState.seenRevisionDrafts.clear()
       accepted.clear()
       const coreCoverageInstruction = reviewsCompleteGroup
-        ? ' This is the complete-group review. Match every independent problem whose source page id is listed in corePageIds to one listed crop; adjacent preview pages are read-only continuation context and their independent problems do not need crops in this group. Pages listed in answerSectionPageIds belong to a document answer key: numbered solution or explanation heads on those pages are not missing learner questions and must not receive crops. A page-only missing-question finding is valid only on a page listed in missingQuestionCandidatePageIds and must describe one of uncoveredMissingQuestionHeads; when that list is empty, section headings, formulas, theory summaries, and worked solutions cannot be recovered as questions.'
+        ? ' This is the complete-group review. Match every independent problem whose source page id is listed in corePageIds to exactly one listed crop; adjacent preview pages are read-only continuation context and their independent problems do not need crops in this group. Pages listed in answerSectionPageIds belong to a document answer key: numbered solution or explanation heads on those pages are not missing learner questions and must not receive crops. A page-only missing-question finding is valid on any core page when visible source pixels establish an independent answer demand with no one-question crop. suggestedUncoveredQuestionHeads is a non-exhaustive OCR hint, never an allowlist.'
         : ' This is a crop-local recut review. Classify only the listed cropIds. Opaque gray vertical bands on annotated pages hide unrelated lanes: masked pixels are unavailable and cannot be cited as missing content, options, figures, continuation, or contamination. Unmasked unlisted questions remain present and unchanged and may be used only as same-lane boundary context. Do not report an unlisted question as missing, do not submit a pageId-only finding or missingQuestionHead, and do not replace the complete group.'
       const recoveryInstruction = agentRun === 0
         ? coreCoverageInstruction
         : ` A previous crop-review child ended without a Host-accepted result. Start the visual classification again and use only the listed cropIds and reviewSheetIds; an accepted review tool ends this run.${coreCoverageInstruction}`
       const reviewClassificationInstruction = reviewsCompleteGroup
-        ? 'Match every independent source-page problem to exactly one crop. A pageId-only finding is permitted only when an independent source problem has no listed crop at all and the page is listed in missingQuestionCandidatePageIds, even when some of its pixels appear inside another crop; set missingQuestionHead to that problem\'s visible printed head from the corresponding uncoveredMissingQuestionHeads entry and cite the containing crop in evidence when applicable. This explicit missing-question record requires a complete-group repair. Missing content from an existing crop, including a diagram or options printed elsewhere on the source page, must cite that cropId and may include pageId in the same finding; never set missingQuestionHead for it. If content missing from one crop appears in another, cite both cropIds as separate findings with complementary repairIntents so both boundaries change. Build one complete classification: use cropId, answerDemand, evidence, topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, rightmostVisibleContent, and requiredVisuals for a complete crop, plus attentionEvidence when visualAttention names it; use issue, evidence, cropId, and every required repairIntent for an existing-crop defect; use issue, evidence, pageId, and missingQuestionHead only for an independent problem with no listed crop. When cropIds is empty, submit empty arrays when uncoveredMissingQuestionHeads is empty; otherwise record each missing problem and add it through a candidate-complete group correction. A finding with missingQuestionHead requires a complete processing-group draft that explicitly classifies every possible question-head candidate and image element.'
+        ? 'Match every independent source-page problem to exactly one crop. A pageId-only finding is permitted when an independent source problem has no one-question crop, even when its pixels are inside a larger crop that combines several problems; set missingQuestionHead to its visible printed head and cite the containing crop in evidence when applicable. Also classify that combined crop as defective with reassign-content. This explicit missing-question record requires a complete-group repair. Missing content from an existing single-question crop, including a diagram or options printed elsewhere on the source page, must cite that cropId and may include pageId in the same finding; never set missingQuestionHead for it. If content missing from one crop appears in another, cite both cropIds as separate findings with complementary repairIntents so both boundaries change. Build one complete classification: use cropId, answerDemand, evidence, topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, rightmostVisibleContent, and requiredVisuals for a complete crop, plus attentionEvidence when visualAttention names it; use issue, evidence, cropId, and every required repairIntent for an existing-crop defect; use issue, evidence, pageId, and missingQuestionHead only for an independent problem with no one-question crop. A finding with missingQuestionHead requires a complete processing-group draft that explicitly classifies every possible question-head candidate and image element.'
         : 'Classify every listed crop exactly once and ignore unlisted questions except as read-only boundary context. Missing content from a listed crop must cite that cropId and may include pageId. If pixels belonging to one listed crop appear in another listed crop, cite both cropIds with complementary repairIntents so both local boundaries change. Never submit a pageId-only finding or missingQuestionHead in this crop-local recut. Record a complete crop with the exact cropId field, never verifyCropId, plus answerDemand, evidence, topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, rightmostVisibleContent, and requiredVisuals, plus attentionEvidence when visualAttention names it; record an existing-crop defect with issue, evidence, cropId, and every required repairIntent. Host validation preserves every unlisted question and rejects a complete-group replacement.'
       const promptText = compactReview
-        ? `Review every annotated source page and rendered crop from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First call ${sheetToolName} once with every reviewSheetId. These ids exist only in that tool; never call read_image or any filesystem tool. A review-page sheet contains annotated source pages: each magenta rectangle is the exact sampled source region for its Q label, the blue dashed line is final owned OCR content before permitted white right padding, a red crossed region is erased, repeated Q labels form one stitched crop, and any opaque gray vertical band hides an unrelated page lane. Masked pixels are unavailable evidence and must never be cited as missing content, options, figures, continuation, or contamination. Except for a red crossed region, every source pixel inside a magenta rectangle is already present in that crop; never report content inside the rectangle as missing from the rendered crop. Unmasked source pixels outside a magenta rectangle are same-lane page context and are not inside that crop. A review-crop sheet contains the rendered outputs: the cyan frame is the exact outer boundary of the actual crop, while the gray field outside that frame is only sheet layout and is never crop whitespace. Judge margins and gaps only inside the cyan frame. Map Q labels through preliminaryQuestions and compare every actual crop with its boxed source region. Check that every crop has one complete independent answer demand with all figures, options, subparts, and continuations, contains no answer, explanation, footer, adjacent problem, or avoidable vertical gap, and that every core-page problem has a box and output crop. A magenta rectangle or Q label proves only that a crop exists; it never proves that the crop is a learner question. A page-only missing-question finding must identify a problem outside every magenta box and correspond to uncoveredMissingQuestionHeads on a page listed in missingQuestionCandidatePageIds; a visible Q label proves that crop exists and must never be reported as missing. Compare adjacent and repeated boxes for missing or duplicated pixels. Report only visibly confirmed defects; possible or suspected findings are rejected. Immediately submit one ${findingsToolName} call listing every complete crop in verifiedCrops with its exact visible answerDemand and visible task evidence, and every defect in findings. If a crop has no learner answer demand because it contains only theory, a method summary, an answer, a solution, or explanatory prose, report remove-crop instead of verifying it. Every expansion finding supplies outsideCropEvidence naming the required pixels outside the magenta rectangle; every trim finding supplies insideCropEvidence naming unwanted pixels actually visible in the rendered crop. A reassign-content finding that claims a missing continuation must identify source content outside the magenta rectangle; a page-binding line or the blue owned-content marker does not prove missing content. Resolve every visualAttention flag for a verified crop through attentionChecks. A crop defect cites cropId and every repairIntent; a wholly missing problem cites pageId plus missingQuestionHead. Never declare both expansion and trimming on the same crop edge. Recorded defects cannot be withdrawn during this visual run. A findings call with defects ends this visual pass; the Host starts a separate text-only repair child. Do not call a repair-context or revision tool here. An accepted clean findings call also ends the run. Do not narrate individual crops.\n${JSON.stringify({
+        ? `Review every annotated source page and rendered crop from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First call ${sheetToolName} once with every reviewSheetId. These ids exist only in that tool; never call read_image or any filesystem tool. A review-page sheet contains annotated source pages: each magenta rectangle is the exact sampled source region for its Q label, the blue dashed line is final owned OCR content before permitted white right padding, a red crossed region is erased, repeated Q labels form one stitched crop, and any opaque gray vertical band hides an unrelated page lane. Masked pixels are unavailable evidence and must never be cited as missing content, options, figures, continuation, or contamination. Except for a red crossed region, every source pixel inside a magenta rectangle is already present in that crop; never report those pixels as absent from the rendered crop. They can still prove that one crop incorrectly combines several independent questions. Unmasked source pixels outside a magenta rectangle are same-lane page context and are not inside that crop. A review-crop sheet contains the rendered outputs: the cyan frame is the exact outer boundary of the actual crop, while the gray field outside that frame is only sheet layout and is never crop whitespace. Judge margins and gaps only inside the cyan frame. Map Q labels through preliminaryQuestions and compare every actual crop with its boxed source region. Check that every crop has exactly one complete independent answer demand with all figures, options, subparts, and continuations, contains no second independent problem, answer, explanation, footer, adjacent problem, or avoidable vertical gap, and that every core-page problem has its own output crop. A collective answerDemand such as solving several separately labelled problems never verifies a crop. A magenta rectangle or Q label proves only that a crop exists; it never proves that the crop is one learner question. A page-only missing-question finding may identify a visible independent problem outside every box or inside a box that combines multiple problems; suggestedUncoveredQuestionHeads is only a non-exhaustive OCR hint. Compare adjacent and repeated boxes for missing or duplicated pixels. Report only visibly confirmed defects; possible or suspected findings are rejected. Immediately submit one ${findingsToolName} call listing every complete crop in verifiedCrops with its exact single visible answerDemand and visible task evidence, and every defect in findings. If a crop has no learner answer demand because it contains only theory, a method summary, an answer, a solution, or explanatory prose, report remove-crop instead of verifying it. Every expansion finding supplies outsideCropEvidence naming the required pixels outside the magenta rectangle; every trim finding supplies insideCropEvidence naming unwanted pixels actually visible in the rendered crop. A reassign-content finding that claims a missing continuation must identify source content outside the magenta rectangle; a page-binding line or the blue owned-content marker does not prove missing content. Resolve every visualAttention flag for a verified crop through attentionChecks. A crop defect cites cropId and every repairIntent; an independent problem without its own crop cites pageId plus missingQuestionHead. Never declare both expansion and trimming on the same crop edge. Recorded defects cannot be withdrawn during this visual run. A findings call with defects ends this visual pass; the Host starts a separate text-only repair child. Do not call a repair-context or revision tool here. An accepted clean findings call also ends the run. Do not narrate individual crops.\n${JSON.stringify({
           groupIndex: request.groupIndex,
           recutAttempt: request.recutAttempt,
           fullGroupCoverage: request.reviewQuestionIds.length === request.questions.length,
           cropLocalLaneMask: !reviewsCompleteGroup,
           corePageIds,
           answerSectionPageIds,
-          missingQuestionCandidatePageIds: [...missingQuestionCandidatePageIds],
-          uncoveredMissingQuestionHeads,
+          suggestedUncoveredQuestionHeads: uncoveredMissingQuestionHeads,
           reviewSheetIds: reviewPageSources.map(source => source.id),
           visualAttention: reviewAttention,
           preliminaryQuestions: scopedQuestions.map(question => ({
@@ -4457,8 +4319,7 @@ export async function reviewQuestionCropsWithAgent(
           cropLocalLaneMask: !reviewsCompleteGroup,
           corePageIds,
           answerSectionPageIds,
-          missingQuestionCandidatePageIds: [...missingQuestionCandidatePageIds],
-          uncoveredMissingQuestionHeads,
+          suggestedUncoveredQuestionHeads: uncoveredMissingQuestionHeads,
           cropIds: cropSources.map(source => source.id),
           pagePreviewIds: pageSources.map(source => source.id),
           visualAttention: reviewAttention,

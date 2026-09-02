@@ -140,8 +140,8 @@ function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbench
     maxQuestionSourceChunkCharacters: 18_000,
     maxQuestionCompactBoundaryCharacters: 12_000,
     questionSegmentationInlineEvidence: false,
-    maxQuestionCompactBoundaryOutputTokens: 2_048,
-    maxQuestionCompactReviewOutputTokens: 4_096,
+    maxQuestionCompactBoundaryOutputTokens: 32_768,
+    maxQuestionCompactReviewOutputTokens: 32_768,
     maxSegmentedQuestions: 300,
     maxQuestionBoundarySubmissions: 3,
     maxQuestionBoundaryAgentRuns: 2,
@@ -205,6 +205,19 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
+  it('defaults compact question children to the 32K output allowance', () => {
+    expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
+    })
+    expect(() => TeacherWorkbenchService.Config({
+      maxQuestionCompactBoundaryOutputTokens: 32_769,
+    } as never)).toThrow()
+    expect(() => TeacherWorkbenchService.Config({
+      maxQuestionCompactReviewOutputTokens: 32_769,
+    } as never)).toThrow()
+  })
+
   it('registers ordinary-conversation tools and applies daily, timetable, roster, and score mutations', async () => {
     const b = await harness()
     contexts.push(b.ctx)
@@ -559,8 +572,8 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionSourceChunkCharacters: 18_000,
       maxQuestionCompactBoundaryCharacters: 12_000,
       questionSegmentationInlineEvidence: false,
-      maxQuestionCompactBoundaryOutputTokens: 2_048,
-      maxQuestionCompactReviewOutputTokens: 4_096,
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
@@ -611,8 +624,8 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionSourceChunkCharacters: 18_000,
       maxQuestionCompactBoundaryCharacters: 12_000,
       questionSegmentationInlineEvidence: false,
-      maxQuestionCompactBoundaryOutputTokens: 2_048,
-      maxQuestionCompactReviewOutputTokens: 4_096,
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
@@ -872,8 +885,8 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionSourceChunkCharacters: 18_000,
       maxQuestionCompactBoundaryCharacters: 12_000,
       questionSegmentationInlineEvidence: false,
-      maxQuestionCompactBoundaryOutputTokens: 2_048,
-      maxQuestionCompactReviewOutputTokens: 4_096,
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
@@ -1364,8 +1377,8 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionSourceChunkCharacters: 18_000,
       maxQuestionCompactBoundaryCharacters: 12_000,
       questionSegmentationInlineEvidence: false,
-      maxQuestionCompactBoundaryOutputTokens: 2_048,
-      maxQuestionCompactReviewOutputTokens: 4_096,
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,
@@ -1775,8 +1788,8 @@ describe('TeacherWorkbenchService', () => {
       maxQuestionSourceChunkCharacters: 18_000,
       maxQuestionCompactBoundaryCharacters: 12_000,
       questionSegmentationInlineEvidence: false,
-      maxQuestionCompactBoundaryOutputTokens: 2_048,
-      maxQuestionCompactReviewOutputTokens: 4_096,
+      maxQuestionCompactBoundaryOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 32_768,
       maxSegmentedQuestions: 300,
       maxQuestionBoundarySubmissions: 3,
       maxQuestionBoundaryAgentRuns: 2,

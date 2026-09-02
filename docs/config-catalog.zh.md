@@ -953,7 +953,7 @@ export interface Config {
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
   maxQuestionSourceChunkCharacters: number
-  /** Maximum focused OCR characters placed directly in one compact boundary request. */
+  /** Maximum complete OCR characters placed directly in one compact boundary request. */
   maxQuestionCompactBoundaryCharacters: number
   /** Whether eligible OCR source and visual-review sheets travel directly in their respective child requests. */
   questionSegmentationInlineEvidence: boolean

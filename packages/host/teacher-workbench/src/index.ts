@@ -135,8 +135,8 @@ const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
 const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 400_000
 const DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS = 24_000
 const DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE = true
-const DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS = 2_048
-const DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS = 4_096
+const DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS = 32_768
+const DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS = 32_768
 const DEFAULT_SEGMENTED_QUESTIONS = 300
 const DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS = 5
 const DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS = 2
@@ -228,7 +228,7 @@ export interface Config {
   maxQuestionLayoutElements: number
   /** Maximum serialized OCR characters returned by one question-layout tool call. */
   maxQuestionSourceChunkCharacters: number
-  /** Maximum focused OCR characters placed directly in one compact boundary request. */
+  /** Maximum complete OCR characters placed directly in one compact boundary request. */
   maxQuestionCompactBoundaryCharacters: number
   /** Whether eligible OCR source and visual-review sheets travel directly in their respective child requests. */
   questionSegmentationInlineEvidence: boolean
@@ -290,9 +290,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       .default(DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS),
     questionSegmentationInlineEvidence: z.boolean()
       .default(DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE),
-    maxQuestionCompactBoundaryOutputTokens: z.natural().min(256).max(16_384)
+    maxQuestionCompactBoundaryOutputTokens: z.natural().min(256).max(32_768)
       .default(DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS),
-    maxQuestionCompactReviewOutputTokens: z.natural().min(256).max(16_384)
+    maxQuestionCompactReviewOutputTokens: z.natural().min(256).max(32_768)
       .default(DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS),
     maxSegmentedQuestions: z.natural().min(1).max(10_000).default(DEFAULT_SEGMENTED_QUESTIONS),
     maxQuestionBoundarySubmissions: z.natural().min(1).max(20).default(DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS),

@@ -233,8 +233,8 @@
         maxQuestionSourceChunkCharacters: 400000
         maxQuestionCompactBoundaryCharacters: 24000
         questionSegmentationInlineEvidence: true
-        maxQuestionCompactBoundaryOutputTokens: 2048
-        maxQuestionCompactReviewOutputTokens: 4096
+        maxQuestionCompactBoundaryOutputTokens: 32768
+        maxQuestionCompactReviewOutputTokens: 32768
         maxSegmentedQuestions: 300
         maxQuestionBoundarySubmissions: 5
         maxQuestionBoundaryAgentRuns: 2

@@ -90,10 +90,18 @@ class QuestionSegmentationAdapter extends LlmAdapter {
     }
     const submit = options.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))?.name
     if (submit === undefined) throw new Error('question boundary submission tool is missing')
+    const boundaryPrompt = options.messages.flatMap(message => message.content)
+      .find(block => block.type === 'text' && block.text.includes('"semanticHints"'))
+    if (boundaryPrompt?.type !== 'text') throw new Error('question boundary metadata is missing')
+    const boundaryMetadata = JSON.parse(boundaryPrompt.text.slice(boundaryPrompt.text.lastIndexOf('\n') + 1)) as {
+      readonly semanticHints: { readonly protectedQuestionHeadIds: readonly string[] }
+    }
+    const questions = boundaryMetadata.semanticHints.protectedQuestionHeadIds
+      .map(headElementId => ({ headElementId }))
     if (JSON.stringify(options.messages).includes('双栏等宽试卷.pdf')) {
       yield * toolCall(submit, {
         headConvention: 'Score-bearing Arabic labels start one independent question in each printed column.',
-        questionOverrides: [],
+        questions,
       }, this.requests.length)
       return
     }
@@ -102,13 +110,13 @@ class QuestionSegmentationAdapter extends LlmAdapter {
     yield * toolCall(submit, groupIndex === 0
       ? {
         headConvention: 'Arabic punctuation begins independent top-level questions on the core page.',
-        questionOverrides: [],
+        questions,
         nonQuestionHeadElementIds: ['p0e2'],
         stopBeforeElementId: 'p1e2',
       }
       : {
         headConvention: 'Bracketed 题 labels begin independent top-level questions on the core page.',
-        questionOverrides: [],
+        questions,
         nonQuestionHeadElementIds: ['p1e2'],
         stopBeforeElementId: 'p1e5',
       }, this.requests.length)
@@ -287,6 +295,29 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
         cropReviewRevision: adapter.requests.some(request => request.tools?.some(tool => tool.name.startsWith('revise_question_boundaries_'))),
         structuredOutput: adapter.requests.some(request => request.tools?.some(tool => tool.name === 'structured_output')),
       },
+      compactOutputTokenBudgets: {
+        boundary: [...new Set(adapter.requests
+          .filter(request => request.tools?.some(tool => tool.name.startsWith('submit_question_boundaries_')))
+          .map(request => request.maxTokens))],
+        review: [...new Set(adapter.requests
+          .filter(request => request.tools?.some(tool => tool.name.startsWith('submit_question_crop_findings_')))
+          .map(request => request.maxTokens))],
+      },
+      boundaryUsesCompleteDraft: adapter.requests.some((request) => {
+        const submission = request.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        const schema = JSON.stringify(submission)
+        return submission !== undefined
+          && schema.includes('questions')
+          && !schema.includes('questionOverrides')
+          && JSON.stringify(request.messages).includes('questions must be the complete ordered list')
+      }),
+      boundaryHintsAreNonAuthoritative: adapter.requests.some(request => (
+        JSON.stringify(request.messages).includes('submit a genuine head even when it is absent from possibleQuestionHeadIds')
+      )),
+      cropReviewSplitsCombinedQuestions: adapter.requests.some(request => (
+        JSON.stringify(request.messages).includes('one crop incorrectly combines several independent questions')
+          && JSON.stringify(request.messages).includes('collective answerDemand')
+      )),
       cropReviewPromptMentionsWhitePadding: adapter.requests.some(request => (
         JSON.stringify(request.messages).includes('permitted white right padding')
       )),
