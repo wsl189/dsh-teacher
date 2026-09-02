@@ -1,8 +1,8 @@
 // Web e2e: a bundled image-generation Tool result remains beside the final
 // Assistant answer as an independent Chat node. The scenario cold-seeds one
 // closed Turn and a real attachment, so it exercises the shipped Client graph,
-// provider-owned loopback route, compact-process boundary, and browser image load
-// without a model or image-provider network call.
+// provider-owned loopback route, compact-process boundary, browser image load,
+// wheel zoom, and native save handoff without a model or image-provider network call.
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
@@ -167,10 +167,46 @@ describe('web e2e: generated images follow the final answer', () => {
     expect(imageIndex).toBeGreaterThan(answerIndex)
     expect(tailIndex).toBeGreaterThan(imageIndex)
     expect(await imageRow.getAttribute('data-turn-process-hidden')).toBeNull()
-    const link = imageRow.getByRole('link', {
+    const open = imageRow.getByRole('button', {
       name: 'generated-preview.webp, click to view original',
     })
-    expect(await link.getAttribute('href')).toMatch(/^blob:/)
+    const card = imageRow.locator('[data-generated-image-card]')
+    const download = imageRow.getByRole('button', { name: 'Download image generated-preview.webp' })
+    expect(await download.evaluate(element => getComputedStyle(element).opacity)).toBe('0')
+    await card.hover()
+    await expect.poll(() => download.evaluate(element => getComputedStyle(element).opacity)).toBe('1')
+
+    await page.evaluate(() => {
+      const probe = { suggestedName: '', writes: [] as Array<{ type: string; size: number }>, closed: 0 }
+      Reflect.set(window, '__dshGeneratedImageSaveProbe', probe)
+      Reflect.set(window, 'showSaveFilePicker', async (options: { readonly suggestedName: string }) => {
+        probe.suggestedName = options.suggestedName
+        return {
+          createWritable: async () => ({
+            write: async (blob: Blob) => { probe.writes.push({ type: blob.type, size: blob.size }) },
+            close: async () => { probe.closed += 1 },
+          }),
+        }
+      })
+    })
+    await download.click()
+    await expect.poll(() => page.evaluate(() => {
+      const probe: unknown = Reflect.get(window, '__dshGeneratedImageSaveProbe')
+      return probe
+    }))
+      .toMatchObject({ suggestedName: 'generated-preview.webp', writes: [{ type: 'image/webp' }], closed: 1 })
+
+    await open.click()
+    const dialog = page.getByRole('dialog', { name: 'Original image preview' })
+    await dialog.waitFor()
+    const viewport = dialog.locator('[data-generated-image-preview-viewport]')
+    await viewport.hover()
+    await page.mouse.wheel(0, -120)
+    await expect.poll(() => dialog.getAttribute('data-zoom')).toBe('1.25')
+    await page.mouse.wheel(0, 120)
+    await expect.poll(() => dialog.getAttribute('data-zoom')).toBe('1')
+    await dialog.getByRole('button', { name: 'Close original image preview' }).click()
+    await expect.poll(() => dialog.count()).toBe(0)
 
     const snapshot = (await captureStableAria(
       page, '[data-image-generation-results]', scaffold.workspaceCwd,

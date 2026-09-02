@@ -1,4 +1,5 @@
 - region "Image":
-  - link "generated-preview.webp, click to view original":
-    - /url: blob:http://127.0.0.1:{{port}}/{{uuid}}
+  - button "generated-preview.webp, click to view original":
     - img "generated-preview.webp"
+  - button "Download image generated-preview.webp":
+    - img

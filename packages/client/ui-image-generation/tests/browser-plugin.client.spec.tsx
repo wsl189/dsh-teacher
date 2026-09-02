@@ -2,7 +2,7 @@
 
 import { Context } from '@deepseek-ai/cordis'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, waitFor, within } from '@testing-library/react'
 import { AttachmentId, type ImageAttachmentRef } from '@deepseek-ai/dsh-attachment'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { makeTranslate } from '@deepseek-ai/dsh-client-test-runtime'
@@ -71,7 +71,7 @@ async function bench() {
 }
 
 describe('generated-image result renderer', () => {
-  it('loads through the bundled loopback route, opens the original, and revokes the URL', async () => {
+  it('loads through the bundled route, opens an in-page wheel-zoom preview, and revokes the URL', async () => {
     const fetch = vi.fn<typeof globalThis.fetch>().mockResolvedValue({
       ok: true,
       blob: () => Promise.resolve(new Blob([Uint8Array.of(1)], { type: 'image/png' })),
@@ -88,14 +88,160 @@ describe('generated-image result renderer', () => {
     expect(generatedImageUrl(image)).toBe(
       '/api/dsh-imagegen/agent-image?attachment_id=sha256%3Aimage&media_type=image%2Fpng&bytes=68&width=640&height=320',
     )
-    const link = view.getByRole('link', { name: 'generated.png，点击查看原图' })
-    expect(link.getAttribute('href')).toBe('blob:generated')
-    expect(link.getAttribute('target')).toBe('_blank')
-    expect(link.getAttribute('title')).toBe('查看原图')
-    expect(link.getAttribute('style')).toContain('width: 520px')
+    const open = view.getByRole('button', { name: 'generated.png，点击查看原图' })
+    expect(open.getAttribute('title')).toBe('查看原图')
+    expect(open.closest('[data-generated-image-card]')?.getAttribute('style')).toContain('width: 520px')
+    open.focus()
+    fireEvent.click(open)
+    const dialog = view.getByRole('dialog', { name: '原图预览' })
+    const viewport = dialog.querySelector<HTMLElement>('[data-generated-image-preview-viewport]')!
+    expect(viewport.getAttribute('title')).toBe('使用鼠标滚轮放大或缩小图片')
+    expect(within(dialog).getByText('100%')).toBeTruthy()
+    expect(fireEvent.wheel(viewport, { deltaY: 0 })).toBe(true)
+    expect(fireEvent.wheel(viewport, { deltaY: -100 })).toBe(false)
+    expect(dialog.getAttribute('data-zoom')).toBe('1.25')
+    expect(within(dialog).getByText('125%')).toBeTruthy()
+    for (let index = 0; index < 12; index += 1) fireEvent.wheel(viewport, { deltaY: -100 })
+    expect(dialog.getAttribute('data-zoom')).toBe('8')
+    for (let index = 0; index < 16; index += 1) fireEvent.wheel(viewport, { deltaY: 100 })
+    expect(dialog.getAttribute('data-zoom')).toBe('1')
+    fireEvent.keyDown(window, { key: 'Enter' })
+    expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
+    fireEvent.keyDown(window, { key: 'Escape' })
+    expect(view.queryByRole('dialog')).toBeNull()
+    expect(document.activeElement).toBe(open)
+
+    fireEvent.click(open)
+    const reopened = view.getByRole('dialog', { name: '原图预览' })
+    fireEvent.resize(window)
+    fireEvent.mouseDown(reopened.querySelector<HTMLElement>('[aria-hidden="true"]')!)
+    expect(view.queryByRole('dialog')).toBeNull()
+
+    fireEvent.click(open)
+    fireEvent.click(view.getByRole('button', { name: '关闭原图预览' }))
+    expect(view.queryByRole('dialog')).toBeNull()
     expect(created).toHaveBeenCalledTimes(1)
     view.unmount()
     expect(revoked).toHaveBeenCalledWith('blob:generated')
+  })
+
+  it('saves the loaded blob through the system picker from the card and the preview', async () => {
+    const blob = new Blob([Uint8Array.of(7, 8)], { type: 'image/png' })
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({ ok: true, blob: async () => blob }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:save')
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
+    const write = vi.fn(async () => {})
+    const close = vi.fn(async () => {})
+    const picker = vi.fn(async () => ({
+      createWritable: async () => ({ write, close }),
+    }))
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('showSaveFilePicker', picker)
+    const view = render(<ImageGenerationResultNode {...props([image])} />)
+    await view.findByAltText('generated.png')
+
+    const save = view.getByRole('button', { name: '下载图片 generated.png' })
+    expect(save.getAttribute('title')).toBe('下载图片 generated.png')
+    fireEvent.click(save)
+    await waitFor(() => {
+      expect(picker).toHaveBeenCalledWith({ suggestedName: 'generated.png' })
+      expect(write).toHaveBeenCalledWith(blob)
+      expect(close).toHaveBeenCalledTimes(1)
+    })
+
+    fireEvent.click(view.getByRole('button', { name: 'generated.png，点击查看原图' }))
+    fireEvent.click(within(view.getByRole('dialog')).getByRole('button', { name: '下载图片 generated.png' }))
+    await waitFor(() => {
+      expect(picker).toHaveBeenCalledTimes(2)
+      expect(write).toHaveBeenCalledTimes(2)
+      expect(close).toHaveBeenCalledTimes(2)
+    })
+  })
+
+  it('treats picker cancellation as a no-op and exposes a retryable save failure in either view', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob([Uint8Array.of(9)], { type: 'image/png' }),
+    }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:save-errors')
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
+    const write = vi.fn(async () => {})
+    const close = vi.fn(async () => {})
+    const picker = vi.fn()
+      .mockRejectedValueOnce(new DOMException('cancelled', 'AbortError'))
+      .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
+      .mockResolvedValueOnce({ createWritable: async () => ({ write, close }) })
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('showSaveFilePicker', picker)
+    const view = render(<ImageGenerationResultNode {...props([image])} />)
+    await view.findByAltText('generated.png')
+    const save = view.getByRole('button', { name: '下载图片 generated.png' })
+
+    fireEvent.click(save)
+    await waitFor(() => { expect(save.hasAttribute('disabled')).toBe(false) })
+    expect(view.queryByRole('alert')).toBeNull()
+
+    fireEvent.click(save)
+    expect((await view.findByRole('alert')).textContent).toBe('图片保存失败，请重试')
+    fireEvent.click(view.getByRole('button', { name: 'generated.png，点击查看原图' }))
+    const dialog = view.getByRole('dialog')
+    expect(within(dialog).getByRole('alert').textContent).toBe('图片保存失败，请重试')
+    fireEvent.click(within(dialog).getByRole('button', { name: '下载图片 generated.png' }))
+    await waitFor(() => {
+      expect(view.queryByRole('alert')).toBeNull()
+      expect(write).toHaveBeenCalledTimes(1)
+      expect(close).toHaveBeenCalledTimes(1)
+    })
+  })
+
+  it('falls back to a browser download with a sanitized media-type filename', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob([Uint8Array.of(4)], { type: 'image/png' }),
+    }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:fallback')
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
+    const clicks: Array<{ href: string; download: string }> = []
+    vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(function (this: HTMLAnchorElement) {
+      clicks.push({ href: this.href, download: this.download })
+    })
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('showSaveFilePicker', undefined)
+    const oddlyNamed = { ...image, name: '../...bad?:name' }
+    const view = render(<ImageGenerationResultNode {...props([oddlyNamed])} />)
+    await view.findByAltText('../...bad?:name')
+    const save = view.getByRole('button', { name: '下载图片 ../...bad?:name' })
+    fireEvent.click(save)
+    await waitFor(() => {
+      expect(clicks).toEqual([{ href: 'blob:fallback', download: 'bad__name.png' }])
+    })
+
+    const picker = vi.fn()
+    vi.stubGlobal('isSecureContext', false)
+    vi.stubGlobal('showSaveFilePicker', picker)
+    fireEvent.click(save)
+    await waitFor(() => { expect(clicks).toHaveLength(2) })
+    expect(picker).not.toHaveBeenCalled()
+  })
+
+  it('does not publish save state after the image unmounts during a failed picker', async () => {
+    vi.stubGlobal('fetch', vi.fn().mockResolvedValue({
+      ok: true,
+      blob: async () => new Blob([Uint8Array.of(5)], { type: 'image/png' }),
+    }))
+    vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:pending-save')
+    vi.spyOn(URL, 'revokeObjectURL').mockReturnValue(undefined)
+    let rejectPicker: ((cause: Error) => void) | undefined
+    const picker = vi.fn(() => new Promise((_resolve, reject) => { rejectPicker = reject }))
+    vi.stubGlobal('isSecureContext', true)
+    vi.stubGlobal('showSaveFilePicker', picker)
+    const view = render(<ImageGenerationResultNode {...props([image])} />)
+    await view.findByAltText('generated.png')
+    fireEvent.click(view.getByRole('button', { name: '下载图片 generated.png' }))
+    await waitFor(() => { expect(picker).toHaveBeenCalledTimes(1) })
+    view.unmount()
+    rejectPicker?.(new Error('disk offline'))
+    await Promise.resolve()
   })
 
   it('retries a failed load and renders multiple unnamed images as tiles', async () => {
