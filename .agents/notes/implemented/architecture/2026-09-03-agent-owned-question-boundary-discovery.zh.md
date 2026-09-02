@@ -5,6 +5,8 @@ Status: implemented
 [English](2026-09-03-agent-owned-question-boundary-discovery.md) | 中文
 
 > 本决策只取代[有界并行切题](../feature/2026-08-26-bounded-parallel-question-cutting.zh.md)中的候选默认紧凑题界协议；其中的分组、并发、图片归属、输出预算与降级决策仍然有效。
+>
+> 受保护候选的降级规则与非题目内容块归属由 [Agent 判定的题外边界](2026-09-03-agent-classified-outside-question-boundaries.zh.md)部分取代；完整来源发现、不透明 OCR id、必需工具调用与 Host 几何所有权仍然有效。
 
 ## 问题
 

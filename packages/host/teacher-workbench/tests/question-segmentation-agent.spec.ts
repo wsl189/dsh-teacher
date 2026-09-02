@@ -1166,7 +1166,7 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
-  it('rejects downgrading candidate heads with visible learner answer demands', async () => {
+  it('requires an explicit outside boundary to downgrade candidate heads with visible learner answer demands', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
     ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
@@ -1182,7 +1182,7 @@ describe('segmentQuestionsWithAgent', () => {
           headConvention: 'Numbered theory and exercises are distinguished by a visible answer demand.',
           questions: [],
           nonQuestionHeadElementIds: ['p0e0', 'p0e1', 'p0e3'],
-        }, TOOL_CONTEXT)).resolves.toContain('p0e1 in nonQuestionHeadElementIds[1] has visible learner answer-demand evidence')
+        }, TOOL_CONTEXT)).resolves.toContain('submit it as a question or mark the same id as an outside boundary')
         const accepted = String(await submit.execute({
           headConvention: 'Numbered theory and exercises are distinguished by a visible answer demand.',
           questions: [{ headElementId: 'p0e1' }, { headElementId: 'p0e3' }],
@@ -1214,6 +1214,59 @@ describe('segmentQuestionsWithAgent', () => {
 
     if (!result.ok) throw new Error(result.error.message)
     expect(result.value.questions.map(question => question.sourceHeadId)).toEqual(['p0e1', 'p0e3'])
+    await ctx.fiber.dispose()
+  })
+
+  it('lets complete-source semantics reject a numbered summary that resembles an answer demand', async () => {
+    const ctx = new Context()
+    const registered = provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+        expect(startRequest.prompt[0]?.text).toContain('protectedQuestionHeadIds are strong recall hints, not semantic authority')
+        const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
+        if (submit === undefined) throw new Error('boundary submission tool was not registered')
+        await expect(submit.execute({
+          headConvention: 'Only inspected semantic elements can begin outside blocks.',
+          questions: [],
+          outsideBoundaryElementIds: ['missing'],
+        }, TOOL_CONTEXT)).resolves.toContain('outsideBoundaryElementIds[0] is not present in the inspected source')
+        await expect(submit.execute({
+          headConvention: 'Each candidate receives one semantic classification.',
+          questions: [],
+          nonQuestionHeadElementIds: ['p0e0'],
+          outsideBoundaryElementIds: ['p0e0'],
+        }, TOOL_CONTEXT)).resolves.toContain('must not also classify the same element as an outside boundary')
+        const accepted = String(await submit.execute({
+          headConvention: 'Numbered summary statements without a learner response belong to no question.',
+          questions: [],
+          outsideBoundaryElementIds: ['p0e0'],
+        }, TOOL_CONTEXT))
+        const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
+        if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
+        return {
+          id: SessionId('summary-boundary-child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [], structured: { validationToken } }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'), fileName: '函数知识总结.pdf', padding: 8,
+      pages: [{
+        pageIndex: 0, width: 600, height: 800,
+        elements: [
+          { type: 'text', text: '1. 二次函数的最大值为顶点纵坐标。', bbox: [40, 80, 540, 110] },
+          { type: 'text', text: '这是本节知识总结，不要求学生作答。', bbox: [50, 120, 530, 150] },
+        ],
+      }],
+    }, { ...CONFIG, questionSegmentationInlineEvidence: true })
+
+    if (!result.ok) throw new Error(result.error.message)
+    expect(result.value.questions).toEqual([])
     await ctx.fiber.dispose()
   })
 
@@ -1482,7 +1535,7 @@ describe('segmentQuestionsWithAgent', () => {
     provideModelInfo(ctx)
     ctx.provide('subagents', {
       start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
-        expect(startRequest.prompt[0]?.text).toContain('A section title, answer heading, explanation, footer, or other transition')
+        expect(startRequest.prompt[0]?.text).toContain('A title, paper preamble, summary, answer block, footer, or other transition')
         const source = [...registered.values()].find(tool => tool.name.startsWith('question_layout_'))
         const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
         if (source === undefined || submit === undefined) throw new Error('segmentation tools were not registered')
@@ -4911,7 +4964,7 @@ describe('segmentQuestionsWithAgent', () => {
         const accepted = String(await submit.execute({
           headConvention: 'Each paper uses its own Arabic sequence; a new paper title resets the printed labels.',
           questions,
-          excludedElementIds: ['p0e4', 'p0e5', 'p0e6'],
+          outsideBoundaryElementIds: ['p0e4'],
         }, TOOL_CONTEXT))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)
@@ -4966,7 +5019,8 @@ describe('segmentQuestionsWithAgent', () => {
         await source.execute({ chunk: 0 }, TOOL_CONTEXT)
         const accepted = String(await submit.execute({
           headConvention: 'Each paper restarts ordinary Arabic numbering at one.',
-          questions: [{ headElementId: 'p0e0', stopBeforeElementId: 'p1e0' }, { headElementId: 'p1e3' }],
+          questions: [{ headElementId: 'p0e0' }, { headElementId: 'p1e3' }],
+          outsideBoundaryElementIds: ['p1e0'],
         }, TOOL_CONTEXT))
         const validationToken = accepted.match(/validationToken=([^\n]+)/u)?.[1]
         if (validationToken === undefined) throw new Error(`draft was not accepted: ${accepted}`)

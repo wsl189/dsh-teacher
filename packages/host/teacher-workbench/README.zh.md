@@ -153,6 +153,12 @@ OCR 遗漏的细答题横线、方框或其他作答标记必须由裁剪中的�
 
 一个全新的子 agent 会收到与版式无关的分割 skill、准确的 OCR 来源分块索引、来源页预览 id、可出错的语义提示、本次运行专用的 OCR 与图片工具、一个边界提交工具以及 `structured_output`。来源分块公开不透明元素 id、页面尺寸、元素类型、边界框和提取文本；预览展示渲染页面，但不会成为坐标来源。子 agent 检查全部分块和预览，推断来源自身的语义题目约定，并提交每道独立顶层任务，同时把小问、图形和跨页续文保留在所属题目内。每个已选题头必须产生作答要求，而不能只介绍带编号的定义、公式、方法、理论总结、例题解答或答案；带明确题干的例题仍然成题，其裁剪要在印刷答案或解析前停止。候选已全部归类的分组可以包含零道题。无关内容在下一道任务前开始时，可用单题排他性 `stopBeforeElementId` 指向首个题外元素；OCR 顺序把明确内容留在常规归属外时可使用 `additionalElementIds`；非试题元素位于其他有效区间内部时可显式排除。Host 不要求某种编号语法、连续标签或固定栏数；准确识别出的层级章节与答案标题仍是强制安全停止位置，只有引用标签的题头则必须拥有实际题目内容。它按 OCR 顺序排列有效题头，校验引用、顺序、自相矛盾的归属和非空几何，并在不接受模型坐标的前提下推导全部矩形。相邻题内框与题外框存在空隙时，纵向边缘落在空隙中点；相邻题头框轻微重叠时，两题共享后一个题头上边作为硬切线。初步渲染后，独立视觉复核子 agent 在首次完整分组复核时接收每个核心来源页，后续单题复核只接收局部来源页，并通过分开的图片流接收裁剪图。即使印刷页脚编号不同，`page-x` 标签仍是页面身份真源；从零开始的 OCR `pageIndex` 只用于坐标修改。裁剪级复核只归类列出的裁剪 id；其他可见题目保持不变，缺陷工具会拒绝 `missingQuestionHead` 和任何纯页级恢复。每张裁剪的标签都会说明末尾纯白区域属于统一宽度补边，只有裁剪图中实际可见的相邻栏文字或图形才能报告为污染。零题分组仍会接受来源页复核。每张被接受的裁剪都要记录可见的 `answerDemand`、实际最上、最下、最左和最右非白内容，以及全部必要图形或表格从来源到裁剪的核对结果。同一裁剪在大段同页间隔后拼接来源切片、消除或截断已识别来源图片、采样未归属的右侧条带，或触及可能出现页眉页脚的物理页边时，Host 会添加 `visualAttention`；合格记录必须在 `attentionEvidence` 中处理每项标记。没有独立任务或仍有未处理视觉缺陷的裁剪属于缺陷。复核者检查全部请求图片后，一次提交完整的 `verifiedCrops` 与 `findings` 分类；部分覆盖或同时出现在两个数组中的裁剪会被 Host 拒绝。干净分类无需打开 OCR；在任何修正被接受前，子 agent 都可以在进一步检查后同时替换两个数组。裁剪级缺陷会开放 OCR 来源和按稳定来源题头索引的局部修正，校验时保留全部相邻题头，返回的完整分组则让所有未提交修正的题目保持不变。带裁剪 id 的缺陷即使同时带来源页 id，也始终采用局部合并；确认伪题时，其裁剪缺陷声明 `remove-crop` 即可通过 `removedCropIds` 局部删除，来源页 id 可作为证据附带但不是必填项。纯页级缺陷只允许恢复完全没有现有裁剪的整道漏题，必须提供可见的 `missingQuestionHead`，并且是唯一能够开放候选完整替换草稿的缺陷类型；证据中提到容纳漏题像素的相邻裁剪不会把它降为局部缺陷。Host 要求每个被点名异常裁剪都发生变化，只返回发生变化或被点名的题目标识，调用方下一轮仅重新渲染该子集。通用受保护题头证据包括“引例变式 N”等组合例题变式标签、“分别求”等明确要求、解析式、解集、定义域、值域或单调区间等指定输出，以及写成“=.”的作答空位。这些信号能防止可见独立试题被模型误判为非题目，同时不引入任何文档专用坐标。
 
+##### 题外块归属指引
+
+```markdown
+Boundary drafts distinguish retained non-head content from blocks that belong to no question. outsideBoundaryElementIds names the first semantic OCR element of each document-level title, later-paper preamble, summary, answer, or other outside block. The marker is omitted from crops and stops preceding automatic ownership until the next submitted question head, so a later paper cannot extend the preceding paper's final question. A protected recall hint can be classified as outside only through the same explicit marker after the child inspects the complete source; the deterministic fallback still uses protected hints when no Agent draft is accepted.
+```
+
 ##### 裁剪边缘证据指引
 
 ```markdown

@@ -97,6 +97,7 @@ interface BoundaryDraft {
     readonly sourceRightLimitEdits?: readonly SourceRightLimitEdit[]
   }[]
   readonly nonQuestionHeadElementIds?: readonly string[]
+  readonly outsideBoundaryElementIds?: readonly string[]
   readonly retainedImageElementIds?: readonly string[]
   readonly excludedElementIds?: readonly string[]
   readonly stopBeforeElementId?: string
@@ -1761,6 +1762,7 @@ function assignQuestionOwners(
   selected: readonly SelectedQuestion[],
   end: IndexedElement | undefined,
   semanticStops: readonly IndexedElement[],
+  globalStops: readonly IndexedElement[],
   excluded: ReadonlySet<string>,
   claimed: ReadonlyMap<string, number>,
   retainedImages: ReadonlySet<string>,
@@ -1781,11 +1783,13 @@ function assignQuestionOwners(
     question.end,
     selected[questionIndex + 1]?.head,
     end,
+    ...globalStops,
     ...applicableSemanticStops(question),
   ]))
   const hardStops = selected.map(question => nearestStop(question, [
     question.end,
     end,
+    ...globalStops,
     ...applicableSemanticStops(question),
   ]))
   for (const [questionIndex, question] of selected.entries()) {
@@ -2137,6 +2141,26 @@ function validateBoundaryDraft(
     }
     declaredExcluded.add(id)
   }
+  const declaredOutsideBoundaries = new Set<string>()
+  for (const [index, id] of (draft.outsideBoundaryElementIds ?? []).entries()) {
+    const label = `outsideBoundaryElementIds[${String(index)}]`
+    const element = byId.get(id)
+    if (element === undefined) {
+      const error = `${label} is not present in the inspected source`
+      errors.push(error)
+      referenceErrors.push(error)
+    } else if (!isSemanticTextElement(element.element)) {
+      errors.push(`${label} must reference a semantic OCR element`)
+    }
+    if (seenIds.has(id)) errors.push(`${label} must not also be a question head`)
+    if (declaredOutsideBoundaries.has(id)) {
+      const error = `${label} duplicates an earlier outside boundary`
+      errors.push(error)
+      referenceErrors.push(error)
+    }
+    if (declaredExcluded.has(id)) errors.push(`${label} must not also exclude the same element`)
+    declaredOutsideBoundaries.add(id)
+  }
   const declaredNonQuestionHeads = new Set<string>()
   for (const [index, id] of (draft.nonQuestionHeadElementIds ?? []).entries()) {
     const label = `nonQuestionHeadElementIds[${String(index)}]`
@@ -2156,8 +2180,14 @@ function validateBoundaryDraft(
       referenceErrors.push(error)
     }
     if (declaredExcluded.has(id)) errors.push(`${label} must not also exclude the same element`)
-    if (protectedHeadIds.has(id)) {
-      errors.push(`${id} in ${label} has visible learner answer-demand evidence and must remain an independent question`)
+    if (declaredOutsideBoundaries.has(id)) {
+      errors.push(`${label} must not also classify the same element as an outside boundary`)
+    }
+    if (protectedHeadIds.has(id) && !declaredOutsideBoundaries.has(id)) {
+      errors.push(
+        `${id} in ${label} has visible learner answer-demand evidence; `
+        + 'submit it as a question or mark the same id as an outside boundary after inspecting the complete source',
+      )
     }
     declaredNonQuestionHeads.add(id)
   }
@@ -2199,7 +2229,10 @@ function validateBoundaryDraft(
     }
   }
   const unclassifiedCandidates = [...requiredHeadCandidateIds].filter(id => (
-    !seenIds.has(id) && !declaredNonQuestionHeads.has(id) && !declaredExcluded.has(id)
+    !seenIds.has(id)
+      && !declaredNonQuestionHeads.has(id)
+      && !declaredOutsideBoundaries.has(id)
+      && !declaredExcluded.has(id)
   ))
   if (unclassifiedCandidates.length > 0) {
     errors.push(`possible question-head candidates require an explicit decision: ${unclassifiedCandidates.join(', ')}`)
@@ -2217,9 +2250,11 @@ function validateBoundaryDraft(
   const contextHeadStops = corePageIndexes === undefined
     ? []
     : elements.filter(element => !corePageIndexes.has(element.page.pageIndex) && isPossibleQuestionHead(element))
+  const outsideBoundaries = elements.filter(element => declaredOutsideBoundaries.has(element.id as string))
   const ownershipStops = [...semanticStops, ...contextHeadStops]
   const excluded = new Set([
     ...declaredExcluded,
+    ...declaredOutsideBoundaries,
     ...semanticStops.map(element => element.id as string),
   ])
   const selectedHeadIds = new Set(selected.map(question => question.head.id as string))
@@ -2230,6 +2265,7 @@ function validateBoundaryDraft(
       selected,
       end,
       ownershipStops,
+      outsideBoundaries,
       excluded,
       new Map(),
       declaredRetainedImages,
@@ -2245,8 +2281,9 @@ function validateBoundaryDraft(
       if (excluded.has(id)) {
         errors.push(`questions[${String(questionIndex)}].additionalElementIds claims excluded element ${id}`)
       }
-      const crossedSemanticStop = semanticStops.find(stop => (
-        stop.ordinal < element.ordinal && semanticStopAppliesToQuestion(question, stop)
+      const crossedSemanticStop = [...outsideBoundaries, ...semanticStops].find(stop => (
+        stop.ordinal < element.ordinal
+          && (declaredOutsideBoundaries.has(stop.id as string) || semanticStopAppliesToQuestion(question, stop))
       ))
       if (crossedSemanticStop !== undefined) {
         errors.push(
@@ -2281,6 +2318,7 @@ function validateBoundaryDraft(
     selected,
     end,
     ownershipStops,
+    outsideBoundaries,
     excluded,
     claimed,
     declaredRetainedImages,
@@ -2300,6 +2338,7 @@ function validateBoundaryDraft(
       || element === end
       || selected.some(question => question.end === element)
       || ownershipStops.includes(element)
+      || outsideBoundaries.includes(element)
   ))
   const laneLandmarks = elements.filter(element => (
     isPossibleQuestionHead(element) || isContextualNumberedTheoryHeading(element, elements)
@@ -2616,6 +2655,11 @@ function submissionTool(
           ? 'Every semanticHints possibleQuestionHeadId that does not begin an independent question. These elements remain eligible question content.'
           : 'Possible question-head candidates explicitly classified as content that does not begin an independent question. These elements remain eligible question content.',
       },
+      outsideBoundaryElementIds: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'First semantic OCR element of each title, preamble, summary, answer, or other block that belongs to no question. Each id stops preceding automatic ownership until the next submitted question head and is omitted from crops.',
+      },
       retainedImageElementIds: {
         type: 'array',
         items: { type: 'string' },
@@ -2649,9 +2693,11 @@ function submissionTool(
       if (automaticImageDecisions) {
         const submittedQuestionIds = new Set(submittedArgs.questions.map(question => question.headElementId))
         const explicitNonQuestionIds = new Set(submittedArgs.nonQuestionHeadElementIds ?? [])
+        const outsideBoundaryIds = new Set(submittedArgs.outsideBoundaryElementIds ?? [])
         const unclassifiedCandidateIds = candidateIds.filter(id => (
           !submittedQuestionIds.has(id as string)
             && !explicitNonQuestionIds.has(id as string)
+            && !outsideBoundaryIds.has(id as string)
         ))
         if (unclassifiedCandidateIds.length > 0) {
           return Promise.resolve(`REJECTED\nevery possible question head requires an explicit question or non-question decision: ${unclassifiedCandidateIds.join(', ')}`)
@@ -3440,6 +3486,11 @@ function cropReviewRevisionTool(
         items: { type: 'string' },
         description: 'Possible question-head candidates classified as non-head content during a complete-group replacement.',
       },
+      outsideBoundaryElementIds: {
+        type: 'array',
+        items: { type: 'string' },
+        description: 'First semantic OCR element of each non-question block. It stops preceding automatic ownership until the next submitted question head.',
+      },
       retainedImageElementIds: {
         type: 'array',
         items: { type: 'string' },
@@ -3513,6 +3564,9 @@ function cropReviewRevisionTool(
         ...(args.nonQuestionHeadElementIds === undefined
           ? {}
           : { nonQuestionHeadElementIds: args.nonQuestionHeadElementIds }),
+        ...(args.outsideBoundaryElementIds === undefined
+          ? {}
+          : { outsideBoundaryElementIds: args.outsideBoundaryElementIds }),
         ...(args.retainedImageElementIds === undefined
           ? {}
           : { retainedImageElementIds: args.retainedImageElementIds }),
@@ -3974,11 +4028,11 @@ export async function segmentQuestionsWithAgent(
         ? completeInlineSource
         : undefined
       const decisionInstruction = inlineEvidence
-        ? ' questions must be the complete ordered list of independent learner questions discovered from inlineSource, not an exception list. semanticHints are incomplete recall aids: inspect every text element and submit a genuine head even when it is absent from possibleQuestionHeadIds, including OCR-damaged labels. Include every protectedQuestionHeadId; classify every other possibleQuestionHeadId either as a question or in nonQuestionHeadElementIds. Never combine several independently answerable numbered, example, or variant tasks into one question merely because one detected head precedes them: each independent answer demand needs its own head. excludedElementIds is unavailable in this OCR-only pass because deleting unreviewed pixels can erase a stem; Host defaults and the later annotated visual review own pixel removal. An unusable stopBeforeElementId is omitted so Host ownership can use the next accepted head or semantic transition. Every unlisted image element receives automatic geometric ownership, except a page-spanning image that covers multiple accepted heads is treated as a background layer. Use retainedImageElementIds or additionalElementIds only to override that default for a required shared visual. Never attach an element across an answer, explanation, section, or theory boundary. The later visual review corrects diagrams, furniture, and edge pixels.'
-        : ' Every possibleQuestionHeadId requires one explicit decision: use it as headElementId, put it in nonQuestionHeadElementIds when it is not an independent head but should remain eligible content, or put it in excludedElementIds only when its pixels must be removed. Every imageElementId also requires an individual preview-backed decision: retain a question diagram in retainedImageElementIds, assign it through exactly one question\'s additionalElementIds when automatic ownership would be wrong, or exclude only visually confirmed furniture.'
+        ? ' questions must be the complete ordered list of independent learner questions discovered from inlineSource, not an exception list. semanticHints are incomplete recall aids: inspect every text element and submit a genuine head even when it is absent from possibleQuestionHeadIds, including OCR-damaged labels. Classify every possibleQuestionHeadId as a question, retained content in nonQuestionHeadElementIds, or the start of a block belonging to no question in outsideBoundaryElementIds. protectedQuestionHeadIds are strong recall hints, not semantic authority; downgrade one only by putting the same id in outsideBoundaryElementIds when the complete source proves that it begins a title, preamble, summary, answer, or other non-question block. Put the first OCR element of every later-paper preamble or other non-question block in outsideBoundaryElementIds even when it is not a candidate. Never combine several independently answerable numbered, example, or variant tasks into one question merely because one detected head precedes them: each independent answer demand needs its own head. excludedElementIds is unavailable in this OCR-only pass because deleting unreviewed pixels can erase a stem; outsideBoundaryElementIds is the semantic stop for content that belongs to no question, while Host defaults and the later annotated visual review own other pixel removal. An unusable stopBeforeElementId is omitted so Host ownership can use the next accepted head or declared outside boundary. Every unlisted image element receives automatic geometric ownership, except a page-spanning image that covers multiple accepted heads is treated as a background layer. Use retainedImageElementIds or additionalElementIds only to override that default for a required shared visual. Never attach an element across an answer, explanation, section, theory, or later-paper boundary. The later visual review corrects diagrams, furniture, and edge pixels.'
+        : ' Every possibleQuestionHeadId requires one explicit decision: use it as headElementId, put it in nonQuestionHeadElementIds when it is not an independent head but should remain eligible question content, or put it in outsideBoundaryElementIds when it begins a block that belongs to no question. Put the first OCR element of every later-paper title, preamble, summary, answer, or other non-question block in outsideBoundaryElementIds even when it is not a candidate. Use excludedElementIds only when inspected pixels inside an otherwise valid interval must be removed. Every imageElementId also requires an individual preview-backed decision: retain a question diagram in retainedImageElementIds, assign it through exactly one question\'s additionalElementIds when automatic ownership would be wrong, or exclude only visually confirmed furniture.'
       const prompt: SubagentStartRequest['prompt'] = [{
         type: 'text',
-        text: `Segment the selected PDF pages into complete top-level questions.${recoveryInstruction}${evidenceInstruction} Only heads on corePageIndexes belong to this run. Adjacent inspection pages are read-only context for deciding whether a core-page question continues; never submit one of their heads. Infer this source's own question convention from the OCR text and geometry, then submit one draft to ${submissionToolName}. Apply the answer-obligation test: a head must visibly ask the learner to choose, fill, calculate, explain, prove, draw, judge, or otherwise produce something. A number, topic label, definition, property, formula, method step, theory summary, worked solution, or answer explanation is not a question by itself. A worked example that opens with a problem stem and has a visible response demand is a question. A group may validly contain zero questions; do not invent a task. semanticHints are fallible recall aids.${decisionInstruction} A bracketed citation without its own stem, options, subparts, table, or figure is nonQuestionHeadElementIds content. A section title, answer heading, explanation, footer, or other transition after a complete question is outside that question. stopBeforeElementId is exclusive and names the first OCR element outside a question, never its final content. Use additionalElementIds only for content whose geometric owner is wrong. A Host-accepted ${submissionToolName} call concludes this run immediately.\n${JSON.stringify({ fileName: request.fileName, corePageIndexes: [...corePageIndexes], inspectionPageIndexes: request.pages.map(page => page.pageIndex), elementCount: elements.length, sourceChunkIndexes: chunks.map((_chunk, index) => index), ...(inlineEvidence ? {} : { previewIds: previewSources.map(source => source.id) }), semanticHints, ...(inlineSource === undefined ? {} : { inlineSource }) })}`,
+        text: `Segment the selected PDF pages into complete top-level questions.${recoveryInstruction}${evidenceInstruction} Only heads on corePageIndexes belong to this run. Adjacent inspection pages are read-only context for deciding whether a core-page question continues; never submit one of their heads. Infer this source's own question convention from the OCR text and geometry, then submit one draft to ${submissionToolName}. Apply the answer-obligation test: a head must visibly ask the learner to choose, fill, calculate, explain, prove, draw, judge, or otherwise produce something. A number, topic label, definition, property, formula, method step, theory summary, worked solution, or answer explanation is not a question by itself. A worked example that opens with a problem stem and has a visible response demand is a question. A group may validly contain zero questions; do not invent a task. semanticHints are fallible recall aids.${decisionInstruction} A bracketed citation without its own stem, options, subparts, table, or figure is nonQuestionHeadElementIds content. A title, paper preamble, summary, answer block, footer, or other transition that belongs to no question begins at an outsideBoundaryElementIds entry; that boundary stops preceding automatic ownership until the next submitted head. stopBeforeElementId is exclusive and names the first OCR element outside one question, never its final content. Use additionalElementIds only for content whose geometric owner is wrong. A Host-accepted ${submissionToolName} call concludes this run immediately.\n${JSON.stringify({ fileName: request.fileName, corePageIndexes: [...corePageIndexes], inspectionPageIndexes: request.pages.map(page => page.pageIndex), elementCount: elements.length, sourceChunkIndexes: chunks.map((_chunk, index) => index), ...(inlineEvidence ? {} : { previewIds: previewSources.map(source => source.id) }), semanticHints, ...(inlineSource === undefined ? {} : { inlineSource }) })}`,
       }]
       run = await subagents.start('spawn', {
         label: `Question segmentation: ${request.fileName}${agentRun === 0 ? '' : ` (recovery ${String(agentRun + 1)})`}`,
@@ -4313,7 +4367,7 @@ export async function reviewQuestionCropsWithAgent(
             regionPageIds: [...new Set(question.regions.map(region => `page-${String(region.pageIndex + 1)}`))],
           })),
         })}`
-        : `Review the listed crops from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First inspect every pagePreviewId through ${pageToolName}; then inspect every cropId through ${cropToolName}. Keep source pages and crops in separate calls and request at most ${String(maxImages)} ids per call. Each page-x tool label is the authoritative source-page identity and must not be reordered or inferred from printed footer numbering; OCR pageIndex is zero-based and is used only for coordinate edits. Printed source text and each crop label's OCR head text identify the problem; no internal sequence position is a printed question number. In a crop-local recut, opaque gray vertical bands hide unrelated page lanes; masked pixels are unavailable and cannot support a finding. Content visible on an unmasked source lane is context, not proof that it appears inside a crop. Crops share one output width, so blank white pixels on the right are intentional padding and contain no source-page content; report neighboring-column contamination only when its text or graphics are visibly present inside the crop image. Before verifying any crop, fill answerDemand with the visible response the learner must produce; numbering, a topic title, definitions, formulas, theory summaries, and explanatory prose are not answer demands. A worked example with a visible problem stem still needs one crop containing only that stem, even when the source prints its answer and analysis immediately afterward. A crop is defective when it has no independent answer demand, omits any stem, option, subpart, continuation, answer blank, or figure, or includes any adjacent question, next-section title, answer or explanation, footer, decoration, or neighboring-column content that is not part of the question. A page-sized crop containing several theory topics or summary sections without one answer demand is a spurious question: submit one finding containing both cropId and pageId with repairIntents=["remove-crop"], then put that cropId in removedCropIds so the Host removes only that crop. A QR code, publisher resource label, or optional dynamic-demo block is furniture unless the problem explicitly instructs the learner to scan or use it; proximity alone never makes it required content. Compare each crop's first and last owned pixels with the source; trace unfinished clauses to the next source line and inspect every referenced or adjacent figure through its final edge or vertex. Thin answer lines, boxes, and other response marks may have no OCR element: inspect the source strip immediately after an unfinished prompt and require their actual dark pixels in the crop. Never infer that a response mark is visible from answerDemand or source text; if it is missing at an edge, report the crop for local expansion and correct it with verticalRegionEdits. Before marking a crop complete, scan all four edges: topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, and rightmostVisibleContent must name the actual non-white edge pixels, not merely the intended question text, and requiredVisuals must name every required source visual with its visible crop location or say none when the source requires none. Inspect the final non-white pixels before intentional blank right padding. Registration fields, binding or trim lines, vertical page labels, printed page numbers, and running headers or footers are page furniture unless explicitly required by the question; report visible right-edge residue with trim-right. visualAttention is generated from suspicious source geometry. A named crop cannot be verified until attentionEvidence resolves every listed flag against source and crop pixels; if a detached slice is a watermark or an erased source image is a required diagram, report the defect instead. Compare every adjacent crop pair: a line, option, continuation, or figure missing from one crop but visible at the edge of the other requires two findings with complementary boundary repairIntents. A leading answer line in the next crop is not harmless whitespace when it completes the preceding prompt. A detached watermark, publisher mark, answer block, or other unrelated pixels below the last required line or figure are contamination even when separated by a large white gap; report only that crop for local correction. A visually detached lower-page block is not part of the preceding question merely because no later question head was detected; verify its semantic connection or report contamination. repairIntents are structural obligations: use expand-top or expand-bottom for missing edge pixels, trim-top or trim-bottom for extra vertical edge pixels, trim-right for unrelated right-edge pixels, reassign-content for an OCR element or figure that must change owner without a directional edge edit, and remove-crop only for a spurious crop. List every applicable intent and never use reassign-content to avoid naming a known edge direction. ${reviewClassificationInstruction} Submit exactly one ${findingsToolName} call containing complete verifiedCrops and findings arrays after every cropId has one classification. Recorded visual defects cannot be replaced or withdrawn in the same run. If defects are recorded, call ${sourceToolName} for chunk 0 of each repairTargetId returned by the findings tool and every remaining chunk it reports, then submit corrections to ${reviseToolName}. For any finding that cites a cropId, submit only the cited question heads and the Host will merge them into the unchanged group even when pageId is also present as evidence; the Host rejects changes to uncited questions. Put every spurious crop in removedCropIds; its combined cropId and pageId finding authorizes local deletion without a complete-group draft. stopBeforeElementId is exclusive: it names the first OCR element outside a question, including an intervening section title or answer heading, never its last option, subpart, continuation line, or figure. When visible pixels have no usable OCR element, use verticalRegionEdits with exact pageIndex and top or bottom in the OCR page units reported by the repair-context tool; do not invent an element id for whitespace or a drawn line. Increasing top removes pixels from the crop top; decreasing top adds them; increasing bottom adds bottom pixels. Every edited side must move in a direction authorized by that crop's repairIntents. Expanding into a neighboring crop requires a cited complementary trim finding for that neighbor, so transferred pixels do not remain duplicated. Coordinate-only edits apply only to the cited question. verticalRegionEdits change top or bottom. sourceRightLimitEdits may only reduce rightLimit for trim-right without moving left or right; the document-wide output width remains fixed and the removed source area becomes white padding. Unrelated question boundaries remain unchanged. A correction that removes a previously sampled image must list that image in excludedElementIds and carry reassign-content; otherwise the Host preserves it. The Host rejects a correction that crosses another question head, contradicts a repairIntent, or leaves any cited crop geometry unchanged. A Host-accepted ${findingsToolName} or ${reviseToolName} call concludes this run immediately; do not call another tool after acceptance.\n${JSON.stringify({
+        : `Review the listed crops from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First inspect every pagePreviewId through ${pageToolName}; then inspect every cropId through ${cropToolName}. Keep source pages and crops in separate calls and request at most ${String(maxImages)} ids per call. Each page-x tool label is the authoritative source-page identity and must not be reordered or inferred from printed footer numbering; OCR pageIndex is zero-based and is used only for coordinate edits. Printed source text and each crop label's OCR head text identify the problem; no internal sequence position is a printed question number. In a crop-local recut, opaque gray vertical bands hide unrelated page lanes; masked pixels are unavailable and cannot support a finding. Content visible on an unmasked source lane is context, not proof that it appears inside a crop. Crops share one output width, so blank white pixels on the right are intentional padding and contain no source-page content; report neighboring-column contamination only when its text or graphics are visibly present inside the crop image. Before verifying any crop, fill answerDemand with the visible response the learner must produce; numbering, a topic title, definitions, formulas, theory summaries, and explanatory prose are not answer demands. A worked example with a visible problem stem still needs one crop containing only that stem, even when the source prints its answer and analysis immediately afterward. A crop is defective when it has no independent answer demand, omits any stem, option, subpart, continuation, answer blank, or figure, or includes any adjacent question, next-section title, answer or explanation, footer, decoration, or neighboring-column content that is not part of the question. A page-sized crop containing several theory topics or summary sections without one answer demand is a spurious question: submit one finding containing both cropId and pageId with repairIntents=["remove-crop"], then put that cropId in removedCropIds so the Host removes only that crop. A QR code, publisher resource label, or optional dynamic-demo block is furniture unless the problem explicitly instructs the learner to scan or use it; proximity alone never makes it required content. Compare each crop's first and last owned pixels with the source; trace unfinished clauses to the next source line and inspect every referenced or adjacent figure through its final edge or vertex. Thin answer lines, boxes, and other response marks may have no OCR element: inspect the source strip immediately after an unfinished prompt and require their actual dark pixels in the crop. Never infer that a response mark is visible from answerDemand or source text; if it is missing at an edge, report the crop for local expansion and correct it with verticalRegionEdits. Before marking a crop complete, scan all four edges: topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, and rightmostVisibleContent must name the actual non-white edge pixels, not merely the intended question text, and requiredVisuals must name every required source visual with its visible crop location or say none when the source requires none. Inspect the final non-white pixels before intentional blank right padding. Registration fields, binding or trim lines, vertical page labels, printed page numbers, and running headers or footers are page furniture unless explicitly required by the question; report visible right-edge residue with trim-right. visualAttention is generated from suspicious source geometry. A named crop cannot be verified until attentionEvidence resolves every listed flag against source and crop pixels; if a detached slice is a watermark or an erased source image is a required diagram, report the defect instead. Compare every adjacent crop pair: a line, option, continuation, or figure missing from one crop but visible at the edge of the other requires two findings with complementary boundary repairIntents. A leading answer line in the next crop is not harmless whitespace when it completes the preceding prompt. A detached watermark, publisher mark, answer block, or other unrelated pixels below the last required line or figure are contamination even when separated by a large white gap; report only that crop for local correction. A visually detached lower-page block is not part of the preceding question merely because no later question head was detected; verify its semantic connection or report contamination. repairIntents are structural obligations: use expand-top or expand-bottom for missing edge pixels, trim-top or trim-bottom for extra vertical edge pixels, trim-right for unrelated right-edge pixels, reassign-content for an OCR element or figure that must change owner without a directional edge edit, and remove-crop only for a spurious crop. List every applicable intent and never use reassign-content to avoid naming a known edge direction. ${reviewClassificationInstruction} Submit exactly one ${findingsToolName} call containing complete verifiedCrops and findings arrays after every cropId has one classification. Recorded visual defects cannot be replaced or withdrawn in the same run. If defects are recorded, call ${sourceToolName} for chunk 0 of each repairTargetId returned by the findings tool and every remaining chunk it reports, then submit corrections to ${reviseToolName}. For any finding that cites a cropId, submit only the cited question heads and the Host will merge them into the unchanged group even when pageId is also present as evidence; the Host rejects changes to uncited questions. Put every spurious crop in removedCropIds; its combined cropId and pageId finding authorizes local deletion without a complete-group draft. outsideBoundaryElementIds names the first OCR element of each title, later-paper preamble, summary, answer, or other block that belongs to no question; it stops preceding automatic ownership until the next submitted head. stopBeforeElementId is exclusive: it names the first OCR element outside one question, never its last option, subpart, continuation line, or figure. When visible pixels have no usable OCR element, use verticalRegionEdits with exact pageIndex and top or bottom in the OCR page units reported by the repair-context tool; do not invent an element id for whitespace or a drawn line. Increasing top removes pixels from the crop top; decreasing top adds them; increasing bottom adds bottom pixels. Every edited side must move in a direction authorized by that crop's repairIntents. Expanding into a neighboring crop requires a cited complementary trim finding for that neighbor, so transferred pixels do not remain duplicated. Coordinate-only edits apply only to the cited question. verticalRegionEdits change top or bottom. sourceRightLimitEdits may only reduce rightLimit for trim-right without moving left or right; the document-wide output width remains fixed and the removed source area becomes white padding. Unrelated question boundaries remain unchanged. A correction that removes a previously sampled image must list that image in excludedElementIds and carry reassign-content; otherwise the Host preserves it. The Host rejects a correction that crosses another question head, contradicts a repairIntent, or leaves any cited crop geometry unchanged. A Host-accepted ${findingsToolName} or ${reviseToolName} call concludes this run immediately; do not call another tool after acceptance.\n${JSON.stringify({
           groupIndex: request.groupIndex,
           recutAttempt: request.recutAttempt,
           fullGroupCoverage: request.reviewQuestionIds.length === request.questions.length,

@@ -5,6 +5,8 @@ Status: implemented
 English | [中文](2026-09-03-agent-owned-question-boundary-discovery.zh.md)
 
 > This decision supersedes only the candidate-default compact boundary protocol in [bounded parallel question cutting](../feature/2026-08-26-bounded-parallel-question-cutting.md). Its grouping, concurrency, image ownership, output budgets, and fallback decisions remain current.
+>
+> The protected-candidate downgrade rule and ownership of non-question blocks are partially superseded by [Agent-classified outside question boundaries](2026-09-03-agent-classified-outside-question-boundaries.md). Complete-source discovery, opaque OCR ids, required tool use, and Host-owned geometry remain current.
 
 ## Problem
 
