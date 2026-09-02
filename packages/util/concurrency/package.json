@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-concurrency",
   "description": "Zero-dependency bounded asynchronous mapping with ordered results and settle-safe failure",
-  "version": "1.1.3",
+  "version": "1.1.4",
   "publishConfig": {
     "access": "public"
   },
