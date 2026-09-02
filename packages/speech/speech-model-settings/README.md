@@ -72,7 +72,7 @@ None until a user or IM workflow submits the resulting text through an ordinary 
 - **Maintained adapters are explicit** — a custom URL works only with an installed speech request and response adapter; changing the URL does not make an unrelated provider protocol compatible.
 - **No streaming transcript** — one upstream request begins only after recording completes.
 - **External services** — the executable includes request adapters, not speech models, model weights, GPU drivers, or provider services.
-- **Image generation remains separate** — image generation has a different capability owner and request format; this package does not execute image models.
+- **Image generation has its own executor** — speech and image routes share Models settings, but image requests use the bundled image-generation provider; this package does not execute image models.
 
 <a id="dev-note"></a>
 ### Dev Note

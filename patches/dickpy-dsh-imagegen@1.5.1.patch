@@ -1,67 +1,5 @@
-diff --git a/lib/index.js b/lib/index.js
-index 11d7d6d..1fb8bc2 100644
---- a/lib/index.js
-+++ b/lib/index.js
-@@ -736,6 +736,6 @@ async function generateImage(upstream, request, options = {}) {
- 	const baseUrl = upstream.apiUrl.trim().replace(/\/+$/, "");
--	if (baseUrl === "") throw new ImageGenError("api_url 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
--	if (upstream.apiKey.trim() === "") throw new ImageGenError("api_key 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
-+	if (baseUrl === "") throw new ImageGenError("api_url 未配置：请先在「设置 → 模型 → 生图模型」中填写", "config-missing");
-+	if (upstream.apiKey.trim() === "") throw new ImageGenError("api_key 未配置：请先在「设置 → 模型 → 生图模型」中填写", "config-missing");
- 	if (request.mode === "edit" && isZhipuImage(wireModel(request))) throw new ImageGenError("智谱 GLM-Image 当前仅支持文生图，请切换到文生图模式或选择支持图生图的模型", "edit-unsupported");
- 	const params = effectiveParams(request);
- 	const count = effectiveCount(request);
-@@ -1090,7 +1090,7 @@ var ImageGenService = class {
- 	async run(request, signal) {
- 		const view = this.resolve();
- 		const channel = view.channels.find((candidate) => candidate.id === request.channelId) ?? view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
--		if (channel === void 0) throw new ImageGenError("尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥", "no-channels");
-+		if (channel === void 0) throw new ImageGenError("尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥", "no-channels");
- 		const result = await generateImage({
- 			apiUrl: channel.apiUrl,
- 			apiKey: channel.apiKey
-@@ -2054,7 +2054,7 @@ function applyGenerationRoutes(ctx, channelViewOf, options = {}) {
- 		if (view.channels.length === 0) return {
- 			ok: false,
- 			code: "no-channels",
--			message: "尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥"
-+			message: "尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥"
- 		};
- 		const explicit = view.channels.find((candidate) => candidate.id === request.channelId);
- 		const defaults = view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
-@@ -2967,9 +2967,9 @@ const READ_IMAGE_TOOL = "read_image";
- /** Agent calls stay pending until the provider and history write settle. */
- const AGENT_GENERATION_TIMEOUT_MS = 3e5;
- function ensureAgentImageConfigured(config) {
--	if (!config.enabled) throw new ImageGenError("AI image generation is disabled. Open Settings > Plugins > AI Image and enable it.", "plugin-disabled");
--	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled in Settings > Plugins > AI Image.", "agent-generation-disabled");
--	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "" && channel.apiKey.trim() !== "")) throw new ImageGenError("Image API credentials are not configured. Open Settings > Plugins > AI Image, add a channel and fill in its API URL and API key.", "image-api-not-configured");
-+	if (!config.enabled) throw new ImageGenError("AI image generation is disabled. Open Settings > Models > Image generation model and enable it.", "plugin-disabled");
-+	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled in Settings > Models > Image generation model.", "agent-generation-disabled");
-+	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "" && channel.apiKey.trim() !== "")) throw new ImageGenError("Image API credentials are not configured. Open Settings > Models > Image generation model, add a channel and fill in its API URL and API key.", "image-api-not-configured");
- }
- /** Resolve a configured image alias and its owning channel. */
- function resolveAgentImageModel(config, requested) {
-@@ -2978,7 +2978,7 @@ function resolveAgentImageModel(config, requested) {
- 		alias: model.alias,
- 		upstream: model.id
- 	})));
--	if (entries.length === 0) throw new ImageGenError("No image models are configured. Open Settings > Plugins > AI Image and add a channel with at least one model.", "no-models-configured");
-+	if (entries.length === 0) throw new ImageGenError("No image models are configured. Open Settings > Models > Image generation model and add a channel with at least one model.", "no-models-configured");
- 	const wanted = typeof requested === "string" && requested.trim() !== "" ? requested.trim() : "";
- 	if (wanted === "") {
- 		if (entries.length === 1) return entries[0];
-@@ -3504,7 +3504,7 @@ const SECTION_ORDER = 150;
- const IMAGEGEN_GUIDANCE = "本机已安装 dsh-imagegen 插件（DSH AI 生图）：侧边栏「AI 生图」入口。能力：通过「渠道」对接 OpenAI 兼容图像生成 API（每个渠道 = 一个 API 端点 + 各自的模型目录），支持文生图（/images/generations）与图生图（/images/edits，上传参考图，grok-imagine 模型按官方 JSON image_url 协议发送，nanobanana 系列按 aspect_ratio / image_size 参数协议发送；seedream 系列统一走 /images/generations，参考图以 JSON image 数组发送；智谱 `glm-image` 使用官方 `/api/paas/v4/images/generations`，当前仅支持文生图）。API 地址与密钥在 GUI 设置中按渠道配置，密钥仅存于本机设置文档；生成请求由本地宿主代理转发，结果以 base64 返回面板，可预览与下载。模型只能使用用户在各渠道配置目录中的模型；检测模型时会过滤聊天、Embedding 等非图片模型，但模型出现在 /models 中仍不等于其网关原生支持生图协议，遇到 Qwen、Gemini 等非 OpenAI 生图协议时应如实说明上游兼容性。可一键把满意的图片加入「画廊」。内置「提示词模板库」（面板提示词框左下角「模板库」按钮）：打包 awesome-gpt-image-2 的数百条提示词案例，可搜索、筛选与复用。Agent 可直接调用 `generate_image` 提交文生图，也可用 `edit_image` 图生图；默认保持工具调用等待直到任务完成，完成图片显示在工具调用对应的左侧结果区域，模型收到状态和附件引用，不会额外伪造用户消息。用户也可以使用 `/edit_image <修改描述>`，命令会直接读取当前对话最近图片并调用插件图片模型，不经过对话模型的图片能力检查。若明确需要后台执行，可传 `wait_for_completion: false`，之后再用 `get_image_generation_task` 查询；不要反复轮询。限制：生成消耗上游 API 额度；图片内容由上游模型生成，可能不符合预期或包含不适宜内容；api_key 以明文存储在设置文档中；参考图会发送至所配置的 API 服务；模板库在线刷新与参考图首次加载需要访问 vibeui.top。用户提到「生图 / 绘画 / 生成图片 / 文生图 / 图生图 / 画廊 / 提示词模板」时即指本插件，请据此协作。";
- /** Append the live channel × model table so an Agent can honor user choices. */
- function guidanceFor(channels, defaultChannelId) {
--	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥。`;
-+	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未配置任何渠道：请先在「设置 → 模型 → 生图模型」添加渠道并填写 API 地址与密钥。`;
- 	const table = channels.map((channel) => {
- 		const aliases = channel.models.map((model) => model.alias).join("、");
- 		const mark = channel.id === defaultChannelId ? "（默认渠道）" : "";
 diff --git a/lib/client.js b/lib/client.js
-index c46d3f1..bfa0b5a 100644
+index c46d3f199b87736e79a5fd2dd12010f1f6f1dc42..4403124edd5c1d25f6cf443dd4438982c38f15a1 100644
 --- a/lib/client.js
 +++ b/lib/client.js
 @@ -384,7 +384,7 @@ window.__ModuleLoader__.load({
@@ -69,7 +7,7 @@ index c46d3f1..bfa0b5a 100644
  			"prompt.enhanceHint": "使用已配置的对话模型扩写提示词",
  			"prompt.configTitle": "请先配置提示词增强模型",
 -			"prompt.configHint": "已打开设置。进入「插件 → AI 生图」，填写或复用 API 地址和密钥，选择对话模型并保存。",
-+			"prompt.configHint": "已打开设置。进入「模型 → 生图模型」，填写或复用 API 地址和密钥，选择对话模型并保存。",
++			"prompt.configHint": "已打开设置。请先在「模型 → 服务接入」配置线路，再在「使用场景」选择模型。",
  			"tasks.title": "生成任务",
  			"tasks.queued": "排队中",
  			"tasks.running": "生成中",
@@ -78,16 +16,16 @@ index c46d3f1..bfa0b5a 100644
  			"preview.copied": "已复制",
  			"preview.addToEdit": "添加到图生图",
 -			"config.missing": "尚未配置 API：请前往「设置 → 插件 → 可配置」为 AI 生图填写 api_url 与 api_key。",
-+			"config.missing": "尚未配置 API：请前往「设置 → 模型 → 生图模型」配置生图渠道。",
++			"config.missing": "尚未选择可用的生图模型：请前往「设置 → 模型」完成服务接入和使用场景选择。",
  			"config.generationTitle": "请先配置生图 API",
 -			"config.generationHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。填写生图 API 地址与 API 密钥，保存后即可开始生成。",
-+			"config.generationHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。填写生图 API 地址与 API 密钥，保存后即可开始生成。",
++			"config.generationHint": "已自动打开 DSH「设置 → 模型」。请在「服务接入」配置图像生成线路，再在「使用场景」选择生图模型。",
  			"config.enhancementTitle": "请先配置提示词增强模型",
 -			"config.enhancementHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。填写或复用对话 API 地址和密钥，选择对话模型并保存。",
-+			"config.enhancementHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。填写或复用对话 API 地址和密钥，选择对话模型并保存。",
++			"config.enhancementHint": "已自动打开 DSH「设置 → 模型」。请配置并选择所需模型。",
  			"config.disabledTitle": "AI 生图插件已停用",
 -			"config.disabledHint": "已自动打开 DSH「设置 → 插件 → AI 生图」。开启「启用插件」后即可生成图片。",
-+			"config.disabledHint": "已自动打开 DSH「设置 → 模型 → 生图模型」。开启「启用插件」后即可生成图片。",
++			"config.disabledHint": "请在插件管理中重新启用 AI 生图插件。",
  			"config.configured": "已连接 {url}",
  			"config.disabled": "插件已停用，请在设置中重新启用。",
  			"connection.connected": "已连接",
@@ -107,7 +45,7 @@ index c46d3f1..bfa0b5a 100644
  			"prompt.enhanceHint": "Expand the prompt with the configured chat model",
  			"prompt.configTitle": "Configure a prompt enhancement model first",
 -			"prompt.configHint": "Settings has opened. Go to Plugins → AI Image, configure or reuse an API URL and key, choose a chat model, then save.",
-+			"prompt.configHint": "Settings has opened. Go to Models → Image generation model, configure or reuse an API URL and key, choose a chat model, then save.",
++			"prompt.configHint": "Settings has opened. Configure a route under Models → Service access, then choose it under Use cases.",
  			"tasks.title": "Generation tasks",
  			"tasks.queued": "Queued",
  			"tasks.running": "Generating",
@@ -116,16 +54,16 @@ index c46d3f1..bfa0b5a 100644
  			"preview.copied": "Copied",
  			"preview.addToEdit": "Add to image to image",
 -			"config.missing": "API not configured: open \"Settings → Plugins → Configurable\" and fill in api_url and api_key for AI Image.",
-+			"config.missing": "API not configured: open Settings → Models → Image generation model and configure an image provider.",
++			"config.missing": "No usable image model is selected. Complete Service access and Use cases under Settings → Models.",
  			"config.generationTitle": "Configure the image API first",
 -			"config.generationHint": "DSH Settings → Plugins → AI Image has opened. Enter the image API URL and API key, then save before generating.",
-+			"config.generationHint": "DSH Settings → Models → Image generation model has opened. Enter the image API URL and API key, then save before generating.",
++			"config.generationHint": "DSH Settings → Models has opened. Configure an image route under Service access, then select its model under Use cases.",
  			"config.enhancementTitle": "Configure a prompt enhancement model first",
 -			"config.enhancementHint": "DSH Settings → Plugins → AI Image has opened. Configure or reuse a chat API URL and key, choose a chat model, then save.",
-+			"config.enhancementHint": "DSH Settings → Models → Image generation model has opened. Configure or reuse a chat API URL and key, choose a chat model, then save.",
++			"config.enhancementHint": "DSH Settings → Models has opened. Configure and select the required model.",
  			"config.disabledTitle": "The AI Image plugin is disabled",
 -			"config.disabledHint": "DSH Settings → Plugins → AI Image has opened. Enable the plugin, then generate images.",
-+			"config.disabledHint": "DSH Settings → Models → Image generation model has opened. Enable the plugin, then generate images.",
++			"config.disabledHint": "Re-enable the AI Image plugin in plugin management.",
  			"config.configured": "Connected to {url}",
  			"config.disabled": "The plugin is disabled — re-enable it in Settings.",
  			"connection.connected": "Connected",
@@ -140,19 +78,18 @@ index c46d3f1..bfa0b5a 100644
  			"settings.currentVersion": "Current version",
  			"settings.apiUrl": "API URL (api_url)",
  			"settings.apiUrlHint": "OpenAI-compatible base URL, e.g. https://api.openai.com/v1; /images/generations and /images/edits are appended",
-@@ -2885,16 +2885,16 @@ window.__ModuleLoader__.load({
+@@ -2885,16 +2885,12 @@ window.__ModuleLoader__.load({
  			};
  			const openSettingsGuide = (kind) => {
  				setConfigGuide(kind);
 -				const openPluginSettings = () => {
 -					Array.from(document.querySelectorAll("button")).find((button) => /^(插件|Plugins)$/.test(button.textContent?.trim() ?? ""))?.click();
+-					window.setTimeout(() => {
+-						const imageGenButton = Array.from(document.querySelectorAll("button")).find((button) => /dsh-imagegen/i.test(button.textContent ?? ""));
+-						if (imageGenButton?.getAttribute("aria-expanded") !== "true") imageGenButton?.click();
+-					}, 0);
 +				const openModelSettings = () => {
 +					Array.from(document.querySelectorAll("button")).find((button) => /^(模型|Models)$/.test(button.textContent?.trim() ?? ""))?.click();
- 					window.setTimeout(() => {
--						const imageGenButton = Array.from(document.querySelectorAll("button")).find((button) => /dsh-imagegen/i.test(button.textContent ?? ""));
-+						const imageGenButton = Array.from(document.querySelectorAll("button")).find((button) => /^(生图模型|Image generation model)/.test(button.textContent?.trim() ?? ""));
- 						if (imageGenButton?.getAttribute("aria-expanded") !== "true") imageGenButton?.click();
- 					}, 0);
  				};
  				const settingsButton = Array.from(document.querySelectorAll("button")).find((button) => /^(设置|Settings)$/.test(button.textContent?.trim() ?? ""));
  				if (settingsButton?.getAttribute("aria-expanded") !== "true") settingsButton?.click();
@@ -161,20 +98,23 @@ index c46d3f1..bfa0b5a 100644
  			};
  			const enhanceCurrentPrompt = async () => {
  				if (prompt.trim() === "" || enhancing) return;
-@@ -6751,9 +6751,9 @@ window.__ModuleLoader__.load({
- 		* The dsh-imagegen settings card: channel management (list rows with status
- 		* dots, an editor dialog with the model-catalog alias → upstream mapping, and
- 		* built-in provider presets), plus the prompt-enhancement model and the plugin
+@@ -6748,12 +6744,9 @@ window.__ModuleLoader__.load({
+ 		//#endregion
+ 		//#region src/client/SettingsCard.tsx
+ 		/**
+-		* The dsh-imagegen settings card: channel management (list rows with status
+-		* dots, an editor dialog with the model-catalog alias → upstream mapping, and
+-		* built-in provider presets), plus the prompt-enhancement model and the plugin
 -		* switches. Registers into the official `settings.plugin.item` slot (the
 -		* Settings → Plugins → Configurable tab), independent of the dsh-web-ui family
 -		* group, bound to the plugin's own bridge settings scope.
-+		* switches. Registers into the official `settings.models.specialized-model`
-+		* slot immediately below Tool model, bound to the plugin's own bridge settings
-+		* scope.
++		* Legacy settings-card implementation retained by the compiled upstream
++		* bundle. The compatibility layer leaves it unregistered because the shared
++		* Models page owns image routes, credentials, catalogs, and assignment.
  		*
  		* The interaction mirrors the host's model-provider page: one row per channel
  		* (status dot + edit/delete), two add buttons (built-in provider / custom),
-@@ -6852,7 +6852,7 @@ window.__ModuleLoader__.load({
+@@ -6852,7 +6845,7 @@ window.__ModuleLoader__.load({
  				invalidLabel: t("settings.invalidNumber"),
  				disabled
  			};
@@ -183,7 +123,7 @@ index c46d3f1..bfa0b5a 100644
  				className: settings_card_module_css_default.card,
  				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
  					type: "button",
-@@ -6886,7 +6886,7 @@ window.__ModuleLoader__.load({
+@@ -6886,7 +6879,7 @@ window.__ModuleLoader__.load({
  			});
  			const channels = state.channels.channels;
  			const editing = editingId === null ? void 0 : channels.find((channel) => channel.id === editingId);
@@ -192,29 +132,497 @@ index c46d3f1..bfa0b5a 100644
  				className: settings_card_module_css_default.card,
  				children: [
  					/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("button", {
-@@ -8219,9 +8219,10 @@ window.__ModuleLoader__.load({
+@@ -8194,6 +8187,8 @@ window.__ModuleLoader__.load({
+ 			"slots",
+ 			"locale",
+ 			"connection",
++			"remote",
++			"remote.settings",
+ 			"sessions",
+ 			"conversation"
+ 		];
+@@ -8213,18 +8208,13 @@ window.__ModuleLoader__.load({
+ 			ctx.effect(() => {
+ 				const disposers = [ctx.on("connection/reset", () => {
+ 					scope.load();
++				}), ctx.remote.$on("settings/document-updated", () => {
++					scope.load();
+ 				})];
+ 				return () => {
+ 					for (const dispose of disposers) dispose();
  				};
  			}, "dsh-imagegen: settings scope invalidation");
- 			const settingsCard = new ImageGenSettingsCardController(scope);
+-			const settingsCard = new ImageGenSettingsCardController(scope);
 -			ctx.slots.inject("settings.plugin.item", () => ctx.slots.register({
 -				name: "settings.plugin.item",
 -				key: "dsh-imagegen",
-+			ctx.slots.inject("settings.models.specialized-model", () => ctx.slots.register({
-+				name: "settings.models.specialized-model",
-+				id: "image-generation",
-+				order: -10,
- 				locale: NS,
- 				inject: () => settingsCard.inject()
- 			}, ImageGenSettingsCard));
-diff --git a/package.json b/package.json
-index 3db501b..03eafa7 100644
---- a/package.json
-+++ b/package.json
-@@ -22,6 +22,7 @@
-         "@deepseek-ai/dsh-client-ui-conversation",
-         "@deepseek-ai/dsh-client-ui-renderer",
-         "@deepseek-ai/dsh-client-ui-settings",
-+        "@deepseek-ai/dsh-client-ui-settings-models",
-         "@deepseek-ai/dsh-client-ui-tool"
-       ],
-       "platform": "web"
+-				locale: NS,
+-				inject: () => settingsCard.inject()
+-			}, ImageGenSettingsCard));
+ 			let uiDisposer;
+ 			const mountUi = () => {
+ 				if (uiDisposer !== void 0) return;
+diff --git a/lib/index.js b/lib/index.js
+index 588ee73c15562cbbb6ba7c195cf702c6fbc5016e..ea2e68eb477d708ae159aaadccbbae7e21394bcc 100644
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -1,5 +1,11 @@
+ import * as settingsModule from "@deepseek-ai/dsh-settings";
+ import { SettingsConflictError } from "@deepseek-ai/dsh-settings";
++import { credentialRef } from "@deepseek-ai/dsh-credentials";
++import {
++	Config as ModelServiceSettingsSchema,
++	MODEL_SERVICE_SETTINGS_NAMESPACE,
++	findModelServiceRoute
++} from "@deepseek-ai/dsh-model-service-settings";
+ import z from "schemastery";
+ import { createHash, randomUUID } from "node:crypto";
+ import { promises } from "node:fs";
+@@ -632,7 +638,62 @@ async function normalizeItem(item, upstream) {
+ * Issue one single-image request (never sends `n`). The response is kept as a
+ * list so a gateway that happens to return several images per call still works.
+ */
+-async function requestOneImage(baseUrl, upstream, request, params, signal) {
++function dashscopeImageBody(request) {
++	const content = [
++		...request.mode === "edit" ? [{ image: request.image }] : [],
++		{ text: request.prompt }
++	];
++	const pixelSize = OPENAI_SIZE_BY_RATIO[request.size];
++	return {
++		model: wireModel(request),
++		input: { messages: [{ role: "user", content }] },
++		parameters: {
++			prompt_extend: true,
++			n: 1,
++			...pixelSize === void 0 ? {} : { size: pixelSize.replace("x", "*") }
++		}
++	};
++}
++function minimaxImageBody(request) {
++	return {
++		model: wireModel(request),
++		prompt: request.prompt,
++		...request.size === "" || request.size === "auto" ? {} : { aspect_ratio: request.size },
++		...request.mode === "edit" ? { subject_reference: [{ type: "character", image_file: request.image }] } : {},
++		response_format: "base64",
++		n: 1
++	};
++}
++function responseImageItems(protocol, payload) {
++	if (protocol === "dashscope-image") {
++		const output = payload.output;
++		const choices = output !== null && typeof output === "object" && Array.isArray(output.choices) ? output.choices : [];
++		return choices.flatMap((choice) => {
++			if (choice === null || typeof choice !== "object") return [];
++			const message = choice.message;
++			if (message === null || typeof message !== "object" || !Array.isArray(message.content)) return [];
++			return message.content.flatMap((entry) => entry !== null && typeof entry === "object" && typeof entry.image === "string" ? [{ url: entry.image }] : []);
++		});
++	}
++	if (protocol === "minimax-image") {
++		const data = payload.data;
++		if (data === null || typeof data !== "object") return [];
++		if (Array.isArray(data.image_base64)) return data.image_base64.map((value) => ({ b64_json: value }));
++		if (Array.isArray(data.image_urls)) return data.image_urls.map((value) => ({ url: value }));
++		return [];
++	}
++	return Array.isArray(payload.data) ? payload.data : Array.isArray(payload.images) ? payload.images : Array.isArray(payload.output) ? payload.output : void 0;
++}
++function imageRequestUrl(endpoint, upstream, request, params) {
++	if (upstream.protocol === "dashscope-image" || upstream.protocol === "minimax-image") return endpoint;
++	if (upstream.protocol === "openai-images") {
++		if (request.mode !== "edit" || isSeedream(params.model)) return endpoint;
++		if (!/\/images\/generations\/?$/u.test(endpoint)) throw new ImageGenError("所选 OpenAI 生图完整请求地址无法派生图像编辑地址", "edit-unsupported");
++		return endpoint.replace(/\/images\/generations\/?$/u, "/images/edits");
++	}
++	return `${endpoint}${request.mode === "edit" && !isSeedream(params.model) ? "/images/edits" : "/images/generations"}`;
++}
++async function requestOneImage(endpoint, upstream, request, params, signal) {
+ 	const headers = { authorization: `Bearer ${upstream.apiKey.trim()}` };
+ 	let body;
+ 	if (request.mode === "edit") {
+@@ -646,7 +707,13 @@ async function requestOneImage(baseUrl, upstream, request, params, signal) {
+ 			throw new ImageGenError("参考图片数据无法解码", "edit-image-invalid");
+ 		}
+ 		if (bytes.byteLength > MAX_EDIT_IMAGE_BYTES) throw new ImageGenError("参考图片超过 10MB 上限", "edit-image-too-large");
+-		if (isGrokImagine(params.model)) {
++		if (upstream.protocol === "dashscope-image") {
++			headers["content-type"] = "application/json";
++			body = JSON.stringify(dashscopeImageBody(request));
++		} else if (upstream.protocol === "minimax-image") {
++			headers["content-type"] = "application/json";
++			body = JSON.stringify(minimaxImageBody(request));
++		} else if (isGrokImagine(params.model)) {
+ 			headers["content-type"] = "application/json";
+ 			body = JSON.stringify({
+ 				model: params.model,
+@@ -686,6 +753,12 @@ async function requestOneImage(baseUrl, upstream, request, params, signal) {
+ 			if (params.detail !== void 0) form.append("detail", params.detail);
+ 			body = form;
+ 		}
++	} else if (upstream.protocol === "dashscope-image") {
++		headers["content-type"] = "application/json";
++		body = JSON.stringify(dashscopeImageBody(request));
++	} else if (upstream.protocol === "minimax-image") {
++		headers["content-type"] = "application/json";
++		body = JSON.stringify(minimaxImageBody(request));
+ 	} else {
+ 		headers["content-type"] = "application/json";
+ 		body = JSON.stringify({
+@@ -696,8 +769,7 @@ async function requestOneImage(baseUrl, upstream, request, params, signal) {
+ 	const budget = requestSignal(signal, UPSTREAM_TIMEOUT_MS);
+ 	let response;
+ 	try {
+-		const endpoint = request.mode === "edit" && !isSeedream(params.model) ? "/images/edits" : "/images/generations";
+-		response = await fetch(`${baseUrl}${endpoint}`, {
++		response = await fetch(imageRequestUrl(endpoint, upstream, request, params), {
+ 			method: "POST",
+ 			headers,
+ 			body,
+@@ -718,7 +790,7 @@ async function requestOneImage(baseUrl, upstream, request, params, signal) {
+ 	}
+ 	if (!response.ok || payload === null || typeof payload !== "object") throw new ImageGenError(upstreamMessage(payload, response.status), "upstream-rejected");
+ 	const record = payload;
+-	const data = Array.isArray(record.data) ? record.data : Array.isArray(record.images) ? record.images : Array.isArray(record.output) ? record.output : void 0;
++	const data = responseImageItems(upstream.protocol, record);
+ 	if (data === void 0) throw new ImageGenError("上游响应缺少 data 数组", "upstream-invalid");
+ 	if (data.length === 0) throw new ImageGenError("上游返回了 0 张图片", "upstream-empty");
+ 	return Promise.all(data.map(async (entry) => {
+@@ -733,13 +805,13 @@ async function requestOneImage(baseUrl, upstream, request, params, signal) {
+ * `tools[0].n`), then the results are flattened in order.
+ */
+ async function generateImage(upstream, request, options = {}) {
+-	const baseUrl = upstream.apiUrl.trim().replace(/\/+$/, "");
+-	if (baseUrl === "") throw new ImageGenError("api_url 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
+-	if (upstream.apiKey.trim() === "") throw new ImageGenError("api_key 未配置：请先在「设置 → 插件 → 可配置」中填写", "config-missing");
++	const endpoint = upstream.apiUrl.trim().replace(/\/+$/, "");
++	if (endpoint === "") throw new ImageGenError("尚未配置图像生成完整请求地址：请前往「设置 → 模型 → 服务接入」配置", "config-missing");
++	if (upstream.apiKey.trim() === "") throw new ImageGenError("所选图像生成线路没有可用 API 密钥：请前往「设置 → 模型 → 服务接入」配置", "config-missing");
+ 	if (request.mode === "edit" && isZhipuImage(wireModel(request))) throw new ImageGenError("智谱 GLM-Image 当前仅支持文生图，请切换到文生图模式或选择支持图生图的模型", "edit-unsupported");
+ 	const params = effectiveParams(request);
+ 	const count = effectiveCount(request);
+-	return { images: (await Promise.all(Array.from({ length: count }, () => requestOneImage(baseUrl, upstream, request, params, options.signal)))).flat() };
++	return { images: (await Promise.all(Array.from({ length: count }, () => requestOneImage(endpoint, upstream, request, params, options.signal)))).flat() };
+ }
+ /** Human-readable failure message from an upstream error payload. */
+ function upstreamMessage(payload, status) {
+@@ -1088,12 +1160,13 @@ var ImageGenerationRuntime = class {
+ 		this.queue = new GenerationTaskQueue((request, signal) => this.run(request, signal), 4);
+ 	}
+ 	async run(request, signal) {
+-		const view = this.resolve();
++		const view = await this.resolve();
+ 		const channel = view.channels.find((candidate) => candidate.id === request.channelId) ?? view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
+-		if (channel === void 0) throw new ImageGenError("尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥", "no-channels");
++		if (channel === void 0) throw new ImageGenError("尚未选择图像生成模型：请前往「设置 → 模型 → 使用场景」选择", "no-channels");
+ 		const result = await generateImage({
+ 			apiUrl: channel.apiUrl,
+-			apiKey: channel.apiKey
++			apiKey: channel.apiKey,
++			protocol: channel.protocol
+ 		}, request, { signal });
+ 		try {
+ 			const history = await this.history.append({
+@@ -2054,7 +2127,7 @@ function makeRoutes(deps) {
+ 		if (view.channels.length === 0) return {
+ 			ok: false,
+ 			code: "no-channels",
+-			message: "尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥"
++			message: "尚未选择图像生成模型：请前往「设置 → 模型 → 使用场景」选择"
+ 		};
+ 		const explicit = view.channels.find((candidate) => candidate.id === request.channelId);
+ 		const defaults = view.channels.find((candidate) => candidate.id === view.defaultChannelId) ?? view.channels[0];
+@@ -2302,10 +2375,25 @@ function makeRoutes(deps) {
+ 			handler: async (req, res) => {
+ 				if (!guard(req, res, "POST")) return;
+ 				const descriptor = deps.settings.describe({ redactSecrets: true }).find((candidate) => String(candidate.ns) === IMAGEGEN_SETTINGS_NAMESPACE);
++				const channels = channelViewOf();
++				const keySet = await deps.imageCredentialConfigured?.() ?? false;
++				const projected = descriptor === void 0 ? void 0 : toView(descriptor);
++				const unified = projected === void 0 ? void 0 : {
++					...projected,
++					value: {
++						...projected.value,
++						channels: channels.channels.map(({ apiKey: _apiKey, ...channel }) => channel),
++						defaultChannelId: channels.defaultChannelId
++					},
++					secrets: [
++						...(projected.secrets ?? []).filter((secret) => secret.path[0] !== "channelSecrets"),
++						...channels.channels.map((channel) => ({ path: ["channelSecrets", channel.id], set: keySet }))
++					]
++				};
+ 				writeJson(res, 200, {
+ 					ok: true,
+ 					value: {
+-						namespaces: descriptor === void 0 ? [] : [toView(descriptor)],
++						namespaces: unified === void 0 ? [] : [unified],
+ 						writable: deps.settings.writable !== false
+ 					}
+ 				});
+@@ -2967,9 +3055,9 @@ const taskResultSchema = {
+ /** Agent calls stay pending until the provider and history write settle. */
+ const AGENT_GENERATION_TIMEOUT_MS = 3e5;
+ function ensureAgentImageConfigured(config) {
+-	if (!config.enabled) throw new ImageGenError("AI image generation is disabled. Open Settings > Plugins > AI Image and enable it.", "plugin-disabled");
+-	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled in Settings > Plugins > AI Image.", "agent-generation-disabled");
+-	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "" && channel.apiKey.trim() !== "")) throw new ImageGenError("Image API credentials are not configured. Open Settings > Plugins > AI Image, add a channel and fill in its API URL and API key.", "image-api-not-configured");
++	if (!config.enabled) throw new ImageGenError("AI image generation is disabled by the installed plugin configuration.", "plugin-disabled");
++	if (!config.allowAgentImageGeneration) throw new ImageGenError("Agent image generation is disabled by the installed plugin configuration.", "agent-generation-disabled");
++	if (!config.channels.some((channel) => channel.apiUrl.trim() !== "")) throw new ImageGenError("No image-generation model is selected. Open Settings > Models > Use cases and select one.", "image-api-not-configured");
+ }
+ /** Resolve a configured image alias and its owning channel. */
+ function resolveAgentImageModel(config, requested) {
+@@ -2978,7 +3066,7 @@ function resolveAgentImageModel(config, requested) {
+ 		alias: model.alias,
+ 		upstream: model.id
+ 	})));
+-	if (entries.length === 0) throw new ImageGenError("No image models are configured. Open Settings > Plugins > AI Image and add a channel with at least one model.", "no-models-configured");
++	if (entries.length === 0) throw new ImageGenError("No image-generation model is selected. Open Settings > Models > Use cases and select one.", "no-models-configured");
+ 	const wanted = typeof requested === "string" && requested.trim() !== "" ? requested.trim() : "";
+ 	if (wanted === "") {
+ 		if (entries.length === 1) return entries[0];
+@@ -3467,9 +3555,12 @@ const name = "imagegen";
+ const inject = [
+ 	"webServer",
+ 	"systemPrompt",
+-	"commands"
++	"commands",
++	"settings",
++	"credentials",
++	"agentDefaultModel"
+ ];
+-/** The branded settings namespace of this plugin (the card edits it). */
++/** The branded settings namespace for plugin switches and prompt-enhancement compatibility. */
+ const ImageGenSettingsNamespace = settingsNamespaceCompat(IMAGEGEN_SETTINGS_NAMESPACE);
+ const Config = z.object({
+ 	enabled: z.boolean().default(true),
+@@ -3500,19 +3591,88 @@ const DEFAULT_ANNOUNCE = true;
+ const DEFAULT_ALLOW_AGENT_IMAGE_GENERATION = true;
+ /** Order of the announcement section within the tool-guidance band. */
+ const SECTION_ORDER = 150;
++const PI_AI_SETTINGS_NAMESPACE = settingsNamespaceCompat("llm-pi-ai");
++const INSTALLED_IMAGE_PROTOCOLS = /* @__PURE__ */ new Set(["openai-images", "dashscope-image", "minimax-image"]);
++function derivedCredentialRef(provider) {
++	return `${provider.toUpperCase().replace(/[^A-Z0-9]+/gu, "_")}_API_KEY`;
++}
++function modelServiceSettings(settings) {
++	try {
++		return ModelServiceSettingsSchema(structuredClone(settings.get(MODEL_SERVICE_SETTINGS_NAMESPACE)));
++	} catch {
++		throw new ImageGenError("供应商模型设置不可用", "config-missing");
++	}
++}
++function llmCredentialRef(settings, provider) {
++	const section = settings.get(PI_AI_SETTINGS_NAMESPACE);
++	if (section === null || typeof section !== "object") return;
++	const providers = section.providers;
++	if (providers === null || typeof providers !== "object") return;
++	const profile = providers[provider];
++	if (profile === null || typeof profile !== "object") return;
++	return typeof profile.apiKeyEnv === "string" && profile.apiKeyEnv.trim() !== "" ? profile.apiKeyEnv : void 0;
++}
++/** Resolve the selected image model to its exact typed supplier route. */
++function resolveModelSettingsImageRoute(defaultModel, settings) {
++	const selection = defaultModel.currentImageSelection();
++	if (selection === void 0) throw new ImageGenError("尚未选择图像生成模型：请前往「设置 → 模型 → 使用场景」选择", "no-channels");
++	const resolved = findModelServiceRoute(modelServiceSettings(settings), selection.provider, selection.model, "image");
++	if (resolved === void 0 || !INSTALLED_IMAGE_PROTOCOLS.has(resolved.route.protocol)) {
++		throw new ImageGenError(`所选图像生成模型“${selection.provider}/${selection.model}”没有可用请求适配器`, "image-model-not-configured");
++	}
++	return {
++		provider: selection.provider,
++		providerName: resolved.provider.displayName?.trim() || selection.provider,
++		model: resolved.model.id,
++		endpoint: resolved.route.endpoint,
++		protocol: resolved.route.protocol,
++		credential: resolved.provider.apiKeyEnv ?? llmCredentialRef(settings, selection.provider) ?? derivedCredentialRef(selection.provider)
++	};
++}
++function imageChannelView(selected) {
++	return {
++		channels: [{
++			id: selected.provider,
++			preset: "",
++			name: selected.providerName,
++			apiUrl: selected.endpoint,
++			protocol: selected.protocol,
++			models: [{ alias: selected.model, id: selected.model }]
++		}],
++		defaultChannelId: selected.provider
++	};
++}
++function selectedImageChannelView(defaultModel, settings) {
++	try {
++		return imageChannelView(resolveModelSettingsImageRoute(defaultModel, settings));
++	} catch {
++		return { channels: [], defaultChannelId: "" };
++	}
++}
++async function selectedImageRuntimeView(defaultModel, settings, credentials) {
++	const selected = resolveModelSettingsImageRoute(defaultModel, settings);
++	const resolved = await credentials.resolve(credentialRef(selected.credential));
++	if (resolved?.value === void 0 || resolved.value.trim() === "") {
++		throw new ImageGenError(`所选图像生成线路“${selected.provider}”没有可用 API 密钥`, "config-missing");
++	}
++	const view = imageChannelView(selected);
++	return {
++		channels: view.channels.map((channel) => ({ ...channel, apiKey: resolved.value })),
++		defaultChannelId: view.defaultChannelId
++	};
++}
+ /** Model-facing announcement: plugin presence, capabilities, and limits. */
+-const IMAGEGEN_GUIDANCE = "本机已安装 dsh-imagegen 插件（DSH AI 生图）：侧边栏「AI 生图」入口。能力：通过「渠道」对接 OpenAI 兼容图像生成 API（每个渠道 = 一个 API 端点 + 各自的模型目录），支持文生图（/images/generations）与图生图（/images/edits，上传参考图，grok-imagine 模型按官方 JSON image_url 协议发送，nanobanana 系列按 aspect_ratio / image_size 参数协议发送；seedream 系列统一走 /images/generations，参考图以 JSON image 数组发送；智谱 `glm-image` 使用官方 `/api/paas/v4/images/generations`，当前仅支持文生图）。API 地址与密钥在 GUI 设置中按渠道配置，密钥仅存于本机设置文档；生成请求由本地宿主代理转发，结果以 base64 返回面板，可预览与下载。模型只能使用用户在各渠道配置目录中的模型；检测模型时会过滤聊天、Embedding 等非图片模型，但模型出现在 /models 中仍不等于其网关原生支持生图协议，遇到 Qwen、Gemini 等非 OpenAI 生图协议时应如实说明上游兼容性。可一键把满意的图片加入「画廊」。内置「提示词模板库」（面板提示词框左下角「模板库」按钮）：打包 awesome-gpt-image-2 的数百条提示词案例，可搜索、筛选与复用。Agent 可直接调用 `generate_image` 提交文生图，也可用 `edit_image` 图生图；默认保持工具调用等待直到任务完成，完成图片显示在工具调用对应的左侧结果区域，模型收到状态和附件引用，不会额外伪造用户消息。用户也可以使用 `/edit_image <修改描述>`，命令会直接读取当前对话最近图片并调用插件图片模型，不经过对话模型的图片能力检查。若明确需要后台执行，可传 `wait_for_completion: false`，之后再用 `get_image_generation_task` 查询；不要反复轮询。限制：生成消耗上游 API 额度；图片内容由上游模型生成，可能不符合预期或包含不适宜内容；api_key 以明文存储在设置文档中；参考图会发送至所配置的 API 服务；模板库在线刷新与参考图首次加载需要访问 vibeui.top。用户提到「生图 / 绘画 / 生成图片 / 文生图 / 图生图 / 画廊 / 提示词模板」时即指本插件，请据此协作。";
++const IMAGEGEN_GUIDANCE = "本机已安装 dsh-imagegen 插件（DSH AI 生图）：侧边栏「AI 生图」入口。能力：通过「设置 → 模型 → 服务接入」中的图像生成线路和「使用场景」中的生图选择执行请求，支持 OpenAI Images、阿里云百炼 Qwen Image 与 MiniMax Image 协议。完整请求地址、模型目录和供应商凭据由统一模型设置持有；生成请求由本地宿主代理转发，结果以 base64 返回面板，可预览与下载。可一键把满意的图片加入「画廊」。内置「提示词模板库」（面板提示词框左下角「模板库」按钮）：打包 awesome-gpt-image-2 的数百条提示词案例，可搜索、筛选与复用。Agent 可直接调用 `generate_image` 提交文生图，也可用 `edit_image` 图生图；默认保持工具调用等待直到任务完成，完成图片显示在工具调用对应的左侧结果区域，模型收到状态和附件引用，不会额外伪造用户消息。用户也可以使用 `/edit_image <修改描述>`，命令会直接读取当前对话最近图片并调用所选生图模型，不经过对话模型的图片能力检查。若明确需要后台执行，可传 `wait_for_completion: false`，之后再用 `get_image_generation_task` 查询；不要反复轮询。限制：生成消耗上游 API 额度；图片内容由上游模型生成，可能不符合预期或包含不适宜内容；参考图会发送至所选供应商；模板库在线刷新与参考图首次加载需要访问 vibeui.top。用户提到「生图 / 绘画 / 生成图片 / 文生图 / 图生图 / 画廊 / 提示词模板」时即指本插件，请据此协作。";
+ /** Append the live channel × model table so an Agent can honor user choices. */
+ function guidanceFor(channels, defaultChannelId) {
+-	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未配置任何渠道：请先在「设置 → 插件 → AI 生图」添加渠道并填写 API 地址与密钥。`;
++	if (channels.length === 0) return `${IMAGEGEN_GUIDANCE} 尚未选择图像生成模型：请前往「设置 → 模型 → 使用场景」选择。`;
+ 	const table = channels.map((channel) => {
+ 		const aliases = channel.models.map((model) => model.alias).join("、");
+ 		const mark = channel.id === defaultChannelId ? "（默认渠道）" : "";
+-		const key = channel.apiKey === "" ? "（未填密钥）" : "";
+ 		const models = channel.models.length === 0 ? "未配置模型" : `可用模型：${aliases}`;
+-		return `渠道「${channel.name}」${mark}[${channel.apiUrl}] ${models}${key}`;
++		return `线路「${channel.name}」${mark}[${channel.apiUrl}] ${models}`;
+ 	}).join("；");
+-	return `${IMAGEGEN_GUIDANCE} 当前渠道与模型：${table}。用户指定模型名时取该模型所属渠道（多渠道同名用默认渠道）；未指定模型时若仅一个可用模型可直接生成，若有多个应先询问用户选择「渠道 + 模型」。`;
++	return `${IMAGEGEN_GUIDANCE} 当前生图线路：${table}。未指定模型时直接使用「使用场景」中的选择。`;
+ }
+ /** Normalize raw channel entries into the wire shape (schema-adjacent guard). */
+ function normalizeChannels(value) {
+@@ -3554,53 +3714,17 @@ function apply(ctx, config) {
+ 	let current = () => config ?? {};
+ 	const resolve = () => {
+ 		const value = current() ?? {};
+-		let channels = normalizeChannels(value.channels);
+-		const secrets = { ...value.channelSecrets ?? {} };
+-		if (channels.length === 0) {
+-			const legacyUrl = typeof value.apiUrl === "string" ? value.apiUrl.trim() : "";
+-			const legacyModels = Array.isArray(value.imageModels) ? value.imageModels.filter((model) => typeof model === "string" && model.trim() !== "").map((model) => ({
+-				alias: model.trim(),
+-				id: model.trim()
+-			})) : [];
+-			if (legacyUrl !== "" || legacyModels.length > 0) {
+-				channels = [{
+-					id: "default",
+-					preset: "",
+-					name: "默认渠道",
+-					apiUrl: legacyUrl,
+-					models: legacyModels
+-				}];
+-				const legacyKey = typeof value.apiKey === "string" ? value.apiKey.trim() : "";
+-				if (legacyKey !== "") secrets["default"] = legacyKey;
+-			}
+-		}
+-		const named = channels.map((channel) => ({
+-			...channel,
+-			name: channel.name === "" ? presetById(channel.preset)?.name ?? "未命名渠道" : channel.name
+-		}));
+-		const defaultChannelId = typeof value.defaultChannelId === "string" && named.some((channel) => channel.id === value.defaultChannelId) ? value.defaultChannelId : named[0]?.id ?? "";
+ 		return {
+ 			enabled: value.enabled ?? DEFAULT_ENABLED,
+ 			announceToAgent: value.announceToAgent ?? DEFAULT_ANNOUNCE,
+ 			allowAgentImageGeneration: value.allowAgentImageGeneration ?? DEFAULT_ALLOW_AGENT_IMAGE_GENERATION,
+-			channels: named.map((channel) => ({
+-				...channel,
+-				apiKey: typeof secrets[channel.id] === "string" ? secrets[channel.id] : ""
+-			})),
+-			defaultChannelId,
+ 			promptApiUrl: typeof value.promptApiUrl === "string" ? value.promptApiUrl.trim() : "",
+ 			promptApiKey: typeof value.promptApiKey === "string" ? value.promptApiKey.trim() : "",
+ 			promptModel: typeof value.promptModel === "string" ? value.promptModel.trim() : ""
+ 		};
+ 	};
+-	const channelsView = () => {
+-		const value = resolve();
+-		return {
+-			channels: value.channels,
+-			defaultChannelId: value.defaultChannelId
+-		};
+-	};
+-	const runtime = new ImageGenerationRuntime(channelsView);
++	const channelsView = () => selectedImageChannelView(ctx.agentDefaultModel, ctx.settings);
++	const runtime = new ImageGenerationRuntime(() => selectedImageRuntimeView(ctx.agentDefaultModel, ctx.settings, ctx.credentials));
+ 	const pendingConversationImages = /* @__PURE__ */ new Map();
+ 	ctx.inject(["settings", "attachments"], (sctx) => {
+ 		const seam = sctx.get("settings");
+@@ -3608,26 +3732,33 @@ function apply(ctx, config) {
+ 			const disposers = makeRoutes({
+ 				settings: seam,
+ 				resolve: () => {
+-					const value = resolve();
+-					const channel = value.channels.find((candidate) => candidate.id === value.defaultChannelId) ?? value.channels[0];
++					const view = channelsView();
++					const channel = view.channels[0];
+ 					return {
+ 						apiUrl: channel?.apiUrl ?? "",
+-						apiKey: channel?.apiKey ?? ""
++						apiKey: ""
+ 					};
+ 				},
+ 				resolveChannels: channelsView,
+ 				resolvePrompt: () => {
+ 					const value = resolve();
+-					const channel = value.channels.find((candidate) => candidate.id === value.defaultChannelId) ?? value.channels[0];
+ 					return {
+-						apiUrl: value.promptApiUrl !== "" ? value.promptApiUrl : channel?.apiUrl ?? "",
+-						apiKey: value.promptApiKey !== "" ? value.promptApiKey : channel?.apiKey ?? "",
++						apiUrl: value.promptApiUrl,
++						apiKey: value.promptApiKey,
+ 						model: value.promptModel
+ 					};
+ 				},
+ 				resolveImageModels: () => {
+-					const value = resolve();
+-					return [...new Set(value.channels.flatMap((channel) => channel.models.map((model) => model.alias)))];
++					return channelsView().channels.flatMap((channel) => channel.models.map((model) => model.alias));
++				},
++				imageCredentialConfigured: async () => {
++					try {
++						const selected = resolveModelSettingsImageRoute(ctx.agentDefaultModel, ctx.settings);
++						const value = (await ctx.credentials.resolve(credentialRef(selected.credential)))?.value;
++						return typeof value === "string" && value.trim() !== "";
++					} catch {
++						return false;
++					}
+ 				},
+ 				attachments: sctx.attachments,
+ 				pendingConversationImages,
+@@ -3646,11 +3777,12 @@ function apply(ctx, config) {
+ 		tctx.effect(() => {
+ 			const resolveAgentConfig = () => {
+ 				const value = resolve();
++				const view = channelsView();
+ 				return {
+ 					enabled: value.enabled,
+ 					allowAgentImageGeneration: value.allowAgentImageGeneration,
+-					channels: value.channels,
+-					defaultChannelId: value.defaultChannelId
++					channels: view.channels,
++					defaultChannelId: view.defaultChannelId
+ 				};
+ 			};
+ 			const disposeTools = registerAgentImageTools(tctx, runtime, resolveAgentConfig);
+@@ -3674,12 +3806,14 @@ function apply(ctx, config) {
+ 		}
+ 		const value = resolve();
+ 		if (!value.enabled || !value.announceToAgent) return;
++		const view = channelsView();
+ 		disposeSection = ctx.systemPrompt.section({
+ 			name: "plugin:dsh-imagegen",
+ 			order: SECTION_ORDER,
+-			text: guidanceFor(value.channels, value.defaultChannelId)
++			text: guidanceFor(view.channels, view.defaultChannelId)
+ 		});
+ 	};
++	ctx.effect(() => ctx.on("settings/document-updated", sync), "dsh-imagegen: unified model settings invalidation");
+ 	installSettingsSectionCompat(ctx, ImageGenSettingsNamespace, Config, config ?? {}, {
+ 		setSource: (source) => {
+ 			current = source;
+@@ -3690,4 +3824,4 @@ function apply(ctx, config) {
+ 	sync();
+ }
+ //#endregion
+-export { CURRENT_VERSION, Config, IMAGEGEN_GUIDANCE, ImageGenError, ImageGenSettingsNamespace, ImageGenerationRuntime, appendGallery, apply, checkForUpdate, clearGallery, clearTemplateMemo, clearUpdateCache, compareVersions, generateImage, inject, installUpdate, latestSessionImage, listGallery, listTemplates, makeRoutes, name, profileFromProcess, readGalleryImage, readTemplateImage, refreshTemplates, registerAgentImageTools, registerEditImageCommand, removeGallery, updateGalleryTags };
++export { CURRENT_VERSION, Config, IMAGEGEN_GUIDANCE, ImageGenError, ImageGenSettingsNamespace, ImageGenerationRuntime, appendGallery, apply, checkForUpdate, clearGallery, clearTemplateMemo, clearUpdateCache, compareVersions, generateImage, inject, installUpdate, latestSessionImage, listGallery, listTemplates, makeRoutes, name, profileFromProcess, readGalleryImage, readTemplateImage, refreshTemplates, registerAgentImageTools, registerEditImageCommand, removeGallery, resolveModelSettingsImageRoute, selectedImageRuntimeView, updateGalleryTags };

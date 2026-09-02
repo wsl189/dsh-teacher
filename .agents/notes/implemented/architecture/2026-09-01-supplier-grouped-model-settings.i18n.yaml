@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-01-supplier-grouped-model-settings.md
-2026-09-01-supplier-grouped-model-settings.md: e3d9a45c7ad7e47be88ea45bc140d82bdbd68194
-2026-09-01-supplier-grouped-model-settings.zh.md: 21f2c82188d0befa0af3037ad11a2e705e6c4787
+2026-09-01-supplier-grouped-model-settings.md: 2ab6de4ad82f545dd09f4bd8ea1c48bdd1a87765
+2026-09-01-supplier-grouped-model-settings.zh.md: e19d143dfe92e613e4c3e419545cb47a0195b9f1

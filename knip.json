@@ -707,7 +707,6 @@
       "ignoreDependencies": [
         "@anysearch/anysearch-dsh",
         "@deepseek-ai/.+",
-        "@dickpy/dsh-imagegen",
         "@huanlin/dsh-plugin-better-sidebar-plugin-office",
         "dsh-plugin-cron",
         "dsh-skill-mcp-panel",

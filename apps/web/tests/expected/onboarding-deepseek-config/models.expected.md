@@ -50,15 +50,14 @@
           - text: API 密钥
           - textbox "API 密钥":
             - /placeholder: 已配置——输入新值可替换
-          - text: 请求路由 切换模型类型后会自动套用供应商对应的官方请求地址。 模型类型
+          - text: 请求路由 切换模型类型后会自动套用供应商的官方地址，也可以继续修改完整请求地址。 模型类型
           - combobox "模型类型":
             - option "对话 / 推理" [selected]
             - option "视觉理解"
-            - option "编程模型"
           - text: API 地址
           - textbox "API 地址":
             - /placeholder: https://api.deepseek.com
-          - text: 完整请求地址 只读预览
+          - text: 完整请求地址
           - textbox "完整请求地址": https://api.deepseek.com/chat/completions
           - paragraph: 对话与推理模型使用当前 LLM 请求端点。
           - region "模型目录":
@@ -76,30 +75,20 @@
               - img
             - textbox "模型 ID 2":
               - /placeholder: 模型 ID
-              - text: deepseek-v4-flash-vision-exp
+              - text: private-preview
             - textbox "显示名称 2":
               - /placeholder: 显示名称
-              - text: DeepSeek-V4-Flash-Vision-Exp
-            - button "容量 2":
+              - text: Private Preview
+            - button "容量 2" [expanded]:
               - img
             - button "删除模型 2":
               - img
-            - textbox "模型 ID 3":
-              - /placeholder: 模型 ID
-              - text: private-preview
-            - textbox "显示名称 3":
-              - /placeholder: 显示名称
-              - text: Private Preview
-            - button "容量 3" [expanded]:
-              - img
-            - button "删除模型 3":
-              - img
             - text: 上下文窗口
-            - textbox "上下文窗口 3":
+            - textbox "上下文窗口 2":
               - /placeholder: 1M
               - text: "131072"
             - text: 最大输出 token 数
-            - textbox "最大输出 token 数 3":
+            - textbox "最大输出 token 数 2":
               - /placeholder: 256K
               - text: 64K
             - button "添加模型":
@@ -114,7 +103,3 @@
   - button "添加自定义提供方":
     - img
     - text: 添加自定义提供方
-  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
-  - 'button "展开设置: 语音模型"':
-    - strong: 语音模型
-    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。

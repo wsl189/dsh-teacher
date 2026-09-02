@@ -361,7 +361,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
           value={fullRequestURL}
           placeholder={mediaType
             ? t('customFullRequestUrlPlaceholder')
-            : `https://api.example.com/v1${requestPath(protocol)}`}
+            : `${t('customBaseUrlPlaceholder')}${requestPath(protocol)}`}
           aria-label={t('fullRequestUrl')}
           aria-invalid={fullRequestURL.length > 0 && !endpointValid}
           disabled={profileDisabled}

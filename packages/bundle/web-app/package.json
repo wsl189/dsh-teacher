@@ -46,6 +46,7 @@
   "dependencies": {
     "@anysearch/anysearch-dsh": "file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz",
     "@deepseek-ai/dsh-agent-presets": "workspace:^",
+    "@deepseek-ai/dsh-agent-default-model": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
     "@deepseek-ai/dsh-api-remotes": "workspace:^",
     "@deepseek-ai/dsh-app-boot": "workspace:^",

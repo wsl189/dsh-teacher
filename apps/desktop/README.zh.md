@@ -58,7 +58,7 @@ git push origin v0.1.2
 
 renderer 启用 `contextIsolation` 与 sandbox，并关闭 Node integration。preload 只暴露更新快照、订阅、下载和安装方法。初始 loopback URL 会把当前进程的令牌交换为绑定 authority 的 HttpOnly 浏览器 cookie，再重定向到不带令牌的根 URL。外部导航会被拒绝并交给系统浏览器。GitHub 元数据与下载始终留在主进程，安装器由 electron-updater 按 SemVer 选择。
 
-安装器包含 Electron、JavaScript／Node 运行时、本仓库已构建的 Web UI，以及完整的发行版 DSH 插件闭包，其中包括 AI 生图工作室、IM、cron、技能／MCP 管理、Windows 桌面控制、AGPL Office 查看器、Univer Office、供应商模型语音适配器，以及带脚本、参考资料、模板、媒体、许可证与赞助记录的 PPT Master 6.1.0。这些插件和 Skill 资源不需要单独安装。仅 Windows-MCP 带有一套私有嵌入式 CPython 与 wheel 闭包，除非 Windows 桌面控制被关闭，否则它会默认启动；安装版从 `resources/windows-mcp` 解析它，并忽略环境中的覆盖路径。EXE 不会内嵌生图服务或模型、PPT Master 的可选 Python 包、vLLM、MinerU、语音识别服务、模型权重、GPU 驱动、Docker、Chrome／Chromium 可执行文件、Univer 许可证或本机专属插件配置。请先在**设置 → 模型 → 服务接入**中配置供应商线路，再于**使用场景**分配受支持的语音模型；独立的 OpenAI 兼容生图插件仍在**生图模型**中配置。录音、提示词与参考图会离开本机并发送给相应服务。外部运行时、服务与私有值应独立维护，并单独迁移 `DSH_HOME` 与生图数据目录。
+安装器包含 Electron、JavaScript／Node 运行时、本仓库已构建的 Web UI，以及完整的发行版 DSH 插件闭包，其中包括 AI 生图工作室、IM、cron、技能／MCP 管理、Windows 桌面控制、AGPL Office 查看器、Univer Office、供应商模型媒体适配器，以及带脚本、参考资料、模板、媒体、许可证与赞助记录的 PPT Master 6.1.0。这些插件和 Skill 资源不需要单独安装。仅 Windows-MCP 带有一套私有嵌入式 CPython 与 wheel 闭包，除非 Windows 桌面控制被关闭，否则它会默认启动；安装版从 `resources/windows-mcp` 解析它，并忽略环境中的覆盖路径。EXE 不会内嵌生图服务或模型、PPT Master 的可选 Python 包、vLLM、MinerU、语音识别服务、模型权重、GPU 驱动、Docker、Chrome／Chromium 可执行文件、Univer 许可证或本机专属插件配置。请在**设置 → 模型 → 服务接入**中配置语音识别与图像生成线路，再于**使用场景**分别分配受支持的模型；录音、提示词与参考图会离开本机并发送给所选服务。外部运行时、服务与私有值应独立维护，并单独迁移 `DSH_HOME` 与生图数据目录。
 
 ## 已知限制与暂缓事项
 

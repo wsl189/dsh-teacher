@@ -26,6 +26,11 @@ overrides:
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': 'link:packages/web/tool-web'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tools': 'link:packages/core/tools'
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': 'link:packages/web/web'
+  # The bundled image studio resolves the selected typed supplier route at
+  # request time instead of owning a second model-and-credential catalog.
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-agent-default-model': 'link:packages/core/agent-default-model'
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-credentials': 'link:packages/credentials/credentials'
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-model-service-settings': 'link:packages/settings/model-service-settings'
   # The bundled cron release pins the pre-ToolCallId tools package. Its public
   # defineTool use remains compatible with the current workspace implementation.
   'dsh-plugin-cron>@deepseek-ai/dsh-tools': 'link:packages/core/tools'
@@ -54,6 +59,13 @@ packageExtensions:
   '@anysearch/anysearch-dsh@0.1.4':
     peerDependencies:
       '@deepseek-ai/dsh-settings': '>=1.0.9 <2'
+  # The reviewed compatibility patch adds these runtime imports to the
+  # upstream compiled Host bundle.
+  '@dickpy/dsh-imagegen@1.5.1':
+    peerDependencies:
+      '@deepseek-ai/dsh-agent-default-model': '>=1.1.2 <2'
+      '@deepseek-ai/dsh-credentials': '>=1.1.2 <2'
+      '@deepseek-ai/dsh-model-service-settings': '>=1.1.2 <2'
 
 peerDependencyRules:
   allowedVersions:

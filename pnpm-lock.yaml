@@ -13,6 +13,9 @@ overrides:
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tool-web': link:packages/web/tool-web
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-tools': link:packages/core/tools
   '@anysearch/anysearch-dsh>@deepseek-ai/dsh-web': link:packages/web/web
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-agent-default-model': link:packages/core/agent-default-model
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-credentials': link:packages/credentials/credentials
+  '@dickpy/dsh-imagegen>@deepseek-ai/dsh-model-service-settings': link:packages/settings/model-service-settings
   dsh-plugin-cron>@deepseek-ai/dsh-tools: link:packages/core/tools
   dsh-skill-mcp-panel>@deepseek-ai/dsh-home-paths: link:packages/util/home-paths
   dsh-skill-mcp-panel>@deepseek-ai/dsh-subprocess: link:packages/subprocess/subprocess
@@ -26,11 +29,11 @@ overrides:
   dsh-univer-office>@deepseek-ai/dsh-tools: link:packages/core/tools
   app-builder-lib>@electron/get: 3.1.0
 
-packageExtensionsChecksum: sha256-TY2j5lQxdkFZX2SZBnhquSRqKkdC0DEqsCVjyixLOzo=
+packageExtensionsChecksum: sha256-yttsIs1OY32Ma8H8GL0Fs7a/NYHRkt3GUgVErq30mLQ=
 
 patchedDependencies:
   '@anysearch/anysearch-dsh@0.1.4': f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82
-  '@dickpy/dsh-imagegen@1.5.1': 5d0b75d1226004286dbe33d5b69d45614ebd826bc9677c01f844271abb52f6f0
+  '@dickpy/dsh-imagegen@1.5.1': d30144d0af5650311f09c146c6a6da68416c56f209a8af20aa8b3a7020b18f7e
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': 34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd
   '@xmanrui/dsh-im@1.0.3': ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762
   dsh-better-sidebar@0.17.1: 78d35a900c83a83e141ae27f8a225bf8c579859814f5be0e4cd145531efa71ef
@@ -1591,6 +1594,9 @@ importers:
       '@anysearch/anysearch-dsh':
         specifier: file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz
         version: file:third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz(patch_hash=f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-system-prompt@packages+core+system-prompt)(@deepseek-ai/dsh-tool-web@packages+web+tool-web)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/dsh-web@packages+web+web)
+      '@deepseek-ai/dsh-agent-default-model':
+        specifier: workspace:^
+        version: link:../../core/agent-default-model
       '@deepseek-ai/dsh-agent-presets':
         specifier: workspace:^
         version: link:../../preset/agent-presets
@@ -1860,7 +1866,7 @@ importers:
         version: link:../../../vendor/schemastery
       '@dickpy/dsh-imagegen':
         specifier: file:../../../third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz
-        version: file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz(patch_hash=5d0b75d1226004286dbe33d5b69d45614ebd826bc9677c01f844271abb52f6f0)
+        version: file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz(patch_hash=d30144d0af5650311f09c146c6a6da68416c56f209a8af20aa8b3a7020b18f7e)(@deepseek-ai/dsh-agent-default-model@packages+core+agent-default-model)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-model-service-settings@packages+settings+model-service-settings)
       '@huanlin/dsh-plugin-better-sidebar-plugin-office':
         specifier: 0.1.2
         version: 0.1.2(patch_hash=34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd)(bcb238876ae0845a34599176906e0d4a)
@@ -11742,6 +11748,10 @@ packages:
   '@dickpy/dsh-imagegen@file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz':
     resolution: {integrity: sha512-8ZKga3RG5F0DCruzIkz8ZKQp6xJJJPvIhT++lhNZ6Y9gGop9SZVvazgs4QQkr1zvk4Vy5My4nJHIhQCy6bIUpg==, tarball: file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz}
     version: 1.5.1
+    peerDependencies:
+      '@deepseek-ai/dsh-agent-default-model': '>=1.1.2 <2'
+      '@deepseek-ai/dsh-credentials': '>=1.1.2 <2'
+      '@deepseek-ai/dsh-model-service-settings': '>=1.1.2 <2'
 
   '@docsearch/css@3.8.2':
     resolution: {integrity: sha512-y05ayQFyUmCXze79+56v/4HpycYF3uFqB78pLPrSV5ZKAlDuIAAJNhaRi8tTdRNXh05yxX/TyNnzD6LwSM89vQ==}
@@ -20582,8 +20592,11 @@ snapshots:
 
   '@csstools/css-tokenizer@4.0.0': {}
 
-  '@dickpy/dsh-imagegen@file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz(patch_hash=5d0b75d1226004286dbe33d5b69d45614ebd826bc9677c01f844271abb52f6f0)':
+  '@dickpy/dsh-imagegen@file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz(patch_hash=d30144d0af5650311f09c146c6a6da68416c56f209a8af20aa8b3a7020b18f7e)(@deepseek-ai/dsh-agent-default-model@packages+core+agent-default-model)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-model-service-settings@packages+settings+model-service-settings)':
     dependencies:
+      '@deepseek-ai/dsh-agent-default-model': link:packages/core/agent-default-model
+      '@deepseek-ai/dsh-credentials': link:packages/credentials/credentials
+      '@deepseek-ai/dsh-model-service-settings': link:packages/settings/model-service-settings
       schemastery: 3.18.0
 
   '@docsearch/css@3.8.2': {}

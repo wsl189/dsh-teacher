@@ -23,7 +23,7 @@ Web 组合还从 npm 固定 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0
 
 AnySearch 无需密钥即可使用，但受远程服务的匿名限制。[Web 组合包](../packages/bundle/web-app/README.zh.md#built-in-web-search)说明可选凭据、服务地址与单次搜索结果上限配置、提供方选择，以及向外发送的查询与正文提取 URL。安装器包含插件，不包含搜索服务或注册账户。
 
-可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务、技能文件、MCP 配置、Univer 文档、工作树与下载资源缓存仍保存在 `DSH_HOME` 或所选工作区下。机器人通过**设置 → 插件 → 连接平台**配置。请先在**设置 → 模型 → 服务接入**配置供应商线路，再于**使用场景**分配其支持的语音模型；浏览器语音输入与 QQ 语音消息会使用同一项分配。生图服务渠道通过**生图模型**配置，技能在**设置 → 技能**中管理，MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理。生图 API 密钥保存在本机设置文档中，生成历史、画廊与模板缓存使用 `~/.dsh/dsh-imagegen`；参考图和提示词会发送给已配置的服务提供方。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
+可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务、技能文件、MCP 配置、Univer 文档、工作树与下载资源缓存仍保存在 `DSH_HOME` 或所选工作区下。机器人通过**设置 → 插件 → 连接平台**配置。请在**设置 → 模型 → 服务接入**配置语音识别与图像生成线路，再于**使用场景**分别分配受支持的模型；浏览器语音输入、QQ 语音消息与生图工具会使用这些分配。提供方 API 密钥使用凭据存储，生成历史、画廊与模板缓存使用 `~/.dsh/dsh-imagegen`；录音、参考图和提示词会发送给所选提供方。技能在**设置 → 技能**中管理，MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
 
 内置 Univer 配置项设置了 `telemetry: false`。未设置 `UNIVER_LICENSE` 时，Univer Viewer 会按上游的受限试用模式打开，并保留水印和功能限制。需要授权功能时，通过 `UNIVER_LICENSE` 提供有效许可证；产物中没有开发许可证回退值。部分 Slide 布局检查、SVG 文本测量与截图操作还需要本机 Chrome 或 Chromium；自动发现无效时可用 `UNIVER_RENDER_BROWSER` 显式指定。
 
@@ -39,14 +39,14 @@ Windows 桌面控制在运行时可用时默认启动；已持久化的用户值
 
 ## 验证
 
-真实发行组合的浏览器测试会断言所有客户端模块均进入模块图，并固定四项生图工具、Host 级 `cron_*`、`qq_send_local_file`、十三项 `univer_*` 工具，以及 Windows-MCP 按运行时可用性确定的默认值和已保存的关闭选择。模型测试会固定默认收起的生图模型卡片、拒绝重复语音模型卡片、配置供应商线路，并在「使用场景」中保存其语音分配。语音输入测试会把浏览器录音经该供应商分配发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作、确认 QQ 页面不再包含语音设置，并固定真实 Host 后端返回的应用内目录列表快照；Host 集成测试还要求 QQ WAV 附件委托给共享语音运行时。桌面载荷门禁还会单独要求已打包依赖闭包包含生图 Host 与 Client bundle、内置模板快照与许可证；Univer Viewer、Gateway、worker、技能、商业资源 manifest 与 Windows x64 原生 binding；以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的 Python 原生模块。
+真实发行组合的浏览器测试会断言所有客户端模块均进入模块图，并固定四项生图工具、Host 级 `cron_*`、`qq_send_local_file`、十三项 `univer_*` 工具，以及 Windows-MCP 按运行时可用性确定的默认值和已保存的关闭选择。模型测试会拒绝单独的生图与语音模型卡片、配置供应商线路，并在「使用场景」中保存生图和语音分配。语音输入测试会把浏览器录音经该供应商分配发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作、确认 QQ 页面不再包含语音设置，并固定真实 Host 后端返回的应用内目录列表快照；Host 集成测试还要求 QQ WAV 附件委托给共享语音运行时。桌面载荷门禁还会单独要求已打包依赖闭包包含生图 Host 与 Client bundle、内置模板快照与许可证；Univer Viewer、Gateway、worker、技能、商业资源 manifest 与 Windows x64 原生 binding；以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的 Python 原生模块。
 
 <a id="artifact-notes"></a>
 ## 产物说明
 
 AnySearch 压缩包使用固定 lockfile 从用户提供的 0.1.4 源码编译，保留 MIT 许可证、编译模块、类型声明、组合补丁、双语 README 与文档链接资源。其 SHA-256 为 `08d583857ec3b9307157f45c68bfbc91f7863a54c143a0f3e34079afff578079`。[兼容补丁](../patches/anysearch-anysearch-dsh@0.1.4.patch)移除上游全局 `web_fetch` 回退注册，因为该工具由 DSH 会话 preset 持有；补丁还通过实时 DSH settings 分节投影凭据引用、服务地址与单次搜索结果上限，并在每次操作时对这些配置取一次快照。限定范围的依赖覆盖把其 1.0 之前的 peer 声明绑定到当前 workspace 服务。发行组合与 AnySearch 集成测试会执行这些 API，搜索会话快照固定模型可见结果，桌面载荷门禁则要求许可证与全部运行模块存在。
 
-生图压缩包是上游 npm 1.5.1 发行版的仅运行时重打包。它保留未经修改的 Host 与 Client 编译 bundle、内置 441 案例模板快照、包元数据、组合补丁、README 与 Apache-2.0 许可证；上游 50 MB 发行包中的截图、演示视频、非运行时 TypeScript 源码与 Source Map 不进入安装包。[生图兼容补丁](../patches/dickpy-dsh-imagegen@1.5.1.patch)把安装后的 Client 卡片注册为模型页中默认收起的生图模型，声明该页面的客户端注入项，并把 Host 与 Client 配置指引更新到同一位置。官方 npm tarball 的 SHA-256 为 `f95c6ac0099d2dc958e07efb2a4a35dd036c832db30d6e3d37fb63b916bda820`；经过审阅的运行时重打包 SHA-256 为 `dc0877229e38fbd19d716654460a0f0a4346992e37318fb8e48853f34a29ec51`。
+生图压缩包是上游 npm 1.5.1 发行版的仅运行时重打包。它保留未经修改的 Host 与 Client 编译 bundle、内置 441 案例模板快照、包元数据、组合补丁、README 与 Apache-2.0 许可证；上游 50 MB 发行包中的截图、演示视频、非运行时 TypeScript 源码与 Source Map 不进入安装包。[生图兼容补丁](../patches/dickpy-dsh-imagegen@1.5.1.patch)会移除单独的模型卡片、为每项任务读取生图分配与准确的服务接入线路、通过共享存储解析凭据、分发 OpenAI Images、DashScope 或 MiniMax 格式，并把 Host 与 Client 配置指引更新到统一位置。官方 npm tarball 的 SHA-256 为 `f95c6ac0099d2dc958e07efb2a4a35dd036c832db30d6e3d37fb63b916bda820`；经过审阅的运行时重打包 SHA-256 为 `dc0877229e38fbd19d716654460a0f0a4346992e37318fb8e48853f34a29ec51`。
 
 dsh-im 压缩包包含源码与 MIT 许可证。cron 压缩包包含编译后的 `lib/`、组合补丁、README 与 MIT 许可证。技能／MCP 压缩包是上游 MIT 发行产物；仓库兼容补丁会为当前 DSH 版本更新其客户端注入项与会话查询。其 SHA-256 为 `5e8523cfea0c4ca2cf7a71600f6eaa67655258b1ddce317e5c06f0658620737a`。
 

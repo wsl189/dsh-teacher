@@ -50,16 +50,15 @@
           - text: API 密钥
           - textbox "API 密钥":
             - /placeholder: 输入 API 密钥，或留空使用环境认证
-          - text: 请求路由 切换模型类型后会自动套用供应商对应的官方请求地址。 模型类型
+          - text: 请求路由 切换模型类型后会自动套用供应商的官方地址，也可以继续修改完整请求地址。 模型类型
           - combobox "模型类型":
             - option "对话 / 推理" [selected]
             - option "视觉理解"
-            - option "编程模型"
             - option "图像生成"
           - text: API 地址
           - textbox "API 地址":
             - /placeholder: https://api.minimaxi.com/anthropic
-          - text: 完整请求地址 只读预览
+          - text: 完整请求地址
           - textbox "完整请求地址": https://api.minimaxi.com/anthropic/v1/messages
           - paragraph: 对话与推理模型使用当前 LLM 请求端点。
           - region "模型目录":
@@ -76,7 +75,3 @@
   - button "添加自定义提供方":
     - img
     - text: 添加自定义提供方
-  - 'button "展开: 生图模型"': 生图模型 配置生图渠道、模型、API 地址与密钥 ▾
-  - 'button "展开设置: 语音模型"':
-    - strong: 语音模型
-    - text: 配置语音识别服务，供 QQ、对话输入框和日常管理共用。

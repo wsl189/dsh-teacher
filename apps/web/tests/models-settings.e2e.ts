@@ -19,7 +19,6 @@ import {
 import { ZH_BROWSER_LOCALE, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/models-settings', import.meta.url))
-const IMAGE_GENERATION_EXPECTED = join(SNAPSHOT_DIR, 'image-generation.expected.md')
 const EMPTY_EXPECTED = join(SNAPSHOT_DIR, 'empty.expected.md')
 const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
@@ -89,17 +88,10 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await dialog.locator('summary:visible').filter({ hasText: '更多设置' }).count()).toBe(0)
 
     await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
-    const imageModel = dialog.getByRole('button', { name: '展开: 生图模型' })
-    await imageModel.waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '添加提供方', exact: true }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByRole('button', { name: '展开: 生图模型' }).count()).toBe(0)
     expect(await dialog.getByRole('button', { name: '展开设置: 语音模型' }).count()).toBe(0)
     expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
-    await imageModel.click()
-    await dialog.getByText('渠道', { exact: true }).waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: '+ 添加提供方', exact: true }).waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: '+ 添加自定义渠道', exact: true }).waitFor({ timeout: 10_000 })
-    const imageGenerationSnapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
-    await compareOrRefreshGolden(IMAGE_GENERATION_EXPECTED, imageGenerationSnapshot, MODE)
-    await dialog.getByRole('button', { name: '收起: 生图模型' }).click()
     expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
 
     await dialog.getByRole('button', { name: /智谱 GLM 标准 API 与 GLM Coding Plan/u }).click()
@@ -109,13 +101,19 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByRole('button', { name: /编辑 .*zhipu-cn/u }).waitFor({ timeout: 10_000 })
 
     await dialog.getByRole('tab', { name: '使用场景', exact: true }).click()
+    await expect.poll(async () => imageAssignment.locator('option').allTextContents(), { timeout: 10_000 })
+      .toContain('GLM-Image (glm-image)')
     await expect.poll(async () => speechAssignment.locator('option').allTextContents(), { timeout: 10_000 })
       .toContain('GLM-ASR-2512 (glm-asr-2512)')
+    await imageAssignment.selectOption(JSON.stringify(['zhipu-cn', 'glm-image']))
+    await dialog.getByText('生图模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
     await speechAssignment.selectOption(JSON.stringify(['zhipu-cn', 'glm-asr-2512']))
     await dialog.getByText('语音识别模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
 
     const settings = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(settings).toContain('zhipu-cn:')
+    expect(settings).toContain('imageProvider: zhipu-cn')
+    expect(settings).toContain('imageModel: glm-image')
     expect(settings).toContain('speechProvider: zhipu-cn')
     expect(settings).toContain('speechModel: glm-asr-2512')
     await expect.poll(
@@ -422,7 +420,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
-      'delete.expected.md', 'empty.expected.md', 'image-generation.expected.md', 'model-picker.expected.md',
+      'delete.expected.md', 'empty.expected.md', 'model-picker.expected.md',
       'native-delete.expected.md',
     ])
   })
