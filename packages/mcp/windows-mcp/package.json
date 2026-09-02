@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-windows-mcp",
   "description": "Opt-in Windows desktop automation plugin backed by the Windows-MCP stdio server bundled with the DSH desktop app",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "publishConfig": {
     "access": "public"
   },
