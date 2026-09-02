@@ -303,6 +303,14 @@ describe.skipIf(MODE === 'record')('web e2e: semantic question segmentation chil
           .filter(request => request.tools?.some(tool => tool.name.startsWith('submit_question_crop_findings_')))
           .map(request => request.maxTokens))],
       },
+      semanticChildrenRequireToolCalls: {
+        boundary: adapter.requests
+          .filter(request => request.tools?.some(tool => tool.name.startsWith('submit_question_boundaries_')))
+          .every(request => request.toolChoice === 'required'),
+        review: adapter.requests
+          .filter(request => request.tools?.some(tool => tool.name.startsWith('submit_question_crop_findings_')))
+          .every(request => request.toolChoice === 'required'),
+      },
       boundaryUsesCompleteDraft: adapter.requests.some((request) => {
         const submission = request.tools?.find(tool => tool.name.startsWith('submit_question_boundaries_'))
         const schema = JSON.stringify(submission)

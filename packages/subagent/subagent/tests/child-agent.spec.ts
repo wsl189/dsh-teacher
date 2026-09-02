@@ -12,6 +12,7 @@ function parentAgent(): Agent {
       provider: 'parent-provider',
       model: 'parent-model',
       reasoningEffort: ReasoningEffortId('high'),
+      toolChoice: 'required',
       maxTokens: 512,
     },
     session: Session.create(id),
@@ -24,6 +25,7 @@ describe('child Agent options', () => {
       provider: 'parent-provider',
       model: 'parent-model',
       reasoningEffort: 'high',
+      toolChoice: 'required',
       maxTokens: 512,
       subagentDepth: 1,
     })
@@ -33,6 +35,7 @@ describe('child Agent options', () => {
     expect(resolveChildAgentOptions(parentAgent(), { model: 'child-model' }, 1)).toEqual({
       provider: 'parent-provider',
       model: 'child-model',
+      toolChoice: 'required',
       maxTokens: 512,
       subagentDepth: 1,
     })
@@ -47,6 +50,7 @@ describe('child Agent options', () => {
       provider: 'child-provider',
       model: 'child-model',
       reasoningEffort: 'max',
+      toolChoice: 'required',
       maxTokens: 512,
       subagentDepth: 1,
     })
@@ -60,6 +64,7 @@ describe('child Agent options', () => {
           provider: 'current-provider',
           model: 'current-model',
           reasoningEffort: ReasoningEffortId('low'),
+          toolChoice: 'none',
         },
       },
       reason: 'initial',
@@ -69,6 +74,7 @@ describe('child Agent options', () => {
       provider: 'current-provider',
       model: 'current-model',
       reasoningEffort: 'low',
+      toolChoice: 'none',
       maxTokens: 512,
       subagentDepth: 1,
     })

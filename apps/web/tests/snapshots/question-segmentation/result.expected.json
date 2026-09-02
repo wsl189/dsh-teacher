@@ -31,6 +31,10 @@
       32768
     ]
   },
+  "semanticChildrenRequireToolCalls": {
+    "boundary": true,
+    "review": true
+  },
   "boundaryUsesCompleteDraft": true,
   "boundaryHintsAreNonAuthoritative": true,
   "cropReviewSplitsCombinedQuestions": true,

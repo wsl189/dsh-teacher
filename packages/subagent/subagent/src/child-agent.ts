@@ -59,9 +59,9 @@ export function resolveChildDepth(parent: Agent, maxDepth: number | undefined): 
 
 /**
  * Resolve the parent values inherited by a child. The latest request header
- * owns provider, model, and reasoning effort after request-time selection;
- * creation options remain the fallback before the first request and retain
- * the configured output-token limit.
+ * owns provider, model, reasoning effort, and tool choice after request-time
+ * selection; creation options remain the fallback before the first request
+ * and retain the configured output-token limit.
  * @param parent - delegating parent Agent.
  * @returns detached Agent options for child-option merging.
  */
@@ -72,6 +72,7 @@ export function parentAgentOptionsForDelegation(parent: Agent): AgentOptions {
     provider: _createdProvider,
     model: _createdModel,
     reasoningEffort: _createdReasoningEffort,
+    toolChoice: _createdToolChoice,
     ...createdOptions
   } = parent.options
   return {
@@ -81,12 +82,15 @@ export function parentAgentOptionsForDelegation(parent: Agent): AgentOptions {
     ...requestConfig.reasoningEffort === undefined
       ? {}
       : { reasoningEffort: requestConfig.reasoningEffort },
+    ...requestConfig.toolChoice === undefined
+      ? {}
+      : { toolChoice: requestConfig.toolChoice },
   }
 }
 
 /**
- * Resolve the child's `AgentOptions`: the parent's provider/model,
- * reasoning-effort, and maxTokens values unless the request overrides them,
+ * Resolve the child's `AgentOptions`: the parent's provider/model, reasoning
+ * effort, tool choice, and maxTokens values unless the request overrides them,
  * stamped with the child's own delegation depth. Changing the route without
  * naming an effort clears the parent's route-owned effort so the selected
  * model resolves its own default.
@@ -104,11 +108,13 @@ export function resolveChildAgentOptions(
   const parentProvider = parentOptions.provider
   const parentModel = parentOptions.model
   const parentReasoningEffort = parentOptions.reasoningEffort
+  const parentToolChoice = parentOptions.toolChoice
   const parentMaxTokens = parentOptions.maxTokens
   const resolved: AgentOptions = {
     ...parentProvider !== undefined ? { provider: parentProvider } : {},
     ...parentModel !== undefined ? { model: parentModel } : {},
     ...parentReasoningEffort !== undefined ? { reasoningEffort: parentReasoningEffort } : {},
+    ...parentToolChoice !== undefined ? { toolChoice: parentToolChoice } : {},
     ...parentMaxTokens !== undefined ? { maxTokens: parentMaxTokens } : {},
     ...requested,
     subagentDepth: childDepth,

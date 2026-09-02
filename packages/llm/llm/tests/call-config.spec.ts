@@ -20,6 +20,7 @@ describe('callConfigEquals', () => {
       { ...base, reasoningEffort: ReasoningEffortId('high') },
       { ...base, reasoningEffort: ReasoningEffortId('high') },
     )).toBe(true)
+    expect(callConfigEquals({ ...base, toolChoice: 'required' }, base)).toBe(false)
     expect(callConfigEquals({ ...base, temperature: 0.5 }, base)).toBe(false)
     expect(callConfigEquals({ ...base, maxTokens: 1 }, { ...base, maxTokens: 2 })).toBe(false)
     expect(callConfigEquals({ ...base, stop: ['a'] }, base)).toBe(false)

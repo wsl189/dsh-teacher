@@ -281,7 +281,7 @@ describe('segmentQuestionsWithAgent', () => {
       readonly prompt: readonly { readonly type: string; readonly text?: string }[]
       readonly toolFilter: { readonly allow: readonly string[] }
       readonly persona: string
-      readonly agentOptions?: { readonly maxTokens?: number; readonly reasoningEffort?: string }
+      readonly agentOptions?: { readonly maxTokens?: number; readonly reasoningEffort?: string; readonly toolChoice?: string }
     }) => {
       expect(startRequest.prompt[0]?.text).toContain('"inlineSource"')
       expect(startRequest.prompt[0]?.text).toContain('Complete compact OCR evidence')
@@ -296,7 +296,7 @@ describe('segmentQuestionsWithAgent', () => {
       expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(0)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_layout_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_page_preview_'))).toBe(false)
-      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, reasoningEffort: 'off' })
+      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, reasoningEffort: 'off', toolChoice: 'required' })
       const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
       if (submit === undefined) throw new Error('boundary submission tool was not registered')
       expect(startRequest.persona).toContain(`The only callable tool in this run is ${submit.name}`)
@@ -3671,7 +3671,7 @@ describe('segmentQuestionsWithAgent', () => {
     const start = vi.fn(async (_mode: string, startRequest: {
       readonly prompt: readonly { readonly type: string; readonly text?: string }[]
       readonly toolFilter: { readonly allow: readonly string[] }
-      readonly agentOptions?: { readonly maxTokens?: number }
+      readonly agentOptions?: { readonly maxTokens?: number; readonly toolChoice?: string }
     }) => {
       expect(startRequest.prompt[0]?.text).toContain('magenta rectangle')
       expect(startRequest.prompt[0]?.text).toContain('cyan frame')
@@ -3698,7 +3698,7 @@ describe('segmentQuestionsWithAgent', () => {
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_sheet_'))).toBe(true)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_page_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_crop_'))).toBe(false)
-      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768 })
+      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, toolChoice: 'required' })
       const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
       if (findings === undefined) throw new Error('crop findings tool was not registered')
       expect(findings.parameters).toHaveProperty('properties.verifiedCrops')
@@ -4090,11 +4090,11 @@ describe('segmentQuestionsWithAgent', () => {
       start: async (_mode: string, startRequest: {
         readonly signal: AbortSignal
         readonly toolFilter: { readonly allow: readonly string[] }
-        readonly agentOptions?: { readonly maxTokens?: number }
+        readonly agentOptions?: { readonly maxTokens?: number; readonly toolChoice?: string }
       }) => {
         childRun += 1
         childSignals.push(startRequest.signal)
-        expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768 })
+        expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, toolChoice: 'required' })
         const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
         if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')

@@ -3987,6 +3987,7 @@ export async function segmentQuestionsWithAgent(
         signal: deadline.signal,
         agentOptions: {
           ...lowLatencyToolSelection(selected, modelInfo),
+          toolChoice: 'required',
           ...(inlineEvidence ? { maxTokens: config.maxQuestionCompactBoundaryOutputTokens } : {}),
         },
         toolFilter: { allow: [
@@ -4348,6 +4349,7 @@ export async function reviewQuestionCropsWithAgent(
         signal: deadline.signal,
         agentOptions: {
           ...lowLatencyToolSelection(selected, modelInfo),
+          toolChoice: 'required',
           ...(compactReview ? { maxTokens: config.maxQuestionCompactReviewOutputTokens } : {}),
         },
         toolFilter: { allow: [
@@ -4396,6 +4398,7 @@ export async function reviewQuestionCropsWithAgent(
             signal: deadline.signal,
             agentOptions: {
               ...lowLatencyToolSelection(selected, modelInfo),
+              toolChoice: 'required',
               maxTokens: config.maxQuestionCompactReviewOutputTokens,
             },
             toolFilter: { allow: [sourceToolName, reviseToolName] },

@@ -77,6 +77,20 @@ describe('agent loop', () => {
     expect(adapter.requests[0]?.maxTokens).toBe(256)
   })
 
+  it('seeds an AgentOptions tool choice into the first model request', async () => {
+    const adapter = new MockAdapter([textResponse('tool policy')])
+    const ctx = await harness(adapter)
+    const agent = ctx.agentLoop.create(
+      SessionId('required-tool-call'),
+      { provider: 'mock', model: 'mock', toolChoice: 'required' },
+    )
+
+    send(agent, 'use a tool')
+    await waitForIdle(ctx, agent)
+
+    expect(adapter.requests[0]?.toolChoice).toBe('required')
+  })
+
   it('seeds an AgentOptions reasoning effort into the first model request', async () => {
     const effort = ReasoningEffortId('high')
     const adapter = new MockAdapter([textResponse('reasoned')], {
@@ -102,6 +116,15 @@ describe('agent loop', () => {
     }).agents[0]?.reasoningEffort).toBe(effort)
     expect(() => AgentLoop.Config({
       agents: [{ id: 'configured-agent', reasoningEffort: ReasoningEffortId('') }],
+    })).toThrow()
+  })
+
+  it('validates tool choice in declarative agent config', () => {
+    expect(AgentLoop.Config({
+      agents: [{ id: 'configured-agent', toolChoice: 'required' }],
+    }).agents[0]?.toolChoice).toBe('required')
+    expect(() => AgentLoop.Config({
+      agents: [{ id: 'configured-agent', toolChoice: 'sometimes' as 'required' }],
     })).toThrow()
   })
 

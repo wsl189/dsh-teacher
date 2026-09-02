@@ -372,10 +372,21 @@ export class PiAiAdapter extends LlmAdapter {
             maxBytes: profile.requestImageMaxBytes,
           },
         }, onReplayDegrade)
+      if (options.toolChoice !== undefined && (context.tools === undefined || context.tools.length === 0)) {
+        throw new LlmError('llm-pi-ai tool choice requires at least one tool', 'UNSUPPORTED_OPTION')
+      }
+      const toolChoice = options.toolChoice === 'required'
+        && (model.api === 'anthropic-messages'
+          || model.api === 'bedrock-converse-stream'
+          || model.api === 'google-generative-ai'
+          || model.api === 'google-vertex')
+        ? 'any'
+        : options.toolChoice
       const events = snapshot.models.streamSimple(model, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
+        ...toolChoice === undefined ? {} : { toolChoice },
         ...options.sessionId === undefined ? {} : { sessionId: String(options.sessionId) },
         signal: watchdog.signal,
         // Profile headers are deployment-owned; attribution names are

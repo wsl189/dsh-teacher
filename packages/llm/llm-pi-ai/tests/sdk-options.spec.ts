@@ -42,6 +42,30 @@ async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
   return chunks
 }
 
+async function drainRequiredTool(adapter: PiAiAdapter): Promise<StreamChunk[]> {
+  const chunks: StreamChunk[] = []
+  for await (const chunk of adapter.stream({
+    provider: 'local-gateway',
+    model: 'local-model',
+    messages: [],
+    tools: [{ name: 'submit', description: 'Submit', parameters: { type: 'object' } }],
+    toolChoice: 'required',
+  })) chunks.push(chunk)
+  return chunks
+}
+
+async function drainRequiredToolWithoutDefinitions(adapter: PiAiAdapter): Promise<StreamChunk[]> {
+  const chunks: StreamChunk[] = []
+  for await (const chunk of adapter.stream({
+    provider: 'local-gateway',
+    model: 'local-model',
+    messages: [],
+    tools: [],
+    toolChoice: 'required',
+  })) chunks.push(chunk)
+  return chunks
+}
+
 describe('pi-ai SDK retry boundary', () => {
   it('pins one SDK attempt even when the installed provider currently defaults to zero retries', async () => {
     streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
@@ -71,5 +95,21 @@ describe('pi-ai SDK retry boundary', () => {
       contextWindow: 8192,
       maxTokens: 1024,
     })
+  })
+
+  it('passes required tool choice to the selected pi-ai protocol', async () => {
+    streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drainRequiredTool(gatewayAdapter())
+
+    expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ toolChoice: 'required' })
+  })
+
+  it('rejects required tool choice without a tool definition', async () => {
+    await expect(drainRequiredToolWithoutDefinitions(gatewayAdapter())).rejects.toMatchObject({
+      code: 'UNSUPPORTED_OPTION',
+    })
+
+    expect(streamSimple).not.toHaveBeenCalled()
   })
 })

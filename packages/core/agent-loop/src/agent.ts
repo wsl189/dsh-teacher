@@ -470,6 +470,7 @@ export class ReactLoopAgent implements Agent {
         : {
           ...route,
           ...reasoningEffort === undefined ? {} : { reasoningEffort },
+          ...this.options.toolChoice === undefined ? {} : { toolChoice: this.options.toolChoice },
           ...maxTokens === undefined ? {} : { maxTokens },
         },
     ))

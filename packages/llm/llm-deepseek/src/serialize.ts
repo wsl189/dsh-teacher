@@ -354,6 +354,12 @@ function requestWithMessages(
     },
   }))
   const resolvedThinking = resolveThinking(options, defaults)
+  if (options.toolChoice !== undefined && (tools === undefined || tools.length === 0)) {
+    throw new LlmError('DeepSeek tool choice requires at least one tool', 'UNSUPPORTED_OPTION')
+  }
+  if (options.toolChoice !== undefined && resolvedThinking.thinking === 'enabled') {
+    throw new LlmError('DeepSeek tool choice requires thinking mode to be disabled', 'UNSUPPORTED_OPTION')
+  }
   return {
     model: options.model,
     messages,
@@ -364,6 +370,7 @@ function requestWithMessages(
       ? { reasoning_effort: resolvedThinking.reasoningEffort }
       : {},
     ...tools !== undefined && tools.length > 0 ? { tools } : {},
+    ...options.toolChoice === undefined ? {} : { tool_choice: options.toolChoice },
     ...options.temperature !== undefined ? { temperature: options.temperature } : {},
     ...options.maxTokens === undefined ? {} : { max_tokens: options.maxTokens },
     ...options.stop !== undefined ? { stop: options.stop } : {},

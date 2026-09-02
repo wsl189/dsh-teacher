@@ -389,6 +389,9 @@ export interface ToolSchema {
   parameters: Record<string, unknown>
 }
 
+/** Whether a model may answer without using one of the supplied tools. */
+export type ToolChoice = 'auto' | 'required' | 'none'
+
 /** A single model request, fully assembled. */
 export interface GenerateOptions {
   /** Registered provider route selecting the adapter instance. */
@@ -406,6 +409,8 @@ export interface GenerateOptions {
   system?: string
   /** Tool schemas (adapters map to the provider's `tools` field). */
   tools?: ToolSchema[]
+  /** Provider-neutral tool-use policy for this request. */
+  toolChoice?: ToolChoice
   temperature?: number
   maxTokens?: number
   /**

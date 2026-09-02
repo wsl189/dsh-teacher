@@ -270,6 +270,36 @@ describe('serializeRequest', () => {
     ])
   })
 
+  it('maps required tool choice when thinking is disabled', () => {
+    const wire = serializeRequest(request({
+      messages: history,
+      reasoningEffort: ReasoningEffortId('off'),
+      tools: [{ name: 'submit', description: 'Submit', parameters: { type: 'object' } }],
+      toolChoice: 'required',
+    }))
+    expect(wire.tool_choice).toBe('required')
+  })
+
+  it('rejects tool choice without tools or with thinking enabled', () => {
+    expect(() => serializeRequest(request({
+      messages: history,
+      reasoningEffort: ReasoningEffortId('off'),
+      toolChoice: 'required',
+    }))).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_OPTION' }))
+    expect(() => serializeRequest(request({
+      messages: history,
+      reasoningEffort: ReasoningEffortId('off'),
+      tools: [],
+      toolChoice: 'required',
+    }))).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_OPTION' }))
+    expect(() => serializeRequest(request({
+      messages: history,
+      reasoningEffort: ReasoningEffortId('high'),
+      tools: [{ name: 'submit', description: 'Submit', parameters: { type: 'object' } }],
+      toolChoice: 'required',
+    }))).toThrow(expect.objectContaining({ code: 'UNSUPPORTED_OPTION' }))
+  })
+
   it('omits an empty tools array', () => {
     const wire = serializeRequest(request({ messages: history, tools: [] }))
     expect(wire.tools).toBeUndefined()
