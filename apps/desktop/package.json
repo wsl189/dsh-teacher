@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron and NSIS desktop distribution for the DSH Web application",
-  "version": "1.1.6",
+  "version": "1.1.7",
   "publishConfig": {
     "access": "public"
   },
