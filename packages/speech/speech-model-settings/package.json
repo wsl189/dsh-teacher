@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-speech-model-settings",
   "description": "Speech provider driven by supplier routes selected in Models settings",
-  "version": "1.1.7",
+  "version": "1.1.7-rc1",
   "publishConfig": {
     "access": "public"
   },
