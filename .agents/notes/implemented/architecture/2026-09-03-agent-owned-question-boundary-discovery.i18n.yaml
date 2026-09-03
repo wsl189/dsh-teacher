@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-03-agent-owned-question-boundary-discovery.md
-2026-09-03-agent-owned-question-boundary-discovery.md: d1ae210c6d87ee40ae714bb2a08fc74f362d5be5
-2026-09-03-agent-owned-question-boundary-discovery.zh.md: 47abd3856f59e11117955548f6dad5afeb5c4aec
+2026-09-03-agent-owned-question-boundary-discovery.md: 5a20b3f3ee593d9b88208010b9f6a91c27e042f5
+2026-09-03-agent-owned-question-boundary-discovery.zh.md: 724f76a58eda90dd935cdc32f457020d9a69389d

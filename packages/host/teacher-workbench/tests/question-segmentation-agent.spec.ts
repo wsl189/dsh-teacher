@@ -29,6 +29,7 @@ const CONFIG: TeacherQuestionSegmentationAgentConfig = {
   minQuestionRepeatedImagePages: 3,
   questionRepeatedImagePositionToleranceRatio: 0.015,
   maxQuestionVisionImagesPerToolCall: 4,
+  questionSegmentationReasoningEnabled: true,
   questionSegmentationAgentTimeoutMs: 0,
 }
 
@@ -4245,7 +4246,7 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
-  it('keeps subquestions, diagrams, and continuation pages while excluding instructions and answers', async () => {
+  it('applies the disabled-reasoning policy while preserving accepted question content', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
     const parent = { session: { id: SessionId('parent') } }
@@ -4280,7 +4281,10 @@ describe('segmentQuestionsWithAgent', () => {
     ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
     provideModelInfo(ctx)
 
-    await expect(segmentQuestionsWithAgent(ctx, request(), CONFIG)).resolves.toEqual({
+    await expect(segmentQuestionsWithAgent(ctx, request(), {
+      ...CONFIG,
+      questionSegmentationReasoningEnabled: false,
+    })).resolves.toEqual({
       ok: true,
       value: {
         questions: [{
@@ -4308,7 +4312,7 @@ describe('segmentQuestionsWithAgent', () => {
     const options = start.mock.calls[0]?.[1]
     expect(options).toMatchObject({
       parent,
-      agentOptions: { provider: 'p', model: 'm', reasoningEffort: 'high' },
+      agentOptions: { provider: 'p', model: 'm', reasoningEffort: 'off' },
       toolFilter: { allow: [
         expect.stringMatching(/^question_layout_[a-f0-9]{12}$/u),
         expect.stringMatching(/^submit_question_boundaries_[a-f0-9]{12}$/u),

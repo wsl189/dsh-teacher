@@ -4,7 +4,11 @@ import type { ToolModelSelection } from '@deepseek-ai/dsh-agent-default-model'
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import { describe, expect, it } from 'vitest'
-import { lowLatencyToolSelection, reasoningEnabledToolSelection } from '../src/tool-agent-model.ts'
+import {
+  lowLatencyToolSelection,
+  questionSegmentationToolSelection,
+  reasoningEnabledToolSelection,
+} from '../src/tool-agent-model.ts'
 
 const selection: ToolModelSelection = {
   provider: 'provider',
@@ -52,8 +56,8 @@ describe('lowLatencyToolSelection', () => {
     })
   })
 
-  it('preserves the original selection when neither low-latency effort is advertised', () => {
-    expect(lowLatencyToolSelection(selection, modelInfo([ReasoningEffortId('high')]))).toBe(selection)
+  it('uses the lowest advertised fallback and preserves routes without reasoning metadata', () => {
+    expect(lowLatencyToolSelection(selection, modelInfo([ReasoningEffortId('high')]))).toEqual(selection)
     expect(lowLatencyToolSelection(selection, modelInfo())).toBe(selection)
   })
 })
@@ -89,5 +93,21 @@ describe('reasoningEnabledToolSelection', () => {
       { ...selection, reasoningEffort: ReasoningEffortId('off') },
       modelInfo([ReasoningEffortId('off')]),
     )).toEqual({ provider: 'provider', model: 'model' })
+  })
+})
+
+describe('questionSegmentationToolSelection', () => {
+  it('uses the configured enabled or low-latency reasoning policy', () => {
+    const info = modelInfo([
+      ReasoningEffortId('off'),
+      ReasoningEffortId('high'),
+    ], ReasoningEffortId('high'))
+
+    expect(questionSegmentationToolSelection(selection, info, true)).toEqual(selection)
+    expect(questionSegmentationToolSelection(selection, info, false)).toEqual({
+      provider: 'provider',
+      model: 'model',
+      reasoningEffort: 'off',
+    })
   })
 })

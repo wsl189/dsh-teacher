@@ -2,7 +2,7 @@
 
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { SecretField, ValueField } from '../src/client/fields.tsx'
+import { BooleanField, SecretField, ValueField } from '../src/client/fields.tsx'
 
 afterEach(cleanup)
 
@@ -79,6 +79,44 @@ describe('ValueField', () => {
 
     expect(screen.getByLabelText('Command timeout')).toHaveProperty('disabled', true)
     expect(screen.getByRole('button', { name: 'Reset to default' })).toHaveProperty('disabled', true)
+  })
+})
+
+describe('BooleanField', () => {
+  it('stages the opposite exact boolean draft', () => {
+    const onEdit = vi.fn()
+    const { rerender } = render(
+      <BooleanField {...frame} text="false" onEdit={onEdit} onReset={vi.fn()} />,
+    )
+    const control = screen.getByRole('switch', { name: 'Command timeout' })
+    expect(control.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(control)
+    expect(onEdit).toHaveBeenLastCalledWith('true')
+
+    rerender(<BooleanField {...frame} text="true" onEdit={onEdit} onReset={vi.fn()} />)
+    fireEvent.click(screen.getByRole('switch', { name: 'Command timeout' }))
+    expect(onEdit).toHaveBeenLastCalledWith('false')
+  })
+
+  it('offers reset for an override and disables both controls when read-only', () => {
+    const onReset = vi.fn()
+    render(
+      <BooleanField
+        {...frame}
+        disabled
+        overridden
+        text="true"
+        onEdit={vi.fn()}
+        onReset={onReset}
+      />,
+    )
+
+    expect(screen.getByText('Overridden')).toBeTruthy()
+    expect(screen.getByRole('switch')).toHaveProperty('disabled', true)
+    const reset = screen.getByRole('button', { name: 'Reset to default' })
+    expect(reset).toHaveProperty('disabled', true)
+    fireEvent.click(reset)
+    expect(onReset).not.toHaveBeenCalled()
   })
 })
 

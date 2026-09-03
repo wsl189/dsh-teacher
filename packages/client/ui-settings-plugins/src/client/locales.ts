@@ -23,6 +23,7 @@ export type PluginsSettingsLocaleKey =
   | 'mineruMaxOutputCharacters' | 'mineruMaxOutputCharactersHint'
   | 'mineruMaxResponseBytes' | 'mineruMaxResponseBytesHint'
   | 'teacherWorkbenchTitle' | 'teacherWorkbenchDescription'
+  | 'teacherQuestionSegmentationReasoning' | 'teacherQuestionSegmentationReasoningHint'
   | 'teacherSegmentsRoot' | 'teacherSegmentsRootHint' | 'teacherStudentsRoot' | 'teacherStudentsRootHint'
   | 'teacherImageLimit' | 'teacherImageLimitHint' | 'teacherBatchLimit' | 'teacherBatchLimitHint'
   | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
@@ -71,7 +72,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxResultsHint: 'Caps each AnySearch request at 1–20 results; a smaller tool request still applies.',
   webSearchBaseUrl: 'Endpoint',
   webSearchBaseUrlHint: 'Reset to use the public AnySearch API.',
-  mineruTitle: 'Document extraction',
+  mineruTitle: 'MinerU service',
   mineruDescription: 'The self-hosted MinerU extractor used for reusable document parsing.',
   mineruEndpoint: 'Endpoint',
   mineruEndpointHint: 'HTTP endpoint for MinerU file parsing.',
@@ -110,8 +111,10 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mineruMaxOutputCharactersHint: 'Maximum Markdown characters returned to a DSH consumer.',
   mineruMaxResponseBytes: 'Maximum response size (bytes)',
   mineruMaxResponseBytesHint: 'Largest JSON response accepted from MinerU.',
-  teacherWorkbenchTitle: 'Question workspace',
-  teacherWorkbenchDescription: 'Storage policy for cut papers and student question copies.',
+  teacherWorkbenchTitle: 'Document extraction',
+  teacherWorkbenchDescription: 'Question-cutting agent policy and storage for extracted questions.',
+  teacherQuestionSegmentationReasoning: 'Use reasoning while cutting questions',
+  teacherQuestionSegmentationReasoningHint: 'Uses enabled reasoning for boundary detection, visual review, and repair. When off, uses Off when the model advertises it, otherwise its lowest advertised effort or provider default.',
   teacherSegmentsRoot: 'Paper batch directory',
   teacherSegmentsRootHint: 'Question crops are stored by generated paper and image IDs under this directory.',
   teacherStudentsRoot: 'Student question directory',
@@ -176,7 +179,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   webSearchMaxResultsHint: '每次 AnySearch 请求最多返回 1–20 条；工具请求的更小值仍会生效。',
   webSearchBaseUrl: '接口地址',
   webSearchBaseUrlHint: '恢复默认后使用 AnySearch 公共接口。',
-  mineruTitle: '文档提取',
+  mineruTitle: 'MinerU 服务',
   mineruDescription: '用于可复用文档解析的自托管 MinerU 提取器。',
   mineruEndpoint: '接口地址',
   mineruEndpointHint: 'MinerU 文件解析 HTTP 接口。',
@@ -215,8 +218,10 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mineruMaxOutputCharactersHint: '返回给 DSH 使用方的 Markdown 最大字符数。',
   mineruMaxResponseBytes: '响应大小上限（字节）',
   mineruMaxResponseBytesHint: '允许 MinerU 返回的最大 JSON 响应大小。',
-  teacherWorkbenchTitle: '试题切割工作区',
-  teacherWorkbenchDescription: '设置切题试卷和学生试题副本的存储策略。',
+  teacherWorkbenchTitle: '文档提取',
+  teacherWorkbenchDescription: '设置切题 Agent 策略以及提取后试题的存储方式。',
+  teacherQuestionSegmentationReasoning: '切题时启用思考',
+  teacherQuestionSegmentationReasoningHint: '用于题界识别、视觉复核和修复。关闭后优先使用模型公布的 Off 档；没有 Off 档时使用最低推理档或提供方默认值。',
   teacherSegmentsRoot: '试卷批次目录',
   teacherSegmentsRootHint: '切题图片按系统生成的试卷和图片 ID 存放在此目录。',
   teacherStudentsRoot: '学生试题目录',

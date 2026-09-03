@@ -242,6 +242,7 @@
         maxQuestionBoundaryAgentRuns: 2
         maxQuestionRejectedToolCalls: 3
         maxQuestionAutoOwnedGapRatio: 0.18
+        questionSegmentationReasoningEnabled: false
         questionSegmentationAgentTimeoutMs: 0
         reminderRetryMs: 60000
 

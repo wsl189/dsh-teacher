@@ -32,6 +32,7 @@ const CONFIG: TeacherQuestionSegmentationBatchConfig = {
   questionRepeatedImagePositionToleranceRatio: 0.015,
   maxQuestionRecutAttempts: 2,
   maxQuestionVisionImagesPerToolCall: 4,
+  questionSegmentationReasoningEnabled: true,
   questionSegmentationAgentTimeoutMs: 180_000,
 }
 

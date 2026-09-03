@@ -1,7 +1,7 @@
-/** Host question-workspace storage settings. */
+/** Host question-cutting policy and workspace storage settings. */
 
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import { ValueField } from './fields.tsx'
+import { BooleanField, ValueField } from './fields.tsx'
 import { PluginCard } from './PluginCard.tsx'
 import type { TeacherWorkbenchCardFace } from './teacher-workbench-card-controller.ts'
 import type {} from './slot-contract.ts'
@@ -12,7 +12,7 @@ export type TeacherWorkbenchCardProps =
   & PropsLocale<'settings.plugins'>
   & InjectFace<TeacherWorkbenchCardFace>
 
-/** Render question image storage paths and byte limits. */
+/** Render question-cutting reasoning and image-storage settings. */
 export function TeacherWorkbenchCard(props: TeacherWorkbenchCardProps) {
   const { t } = props
   const state = props.useTeacherWorkbenchCard(snapshot => snapshot)
@@ -31,6 +31,15 @@ export function TeacherWorkbenchCard(props: TeacherWorkbenchCardProps) {
       onSave={props.save}
       onDiscard={props.discard}
     >
+      <BooleanField
+        id="plugin-config-teacher-question-segmentation-reasoning"
+        label={t('teacherQuestionSegmentationReasoning')}
+        hint={t('teacherQuestionSegmentationReasoningHint')}
+        {...common}
+        {...state.questionSegmentationReasoningEnabled}
+        onEdit={(text) => { props.edit('questionSegmentationReasoningEnabled', text) }}
+        onReset={() => { props.resetField('questionSegmentationReasoningEnabled') }}
+      />
       <ValueField
         id="plugin-config-teacher-segments-root"
         label={t('teacherSegmentsRoot')}

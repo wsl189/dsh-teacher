@@ -16,12 +16,15 @@ import { SubagentModelSelectionCard } from '../src/client/SubagentModelSelection
 import type { SubagentModelSelectionCardProps } from '../src/client/SubagentModelSelectionCard.tsx'
 import { WebSearchCard } from '../src/client/WebSearchCard.tsx'
 import type { WebSearchCardProps } from '../src/client/WebSearchCard.tsx'
+import { TeacherWorkbenchCard } from '../src/client/TeacherWorkbenchCard.tsx'
+import type { TeacherWorkbenchCardProps } from '../src/client/TeacherWorkbenchCard.tsx'
 import type { AgentLoopCardState } from '../src/client/agent-loop-card-controller.ts'
 import type { BashCardState } from '../src/client/bash-card-controller.ts'
 import type { CardFieldState, CardShell } from '../src/client/card-form.ts'
 import type { ConfigurablePluginsTabState } from '../src/client/tab-store.ts'
 import type { WebSearchCardState } from '../src/client/web-search-card-controller.ts'
 import type { SubagentModelSelectionCardState } from '../src/client/subagent-model-selection-card-controller.ts'
+import type { TeacherWorkbenchCardState } from '../src/client/teacher-workbench-card-controller.ts'
 import { en } from '../src/client/locales.ts'
 
 afterEach(cleanup)
@@ -109,6 +112,26 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
     useSubagentModelSelectionCard: bindSnapshotSelector(store),
   } as unknown as SubagentModelSelectionCardProps
   render(<SubagentModelSelectionCard {...props} />)
+  return actions
+}
+
+function renderTeacherWorkbench(state: Partial<TeacherWorkbenchCardState> = {}) {
+  const store = createSnapshotStore<TeacherWorkbenchCardState>({
+    ...settled,
+    questionSegmentationReasoningEnabled: field('false'),
+    segmentsRoot: field('/questions'),
+    studentsRoot: field('/students'),
+    maxQuestionImageBytes: field('1024'),
+    maxQuestionBatchBytes: field('4096'),
+    ...state,
+  })
+  const actions = cardActions()
+  const props = {
+    ...actions,
+    t,
+    useTeacherWorkbenchCard: bindSnapshotSelector(store),
+  } as unknown as TeacherWorkbenchCardProps
+  render(<TeacherWorkbenchCard {...props} />)
   return actions
 }
 
@@ -455,6 +478,29 @@ describe('SubagentModelSelectionCard', () => {
     expect(control.disabled).toBe(true)
     fireEvent.click(control)
     expect(actions.toggleEnabled).not.toHaveBeenCalled()
+  })
+})
+
+describe('TeacherWorkbenchCard', () => {
+  it('shows the default-off question-cutting reasoning switch under Document extraction', () => {
+    const actions = renderTeacherWorkbench()
+    fireEvent.click(screen.getByText(en.teacherWorkbenchTitle))
+
+    const control = screen.getByRole('switch', { name: en.teacherQuestionSegmentationReasoning })
+    expect(control.getAttribute('aria-checked')).toBe('false')
+    fireEvent.click(control)
+
+    expect(actions.edit).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', 'true')
+  })
+
+  it('stages resetting an overridden reasoning preference', () => {
+    const actions = renderTeacherWorkbench({
+      questionSegmentationReasoningEnabled: field('true', { overridden: true }),
+    })
+    fireEvent.click(screen.getByText(en.teacherWorkbenchTitle))
+    fireEvent.click(screen.getByRole('button', { name: en.reset }))
+
+    expect(actions.resetField).toHaveBeenCalledWith('questionSegmentationReasoningEnabled')
   })
 })
 

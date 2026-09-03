@@ -16,7 +16,7 @@ import {
   QUESTION_CROP_REVIEW_SKILL,
   QUESTION_SEGMENTATION_SKILL,
 } from './question-segmentation-skill.ts'
-import { reasoningEnabledToolSelection } from './tool-agent-model.ts'
+import { questionSegmentationToolSelection } from './tool-agent-model.ts'
 import type {
   TeacherQuestionLayoutElement,
   TeacherQuestionLayoutElementId,
@@ -64,6 +64,8 @@ export interface TeacherQuestionSegmentationAgentConfig {
   questionRepeatedImagePositionToleranceRatio: number
   /** Maximum page or crop images returned by one image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
+  /** Whether boundary, visual-review, and repair children use an enabled reasoning effort. */
+  questionSegmentationReasoningEnabled: boolean
   /** Wall-clock deadline for one segmentation child, or zero for no child deadline. */
   questionSegmentationAgentTimeoutMs: number
 }
@@ -4057,7 +4059,11 @@ export async function segmentQuestionsWithAgent(
         parent,
         signal: deadline.signal,
         agentOptions: {
-          ...reasoningEnabledToolSelection(selected, modelInfo),
+          ...questionSegmentationToolSelection(
+            selected,
+            modelInfo,
+            config.questionSegmentationReasoningEnabled,
+          ),
           toolChoice: 'required',
           ...(inlineEvidence ? { maxTokens: config.maxQuestionCompactBoundaryOutputTokens } : {}),
         },
@@ -4419,7 +4425,11 @@ export async function reviewQuestionCropsWithAgent(
         parent,
         signal: deadline.signal,
         agentOptions: {
-          ...reasoningEnabledToolSelection(selected, modelInfo),
+          ...questionSegmentationToolSelection(
+            selected,
+            modelInfo,
+            config.questionSegmentationReasoningEnabled,
+          ),
           toolChoice: 'required',
           ...(compactReview ? { maxTokens: config.maxQuestionCompactReviewOutputTokens } : {}),
         },
@@ -4468,7 +4478,11 @@ export async function reviewQuestionCropsWithAgent(
             parent,
             signal: deadline.signal,
             agentOptions: {
-              ...reasoningEnabledToolSelection(selected, modelInfo),
+              ...questionSegmentationToolSelection(
+                selected,
+                modelInfo,
+                config.questionSegmentationReasoningEnabled,
+              ),
               toolChoice: 'required',
               maxTokens: config.maxQuestionCompactReviewOutputTokens,
             },

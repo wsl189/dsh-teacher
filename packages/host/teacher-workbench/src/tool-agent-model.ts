@@ -15,6 +15,7 @@ export function lowLatencyToolSelection(
 ): ToolModelSelection {
   const effort = info.reasoning?.efforts.find(candidate => candidate.id === 'off')
     ?? info.reasoning?.efforts.find(candidate => candidate.id === 'low')
+    ?? info.reasoning?.efforts[0]
   return effort === undefined ? selection : { ...selection, reasoningEffort: effort.id }
 }
 
@@ -38,4 +39,21 @@ export function reasoningEnabledToolSelection(
       ?? info.reasoning?.efforts.find(candidate => candidate.id !== 'off')
   const { reasoningEffort: _disabledEffort, ...route } = selection
   return effort === undefined ? route : { ...route, reasoningEffort: effort.id }
+}
+
+/**
+ * Apply the configured reasoning policy for question-boundary children.
+ * @param selection - User-selected provider, model, and optional reasoning effort.
+ * @param info - Resolved capabilities for the selected model.
+ * @param enabled - Whether question cutting should retain an enabled reasoning effort.
+ * @returns The selected route with enabled or low-latency reasoning policy applied.
+ */
+export function questionSegmentationToolSelection(
+  selection: ToolModelSelection,
+  info: LlmResolvedModelInfo,
+  enabled: boolean,
+): ToolModelSelection {
+  return enabled
+    ? reasoningEnabledToolSelection(selection, info)
+    : lowLatencyToolSelection(selection, info)
 }

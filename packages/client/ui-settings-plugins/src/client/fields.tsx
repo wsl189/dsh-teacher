@@ -147,6 +147,50 @@ export function SelectField(props: FieldProps & {
 }
 
 /**
+ * A staged boolean field rendered as an accessible switch.
+ * @param props - the field frame and exact `true` or `false` draft.
+ * @returns the labelled switch control.
+ */
+export function BooleanField(props: FieldProps) {
+  const checked = props.text === 'true'
+  return (
+    <div className={css.field}>
+      <div className={css.head}>
+        <label className={css.label} htmlFor={props.id}>{props.label}</label>
+        {props.overridden
+          ? (
+            <span className={css.badges}>
+              <span className={css.badge}>{props.overriddenLabel}</span>
+              <button
+                type="button"
+                className={css.reset}
+                disabled={props.disabled}
+                onClick={props.onReset}
+              >
+                {props.resetLabel}
+              </button>
+            </span>
+          )
+          : null}
+        <button
+          id={props.id}
+          type="button"
+          role="switch"
+          aria-checked={checked}
+          aria-label={props.label}
+          className={checked ? css.switchOn : css.switch}
+          disabled={props.disabled}
+          onClick={() => { props.onEdit(checked ? 'false' : 'true') }}
+        >
+          <span className={css.switchThumb} />
+        </button>
+      </div>
+      <p className={css.hint}>{props.hint}</p>
+    </div>
+  )
+}
+
+/**
  * A write-only credential control. The value never rides a response, so the
  * control reports only whether one is configured and starts blank; a blank
  * draft writes nothing, which keeps the stored key rather than clearing it.

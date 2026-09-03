@@ -151,6 +151,7 @@ function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbench
     questionRepeatedImagePositionToleranceRatio: 0.015,
     maxQuestionRecutAttempts: 2,
     maxQuestionVisionImagesPerToolCall: 4,
+    questionSegmentationReasoningEnabled: true,
     questionSegmentationAgentTimeoutMs: 90_000,
   }
 }
@@ -205,10 +206,11 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
-  it('defaults compact question children to 32K output without a child deadline', () => {
+  it('defaults compact question children to 32K output with reasoning and the deadline disabled', () => {
     expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
       maxQuestionCompactBoundaryOutputTokens: 32_768,
       maxQuestionCompactReviewOutputTokens: 32_768,
+      questionSegmentationReasoningEnabled: false,
       questionSegmentationAgentTimeoutMs: 0,
     })
     expect(() => TeacherWorkbenchService.Config({
@@ -584,6 +586,7 @@ describe('TeacherWorkbenchService', () => {
       questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
+      questionSegmentationReasoningEnabled: true,
       questionSegmentationAgentTimeoutMs: 120_000,
     })
     contexts.push(b.ctx)
@@ -636,6 +639,7 @@ describe('TeacherWorkbenchService', () => {
       questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
+      questionSegmentationReasoningEnabled: true,
       questionSegmentationAgentTimeoutMs: 120_000,
     }
     const b = await harness(undefined, config)
@@ -897,6 +901,7 @@ describe('TeacherWorkbenchService', () => {
       questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
+      questionSegmentationReasoningEnabled: true,
       questionSegmentationAgentTimeoutMs: 90_000,
     })
     contexts.push(b.ctx)
@@ -1389,6 +1394,7 @@ describe('TeacherWorkbenchService', () => {
       questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
+      questionSegmentationReasoningEnabled: true,
       questionSegmentationAgentTimeoutMs: 90_000,
     })
     contexts.push(b.ctx)
@@ -1800,6 +1806,7 @@ describe('TeacherWorkbenchService', () => {
       questionRepeatedImagePositionToleranceRatio: 0.015,
       maxQuestionRecutAttempts: 2,
       maxQuestionVisionImagesPerToolCall: 4,
+      questionSegmentationReasoningEnabled: true,
       questionSegmentationAgentTimeoutMs: 90_000,
     }, true)
     contexts.push(b.ctx)

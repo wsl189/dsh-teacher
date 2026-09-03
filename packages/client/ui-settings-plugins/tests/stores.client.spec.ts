@@ -19,6 +19,10 @@ import {
   type SubagentModelSelectionSettings,
 } from '../src/client/subagent-model-selection-card-controller.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
+import {
+  TeacherWorkbenchCardController,
+  type TeacherWorkbenchHostSettings,
+} from '../src/client/teacher-workbench-card-controller.ts'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -442,6 +446,34 @@ describe('AgentLoopCardController', () => {
     host.publish({ status: 'ready', writable: false, value: { maxParallelToolCalls: 10 } })
 
     expect(controller.inject().hooks.agentLoopCard.getSnapshot().writable).toBe(false)
+  })
+})
+
+describe('TeacherWorkbenchCardController', () => {
+  it('stages and saves the question-cutting reasoning preference', async () => {
+    const host = stubSettingsScope<TeacherWorkbenchHostSettings>()
+    acceptWrites(host)
+    const controller = new TeacherWorkbenchCardController(host.scope)
+    host.publish({
+      status: 'ready',
+      writable: true,
+      value: { questionSegmentationReasoningEnabled: false },
+      base: { questionSegmentationReasoningEnabled: false },
+      user: {},
+    })
+    const face = controller.inject()
+
+    expect(face.hooks.teacherWorkbenchCard.getSnapshot().questionSegmentationReasoningEnabled)
+      .toEqual({ text: 'false', overridden: false, invalid: false })
+    face.edit('questionSegmentationReasoningEnabled', 'true')
+    face.save()
+    await vi.waitFor(() => {
+      expect(host.set).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', true)
+    })
+    expect(face.hooks.teacherWorkbenchCard.getSnapshot()).toMatchObject({
+      dirty: false,
+      questionSegmentationReasoningEnabled: { text: 'true', overridden: true },
+    })
   })
 })
 

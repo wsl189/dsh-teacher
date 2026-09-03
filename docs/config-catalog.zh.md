@@ -979,12 +979,14 @@ export interface Config {
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
+  /** Whether question boundary, visual-review, and repair children use enabled reasoning. */
+  questionSegmentationReasoningEnabled: boolean
   /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number
 }
 ```
 
-来源：[`packages/host/teacher-workbench/src/index.ts:188`](../packages/host/teacher-workbench/src/index.ts)
+来源：[`packages/host/teacher-workbench/src/index.ts:189`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
