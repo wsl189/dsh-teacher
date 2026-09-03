@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-settings-general",
   "description": "Settings shell plugin: the General section, trigger and header chrome, settings dictionaries, and onboarding coordination",
-  "version": "1.2.1-rc1",
+  "version": "1.2.1-rc2",
   "publishConfig": {
     "access": "public"
   },
