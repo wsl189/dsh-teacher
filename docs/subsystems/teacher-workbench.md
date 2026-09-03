@@ -83,14 +83,14 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 
 /**
  * Detect complete top-level question boundaries through the configured tool model.
- * @param request - live parent session, selected OCR pages, and crop padding.
+ * @param request - live parent session, selected OCR pages, captured reasoning choice, and crop padding.
  * @returns validated source-page crop regions or a stable failure.
  */
 @Remote('segmentQuestions') segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>
 
 /**
  * Visually review preliminary question crops and correct one processing group when needed.
- * @param request - crop images, source-page previews, OCR geometry, and current group regions.
+ * @param request - crop evidence, current group regions, and the same captured reasoning choice.
  * @returns accepted preliminary regions or one Host-validated corrected group.
  */
 @Remote('reviewQuestionCrops') reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult>

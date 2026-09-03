@@ -788,6 +788,8 @@ export interface TeacherQuestionPagePreview {
 export interface TeacherQuestionSegmentRequest {
   /** Live root session that owns the short-lived child agent. */
   readonly parentSessionId: SessionId
+  /** Per-operation reasoning choice; omission uses the current Host default. */
+  readonly reasoningEnabled?: boolean
   /** Original PDF display name used only as task context. */
   readonly fileName: string
   /** Exact selected pages and their OCR geometry. */
@@ -842,6 +844,8 @@ export interface TeacherSegmentedQuestion {
 export interface TeacherQuestionCropReviewRequest {
   /** Live root session that owns the short-lived review child. */
   readonly parentSessionId: SessionId
+  /** Per-operation reasoning choice; omission uses the current Host default. */
+  readonly reasoningEnabled?: boolean
   /** Original PDF display name used only as task context. */
   readonly fileName: string
   /** Processing-group identity retained on corrected questions. */

@@ -1,8 +1,10 @@
 /** Question-segmentation agent orchestration and Host boundary validation. */
 
 import { Context } from '@deepseek-ai/cordis'
+import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type { ToolDefinition } from '@deepseek-ai/dsh-tools'
+import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
+import ToolRuntime, { defineTool, type ToolDefinition, type ToolGuard } from '@deepseek-ai/dsh-tools'
 import sharp from 'sharp'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -73,6 +75,9 @@ function provideTools(ctx: Context): Map<string, ToolDefinition> {
     register(tool: ToolDefinition) {
       registered.set(tool.name, tool)
       return () => registered.delete(tool.name)
+    },
+    guard(_guard: ToolGuard) {
+      return () => {}
     },
   } as never)
   return registered
@@ -352,6 +357,86 @@ describe('segmentQuestionsWithAgent', () => {
       value: { questions: [{ sourceHeadId: 'p0e2' }, { sourceHeadId: 'p0e6' }] },
     })
     expect(start).toHaveBeenCalledOnce()
+    await ctx.fiber.dispose()
+  })
+
+  it('denies child-local tools outside the run-specific question tools', async () => {
+    const ctx = new Context()
+    await ctx.plugin(SystemPrompt)
+    await ctx.plugin(ToolRuntime)
+    let escapedCalls = 0
+    for (const name of ['subagent', 'write']) {
+      ctx.tools.register(defineTool({
+        name,
+        description: 'Test-only unrestricted tool.',
+        parameters: {},
+        output: {
+          schema: { type: 'string' },
+          render: (_args, value) => [{ type: 'text', text: value }],
+        },
+        execute() {
+          escapedCalls += 1
+          return Promise.resolve('escaped')
+        },
+      }))
+    }
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    ctx.provide('agentDefaultModel', { currentToolSelection: () => ({ provider: 'p', model: 'm' }) } as never)
+    provideModelInfo(ctx)
+    ctx.provide('subagents', {
+      start: async (_mode: string, startRequest: {
+        readonly agentOptions?: object
+        readonly toolFilter: { readonly allow: readonly string[] }
+      }) => {
+        const child = { options: startRequest.agentOptions } as never
+        for (const name of ['subagent', 'write']) {
+          const denied = await ctx.tools.execute({
+            callId: ToolCallId(`denied-${name}`),
+            name,
+            arguments: {},
+            agent: child,
+            signal: new AbortController().signal,
+          })
+          expect(denied.content).toEqual([{
+            type: 'text',
+            text: `Error: internal question processing can only call run-specific tools; "${name}" is unavailable`,
+          }])
+        }
+        const submitName = startRequest.toolFilter.allow.find(name => name.startsWith('submit_question_boundaries_'))
+        if (submitName === undefined) throw new Error('guarded submission tool was not registered')
+        const submitted = await ctx.tools.execute({
+          callId: ToolCallId('allowed-submit'),
+          name: submitName,
+          arguments: {
+            headConvention: 'Arabic numerals followed by punctuation begin top-level questions.',
+            questions: [{ headElementId: 'p0e2' }, { headElementId: 'p0e6' }],
+            nonQuestionHeadElementIds: ['p0e1'],
+            stopBeforeElementId: 'p1e2',
+          },
+          agent: child,
+          signal: new AbortController().signal,
+        })
+        const submittedContent = submitted.content[0]
+        if (submittedContent?.type !== 'text') throw new Error('submission returned no text result')
+        expect(submittedContent.text).toContain('ACCEPTED')
+        return {
+          id: SessionId('guarded-child'), localAgent: undefined,
+          result: Promise.resolve({ stopReason: 'completed' as const, output: [] }),
+          dispose: () => Promise.resolve(),
+        }
+      },
+    } as never)
+
+    const result = await segmentQuestionsWithAgent(ctx, request(), {
+      ...CONFIG,
+      questionSegmentationInlineEvidence: true,
+    })
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { questions: [{ sourceHeadId: 'p0e2' }, { sourceHeadId: 'p0e6' }] },
+    })
+    expect(escapedCalls).toBe(0)
     await ctx.fiber.dispose()
   })
 

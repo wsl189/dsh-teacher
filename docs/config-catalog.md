@@ -977,7 +977,7 @@ export interface Config {
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
-  /** Whether question boundary, visual-review, and repair children use enabled reasoning. */
+  /** Default reasoning choice for segmentation and review requests that omit an override. */
   questionSegmentationReasoningEnabled: boolean
   /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number

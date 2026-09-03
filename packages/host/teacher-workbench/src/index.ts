@@ -132,7 +132,7 @@ const DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES = 300
 const DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY = 2
 const DEFAULT_MAX_QUESTION_WIDTH_OUTLIER_EXCESS_RATIO = 0.5
 const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
-const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 400_000
+const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 14_000
 const DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS = 24_000
 const DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE = true
 const DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS = 32_768
@@ -255,7 +255,7 @@ export interface Config {
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
-  /** Whether question boundary, visual-review, and repair children use enabled reasoning. */
+  /** Default reasoning choice for segmentation and review requests that omit an override. */
   questionSegmentationReasoningEnabled: boolean
   /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number
@@ -532,22 +532,22 @@ export class TeacherWorkbenchService extends TypertRemoteService {
 
   /**
    * Detect complete top-level question boundaries through the configured tool model.
-   * @param request - live parent session, selected OCR pages, and crop padding.
+   * @param request - live parent session, selected OCR pages, captured reasoning choice, and crop padding.
    * @returns validated source-page crop regions or a stable failure.
    */
   @Remote('segmentQuestions')
   segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult> {
-    return segmentQuestionsInBatches(this.ctx, request, this.configSource())
+    return segmentQuestionsInBatches(this.ctx, request, this.questionSegmentationConfig(request.reasoningEnabled))
   }
 
   /**
    * Visually review preliminary question crops and correct one processing group when needed.
-   * @param request - crop images, source-page previews, OCR geometry, and current group regions.
+   * @param request - crop evidence, current group regions, and the same captured reasoning choice.
    * @returns accepted preliminary regions or one Host-validated corrected group.
    */
   @Remote('reviewQuestionCrops')
   reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult> {
-    return reviewQuestionCropsWithAgent(this.ctx, request, this.configSource())
+    return reviewQuestionCropsWithAgent(this.ctx, request, this.questionSegmentationConfig(request.reasoningEnabled))
   }
 
   /**
@@ -1184,6 +1184,14 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     return {
       maxImageBytes: config.maxQuestionImageBytes,
       maxBatchBytes: config.maxQuestionBatchBytes,
+    }
+  }
+
+  private questionSegmentationConfig(reasoningEnabled: boolean | undefined): Config {
+    const config = this.configSource()
+    return {
+      ...config,
+      questionSegmentationReasoningEnabled: reasoningEnabled ?? config.questionSegmentationReasoningEnabled,
     }
   }
 

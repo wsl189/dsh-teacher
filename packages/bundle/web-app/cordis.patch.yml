@@ -232,7 +232,7 @@
         questionSegmentationConcurrency: 2
         maxQuestionWidthOutlierExcessRatio: 0.5
         maxQuestionLayoutElements: 5000
-        maxQuestionSourceChunkCharacters: 400000
+        maxQuestionSourceChunkCharacters: 14000
         maxQuestionCompactBoundaryCharacters: 24000
         questionSegmentationInlineEvidence: true
         maxQuestionCompactBoundaryOutputTokens: 32768

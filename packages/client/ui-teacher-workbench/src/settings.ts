@@ -10,7 +10,7 @@ export const QUESTION_CUTTING_SETTINGS_NAMESPACE = 'teacher-workbench'
 
 /** Question-cutting policy projected into the PDF page-range panel. */
 export interface QuestionCuttingSettings {
-  /** Whether boundary, visual-review, and repair children may reason. */
+  /** Default reasoning choice for the next PDF admitted to question cutting. */
   questionSegmentationReasoningEnabled?: boolean
 }
 

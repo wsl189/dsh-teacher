@@ -2,12 +2,12 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import type {} from '@deepseek-ai/dsh-agent'
+import type { AgentOptions } from '@deepseek-ai/dsh-agent'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import type { SubagentRun, SubagentStartRequest } from '@deepseek-ai/dsh-subagent'
 import type {} from '@deepseek-ai/dsh-subagent'
-import { defineTool, type ToolDefinition, type ToolRunContext } from '@deepseek-ai/dsh-tools'
+import { defineTool, type ToolDefinition, type ToolGuard, type ToolRunContext } from '@deepseek-ai/dsh-tools'
 import sharp from 'sharp'
 import {
   COMPACT_QUESTION_CROP_REPAIR_PERSONA,
@@ -90,6 +90,30 @@ interface IndexedElement {
 
 function runToolSuffix(): string {
   return randomUUID().replaceAll('-', '').slice(0, 12)
+}
+
+const QUESTION_AGENT_TOOL_ALLOWLIST = Symbol('teacher-question-agent-tool-allowlist')
+
+type RestrictedQuestionAgentOptions = AgentOptions & {
+  readonly [QUESTION_AGENT_TOOL_ALLOWLIST]?: ReadonlySet<string>
+}
+
+function restrictedQuestionAgentOptions(
+  options: AgentOptions,
+  allowedTools: readonly string[],
+): AgentOptions {
+  return {
+    ...options,
+    [QUESTION_AGENT_TOOL_ALLOWLIST]: new Set(allowedTools),
+  } as RestrictedQuestionAgentOptions
+}
+
+const questionAgentToolGuard: ToolGuard = (execution) => {
+  const options = execution.agent?.options
+  if (options === undefined || !(QUESTION_AGENT_TOOL_ALLOWLIST in options)) return undefined
+  const allowedTools = options[QUESTION_AGENT_TOOL_ALLOWLIST]
+  if (allowedTools instanceof Set && allowedTools.has(execution.name)) return undefined
+  return `internal question processing can only call run-specific tools; "${execution.name}" is unavailable`
 }
 
 interface BoundaryDraft {
@@ -3910,6 +3934,7 @@ export async function segmentQuestionsWithAgent(
   }
   const parent = agents.get(request.parentSessionId)
   if (parent === undefined) return rejected('session-unavailable', 'the current session is not live')
+  const disposeQuestionAgentToolGuard = tools.guard(questionAgentToolGuard)
 
   const deadline = createQuestionChildDeadline(
     config.questionSegmentationAgentTimeoutMs,
@@ -4060,12 +4085,17 @@ export async function segmentQuestionsWithAgent(
         type: 'text',
         text: `Segment the selected PDF pages into complete top-level questions.${recoveryInstruction}${evidenceInstruction} Only heads on corePageIndexes belong to this run. Adjacent inspection pages are read-only context for deciding whether a core-page question continues; never submit one of their heads. Infer this source's own question convention from the OCR text and geometry, then submit one draft to ${submissionToolName}. Apply the answer-obligation test: a head must visibly ask the learner to choose, fill, calculate, explain, prove, draw, judge, or otherwise produce something. A number, topic label, definition, property, formula, method step, theory summary, worked solution, or answer explanation is not a question by itself. A worked example that opens with a problem stem and has a visible response demand is a question. A group may validly contain zero questions; do not invent a task. semanticHints are fallible recall aids.${decisionInstruction} A bracketed citation without its own stem, options, subparts, table, or figure is nonQuestionHeadElementIds content. A title, paper preamble, summary, answer block, footer, or other transition that belongs to no question begins at an outsideBoundaryElementIds entry; that boundary stops preceding automatic ownership until the next submitted head. stopBeforeElementId is exclusive and names the first OCR element outside one question, never its final content. Use additionalElementIds only for content whose geometric owner is wrong. A Host-accepted ${submissionToolName} call concludes this run immediately.\n${JSON.stringify({ fileName: request.fileName, corePageIndexes: [...corePageIndexes], inspectionPageIndexes: request.pages.map(page => page.pageIndex), elementCount: elements.length, sourceChunkIndexes: chunks.map((_chunk, index) => index), ...(inlineEvidence ? {} : { previewIds: previewSources.map(source => source.id) }), semanticHints, ...(inlineSource === undefined ? {} : { inlineSource }) })}`,
       }]
+      const allowedTools = [
+        ...(inlineEvidence ? [] : [sourceToolName]),
+        ...(inlineEvidence || previewSources.length === 0 ? [] : [previewToolName]),
+        submissionToolName,
+      ]
       run = await subagents.start('spawn', {
         label: `Question segmentation: ${request.fileName}${agentRun === 0 ? '' : ` (recovery ${String(agentRun + 1)})`}`,
         prompt,
         parent,
         signal: deadline.signal,
-        agentOptions: {
+        agentOptions: restrictedQuestionAgentOptions({
           ...questionSegmentationToolSelection(
             selected,
             modelInfo,
@@ -4073,12 +4103,8 @@ export async function segmentQuestionsWithAgent(
           ),
           toolChoice: 'required',
           ...(inlineEvidence ? { maxTokens: config.maxQuestionCompactBoundaryOutputTokens } : {}),
-        },
-        toolFilter: { allow: [
-          ...(inlineEvidence ? [] : [sourceToolName]),
-          ...(inlineEvidence || previewSources.length === 0 ? [] : [previewToolName]),
-          submissionToolName,
-        ] },
+        }, allowedTools),
+        toolFilter: { allow: allowedTools },
         persona: inlineEvidence
           ? `${COMPACT_QUESTION_SEGMENTATION_PERSONA}\n\nThe only callable tool in this run is ${submissionToolName}. Make that tool call as your first action; do not name or attempt any other tool.`
           : QUESTION_SEGMENTATION_SKILL.content,
@@ -4125,6 +4151,7 @@ export async function segmentQuestionsWithAgent(
       if (outcome.ok) outcome = rejected('model-failed', error instanceof Error ? error.message : String(error))
     }
   }
+  disposeQuestionAgentToolGuard()
   if (!outcome.ok && ['invalid-output', 'timed-out', 'model-failed', 'vision-unavailable'].includes(outcome.error.code)) {
     const questions = fallbackQuestionBoundaries(
       request,
@@ -4167,6 +4194,7 @@ export async function reviewQuestionCropsWithAgent(
   }
   const parent = agents.get(request.parentSessionId)
   if (parent === undefined) return unresolvedCropReview(request)
+  const disposeQuestionAgentToolGuard = tools.guard(questionAgentToolGuard)
 
   const deadline = createQuestionChildDeadline(
     config.questionSegmentationAgentTimeoutMs,
@@ -4422,12 +4450,17 @@ export async function reviewQuestionCropsWithAgent(
         { type: 'text', text: promptText },
         ...(compactReviewValue === undefined ? [] : visionImageContent(compactReviewValue)),
       ]
+      const allowedTools = [
+        ...(!compactReview ? [pageToolName, cropToolName] : []),
+        findingsToolName,
+        ...(!compactReview ? [sourceToolName, reviseToolName] : []),
+      ]
       run = await subagents.start('spawn', {
         label: `Question crop review: ${request.fileName} group ${String(request.groupIndex + 1)}${agentRun === 0 ? '' : ` (recovery ${String(agentRun + 1)})`}`,
         prompt,
         parent,
         signal: deadline.signal,
-        agentOptions: {
+        agentOptions: restrictedQuestionAgentOptions({
           ...questionSegmentationToolSelection(
             selected,
             modelInfo,
@@ -4435,12 +4468,8 @@ export async function reviewQuestionCropsWithAgent(
           ),
           toolChoice: 'required',
           ...(compactReview ? { maxTokens: config.maxQuestionCompactReviewOutputTokens } : {}),
-        },
-        toolFilter: { allow: [
-          ...(!compactReview ? [pageToolName, cropToolName] : []),
-          findingsToolName,
-          ...(!compactReview ? [sourceToolName, reviseToolName] : []),
-        ] },
+        }, allowedTools),
+        toolFilter: { allow: allowedTools },
         persona: compactReview ? COMPACT_QUESTION_CROP_REVIEW_PERSONA : QUESTION_CROP_REVIEW_SKILL.content,
       })
       let result = await run.result
@@ -4475,12 +4504,13 @@ export async function reviewQuestionCropsWithAgent(
               findings: recordedCropReviewFindings(reviewState),
             })}`,
           }]
+          const repairAllowedTools = [sourceToolName, reviseToolName]
           run = await subagents.start('spawn', {
             label: `Question crop repair: ${request.fileName} group ${String(request.groupIndex + 1)}${repairRun === 0 ? '' : ` (recovery ${String(repairRun + 1)})`}`,
             prompt: repairPrompt,
             parent,
             signal: deadline.signal,
-            agentOptions: {
+            agentOptions: restrictedQuestionAgentOptions({
               ...questionSegmentationToolSelection(
                 selected,
                 modelInfo,
@@ -4488,8 +4518,8 @@ export async function reviewQuestionCropsWithAgent(
               ),
               toolChoice: 'required',
               maxTokens: config.maxQuestionCompactReviewOutputTokens,
-            },
-            toolFilter: { allow: [sourceToolName, reviseToolName] },
+            }, repairAllowedTools),
+            toolFilter: { allow: repairAllowedTools },
             persona: COMPACT_QUESTION_CROP_REPAIR_PERSONA,
           })
           result = await run.result
@@ -4554,6 +4584,7 @@ export async function reviewQuestionCropsWithAgent(
       // The latest crop geometry remains usable when a failed child cannot finish teardown.
     }
   }
+  disposeQuestionAgentToolGuard()
   if (disposeSourceTool !== undefined) await disposeSourceTool()
   if (disposePageTool !== undefined) await disposePageTool()
   if (disposeCropTool !== undefined) await disposeCropTool()

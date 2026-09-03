@@ -100,11 +100,12 @@ export function apply(ctx: ClientContext): void {
     extractLayout: (file, pageIndexes, renderScale, progress) => (
       extractWorkbenchLayout(file, ctx.remote.ocr, pageIndexes, renderScale, progress)
     ),
-    resolveSegmentation: () => {
+    resolveSegmentation: (reasoningEnabled) => {
       const parentSessionId = ctx.sessions.list.getSnapshot().current
       if (parentSessionId === undefined) return undefined
       return (layout, padding, pagePreviews, corePageIndexes) => ctx.remote.teacherWorkbench.segmentQuestions({
         parentSessionId,
+        reasoningEnabled,
         fileName: layout.name,
         pages: layout.pages,
         corePageIndexes,
@@ -124,12 +125,13 @@ export function apply(ctx: ClientContext): void {
           },
         }))
     },
-    resolveCropReview: () => {
+    resolveCropReview: (reasoningEnabled) => {
       const parentSessionId = ctx.sessions.list.getSnapshot().current
       if (parentSessionId === undefined) return undefined
       return request => ctx.remote.teacherWorkbench.reviewQuestionCrops({
         ...request,
         parentSessionId,
+        reasoningEnabled,
       }).then(carried => carried.ok
         ? carried.value
         : {

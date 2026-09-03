@@ -179,6 +179,8 @@ describe('QuestionWorkbench reference shell', () => {
             queuedAt: 10_000,
             startedAt: 11_000,
             savedCount: 0,
+            groupCount: 12,
+            completedGroupCount: 4,
           }, {
             key: 'queued',
             fileName: '下一份.pdf',
@@ -201,6 +203,7 @@ describe('QuestionWorkbench reference shell', () => {
     const active = within(progress).getByRole('listitem', { name: '正在处理.pdf' })
     const queued = within(progress).getByRole('listitem', { name: '下一份.pdf' })
     expect(within(active).getByText('页码范围：1-5,8')).toBeTruthy()
+    expect(within(active).getByText('已完成 4/12 组')).toBeTruthy()
     expect(within(queued).getByText('页码范围：全部页码')).toBeTruthy()
     expect(within(active).getByText('用时 00:04')).toBeTruthy()
     expect(within(queued).getByText('用时 00:00')).toBeTruthy()
@@ -851,6 +854,7 @@ describe('QuestionWorkbench reference shell', () => {
         file: pdf,
         pageIndexes: [0],
         pageRange: '全部页码',
+        reasoningEnabled: true,
         folderId: scannedLeafId,
       }))
     })

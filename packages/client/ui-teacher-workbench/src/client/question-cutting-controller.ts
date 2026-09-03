@@ -1,7 +1,6 @@
 /** Plugin-lifetime browser queue for PDF question cutting and progress projection. */
 
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
-import { mapConcurrently } from '@deepseek-ai/dsh-concurrency'
 import type {
   OcrLayoutDocument,
   OcrLayoutResult,
@@ -19,16 +18,17 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchActionResult } from './controller.ts'
 import {
+  openQuestionPdfRasterizer,
   partitionQuestionUploads,
   renderQuestionCrops,
   renderQuestionPagePreviews,
+  type QuestionPdfRasterizer,
 } from './question-segmentation.ts'
 
 type MaximumQuestionWidthRatio = TeacherQuestionSegmentSuccess['value']['maxQuestionWidthRatio']
 type QuestionSegmentationGroup = TeacherQuestionSegmentSuccess['value']['groups'][number]
 
 interface ReviewedQuestionGroup {
-  readonly group: QuestionSegmentationGroup
   readonly questions: readonly TeacherSegmentedQuestion[]
   readonly unverified: boolean
 }
@@ -69,6 +69,10 @@ export interface QuestionCuttingJob {
   readonly savedCount: number
   /** Number of semantic questions detected after segmentation. */
   readonly questionCount?: number
+  /** Number of bounded semantic groups in this PDF. */
+  readonly groupCount?: number
+  /** Number of groups already reviewed and durably saved when non-empty. */
+  readonly completedGroupCount?: number
   /** Number of processing groups saved without a final accepted crop review. */
   readonly unverifiedGroupCount?: number
   /** Stable failure family for a terminal failed row. */
@@ -96,6 +100,8 @@ export interface QuestionCuttingEnqueueRequest {
   readonly pageIndexes: readonly number[]
   /** Display label persisted with the resulting paper batch. */
   readonly pageRange: string
+  /** Per-PDF reasoning choice retained for every segmentation and review stage. */
+  readonly reasoningEnabled: boolean
   /** Optional explicit leaf destination; omission delegates PDF-name directory creation to the Host. */
   readonly folderId?: TeacherQuestionLibraryFolderId
   /** PDF.js scale for OCR fallback and final crop pixels. */
@@ -122,8 +128,8 @@ interface QuestionCuttingControllerDependencies {
     renderScale: number,
     progress: (completedPages: number, totalPages: number) => void,
   ) => Promise<OcrLayoutResult>
-  resolveSegmentation: () => QuestionSegmentationRunner | undefined
-  resolveCropReview: () => QuestionCropReviewRunner | undefined
+  resolveSegmentation: (reasoningEnabled: boolean) => QuestionSegmentationRunner | undefined
+  resolveCropReview: (reasoningEnabled: boolean) => QuestionCropReviewRunner | undefined
   saveBatch: (request: TeacherQuestionBatchSaveRequest) => Promise<TeacherWorkbenchActionResult>
 }
 
@@ -133,7 +139,7 @@ type RenderCrops = (
   questions: readonly TeacherSegmentedQuestion[],
   maxQuestionWidthRatio: MaximumQuestionWidthRatio,
   renderScale: number,
-  progress: (completedQuestions: number, totalQuestions: number) => void,
+  progress?: (completedQuestions: number, totalQuestions: number) => void,
 ) => Promise<TeacherQuestionImageUpload[]>
 
 interface QuestionCuttingControllerOptions {
@@ -141,6 +147,7 @@ interface QuestionCuttingControllerOptions {
   readonly now?: () => number
   readonly renderCrops?: RenderCrops
   readonly renderPagePreviews?: typeof renderQuestionPagePreviews
+  readonly openPdfRasterizer?: (file: File) => Promise<QuestionPdfRasterizer>
   readonly partitionUploads?: typeof partitionQuestionUploads
 }
 
@@ -163,24 +170,6 @@ function adjacentInspectionPages(
   return layout.pages
     .slice(Math.max(0, first - 1), Math.min(layout.pages.length, last + 2))
     .map(page => page.pageIndex)
-}
-
-function replaceQuestionGroup(
-  current: readonly TeacherSegmentedQuestion[],
-  groupIndex: number,
-  replacement: readonly TeacherSegmentedQuestion[],
-  groupCount: number,
-): TeacherSegmentedQuestion[] {
-  if (replacement.some(question => question.groupIndex !== groupIndex)) {
-    throw new Error('reviewed question group identity is inconsistent')
-  }
-  const merged: TeacherSegmentedQuestion[] = []
-  for (let index = 0; index < groupCount; index += 1) {
-    merged.push(...(index === groupIndex
-      ? replacement
-      : current.filter(question => question.groupIndex === index)))
-  }
-  return merged.map((question, index) => ({ ...question, questionNo: index + 1 }))
 }
 
 function affectedQuestions(
@@ -225,8 +214,7 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
   private disposed = false
   private readonly createKey: () => string
   private readonly now: () => number
-  private readonly renderCrops: RenderCrops
-  private readonly renderPagePreviews: typeof renderQuestionPagePreviews
+  private readonly openPdfRasterizer: (file: File) => Promise<QuestionPdfRasterizer>
   private readonly partitionUploads: typeof partitionQuestionUploads
 
   /**
@@ -239,8 +227,21 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
   ) {
     this.createKey = options.key ?? (() => globalThis.crypto.randomUUID())
     this.now = options.now ?? (() => Date.now())
-    this.renderCrops = options.renderCrops ?? renderQuestionCrops
-    this.renderPagePreviews = options.renderPagePreviews ?? renderQuestionPagePreviews
+    const renderCrops = options.renderCrops ?? renderQuestionCrops
+    const renderPagePreviews = options.renderPagePreviews ?? renderQuestionPagePreviews
+    this.openPdfRasterizer = options.openPdfRasterizer ?? (
+      options.renderCrops === undefined && options.renderPagePreviews === undefined
+        ? openQuestionPdfRasterizer
+        : file => Promise.resolve({
+          pageCount: 0,
+          renderPageForOcr: () => Promise.reject(new Error('OCR rasterization is not owned by the cutting controller')),
+          renderPagePreviews: (pageIndexes, renderScale) => renderPagePreviews(file, pageIndexes, renderScale),
+          renderCrops: (layout, questions, maxQuestionWidthRatio, renderScale, progress) => (
+            renderCrops(file, layout, questions, maxQuestionWidthRatio, renderScale, progress)
+          ),
+          dispose: () => Promise.resolve(),
+        })
+    )
     this.partitionUploads = options.partitionUploads ?? partitionQuestionUploads
   }
 
@@ -258,7 +259,7 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
   }
 
   /**
-   * Capture one PDF and its current parent Session, then start or extend the queue.
+   * Capture one PDF, its reasoning choice, and its current parent Session, then start or extend the queue.
    * @param request - selected pages, destination, and rendering settings.
    * @throws when the plugin controller is disposing.
    */
@@ -266,8 +267,8 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
     if (this.disposed) throw new Error('question cutting controller is disposed')
     const key = this.createKey()
     const queuedAt = this.now()
-    const segmentQuestions = this.dependencies.resolveSegmentation()
-    const reviewCrops = this.dependencies.resolveCropReview()
+    const segmentQuestions = this.dependencies.resolveSegmentation(request.reasoningEnabled)
+    const reviewCrops = this.dependencies.resolveCropReview(request.reasoningEnabled)
     this.pending.push({
       key,
       request,
@@ -326,6 +327,7 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
       startedAt,
     }))
     let savedCount = 0
+    let rasterizer: QuestionPdfRasterizer | undefined
     try {
       if (task.segmentQuestions === undefined) {
         throw new QuestionCuttingFailure('no-session', 'question cutting requires an active parent Session')
@@ -344,150 +346,88 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
         ...extracted.value,
         pages: extracted.value.pages,
       }
-      const pagePreviews = await this.renderPagePreviews(
-        task.request.file,
-        layout.pages.map(page => page.pageIndex),
-        task.request.renderScale,
-      )
       this.updateProgress(task.key, 'segmenting', 42)
       const segmented = await task.segmentQuestions(
         layout,
         task.request.padding,
-        pagePreviews,
+        [],
         task.request.pageIndexes,
       )
       if (!segmented.ok) throw new Error(segmented.error.message)
-      let questions = [...segmented.value.questions]
-      this.replaceJob(task.key, job => ({ ...job, questionCount: questions.length }))
-
-      const baseName = task.request.file.name.replace(/\.pdf$/iu, '')
       const groupCount = segmented.value.groupCount
       const reviewCrops = task.reviewCrops
       if (reviewCrops === undefined) {
         throw new QuestionCuttingFailure('no-session', 'question crop review requires an active parent Session')
       }
-      // Crop-local review cannot replace the PDF-wide outlier-filtered width.
-      const outputWidthRatio = segmented.value.maxQuestionWidthRatio
-      let completedReviewSteps = 0
-      const totalReviewSteps = groupCount * segmented.value.maxRecutAttempts
-      const reviewedGroups = await mapConcurrently(
-        segmented.value.groups,
-        segmented.value.maxConcurrentGroups,
-        async (group): Promise<ReviewedQuestionGroup> => {
-          let groupQuestions = questions.filter(question => question.groupIndex === group.groupIndex)
-          let reviewQuestions = groupQuestions
-          let recutAttempt = 0
-          let unverified = false
-          for (;;) {
-            this.updateProgress(
-              task.key,
-              'reviewing',
-              Math.floor(50 + 22 * completedReviewSteps / totalReviewSteps),
-            )
-            const crops = await this.renderCrops(
-              task.request.file,
-              layout,
-              reviewQuestions,
-              outputWidthRatio,
-              task.request.renderScale,
-              () => {},
-            )
-            const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
-              ? group.corePageIndexes
-              : [...new Set(reviewQuestions.flatMap(question => (
-                question.regions.map(region => region.pageIndex)
-              )))]
-            const previewPages = new Set(adjacentInspectionPages(layout, localPageIndexes))
-            const inspectionPages = new Set(group.inspectionPageIndexes)
-            const reviewed = await reviewCrops({
-              fileName: layout.name,
-              groupIndex: group.groupIndex,
-              corePageIndexes: group.corePageIndexes,
-              recutAttempt,
-              reviewQuestionIds: reviewQuestions.map(question => question.sourceHeadId),
-              pages: layout.pages.filter(page => inspectionPages.has(page.pageIndex)),
-              pagePreviews: pagePreviews.filter(preview => (
-                previewPages.has(preview.pageIndex) && inspectionPages.has(preview.pageIndex)
-              )),
-              questions: groupQuestions,
-              crops,
-              padding: task.request.padding,
-            })
-            if (!reviewed.ok) throw new Error(reviewed.error.message)
-            completedReviewSteps += 1
-            this.updateProgress(task.key, 'reviewing', Math.floor(50 + 22 * completedReviewSteps / totalReviewSteps))
-            if (reviewed.value.decision === 'accepted') {
-              break
-            }
-            if (reviewed.value.decision === 'unresolved') {
-              unverified = true
-              break
-            }
-            if (reviewed.value.questions.some(question => question.groupIndex !== group.groupIndex)) {
-              throw new Error('reviewed question group identity is inconsistent')
-            }
-            groupQuestions = [...reviewed.value.questions]
-            recutAttempt += 1
-            if (recutAttempt >= segmented.value.maxRecutAttempts) {
-              unverified = true
-              break
-            }
-            reviewQuestions = affectedQuestions(
-              groupQuestions,
-              reviewed.value.affectedQuestionIds,
-            )
-            if (reviewQuestions.length === 0) {
-              unverified = true
-              break
-            }
-          }
-          return { group, questions: groupQuestions, unverified }
-        },
-      )
-      for (const reviewed of reviewedGroups) {
-        questions = replaceQuestionGroup(
-          questions,
-          reviewed.group.groupIndex,
-          reviewed.questions,
-          groupCount,
-        )
-      }
-      const unverifiedGroupCount = reviewedGroups.filter(group => group.unverified).length
+      let questionCount = segmented.value.questions.length
       this.replaceJob(task.key, job => ({
         ...job,
-        questionCount: questions.length,
-        ...(unverifiedGroupCount === 0 ? {} : { unverifiedGroupCount }),
+        questionCount,
+        groupCount,
+        completedGroupCount: 0,
       }))
-      if (questions.length === 0) {
+
+      const outputWidthRatio = segmented.value.maxQuestionWidthRatio
+      rasterizer = await this.openPdfRasterizer(task.request.file)
+      const baseName = task.request.file.name.replace(/\.pdf$/iu, '')
+      let savedBatchId: TeacherQuestionBatchId | undefined
+      let unverifiedGroupCount = 0
+      for (const group of segmented.value.groups) {
+        const groupStart = 50 + 49 * group.groupIndex / groupCount
+        const groupSpan = 49 / groupCount
+        const initialGroupQuestions = segmented.value.questions.filter(question => (
+          question.groupIndex === group.groupIndex
+        ))
+        this.updateProgress(task.key, 'reviewing', Math.floor(groupStart))
+        const pagePreviews = await rasterizer.renderPagePreviews(
+          group.inspectionPageIndexes,
+          task.request.renderScale,
+        )
+        const reviewed = await this.reviewGroup(
+          task,
+          reviewCrops,
+          rasterizer,
+          layout,
+          group,
+          initialGroupQuestions,
+          pagePreviews,
+          outputWidthRatio,
+          segmented.value.maxRecutAttempts,
+          groupStart,
+          groupSpan,
+        )
+        if (reviewed.unverified) unverifiedGroupCount += 1
+        questionCount += reviewed.questions.length - initialGroupQuestions.length
+        const groupQuestions = reviewed.questions.map((question, index) => ({
+          ...question,
+          questionNo: savedCount + index + 1,
+        }))
         this.replaceJob(task.key, job => ({
           ...job,
-          stage: 'completed',
-          progress: 100,
-          savedCount: 0,
-          finishedAt: this.now(),
+          questionCount,
+          ...(unverifiedGroupCount === 0 ? {} : { unverifiedGroupCount }),
         }))
-        return
-      }
 
-      let savedBatchId: TeacherQuestionBatchId | undefined
-      for (let groupIndex = 0; groupIndex < groupCount; groupIndex += 1) {
-        const groupQuestions = questions.filter(question => question.groupIndex === groupIndex)
-        if (groupQuestions.length === 0) continue
-        const groupStart = 74 + 25 * groupIndex / groupCount
-        const groupSpan = 25 / groupCount
-        this.updateProgress(task.key, 'rendering', Math.floor(groupStart))
-        const crops = await this.renderCrops(
-          task.request.file,
-          layout,
-          groupQuestions,
-          outputWidthRatio,
-          task.request.renderScale,
-          (completedQuestions, totalQuestions) => {
-            const fraction = totalQuestions === 0 ? 0 : completedQuestions / totalQuestions
-            this.updateProgress(task.key, 'rendering', Math.floor(groupStart + groupSpan * 0.6 * fraction))
-          },
-        )
-        const parts = this.partitionUploads(crops, segmented.value.maxSaveBatchBytes)
+        this.updateProgress(task.key, 'rendering', Math.floor(groupStart + groupSpan * 0.6))
+        const uploads = groupQuestions.length === 0
+          ? []
+          : await rasterizer.renderCrops(
+            layout,
+            groupQuestions,
+            outputWidthRatio,
+            task.request.renderScale,
+            (completedQuestions, totalQuestions) => {
+              const fraction = totalQuestions === 0 ? 0 : completedQuestions / totalQuestions
+              this.updateProgress(
+                task.key,
+                'rendering',
+                Math.floor(groupStart + groupSpan * (0.6 + 0.2 * fraction)),
+              )
+            },
+          )
+        const parts = uploads.length === 0
+          ? []
+          : this.partitionUploads(uploads, segmented.value.maxSaveBatchBytes)
         let savedInGroup = 0
         for (const images of parts) {
           const saved = await this.dependencies.saveBatch({
@@ -509,11 +449,15 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
           this.updateProgress(
             task.key,
             'saving',
-            Math.floor(groupStart + groupSpan * (0.6 + 0.4 * savedInGroup / groupQuestions.length)),
+            Math.floor(groupStart + groupSpan * (0.8 + 0.2 * savedInGroup / groupQuestions.length)),
           )
         }
+        this.replaceJob(task.key, job => ({
+          ...job,
+          completedGroupCount: group.groupIndex + 1,
+        }))
       }
-      if (savedBatchId === undefined) throw new Error('question batch was not created')
+      if (questionCount > 0 && savedBatchId === undefined) throw new Error('question batch was not created')
       this.replaceJob(task.key, job => ({
         ...job,
         stage: 'completed',
@@ -534,6 +478,85 @@ export class QuestionCuttingController implements HostObservable<QuestionCutting
             failureMessage: error instanceof Error ? error.message : String(error),
           }),
       }))
+    } finally {
+      if (rasterizer !== undefined) {
+        try {
+          await rasterizer.dispose()
+        } catch (error) {
+          console.error('[ui-teacher-workbench] PDF rasterizer disposal failed:', error)
+        }
+      }
+    }
+  }
+
+  private async reviewGroup(
+    task: PendingQuestionCuttingJob,
+    reviewCrops: QuestionCropReviewRunner,
+    rasterizer: QuestionPdfRasterizer,
+    layout: OcrLayoutDocument,
+    group: QuestionSegmentationGroup,
+    initialQuestions: readonly TeacherSegmentedQuestion[],
+    pagePreviews: readonly TeacherQuestionPagePreview[],
+    outputWidthRatio: MaximumQuestionWidthRatio,
+    maxRecutAttempts: number,
+    groupStart: number,
+    groupSpan: number,
+  ): Promise<ReviewedQuestionGroup> {
+    let groupQuestions = [...initialQuestions]
+    let reviewQuestions = groupQuestions
+    let recutAttempt = 0
+    for (;;) {
+      const crops = await rasterizer.renderCrops(
+        layout,
+        reviewQuestions,
+        outputWidthRatio,
+        task.request.renderScale,
+      )
+      const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
+        ? group.corePageIndexes
+        : [...new Set(reviewQuestions.flatMap(question => (
+          question.regions.map(region => region.pageIndex)
+        )))]
+      const previewPages = new Set(adjacentInspectionPages(layout, localPageIndexes))
+      const inspectionPages = new Set(group.inspectionPageIndexes)
+      const reviewed = await reviewCrops({
+        fileName: layout.name,
+        groupIndex: group.groupIndex,
+        corePageIndexes: group.corePageIndexes,
+        recutAttempt,
+        reviewQuestionIds: reviewQuestions.map(question => question.sourceHeadId),
+        pages: layout.pages.filter(page => inspectionPages.has(page.pageIndex)),
+        pagePreviews: pagePreviews.filter(preview => (
+          previewPages.has(preview.pageIndex) && inspectionPages.has(preview.pageIndex)
+        )),
+        questions: groupQuestions,
+        crops,
+        padding: task.request.padding,
+      })
+      if (!reviewed.ok) throw new Error(reviewed.error.message)
+      this.updateProgress(
+        task.key,
+        'reviewing',
+        Math.floor(groupStart + groupSpan * 0.55 * (recutAttempt + 1) / maxRecutAttempts),
+      )
+      if (reviewed.value.decision === 'accepted') {
+        return { questions: groupQuestions, unverified: false }
+      }
+      if (reviewed.value.decision === 'unresolved') {
+        return { questions: groupQuestions, unverified: true }
+      }
+      if (reviewed.value.questions.some(question => question.groupIndex !== group.groupIndex)) {
+        throw new Error('reviewed question group identity is inconsistent')
+      }
+      groupQuestions = [...reviewed.value.questions]
+      recutAttempt += 1
+      if (recutAttempt >= maxRecutAttempts) {
+        return { questions: groupQuestions, unverified: true }
+      }
+      reviewQuestions = affectedQuestions(groupQuestions, reviewed.value.affectedQuestionIds)
+      if (reviewQuestions.length === 0) {
+        return { questions: groupQuestions, unverified: true }
+      }
     }
   }
 

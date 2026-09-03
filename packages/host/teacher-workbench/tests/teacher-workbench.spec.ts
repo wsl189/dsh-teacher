@@ -209,8 +209,9 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
-  it('defaults compact question children to 32K output with reasoning and the deadline disabled', () => {
+  it('defaults question source chunks below spill size with 32K compact output and no deadline', () => {
     expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
+      maxQuestionSourceChunkCharacters: 14_000,
       maxQuestionCompactBoundaryOutputTokens: 32_768,
       maxQuestionCompactReviewOutputTokens: 32_768,
       questionSegmentationReasoningEnabled: false,

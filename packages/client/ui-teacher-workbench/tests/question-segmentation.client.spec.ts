@@ -43,6 +43,24 @@ describe('readPdfPageCount', () => {
       WorkerMessageHandler: pdfMocks.workerHandler,
     })
   })
+
+  it('opens a real browser File through a Blob URL without copying its bytes into JavaScript', async () => {
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({ numPages: 9 }),
+      destroy: pdfMocks.destroy,
+    })
+    const createObjectURL = vi.spyOn(URL, 'createObjectURL').mockReturnValue('blob:large-pdf')
+    const revokeObjectURL = vi.spyOn(URL, 'revokeObjectURL').mockImplementation(() => {})
+    const file = new File([Uint8Array.of(1, 2, 3)], 'large.pdf', { type: 'application/pdf' })
+
+    await expect(readPdfPageCount(file)).resolves.toBe(9)
+
+    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ url: 'blob:large-pdf' })
+    expect(createObjectURL).toHaveBeenCalledWith(file)
+    expect(revokeObjectURL).toHaveBeenCalledWith('blob:large-pdf')
+    createObjectURL.mockRestore()
+    revokeObjectURL.mockRestore()
+  })
 })
 
 describe('renderQuestionPagePreviews', () => {
@@ -54,6 +72,7 @@ describe('renderQuestionPagePreviews', () => {
         getPage: async (pageNumber: number) => {
           seenPages.push(pageNumber)
           return {
+            cleanup: vi.fn(),
             getViewport: ({ scale }: { scale: number }) => {
               seenScales.push(scale)
               return { width: 100 * scale, height: 80 * scale }
@@ -145,6 +164,7 @@ describe('renderQuestionCrops', () => {
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve({
         getPage: async () => ({
+          cleanup: vi.fn(),
           getViewport: () => ({ width: 100, height: 100 }),
           render: () => ({ promise: Promise.resolve() }),
         }),
@@ -216,6 +236,7 @@ describe('renderQuestionCrops', () => {
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve({
         getPage: async (pageNumber: number) => ({
+          cleanup: vi.fn(),
           getViewport: () => ({ width: pageNumber === 1 ? 100 : 101, height: 100 }),
           render: () => ({ promise: Promise.resolve() }),
         }),
@@ -281,7 +302,7 @@ describe('extractWorkbenchLayout', () => {
     const remote = {
       layoutLimits: vi.fn(async () => ({
         ok: true,
-        value: { ok: true, value: { maxFileBytes: 600, maxPagesPerRequest: 2 } },
+        value: { ok: true, value: { maxFileBytes: 10_000, maxPagesPerRequest: 2 } },
       } as const)),
       layout: vi.fn(async (request: OcrLayoutRequest) => {
         const bytes = Uint8Array.from(atob(request.contentBase64), character => character.charCodeAt(0))
@@ -325,21 +346,39 @@ describe('extractWorkbenchLayout', () => {
     expect(progress.mock.calls).toEqual([[2, 3], [3, 3]])
   })
 
-  it('bisects a copied PDF batch until every upload fits the provider byte limit', async () => {
+  it('streams a source above the provider ceiling as one raster page at a time', async () => {
     const source = await PDFDocument.create()
     for (let index = 0; index < 3; index += 1) source.addPage([600, 800])
     const file = new File([Uint8Array.from(await source.save())], 'large.pdf', { type: 'application/pdf' })
-    const batchSizes: number[] = []
+    const sourceArrayBuffer = vi.spyOn(file, 'arrayBuffer')
+    pdfMocks.getDocument.mockReturnValue({
+      promise: Promise.resolve({
+        numPages: 3,
+        getPage: async () => ({
+          cleanup: vi.fn(),
+          getViewport: () => ({ width: 10, height: 10 }),
+          render: () => ({ promise: Promise.resolve() }),
+        }),
+      }),
+      destroy: pdfMocks.destroy,
+    })
+    vi.stubGlobal('document', {
+      createElement: () => ({
+        width: 0,
+        height: 0,
+        getContext: () => ({}),
+        toBlob: (callback: (blob: Blob | null) => void) => {
+          callback(new Blob([Uint8Array.of(1)], { type: 'image/png' }))
+        },
+      }),
+    })
     const remote = {
       layoutLimits: vi.fn(async () => ({
         ok: true,
         value: { ok: true, value: { maxFileBytes: 580, maxPagesPerRequest: 3 } },
       } as const)),
       layout: vi.fn(async (request: OcrLayoutRequest) => {
-        const bytes = Uint8Array.from(atob(request.contentBase64), character => character.charCodeAt(0))
-        const batch = await PDFDocument.load(bytes)
-        const pageCount = batch.getPageCount()
-        batchSizes.push(pageCount)
+        expect(request.mediaType).toBe('image/png')
         return {
           ok: true,
           value: {
@@ -347,23 +386,21 @@ describe('extractWorkbenchLayout', () => {
             value: {
               name: request.name,
               provider: 'mineru',
-              pages: Array.from({ length: pageCount }, (_, pageIndex) => ({
-                pageIndex,
-                width: 600,
-                height: 800,
-                elements: [],
-              })),
+              pages: [{ pageIndex: 0, width: 10, height: 10, elements: [] }],
             },
           },
         } as const
       }),
       extract: vi.fn(),
     } satisfies TeacherWorkbenchOcrRemote
+    const progress = vi.fn()
 
-    const result = await extractWorkbenchLayout(file, remote)
+    const result = await extractWorkbenchLayout(file, remote, undefined, 2, progress)
 
     expect(result.ok && result.value.pages.map(page => page.pageIndex)).toEqual([0, 1, 2])
-    expect(batchSizes).toEqual([1, 1, 1])
+    expect(remote.layout).toHaveBeenCalledTimes(3)
+    expect(progress.mock.calls).toEqual([[1, 3], [2, 3], [3, 3]])
+    expect(sourceArrayBuffer).not.toHaveBeenCalled()
   })
 
   it('rasterizes and reduces a single copied page that exceeds the provider byte limit', async () => {
@@ -375,6 +412,7 @@ describe('extractWorkbenchLayout', () => {
     pdfMocks.getDocument.mockReturnValue({
       promise: Promise.resolve({
         getPage: async () => ({
+          cleanup: vi.fn(),
           getViewport: ({ scale }: { scale: number }) => {
             rasterScales.push(scale)
             return { width: 10 * scale, height: 10 * scale }

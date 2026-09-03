@@ -506,6 +506,7 @@ export function QuestionWorkbench({
         pageCount: pdfPageCount,
         pageIndexes: selection.pageIndexes,
         pageRange: selection.label || t('questions.allPages'),
+        reasoningEnabled: pageRangeReasoningEnabled,
         ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
         renderScale: settings.questionRenderScale,
         padding: settings.questionCropPadding,
@@ -1792,6 +1793,12 @@ function QuestionCuttingJobRow({
       ><span style={{ width: `${String(job.progress)}%` }} /></div>
       <div className={css.legacyCuttingMeta}>
         <span>{stage}</span>
+        {job.groupCount !== undefined && job.completedGroupCount !== undefined && (
+          <span>{t('questions.progressGroups', {
+            completed: job.completedGroupCount,
+            total: job.groupCount,
+          })}</span>
+        )}
         {job.savedCount > 0 && <span>{t('questions.progressSaved', { count: job.savedCount })}</span>}
         <time>{t('questions.progressElapsed', { time: formatElapsed(elapsed) })}</time>
       </div>

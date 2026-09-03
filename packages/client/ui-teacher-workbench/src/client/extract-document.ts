@@ -9,7 +9,7 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { PDFDocument } from 'pdf-lib'
-import { renderPdfPageForOcr } from './question-segmentation.ts'
+import { openQuestionPdfRasterizer, renderPdfPageForOcr } from './question-segmentation.ts'
 
 /** OCR Remote subset consumed by teacher-workbench uploads. */
 export interface TeacherWorkbenchOcrRemote {
@@ -54,15 +54,26 @@ export async function extractWorkbenchLayout(
     if (!carriedLimits.ok) return transportFailure(carriedLimits.error.message)
     if (!carriedLimits.value.ok) return carriedLimits.value
     const limits = carriedLimits.value.value
+    // MinerU deployments may key active work by upload name; one id prevents
+    // concurrent papers with the same selected range from colliding.
+    const batchId = uploadBatchId()
+    if (file.size > limits.maxFileBytes) {
+      return await extractLargePdfLayout(
+        file,
+        remote,
+        pageIndexes,
+        rasterScale,
+        limits.maxFileBytes,
+        batchId,
+        progress,
+      )
+    }
     const sourceBytes = new Uint8Array(await file.arrayBuffer())
     const source = await PDFDocument.load(sourceBytes)
     const indexes = pageIndexes === undefined
       ? Array.from({ length: source.getPageCount() }, (_, index) => index)
       : [...pageIndexes]
     validatePageIndexes(indexes, source.getPageCount())
-    // MinerU deployments may key active work by upload name; one id prevents
-    // concurrent papers with the same selected range from colliding.
-    const batchId = uploadBatchId()
     const pages: OcrLayoutPage[] = []
     let provider: string | undefined
     for (let offset = 0; offset < indexes.length; offset += limits.maxPagesPerRequest) {
@@ -85,6 +96,47 @@ export async function extractWorkbenchLayout(
         message: error instanceof Error ? error.message : 'document layout extraction failed',
       },
     }
+  }
+}
+
+async function extractLargePdfLayout(
+  file: File,
+  remote: TeacherWorkbenchOcrRemote,
+  pageIndexes: readonly number[] | undefined,
+  rasterScale: number,
+  maxFileBytes: number,
+  batchId: string,
+  progress: ((completedPages: number, totalPages: number) => void) | undefined,
+): Promise<OcrLayoutResult> {
+  const rasterizer = await openQuestionPdfRasterizer(file)
+  try {
+    const indexes = pageIndexes === undefined
+      ? Array.from({ length: rasterizer.pageCount }, (_, index) => index)
+      : [...pageIndexes]
+    validatePageIndexes(indexes, rasterizer.pageCount)
+    const pages: OcrLayoutPage[] = []
+    let provider: string | undefined
+    for (const [index, pageIndex] of indexes.entries()) {
+      const raster = await rasterizer.renderPageForOcr(pageIndex, rasterScale, maxFileBytes)
+      const result = await extractLayoutBytes(
+        remote,
+        file.name,
+        new Uint8Array(await raster.arrayBuffer()),
+        'image/png',
+        batchId,
+        [pageIndex],
+      )
+      if (!result.ok) return result
+      provider ??= result.value.provider
+      pages.push(...result.value.pages)
+      progress?.(index + 1, indexes.length)
+    }
+    pages.sort((left, right) => left.pageIndex - right.pageIndex)
+    return pages.length === 0
+      ? { ok: false, error: { code: 'empty-result', message: 'document layout contains no pages' } }
+      : { ok: true, value: { name: file.name, provider: provider ?? 'unknown', pages } }
+  } finally {
+    await rasterizer.dispose()
   }
 }
 
