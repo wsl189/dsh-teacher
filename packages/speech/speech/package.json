@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-speech",
   "description": "Provider-neutral speech transcription runtime and browser Remote",
-  "version": "1.1.9",
+  "version": "1.2.0",
   "publishConfig": {
     "access": "public"
   },
