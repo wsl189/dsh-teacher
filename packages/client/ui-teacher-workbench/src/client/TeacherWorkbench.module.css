@@ -4855,6 +4855,44 @@
   justify-content: flex-end;
 }
 
+.legacyReasoningToggle {
+  display: flex;
+  margin-top: 12px;
+  padding: 10px 12px;
+  align-items: flex-start;
+  gap: 9px;
+  border: 1px solid var(--legacy-line);
+  border-radius: 9px;
+  color: var(--dsw-alias-label-primary);
+  cursor: pointer;
+}
+
+.legacyReasoningToggle input {
+  width: 17px;
+  height: 17px;
+  min-height: 0;
+  margin: 2px 0 0;
+  accent-color: var(--dsw-alias-brand-primary);
+}
+
+.legacyReasoningToggle span {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.legacyReasoningToggle strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.legacyReasoningToggle small {
+  color: var(--legacy-muted);
+  font-size: 12px;
+  line-height: 18px;
+}
+
 .legacyAssignGrid {
   display: grid;
   padding-top: 14px;

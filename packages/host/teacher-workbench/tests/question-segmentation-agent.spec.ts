@@ -4329,6 +4329,40 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
+  it('does not start a child when the model cannot disable reasoning', async () => {
+    const ctx = new Context()
+    provideTools(ctx)
+    ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
+    const start = vi.fn()
+    ctx.provide('subagents', { start } as never)
+    ctx.provide('agentDefaultModel', {
+      currentToolSelection: () => ({ provider: 'p', model: 'thinking-only', reasoningEffort: 'high' }),
+    } as never)
+    ctx.provide('llm', {
+      resolveModelInfo: () => Promise.resolve({
+        provider: 'p', id: 'thinking-only', name: 'Thinking only',
+        inputModalities: ['text'],
+        reasoning: {
+          efforts: [{ id: 'low', name: 'Low' }, { id: 'high', name: 'High' }],
+          defaultEffort: 'high',
+        },
+      }),
+    } as never)
+
+    await expect(segmentQuestionsWithAgent(ctx, request(), {
+      ...CONFIG,
+      questionSegmentationReasoningEnabled: false,
+    })).resolves.toEqual({
+      ok: false,
+      error: {
+        code: 'invalid-request',
+        message: 'tool model p/thinking-only cannot disable reasoning; enable question-cutting reasoning or select a model that advertises Off',
+      },
+    })
+    expect(start).not.toHaveBeenCalled()
+    await ctx.fiber.dispose()
+  })
+
   it('rejects learner-question heads inside a document answer section', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)

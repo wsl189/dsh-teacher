@@ -56,6 +56,10 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
   const active = props.useStore(state => state.active)
   const snapshot = props.useWorkbench(state => state)
   const settings = props.useTeacherSettings(state => state.value ?? DEFAULT_TEACHER_WORKBENCH_SETTINGS)
+  const questionCuttingReasoning = props.useQuestionCuttingSettings(state => ({
+    enabled: state.value?.questionSegmentationReasoningEnabled ?? false,
+    writable: state.writable,
+  }))
   useEffect(() => {
     if (open) void props.ensure()
   }, [active, open, props.ensure])
@@ -187,6 +191,10 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                       state={snapshot.document.state}
                       settings={settings}
                       commands={commands}
+                      questionCuttingReasoning={{
+                        ...questionCuttingReasoning,
+                        setEnabled: props.setQuestionCuttingReasoningEnabled,
+                      }}
                       useQuestionCutting={props.useQuestionCutting}
                       t={props.t}
                     />

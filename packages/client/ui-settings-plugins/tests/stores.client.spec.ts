@@ -450,29 +450,29 @@ describe('AgentLoopCardController', () => {
 })
 
 describe('TeacherWorkbenchCardController', () => {
-  it('stages and saves the question-cutting reasoning preference', async () => {
+  it('stages and saves a document-extraction storage preference', async () => {
     const host = stubSettingsScope<TeacherWorkbenchHostSettings>()
     acceptWrites(host)
     const controller = new TeacherWorkbenchCardController(host.scope)
     host.publish({
       status: 'ready',
       writable: true,
-      value: { questionSegmentationReasoningEnabled: false },
-      base: { questionSegmentationReasoningEnabled: false },
+      value: { segmentsRoot: '/questions' },
+      base: { segmentsRoot: '/questions' },
       user: {},
     })
     const face = controller.inject()
 
-    expect(face.hooks.teacherWorkbenchCard.getSnapshot().questionSegmentationReasoningEnabled)
-      .toEqual({ text: 'false', overridden: false, invalid: false })
-    face.edit('questionSegmentationReasoningEnabled', 'true')
+    expect(face.hooks.teacherWorkbenchCard.getSnapshot().segmentsRoot)
+      .toEqual({ text: '/questions', overridden: false, invalid: false })
+    face.edit('segmentsRoot', '/new-questions')
     face.save()
     await vi.waitFor(() => {
-      expect(host.set).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', true)
+      expect(host.set).toHaveBeenCalledWith('segmentsRoot', '/new-questions')
     })
     expect(face.hooks.teacherWorkbenchCard.getSnapshot()).toMatchObject({
       dirty: false,
-      questionSegmentationReasoningEnabled: { text: 'true', overridden: true },
+      segmentsRoot: { text: '/new-questions', overridden: true },
     })
   })
 })

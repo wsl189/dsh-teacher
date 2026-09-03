@@ -10,10 +10,11 @@ import {
 
 export {
   DEFAULT_TEACHER_WORKBENCH_SETTINGS,
+  QUESTION_CUTTING_SETTINGS_NAMESPACE,
   TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
   TeacherWorkbenchSettingsSchema,
   validateTeacherWorkbenchSettings,
-  type TeacherWorkbenchSettings,
+  type QuestionCuttingSettings, type TeacherWorkbenchSettings,
 } from './settings.ts'
 
 /**

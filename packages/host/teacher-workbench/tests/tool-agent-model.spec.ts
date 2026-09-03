@@ -97,7 +97,7 @@ describe('reasoningEnabledToolSelection', () => {
 })
 
 describe('questionSegmentationToolSelection', () => {
-  it('uses the configured enabled or low-latency reasoning policy', () => {
+  it('uses the configured enabled or strictly disabled reasoning policy', () => {
     const info = modelInfo([
       ReasoningEffortId('off'),
       ReasoningEffortId('high'),
@@ -109,5 +109,21 @@ describe('questionSegmentationToolSelection', () => {
       model: 'model',
       reasoningEffort: 'off',
     })
+  })
+
+  it('removes a selected effort from models without reasoning metadata', () => {
+    expect(questionSegmentationToolSelection(selection, modelInfo(), false)).toEqual({
+      provider: 'provider',
+      model: 'model',
+    })
+  })
+
+  it('rejects reasoning models that cannot honor the disabled setting', () => {
+    expect(() => questionSegmentationToolSelection(selection, modelInfo([
+      ReasoningEffortId('low'),
+      ReasoningEffortId('high'),
+    ]), false)).toThrow(
+      'tool model provider/model cannot disable reasoning; enable question-cutting reasoning or select a model that advertises Off',
+    )
   })
 })

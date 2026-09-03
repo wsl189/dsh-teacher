@@ -23,7 +23,6 @@ export type PluginsSettingsLocaleKey =
   | 'mineruMaxOutputCharacters' | 'mineruMaxOutputCharactersHint'
   | 'mineruMaxResponseBytes' | 'mineruMaxResponseBytesHint'
   | 'teacherWorkbenchTitle' | 'teacherWorkbenchDescription'
-  | 'teacherQuestionSegmentationReasoning' | 'teacherQuestionSegmentationReasoningHint'
   | 'teacherSegmentsRoot' | 'teacherSegmentsRootHint' | 'teacherStudentsRoot' | 'teacherStudentsRootHint'
   | 'teacherImageLimit' | 'teacherImageLimitHint' | 'teacherBatchLimit' | 'teacherBatchLimitHint'
   | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
@@ -112,9 +111,7 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   mineruMaxResponseBytes: 'Maximum response size (bytes)',
   mineruMaxResponseBytesHint: 'Largest JSON response accepted from MinerU.',
   teacherWorkbenchTitle: 'Document extraction',
-  teacherWorkbenchDescription: 'Question-cutting agent policy and storage for extracted questions.',
-  teacherQuestionSegmentationReasoning: 'Use reasoning while cutting questions',
-  teacherQuestionSegmentationReasoningHint: 'Uses enabled reasoning for boundary detection, visual review, and repair. When off, uses Off when the model advertises it, otherwise its lowest advertised effort or provider default.',
+  teacherWorkbenchDescription: 'Storage for extracted questions.',
   teacherSegmentsRoot: 'Paper batch directory',
   teacherSegmentsRootHint: 'Question crops are stored by generated paper and image IDs under this directory.',
   teacherStudentsRoot: 'Student question directory',
@@ -219,9 +216,7 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   mineruMaxResponseBytes: '响应大小上限（字节）',
   mineruMaxResponseBytesHint: '允许 MinerU 返回的最大 JSON 响应大小。',
   teacherWorkbenchTitle: '文档提取',
-  teacherWorkbenchDescription: '设置切题 Agent 策略以及提取后试题的存储方式。',
-  teacherQuestionSegmentationReasoning: '切题时启用思考',
-  teacherQuestionSegmentationReasoningHint: '用于题界识别、视觉复核和修复。关闭后优先使用模型公布的 Off 档；没有 Off 档时使用最低推理档或提供方默认值。',
+  teacherWorkbenchDescription: '设置提取后试题的存储方式。',
   teacherSegmentsRoot: '试卷批次目录',
   teacherSegmentsRootHint: '切题图片按系统生成的试卷和图片 ID 存放在此目录。',
   teacherStudentsRoot: '学生试题目录',

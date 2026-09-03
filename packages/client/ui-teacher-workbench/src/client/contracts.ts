@@ -45,7 +45,7 @@ import type {
   TeacherTimetableNormalizeResult,
   TeacherWeatherForecast,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import type { TeacherWorkbenchSettings } from '../settings.ts'
+import type { QuestionCuttingSettings, TeacherWorkbenchSettings } from '../settings.ts'
 import type {
   TeacherCalendarImportInput,
   TeacherCalendarItemInput,
@@ -216,6 +216,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
     workbench: HostObservable<TeacherWorkbenchSnapshot>
     /** Durable teacher identity and analysis settings. */
     teacherSettings: SettingsScope<TeacherWorkbenchSettings>
+    /** Host-owned question-cutting policy shown before a PDF enters the queue. */
+    questionCuttingSettings: SettingsScope<QuestionCuttingSettings>
     /** Browser-local question-cutting queue that survives workbench and Session navigation. */
     questionCutting: HostObservable<QuestionCuttingView>
   }
@@ -227,6 +229,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
   setTeacherName: (name: string) => Promise<void>
   /** Persist the weather location query in the feature settings scope. */
   setWeatherLocation: (location: string) => Promise<void>
+  /** Persist whether question-cutting children may reason. */
+  setQuestionCuttingReasoningEnabled: (enabled: boolean) => Promise<void>
   /** Load validated weather through the DSH Host. */
   loadWeather: (location: string, signal?: AbortSignal) => Promise<TeacherWeatherForecast>
 }

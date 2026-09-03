@@ -46,8 +46,21 @@ const t: QuestionWorkbenchProps['t'] = (key, params) => {
   return value
 }
 
-function QuestionWorkbench(props: Omit<QuestionWorkbenchProps, 'cutting'>) {
-  return <QuestionWorkbenchComponent {...props} cutting={EMPTY_QUESTION_CUTTING_VIEW} />
+const defaultQuestionCuttingReasoning: QuestionWorkbenchProps['questionCuttingReasoning'] = {
+  enabled: false,
+  writable: true,
+  setEnabled: vi.fn(async () => {}),
+}
+
+function QuestionWorkbench(
+  props: Omit<QuestionWorkbenchProps, 'cutting' | 'questionCuttingReasoning'>
+    & { questionCuttingReasoning?: QuestionWorkbenchProps['questionCuttingReasoning'] },
+) {
+  return <QuestionWorkbenchComponent
+    {...props}
+    questionCuttingReasoning={props.questionCuttingReasoning ?? defaultQuestionCuttingReasoning}
+    cutting={EMPTY_QUESTION_CUTTING_VIEW}
+  />
 }
 
 const state: TeacherWorkbenchState = {
@@ -155,6 +168,7 @@ describe('QuestionWorkbench reference shell', () => {
         state={state}
         settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={commands()}
+        questionCuttingReasoning={defaultQuestionCuttingReasoning}
         cutting={{
           jobs: [{
             key: 'active',
@@ -202,6 +216,7 @@ describe('QuestionWorkbench reference shell', () => {
         state={state}
         settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={commands()}
+        questionCuttingReasoning={defaultQuestionCuttingReasoning}
         cutting={{
           jobs: [{
             key: 'unverified',
@@ -795,7 +810,16 @@ describe('QuestionWorkbench reference shell', () => {
         questionAssignments: libraryState.questionAssignments,
       } satisfies TeacherQuestionMediaBrowseValue,
     } as const))
-    const view = render(<QuestionWorkbench state={libraryState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    let resolveReasoning!: () => void
+    const reasoningSaved = new Promise<void>((resolve) => { resolveReasoning = resolve })
+    const setReasoningEnabled = vi.fn(() => reasoningSaved)
+    const view = render(<QuestionWorkbench
+      state={libraryState}
+      settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+      commands={c}
+      questionCuttingReasoning={{ enabled: false, writable: true, setEnabled: setReasoningEnabled }}
+      t={t}
+    />)
     await waitFor(() => { expect(c.browseQuestionMedia).toHaveBeenCalled() })
     const input = view.container.querySelector<HTMLInputElement>('input[type="file"][accept="application/pdf,.pdf"]')
     expect(input).not.toBeNull()
@@ -810,16 +834,27 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(directory).getByRole('option', { name: '月考 / 高一' })).toBeTruthy()
     expect(within(directory).getByRole('option', { name: '周考' })).toBeTruthy()
     expect(within(directory).getByRole('option', { name: '当前根目录 / 扫描叶目录' })).toBeTruthy()
+    const reasoning = within(dialog).getByRole('switch', { name: '切题时启用思考' })
+    expect((reasoning as HTMLInputElement).checked).toBe(false)
+    expect(directory.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    fireEvent.click(reasoning)
+    expect((reasoning as HTMLInputElement).checked).toBe(true)
+    expect(setReasoningEnabled).not.toHaveBeenCalled()
     fireEvent.change(directory, { target: { value: scannedLeafId } })
     expect((directory as HTMLSelectElement).value).toBe(scannedLeafId)
     fireEvent.click(within(dialog).getByRole('button', { name: '确认切割' }))
-    expect(c.enqueueQuestionCutting).toHaveBeenCalledWith(expect.objectContaining({
-      file: pdf,
-      pageIndexes: [0],
-      pageRange: '全部页码',
-      folderId: scannedLeafId,
-    }))
-    expect(screen.queryByRole('dialog', { name: '选择页码范围' })).toBeNull()
+    await waitFor(() => { expect(setReasoningEnabled).toHaveBeenCalledWith(true) })
+    expect(c.enqueueQuestionCutting).not.toHaveBeenCalled()
+    resolveReasoning()
+    await waitFor(() => {
+      expect(c.enqueueQuestionCutting).toHaveBeenCalledWith(expect.objectContaining({
+        file: pdf,
+        pageIndexes: [0],
+        pageRange: '全部页码',
+        folderId: scannedLeafId,
+      }))
+    })
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '选择页码范围' })).toBeNull() })
     expect(screen.getByRole('button', { name: '上传 PDF' }).hasAttribute('disabled')).toBe(false)
   })
 

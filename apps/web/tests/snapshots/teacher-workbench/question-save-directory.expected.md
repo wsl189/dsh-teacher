@@ -9,4 +9,7 @@
     - option "不选择（按 PDF 名新建文件夹）" [selected]
     - option "模拟题库 / 八月题库"
     - option "layout"
+  - switch "切题时启用思考"
+  - strong: 切题时启用思考
+  - text: 默认关闭；关闭后严格禁用思考，不支持 Off 档的模型不能执行切题。
   - button "确认切割"

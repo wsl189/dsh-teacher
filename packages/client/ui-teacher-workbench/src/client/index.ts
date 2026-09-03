@@ -13,7 +13,9 @@ import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import {
+  QUESTION_CUTTING_SETTINGS_NAMESPACE,
   TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
+  type QuestionCuttingSettings,
   type TeacherWorkbenchSettings,
 } from '../settings.ts'
 import { TeacherWorkbenchController } from './controller.ts'
@@ -90,6 +92,9 @@ export function apply(ctx: ClientContext): void {
   const settings = ctx.settingsScope.bind<TeacherWorkbenchSettings>({
     namespace: TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
   })
+  const questionCuttingSettings = ctx.settingsScope.bind<QuestionCuttingSettings>({
+    namespace: QUESTION_CUTTING_SETTINGS_NAMESPACE,
+  })
   const controller = new TeacherWorkbenchController(ctx.remote.teacherWorkbench)
   const questionCutting = new QuestionCuttingController({
     extractLayout: (file, pageIndexes, renderScale, progress) => (
@@ -152,11 +157,14 @@ export function apply(ctx: ClientContext): void {
   })
 
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
-    hooks: { workbench: controller, teacherSettings: settings, questionCutting },
+    hooks: { workbench: controller, teacherSettings: settings, questionCuttingSettings, questionCutting },
     ensure: () => controller.refresh(),
     subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),
+    setQuestionCuttingReasoningEnabled: enabled => (
+      questionCuttingSettings.set('questionSegmentationReasoningEnabled', enabled)
+    ),
     loadWeather: (location, signal) => fetchTeacherWeather(location, ctx.remote.teacherWorkbench, signal),
     listNotificationTargets: () => controller.listNotificationTargets(),
     transcribeVoice: async (audio) => {

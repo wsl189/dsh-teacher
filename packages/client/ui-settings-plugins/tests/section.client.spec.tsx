@@ -118,7 +118,6 @@ function renderSubagentModelSelection(state: Partial<SubagentModelSelectionCardS
 function renderTeacherWorkbench(state: Partial<TeacherWorkbenchCardState> = {}) {
   const store = createSnapshotStore<TeacherWorkbenchCardState>({
     ...settled,
-    questionSegmentationReasoningEnabled: field('false'),
     segmentsRoot: field('/questions'),
     studentsRoot: field('/students'),
     maxQuestionImageBytes: field('1024'),
@@ -482,25 +481,13 @@ describe('SubagentModelSelectionCard', () => {
 })
 
 describe('TeacherWorkbenchCard', () => {
-  it('shows the default-off question-cutting reasoning switch under Document extraction', () => {
+  it('shows document-extraction storage fields without the moved reasoning switch', () => {
     const actions = renderTeacherWorkbench()
     fireEvent.click(screen.getByText(en.teacherWorkbenchTitle))
 
-    const control = screen.getByRole('switch', { name: en.teacherQuestionSegmentationReasoning })
-    expect(control.getAttribute('aria-checked')).toBe('false')
-    fireEvent.click(control)
-
-    expect(actions.edit).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', 'true')
-  })
-
-  it('stages resetting an overridden reasoning preference', () => {
-    const actions = renderTeacherWorkbench({
-      questionSegmentationReasoningEnabled: field('true', { overridden: true }),
-    })
-    fireEvent.click(screen.getByText(en.teacherWorkbenchTitle))
-    fireEvent.click(screen.getByRole('button', { name: en.reset }))
-
-    expect(actions.resetField).toHaveBeenCalledWith('questionSegmentationReasoningEnabled')
+    expect(screen.queryByRole('switch')).toBeNull()
+    expect(screen.getByLabelText(en.teacherSegmentsRoot)).toBeTruthy()
+    expect(actions.edit).not.toHaveBeenCalled()
   })
 })
 

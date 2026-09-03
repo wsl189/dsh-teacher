@@ -18,7 +18,7 @@ MinerU 保留了安全切题所需的来源文本和几何，但 OCR 损坏会�
 
 只有完整序列化 OCR 分组不超过 `maxQuestionCompactBoundaryCharacters` 时，才使用紧凑内联证据；此时 Host 会把每个元素都放入 `inlineSource`。更大的分组使用有界来源与页面预览工具，因此语义发现不会基于候选附近的截取子集。两条路径都保留现有的分组、元素、字符、图片与提交次数限制。部署可另外设置子 agent 墙钟截止时间，但 Web 组合默认不设置。
 
-每个边界、视觉复核与修复子 agent 都会把逻辑 `toolChoice: required` 策略记录进请求 header。实时 `questionSegmentationReasoningEnabled` 设置默认为 false。开启后，子 agent 依次保留显式开启的推理强度，或选择模型公布的已开启默认强度、最低已开启强度、提供方默认值；关闭后依次选择模型公布的 Off 档、最低公布档位或提供方默认值。适配器会把工具策略映射为提供方协议支持的最强值。因此，Z.ai 兼容补全路由会发送 `auto`，但模型仍只能看到证据工具与 Host 校验工具，未进行一次已接受提交的步骤也仍会被 Host 拒绝。Web 组合不设置子 agent 墙钟截止时间；部署可将 `questionSegmentationAgentTimeoutMs` 设为正值。工具限制与 Host 校验决定哪些调用存在，以及哪些已提交草稿成为权威结果。
+每个边界、视觉复核与修复子 agent 都会把逻辑 `toolChoice: required` 策略记录进请求 header。实时 `questionSegmentationReasoningEnabled` 设置默认为 false，并在 PDF 页码选择面板中编辑。开启后，子 agent 依次保留显式开启的推理强度，或选择模型公布的已开启默认强度、最低已开启强度、提供方默认值；关闭后，推理模型必须公布并接收 Off 档，没有推理元数据的模型不接收推理档位，没有 Off 档的推理模型不能启动子 agent。适配器会把工具策略映射为提供方协议支持的最强值。因此，Z.ai 兼容补全路由会发送 `auto`，但模型仍只能看到证据工具与 Host 校验工具，未进行一次已接受提交的步骤也仍会被 Host 拒绝。Web 组合不设置子 agent 墙钟截止时间；部署可将 `questionSegmentationAgentTimeoutMs` 设为正值。工具限制与 Host 校验决定哪些调用存在，以及哪些已提交草稿成为权威结果。
 
 Host 候选检测继续作为可疑回忆提示、窄范围矛盾校验以及边界 agent 失败后的确定性降级。每个提示候选仍必须得到题目或非题目显式判定，具有来源作答要求证据的候选不能被降级。这些校验不会再把子 agent 未提交的候选加入一份成功草稿。紧凑纯 OCR 运行仍通过确定性几何归属未列出的图片，因为图片语义由后续标注视觉复核判断。
 

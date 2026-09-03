@@ -1,9 +1,9 @@
-/** Staged form for Host question-cutting policy and media storage settings. */
+/** Staged form for Host question-media storage settings. */
 
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import {
-  booleanField, CardForm, numberField, textField,
+  CardForm, numberField, textField,
   type CardActions, type CardFieldState, type CardShell,
 } from './card-form.ts'
 
@@ -12,8 +12,6 @@ export const TEACHER_WORKBENCH_NS = 'teacher-workbench'
 
 /** Host settings edited by the document-extraction card. */
 export interface TeacherWorkbenchHostSettings {
-  /** Whether question-cutting children use an enabled reasoning effort. */
-  questionSegmentationReasoningEnabled?: boolean
   /** Root for paper batches. */
   segmentsRoot?: string
   /** Root for readable student assignment copies. */
@@ -26,7 +24,6 @@ export interface TeacherWorkbenchHostSettings {
 
 /** Projected card state. */
 export interface TeacherWorkbenchCardState extends CardShell {
-  questionSegmentationReasoningEnabled: CardFieldState
   segmentsRoot: CardFieldState
   studentsRoot: CardFieldState
   maxQuestionImageBytes: CardFieldState
@@ -49,7 +46,6 @@ export class TeacherWorkbenchCardController {
   /** @param scope - settings scope bound to the Host teacher-workbench namespace. */
   constructor(scope: SettingsScope<TeacherWorkbenchHostSettings>) {
     this.form = new CardForm(scope, [
-      booleanField('questionSegmentationReasoningEnabled'),
       textField('segmentsRoot'),
       textField('studentsRoot'),
       numberField('maxQuestionImageBytes'),
@@ -61,7 +57,6 @@ export class TeacherWorkbenchCardController {
   private projection(): TeacherWorkbenchCardState {
     return {
       ...this.form.shell(),
-      questionSegmentationReasoningEnabled: this.form.field('questionSegmentationReasoningEnabled'),
       segmentsRoot: this.form.field('segmentsRoot'),
       studentsRoot: this.form.field('studentsRoot'),
       maxQuestionImageBytes: this.form.field('maxQuestionImageBytes'),

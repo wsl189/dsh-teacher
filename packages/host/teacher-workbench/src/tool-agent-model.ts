@@ -3,6 +3,9 @@
 import type { ToolModelSelection } from '@deepseek-ai/dsh-agent-default-model'
 import type { LlmResolvedModelInfo } from '@deepseek-ai/dsh-llm'
 
+/** Selected question-cutting model cannot honor a strict no-reasoning request. */
+export class QuestionSegmentationReasoningError extends Error {}
+
 /**
  * Prefer the model's non-reasoning or lowest reasoning mode for validated tool loops.
  * @param selection - User-selected provider, model, and optional reasoning effort.
@@ -42,11 +45,36 @@ export function reasoningEnabledToolSelection(
 }
 
 /**
+ * Remove reasoning from a question-cutting route.
+ * Models that advertise reasoning must expose an Off effort; otherwise the
+ * setting cannot promise that the provider will avoid reasoning.
+ * @param selection - User-selected provider, model, and optional reasoning effort.
+ * @param info - Resolved capabilities for the selected model.
+ * @returns The selected route with reasoning disabled or omitted for a non-reasoning model.
+ */
+function reasoningDisabledQuestionSegmentationSelection(
+  selection: ToolModelSelection,
+  info: LlmResolvedModelInfo,
+): ToolModelSelection {
+  const { reasoningEffort: _selectedEffort, ...route } = selection
+  if (info.reasoning === undefined) return route
+  const off = info.reasoning.efforts.find(candidate => candidate.id === 'off')
+  if (off === undefined) {
+    throw new QuestionSegmentationReasoningError(
+      `tool model ${selection.provider}/${selection.model} cannot disable reasoning; `
+      + 'enable question-cutting reasoning or select a model that advertises Off',
+    )
+  }
+  return { ...route, reasoningEffort: off.id }
+}
+
+/**
  * Apply the configured reasoning policy for question-boundary children.
  * @param selection - User-selected provider, model, and optional reasoning effort.
  * @param info - Resolved capabilities for the selected model.
  * @param enabled - Whether question cutting should retain an enabled reasoning effort.
- * @returns The selected route with enabled or low-latency reasoning policy applied.
+ * @returns The selected route with reasoning enabled or strictly disabled.
+ * @throws Error when disabled reasoning is requested for a reasoning model without an Off effort.
  */
 export function questionSegmentationToolSelection(
   selection: ToolModelSelection,
@@ -55,5 +83,5 @@ export function questionSegmentationToolSelection(
 ): ToolModelSelection {
   return enabled
     ? reasoningEnabledToolSelection(selection, info)
-    : lowLatencyToolSelection(selection, info)
+    : reasoningDisabledQuestionSegmentationSelection(selection, info)
 }

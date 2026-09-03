@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TeacherWorkbenchDocument, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   apply as nodeApply,
+  QUESTION_CUTTING_SETTINGS_NAMESPACE,
   TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
   TeacherWorkbenchSettingsSchema,
   validateTeacherWorkbenchSettings,
@@ -169,14 +170,17 @@ describe('teacher-workbench browser wiring', () => {
       'sidebar.primary.section', 'shell.overlay', 'settings.general.item',
     ])
     expect(ctx.locale.register).toHaveBeenCalledWith('teacherWorkbench', expect.any(Object))
-    expect(ctx.settingsScope.bind).toHaveBeenCalledWith({
-      namespace: TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
-    })
+    expect(ctx.settingsScope.bind.mock.calls).toEqual([
+      [{ namespace: TEACHER_WORKBENCH_SETTINGS_NAMESPACE }],
+      [{ namespace: QUESTION_CUTTING_SETTINGS_NAMESPACE }],
+    ])
 
     resetListeners[0]!()
     expect(read).not.toHaveBeenCalled()
     const surfaceEntry = registrations.find(item => item.entry.name === 'shell.overlay')!.entry
     const surface = (surfaceEntry.inject as () => Record<string, unknown>)()
+    await (surface.setQuestionCuttingReasoningEnabled as (enabled: boolean) => Promise<void>)(false)
+    expect(setSetting).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', false)
     const navigated = vi.fn()
     const stopNavigation = (surface.subscribeSessionNavigation as (listener: () => void) => () => void)(navigated)
     currentSession = 'session-b'

@@ -5,6 +5,15 @@ import z from '@deepseek-ai/schemastery'
 /** Settings namespace owned by the teacher-workbench feature. */
 export const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = 'ui-teacher-workbench'
 
+/** Host plugin settings namespace that owns question-cutting execution policy. */
+export const QUESTION_CUTTING_SETTINGS_NAMESPACE = 'teacher-workbench'
+
+/** Question-cutting policy projected into the PDF page-range panel. */
+export interface QuestionCuttingSettings {
+  /** Whether boundary, visual-review, and repair children may reason. */
+  questionSegmentationReasoningEnabled?: boolean
+}
+
 /** Teacher identity, daily-management preferences, and score-analysis policy. */
 export interface TeacherWorkbenchSettings {
   /** Default academic-year directory for legacy and newly created classes. */

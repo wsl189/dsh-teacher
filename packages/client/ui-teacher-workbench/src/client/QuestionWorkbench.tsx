@@ -52,6 +52,12 @@ export interface QuestionWorkbenchProps {
   settings: TeacherWorkbenchSettings
   /** OCR, roster, and durable question commands. */
   commands: TeacherWorkbenchCommands
+  /** Persisted reasoning policy edited before this PDF enters the queue. */
+  questionCuttingReasoning: {
+    readonly enabled: boolean
+    readonly writable: boolean
+    readonly setEnabled: (enabled: boolean) => Promise<void>
+  }
   /** Plugin-lifetime queue projection retained across workbench and Session navigation. */
   cutting: QuestionCuttingView
   /** Namespace translator. */
@@ -155,7 +161,14 @@ interface OfficeDialog {
 }
 
 /** Render the reference workbench shell without its former analysis and image-search center pane. */
-export function QuestionWorkbench({ state, settings, commands, cutting, t }: QuestionWorkbenchProps) {
+export function QuestionWorkbench({
+  state,
+  settings,
+  commands,
+  questionCuttingReasoning,
+  cutting,
+  t,
+}: QuestionWorkbenchProps) {
   const fallbackYear = settings.academicYear.trim() || String(new Date().getFullYear())
   const durableClasses = useMemo(() => state.classes.filter(item => item.usage === 'roster'), [state.classes])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -173,6 +186,8 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
   const [pdfPageCount, setPdfPageCount] = useState(0)
   const [pageRange, setPageRange] = useState('')
   const [pageRangeFolderId, setPageRangeFolderId] = useState<TeacherQuestionLibraryFolderId | ''>('')
+  const [pageRangeReasoningEnabled, setPageRangeReasoningEnabled] = useState(false)
+  const [pageRangeSaving, setPageRangeSaving] = useState(false)
   const [pageRangeOpen, setPageRangeOpen] = useState(false)
   const [skillMenuOpen, setSkillMenuOpen] = useState(false)
   const [pendingSkillKind, setPendingSkillKind] = useState<'word' | 'ppt' | null>(null)
@@ -462,6 +477,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
       setPdfPageCount(count)
       setPageRange('')
       setPageRangeFolderId('')
+      setPageRangeReasoningEnabled(questionCuttingReasoning.enabled)
       setPageRangeOpen(true)
     } catch (cause) {
       setToast(errorMessage(cause, t('questions.pdfReadFailed')))
@@ -470,7 +486,7 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
     }
   }
 
-  const enqueuePdf = (): void => {
+  const enqueuePdf = async (): Promise<void> => {
     if (pendingPdf === null || pdfPageCount < 1) return
     let selection
     try {
@@ -480,20 +496,30 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
       return
     }
 
-    commands.enqueueQuestionCutting({
-      file: pendingPdf,
-      pageCount: pdfPageCount,
-      pageIndexes: selection.pageIndexes,
-      pageRange: selection.label || t('questions.allPages'),
-      ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
-      renderScale: settings.questionRenderScale,
-      padding: settings.questionCropPadding,
-    })
-    setPageRangeOpen(false)
-    setPendingPdf(null)
-    setPdfPageCount(0)
-    setPageRange('')
-    setPageRangeFolderId('')
+    setPageRangeSaving(true)
+    try {
+      if (pageRangeReasoningEnabled !== questionCuttingReasoning.enabled) {
+        await questionCuttingReasoning.setEnabled(pageRangeReasoningEnabled)
+      }
+      commands.enqueueQuestionCutting({
+        file: pendingPdf,
+        pageCount: pdfPageCount,
+        pageIndexes: selection.pageIndexes,
+        pageRange: selection.label || t('questions.allPages'),
+        ...(pageRangeFolderId === '' ? {} : { folderId: pageRangeFolderId }),
+        renderScale: settings.questionRenderScale,
+        padding: settings.questionCropPadding,
+      })
+      setPageRangeOpen(false)
+      setPendingPdf(null)
+      setPdfPageCount(0)
+      setPageRange('')
+      setPageRangeFolderId('')
+    } catch (cause) {
+      setToast(errorMessage(cause, t('questions.reasoningSaveFailed')))
+    } finally {
+      setPageRangeSaving(false)
+    }
   }
 
   const addStudentHierarchy = async (): Promise<void> => {
@@ -1559,7 +1585,26 @@ export function QuestionWorkbench({ state, settings, commands, cutting, t }: Que
                 {libraryFolderOptions.map(option => <option key={option.id} value={option.id}>{option.label}</option>)}
               </select>
             </FormField>
-            <div className={css.legacySheetActions}><button type="button" onClick={enqueuePdf}>{t('questions.confirmCut')}</button></div>
+            <label className={css.legacyReasoningToggle}>
+              <input
+                type="checkbox"
+                role="switch"
+                aria-label={t('questions.reasoningEnabled')}
+                aria-describedby="question-cutting-reasoning-hint"
+                checked={pageRangeReasoningEnabled}
+                disabled={!questionCuttingReasoning.writable || pageRangeSaving}
+                onChange={(event) => { setPageRangeReasoningEnabled(event.target.checked) }}
+              />
+              <span>
+                <strong>{t('questions.reasoningEnabled')}</strong>
+                <small id="question-cutting-reasoning-hint">{t('questions.reasoningHint')}</small>
+              </span>
+            </label>
+            <div className={css.legacySheetActions}>
+              <button type="button" disabled={pageRangeSaving} onClick={() => { void enqueuePdf() }}>
+                {t('questions.confirmCut')}
+              </button>
+            </div>
           </section>
         </>
       )}

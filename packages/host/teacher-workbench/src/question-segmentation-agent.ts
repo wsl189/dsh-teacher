@@ -16,7 +16,10 @@ import {
   QUESTION_CROP_REVIEW_SKILL,
   QUESTION_SEGMENTATION_SKILL,
 } from './question-segmentation-skill.ts'
-import { questionSegmentationToolSelection } from './tool-agent-model.ts'
+import {
+  QuestionSegmentationReasoningError,
+  questionSegmentationToolSelection,
+} from './tool-agent-model.ts'
 import type {
   TeacherQuestionLayoutElement,
   TeacherQuestionLayoutElementId,
@@ -4101,11 +4104,13 @@ export async function segmentQuestionsWithAgent(
       break
     }
   } catch (error) {
-    outcome = error instanceof QuestionSegmentationVisionError
-      ? rejected('vision-unavailable', error.message)
-      : deadline.expired
-        ? rejected('timed-out', 'the tool model did not finish before the deadline')
-        : rejected('model-failed', error instanceof Error ? error.message : String(error))
+    outcome = error instanceof QuestionSegmentationReasoningError
+      ? rejected('invalid-request', error.message)
+      : error instanceof QuestionSegmentationVisionError
+        ? rejected('vision-unavailable', error.message)
+        : deadline.expired
+          ? rejected('timed-out', 'the tool model did not finish before the deadline')
+          : rejected('model-failed', error instanceof Error ? error.message : String(error))
   } finally {
     deadline.dispose()
   }
