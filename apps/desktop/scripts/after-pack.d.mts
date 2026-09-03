@@ -21,6 +21,9 @@ export interface DesktopAfterPackContext {
   }
 }
 
+/** Filename used by the packager and desktop runtime environment. */
+export declare const PPT_MASTER_ARCHIVE_NAME: 'ppt-master.tgz'
+
 /**
  * Copy the HTML-conversion runtime packages into an unpacked desktop application.
  * @param context - source application and Electron output directories.
@@ -29,6 +32,13 @@ export interface DesktopAfterPackContext {
 export declare function copyDesktopRuntimePackages(
   context: DesktopRuntimeCopyContext,
 ): Promise<void>
+
+/**
+ * Replace the loose packaged PPT Master tree with its deterministic archive.
+ * @param appOutDir - unpacked Electron output containing `resources/app`.
+ * @returns completion after the archive is durable and the loose tree is absent.
+ */
+export declare function archivePptMasterDistribution(appOutDir: string): Promise<void>
 
 /**
  * Stage pnpm-deduped runtime packages before electron-builder signs and compresses Windows output.

@@ -7,6 +7,12 @@ export type BackendMessage =
   | { type: 'ready'; url: string }
   | { type: 'fatal'; message: string }
 
+/** Warning sink for a bounded backend stop. */
+export interface BackendStopLogger {
+  /** Report a graceful-stop timeout or IPC delivery failure. */
+  warn(message: string): void
+}
+
 /** Validate a child IPC payload and its private-loopback URL. */
 export function parseBackendMessage(value: unknown): BackendMessage | undefined {
   if (typeof value !== 'object' || value === null) return undefined
@@ -63,5 +69,40 @@ export function waitForBackendReady(child: ChildProcess): Promise<string> {
     child.once('error', onError)
     child.once('exit', onExit)
     child.on('message', onMessage)
+  })
+}
+
+/**
+ * Ask the backend to dispose its tree, then terminate it when the caller's
+ * latency bound expires.
+ * @param child - live desktop backend with an IPC channel.
+ * @param timeoutMs - maximum graceful-disposal interval before termination.
+ * @param logger - warning sink for forced or undeliverable stops.
+ * @returns after the child exits or reports a process error.
+ */
+export function stopBackendProcess(
+  child: ChildProcess,
+  timeoutMs: number,
+  logger: BackendStopLogger,
+): Promise<void> {
+  return new Promise<void>((resolve) => {
+    const timeout = setTimeout(() => {
+      logger.warn('desktop backend did not stop in time; terminating it')
+      child.kill()
+    }, timeoutMs)
+    const done = (): void => {
+      clearTimeout(timeout)
+      child.off('exit', done)
+      child.off('error', done)
+      resolve()
+    }
+    child.once('exit', done)
+    child.once('error', done)
+    child.send({ type: 'shutdown' }, (error) => {
+      if (error !== null) {
+        logger.warn(`could not request desktop backend shutdown: ${error.message}`)
+        child.kill()
+      }
+    })
   })
 }

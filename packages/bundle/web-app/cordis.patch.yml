@@ -38,6 +38,8 @@
 
 - id: skill-ppt-master
   disabled: false
+  config:
+    archivePath: !!js process.env.DSH_PPT_MASTER_ARCHIVE ?? ''
 
 - id: web
   config:
@@ -240,7 +242,7 @@
         maxQuestionBoundaryAgentRuns: 2
         maxQuestionRejectedToolCalls: 3
         maxQuestionAutoOwnedGapRatio: 0.18
-        questionSegmentationAgentTimeoutMs: 50000
+        questionSegmentationAgentTimeoutMs: 0
         reminderRetryMs: 60000
 
     - id: tool-teacher-workbench

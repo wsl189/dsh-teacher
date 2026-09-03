@@ -1,7 +1,8 @@
 /** Verify the runtime closure and file policy of a packaged desktop application. */
 
-import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs'
+import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join, relative, resolve, sep } from 'node:path'
+import { t as listTar } from 'tar'
 
 interface PackageManifest {
   dependencies?: Record<string, unknown>
@@ -9,9 +10,20 @@ interface PackageManifest {
   peerDependenciesMeta?: Record<string, { optional?: unknown }>
 }
 
-const PPT_MASTER_RUNTIME_ROOT = 'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master'
+const PPT_MASTER_ARCHIVE_PATH = '../ppt-master.tgz'
 const PPT_MASTER_RUNTIME_FILES = 12_939
 const PPT_MASTER_RUNTIME_BYTES = 79_496_215
+const REQUIRED_PPT_MASTER_FILES = [
+  'SKILL.md',
+  'LICENSE',
+  'SPONSORS.md',
+  'SPONSORS_CN.md',
+  'requirements.txt',
+  'scripts/attribution_guard.py',
+  'references/shared-standards.md',
+  'templates/layouts/presentation_core/templates/17_two_picture_caption.svg',
+  'templates/sounds/bigsoundbank/0572.wav',
+] as const
 
 /** Product runtime files whose omission would leave a successful but incomplete Windows build. */
 export const REQUIRED_WINDOWS_RUNTIME_FILES = [
@@ -23,15 +35,7 @@ export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   'node_modules/turndown/lib/turndown.cjs.js',
   'node_modules/@deepseek-ai/dsh-skill-ppt-master/package.json',
   'node_modules/@deepseek-ai/dsh-skill-ppt-master/lib/index.js',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SKILL.md',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/LICENSE',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SPONSORS.md',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SPONSORS_CN.md',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/requirements.txt',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/scripts/attribution_guard.py',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/references/shared-standards.md',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/templates/layouts/presentation_core/templates/17_two_picture_caption.svg',
-  'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/templates/sounds/bigsoundbank/0572.wav',
+  PPT_MASTER_ARCHIVE_PATH,
   'node_modules/@dickpy/dsh-imagegen/package.json',
   'node_modules/@dickpy/dsh-imagegen/LICENSE',
   'node_modules/@dickpy/dsh-imagegen/lib/index.js',
@@ -151,13 +155,11 @@ function normalizedRelative(root: string, parentPath: string, name: string): str
  * @param options - product files that must be present; defaults to the Windows runtime set.
  * @returns the inspected file count and every forbidden build artifact or missing runtime file.
  */
-export function inspectDesktopPayload(
+export async function inspectDesktopPayload(
   root: string,
   options: DesktopPayloadOptions = {},
-): DesktopPayloadReport {
+): Promise<DesktopPayloadReport> {
   let fileCount = 0
-  let pptMasterFileCount = 0
-  let pptMasterByteCount = 0
   const failures: string[] = []
   const requiredFiles = options.requiredFiles ?? REQUIRED_WINDOWS_RUNTIME_FILES
 
@@ -171,10 +173,6 @@ export function inspectDesktopPayload(
     if (entry.isDirectory()) continue
     fileCount++
     const path = normalizedRelative(root, entry.parentPath, entry.name)
-    if (path.startsWith(`${PPT_MASTER_RUNTIME_ROOT}/`)) {
-      pptMasterFileCount++
-      pptMasterByteCount += statSync(join(entry.parentPath, entry.name)).size
-    }
     if (entry.name.endsWith('.map')) {
       failures.push(`${path}: source map must not be packaged`)
     } else if (entry.name.endsWith('.tsbuildinfo')) {
@@ -184,13 +182,38 @@ export function inspectDesktopPayload(
     }
   }
 
-  if (
-    options.requiredFiles === undefined
-    && (pptMasterFileCount !== PPT_MASTER_RUNTIME_FILES || pptMasterByteCount !== PPT_MASTER_RUNTIME_BYTES)
-  ) {
-    failures.push(
-      `${PPT_MASTER_RUNTIME_ROOT}: packaged skill inventory is ${String(pptMasterFileCount)} files and ${String(pptMasterByteCount)} bytes; expected ${String(PPT_MASTER_RUNTIME_FILES)} files and ${String(PPT_MASTER_RUNTIME_BYTES)} bytes`,
-    )
+  if (options.requiredFiles === undefined && existsSync(join(root, PPT_MASTER_ARCHIVE_PATH))) {
+    let pptMasterFileCount = 0
+    let pptMasterByteCount = 0
+    const pptMasterFiles = new Set<string>()
+    try {
+      await listTar({
+        file: join(root, PPT_MASTER_ARCHIVE_PATH),
+        strict: true,
+        onReadEntry(entry) {
+          if (entry.type !== 'File' && entry.type !== 'OldFile') return
+          pptMasterFiles.add(entry.path)
+          pptMasterFileCount++
+          pptMasterByteCount += entry.size
+          if (entry.path.endsWith('.map')) {
+            failures.push(`${PPT_MASTER_ARCHIVE_PATH}:${entry.path}: source map must not be packaged`)
+          } else if (entry.path.endsWith('.tsbuildinfo')) {
+            failures.push(`${PPT_MASTER_ARCHIVE_PATH}:${entry.path}: TypeScript incremental compiler state must not be packaged`)
+          }
+        },
+      })
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error)
+      failures.push(`${PPT_MASTER_ARCHIVE_PATH}: archive cannot be read: ${message}`)
+    }
+    for (const path of REQUIRED_PPT_MASTER_FILES) {
+      if (!pptMasterFiles.has(path)) failures.push(`${PPT_MASTER_ARCHIVE_PATH}:${path}: required skill file is absent from archive`)
+    }
+    if (pptMasterFileCount !== PPT_MASTER_RUNTIME_FILES || pptMasterByteCount !== PPT_MASTER_RUNTIME_BYTES) {
+      failures.push(
+        `${PPT_MASTER_ARCHIVE_PATH}: packaged skill inventory is ${String(pptMasterFileCount)} files and ${String(pptMasterByteCount)} bytes; expected ${String(PPT_MASTER_RUNTIME_FILES)} files and ${String(PPT_MASTER_RUNTIME_BYTES)} bytes`,
+      )
+    }
   }
 
   failures.sort()
@@ -203,7 +226,7 @@ if (process.argv[1] && import.meta.filename === resolve(process.argv[1])) {
     throw new Error('usage: verify-desktop-payload <unpacked resources/app directory>')
   }
   const root = resolve(input)
-  const report = inspectDesktopPayload(root)
+  const report = await inspectDesktopPayload(root)
   if (report.failures.length > 0) {
     process.stderr.write('verify-desktop-payload: packaged payload violations found:\n')
     for (const failure of report.failures.slice(0, 20)) process.stderr.write(`  ${failure}\n`)

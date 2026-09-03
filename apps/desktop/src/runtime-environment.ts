@@ -3,6 +3,8 @@
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 
+export const PPT_MASTER_ARCHIVE_NAME = 'ppt-master.tgz'
+
 /** Inputs used to resolve the backend's desktop and Windows-MCP paths. */
 export interface RuntimeEnvironmentOptions {
   /** Ambient environment inherited by the backend. */
@@ -28,8 +30,10 @@ export interface RuntimeEnvironmentOptions {
 export function resolveRuntimeEnvironment(options: RuntimeEnvironmentOptions): NodeJS.ProcessEnv {
   const env: NodeJS.ProcessEnv = { ...options.env, DSH_DESKTOP_DIR: options.desktopPath }
   if (!options.packaged) return env
+  delete env.DSH_PPT_MASTER_ARCHIVE
   delete env.DSH_WINDOWS_MCP_COMMAND
   delete env.DSH_WINDOWS_MCP_RUNTIME_ROOT
+  env.DSH_PPT_MASTER_ARCHIVE = join(options.resourcesPath, PPT_MASTER_ARCHIVE_NAME)
   const runtimeRoot = join(options.resourcesPath, 'windows-mcp')
   const command = join(runtimeRoot, 'python.exe')
   if ((options.exists ?? existsSync)(command)) {

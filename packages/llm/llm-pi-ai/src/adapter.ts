@@ -160,6 +160,7 @@ function resolveReasoningLevel(
   effort: ReasoningEffortIdType | ModelThinkingLevel | undefined,
 ): ModelThinkingLevel | undefined {
   if (effort === undefined) return undefined
+  if (effort === 'off' && !model.reasoning && usesZaiToolChoice(model)) return 'off'
   const supported = getSupportedThinkingLevels(model)
   if (supported.some(level => level === effort)) return effort as ModelThinkingLevel
   throw new LlmError(
@@ -169,17 +170,35 @@ function resolveReasoningLevel(
 }
 
 /**
+ * Let a Z.ai-compatible completion route serialize an explicit Off request
+ * even when a hand-declared model has no reasoning metadata. The temporary
+ * reasoning flag affects only request encoding; discovery exposes only the
+ * `off` effort that this protocol can fulfill.
+ */
+function requestModelForReasoning(model: Model<Api>, reasoning: ModelThinkingLevel | undefined): Model<Api> {
+  if (reasoning !== 'off' || model.reasoning || !usesZaiToolChoice(model)) return model
+  return { ...model, reasoning: true }
+}
+
+/** Whether this completion route uses Z.ai's auto-only tool-choice protocol. */
+function usesZaiToolChoice(model: Model<Api>): boolean {
+  if (model.api !== 'openai-completions') return false
+  if (model.compat !== undefined
+    && 'thinkingFormat' in model.compat
+    && model.compat.thinkingFormat === 'zai') return true
+  const hostname = new URL(model.baseUrl).hostname.toLowerCase()
+  return hostname === 'api.z.ai' || hostname === 'open.bigmodel.cn'
+}
+
+/**
  * Selectable reasoning efforts for one model, or nothing at all.
  *
  * A model that carries no reasoning metadata — every hand-declared one, and
- * every catalog model pi-ai marks as non-reasoning — is reported by pi-ai as
- * supporting the single level `off`. Passing that through would offer a control
- * that cannot do what it says: `off` is translated to *omitting* the reasoning
- * option, which for such a model is byte-for-byte the same request as naming no
- * effort — so a provider whose own default is to think would keep thinking with
- * `off` selected. Omitting `reasoning` entirely is the seam's way of saying the
- * capability is unavailable, which leaves the surface offering only the
- * provider's default.
+ * every catalog model pi-ai marks as non-reasoning — is normally reported by
+ * pi-ai as supporting only `off`. The adapter withholds that control when it
+ * cannot serialize a distinct request. Z.ai completion routes are the explicit
+ * exception: their protocol can send `thinking.type: disabled`, so those routes
+ * advertise a working `off` effort without claiming other thinking levels.
  * @param model - the resolved model descriptor.
  * @param defaultLevel - the profile's configured effort, already validated.
  * @returns the `reasoning` field, or an empty object when none can be offered.
@@ -188,7 +207,10 @@ function reasoningInfo(
   model: Model<Api>,
   defaultLevel: ModelThinkingLevel | undefined,
 ): Pick<LlmResolvedModelInfo, 'reasoning'> | Record<string, never> {
-  if (!model.reasoning) return {}
+  if (!model.reasoning) {
+    if (!usesZaiToolChoice(model)) return {}
+    return { reasoning: { efforts: [{ id: ReasoningEffortId('off'), name: 'Off' }] } }
+  }
   const levels = getSupportedThinkingLevels(model)
   return {
     reasoning: {
@@ -340,6 +362,7 @@ export class PiAiAdapter extends LlmAdapter {
       model,
       options.reasoningEffort ?? profile.reasoning,
     )
+    const requestModel = requestModelForReasoning(model, reasoning)
     const apiKey = await this.config.resolveApiKey(options.provider, profile)
 
     const consumer = new AbortController()
@@ -376,13 +399,16 @@ export class PiAiAdapter extends LlmAdapter {
         throw new LlmError('llm-pi-ai tool choice requires at least one tool', 'UNSUPPORTED_OPTION')
       }
       const toolChoice = options.toolChoice === 'required'
-        && (model.api === 'anthropic-messages'
-          || model.api === 'bedrock-converse-stream'
-          || model.api === 'google-generative-ai'
-          || model.api === 'google-vertex')
-        ? 'any'
+        ? usesZaiToolChoice(requestModel)
+          ? 'auto'
+          : (requestModel.api === 'anthropic-messages'
+              || requestModel.api === 'bedrock-converse-stream'
+              || requestModel.api === 'google-generative-ai'
+              || requestModel.api === 'google-vertex')
+            ? 'any'
+            : 'required'
         : options.toolChoice
-      const events = snapshot.models.streamSimple(model, context, {
+      const events = snapshot.models.streamSimple(requestModel, context, {
         ...profileOptions(profile, reasoning, apiKey),
         ...options.temperature === undefined ? {} : { temperature: options.temperature },
         ...options.maxTokens === undefined ? {} : { maxTokens: options.maxTokens },
@@ -393,7 +419,7 @@ export class PiAiAdapter extends LlmAdapter {
         // Harness-owned and therefore win collisions.
         headers: requestHeaders(profile.headers),
       })
-      const iterator = toStreamChunks(events, model.contextWindow, options.signal)[Symbol.asyncIterator]()
+      const iterator = toStreamChunks(events, requestModel.contextWindow, options.signal)[Symbol.asyncIterator]()
       let exhausted = false
       try {
         while (true) {

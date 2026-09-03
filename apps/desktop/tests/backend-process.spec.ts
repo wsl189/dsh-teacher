@@ -1,13 +1,32 @@
 import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { parseBackendMessage, waitForBackendReady } from '../src/backend-process.ts'
+import {
+  parseBackendMessage,
+  stopBackendProcess,
+  waitForBackendReady,
+} from '../src/backend-process.ts'
 
 const TOKEN = 'a'.repeat(43)
 const READY_URL = `http://127.0.0.1:43125/?token=${TOKEN}`
 
 function fakeChild(): ChildProcess {
   return new EventEmitter() as unknown as ChildProcess
+}
+
+function stoppingChild() {
+  const child = fakeChild()
+  const send = vi.fn((
+    _message: unknown,
+    callback?: (error: Error | null) => void,
+  ) => {
+    callback?.(null)
+    return true
+  })
+  const kill = vi.fn(() => true)
+  child.send = send as unknown as ChildProcess['send']
+  child.kill = kill
+  return { child, kill, send }
 }
 
 afterEach(() => { vi.useRealTimers() })
@@ -62,5 +81,32 @@ describe('desktop backend process', () => {
     const errored = waitForBackendReady(erroredChild)
     erroredChild.emit('error', new Error('fork failed'))
     await expect(errored).rejects.toThrow('fork failed')
+  })
+
+  it('waits for graceful backend exit within the caller latency bound', async () => {
+    vi.useFakeTimers()
+    const { child, kill, send } = stoppingChild()
+    const logger = { warn: vi.fn() }
+
+    const stopped = stopBackendProcess(child, 1_000, logger)
+    await vi.advanceTimersByTimeAsync(999)
+    expect(kill).not.toHaveBeenCalled()
+    child.emit('exit', 0, null)
+    await stopped
+    expect(send).toHaveBeenCalledWith({ type: 'shutdown' }, expect.any(Function))
+    expect(logger.warn).not.toHaveBeenCalled()
+  })
+
+  it('terminates a backend that exceeds the update stop bound', async () => {
+    vi.useFakeTimers()
+    const { child, kill } = stoppingChild()
+    const logger = { warn: vi.fn() }
+
+    const stopped = stopBackendProcess(child, 1_000, logger)
+    await vi.advanceTimersByTimeAsync(1_000)
+    expect(kill).toHaveBeenCalledOnce()
+    expect(logger.warn).toHaveBeenCalledWith('desktop backend did not stop in time; terminating it')
+    child.emit('exit', null, 'SIGTERM')
+    await stopped
   })
 })

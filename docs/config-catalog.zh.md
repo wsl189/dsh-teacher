@@ -979,7 +979,7 @@ export interface Config {
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
-  /** Wall-clock deadline for one question-segmentation agent run. */
+  /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number
 }
 ```
@@ -2388,6 +2388,24 @@ export interface Config {
 
 来源：[`packages/skill/skill-filesystem/src/index.ts:49`](../packages/skill/skill-filesystem/src/index.ts)
 
+<a id="deepseek-aidsh-skill-ppt-master"></a>
+
+## `@deepseek-ai/dsh-skill-ppt-master`
+
+需要：`skills`
+
+```ts config-catalog
+/** Optional desktop archive and materialization directory. */
+export interface Config {
+  /** Absolute `.tgz` produced by the desktop packager; empty uses package files directly. */
+  archivePath?: string
+  /** Absolute cache parent for archive materialization. */
+  cacheRoot?: string
+}
+```
+
+来源：[`packages/skill/skill-ppt-master/src/index.ts:38`](../packages/skill/skill-ppt-master/src/index.ts)
+
 <a id="deepseek-aidsh-speech"></a>
 
 ## `@deepseek-ai/dsh-speech`
@@ -3737,7 +3755,6 @@ export interface Config {
 - `@deepseek-ai/dsh-session-projection`（[`packages/session/session-projection/src/index.ts`](../packages/session/session-projection/src/index.ts)）
 - `@deepseek-ai/dsh-session-stats` — 需要 `sessionProjections`（[`packages/session/session-stats/src/index.ts`](../packages/session/session-stats/src/index.ts)）
 - `@deepseek-ai/dsh-skill-badge` — 需要 `skills`（[`packages/skill/skill-badge/src/index.ts`](../packages/skill/skill-badge/src/index.ts)）
-- `@deepseek-ai/dsh-skill-ppt-master` — 需要 `skills`（[`packages/skill/skill-ppt-master/src/index.ts`](../packages/skill/skill-ppt-master/src/index.ts)）
 - `@deepseek-ai/dsh-storage`（[`packages/storage/storage/src/index.ts`](../packages/storage/storage/src/index.ts)）
 - `@deepseek-ai/dsh-subagent`（[`packages/subagent/subagent/src/index.ts`](../packages/subagent/subagent/src/index.ts)）
 - `@deepseek-ai/dsh-subprocess-local`（[`packages/subprocess/subprocess-local/src/index.ts`](../packages/subprocess/subprocess-local/src/index.ts)）

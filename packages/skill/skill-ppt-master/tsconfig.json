@@ -8,7 +8,9 @@
   "references": [
     { "path": "../../../vendor/cosmokit" },
     { "path": "../../../vendor/cordis" },
+    { "path": "../../../vendor/schemastery" },
     { "path": "../skill" },
+    { "path": "../../util/home-paths" },
     { "path": "../../runtime-diagnostics/invariants" }
   ]
 }

@@ -183,6 +183,38 @@ describe('PiAiAdapter provider routing', () => {
     expect(server.requests).toHaveLength(2)
   })
 
+  it('disables undeclared Z.ai reasoning and uses its supported auto tool choice', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        'zhipu-cn': {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          compat: { thinkingFormat: 'zai' },
+          models: [{ id: 'glm-tool', contextWindow: 65_536, maxTokens: 4096 }],
+        },
+      },
+    })
+
+    const result = await assemble(ctx, {
+      provider: 'zhipu-cn',
+      model: 'glm-tool',
+      reasoningEffort: ReasoningEffortId('off'),
+      toolChoice: 'required',
+      tools: [{ name: 'submit', description: 'Submit the result.', parameters: { type: 'object' } }],
+      messages: [],
+    })
+
+    expect(result.finish).toEqual({ kind: 'stop' })
+    expect(server.requests[0]).toMatchObject({
+      thinking: { type: 'disabled' },
+      tool_choice: 'auto',
+    })
+  })
+
   it('preserves omitted profile options when constructing the adapter directly', async () => {
     const server = await mockServer([{ events: textEvents }])
     const ctx = new Context()

@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The shipped Web and Windows desktop product exposes PPT Master 6.1.0 as the built-in `ppt-master` skill. The provider registers the skill without copying files into `DSH_HOME` and gives the loader the absolute packaged resource directory, so PPT Master's scripts, references, layouts, images, sounds, license, and sponsor records remain available from the same path in a source checkout and an installed EXE. The upstream distribution is preserved under `assets/ppt-master/` and remains subject to its MIT license and attribution guard.
+The shipped Web and Windows desktop product exposes PPT Master 6.1.0 as the built-in `ppt-master` skill. Source and ordinary Node distributions read the complete `assets/ppt-master/` tree directly. The desktop installer carries the same tree as one archive and materializes a content-addressed directory under the DSH cache only when a caller loads the skill, so application installation and startup do not create or scan 12,939 separate resource files. The materialized scripts, references, layouts, images, sounds, license, and sponsor records remain subject to the upstream MIT license and attribution guard.
 
 ## Table of Contents
 
@@ -27,15 +27,22 @@ The shipped Web and Windows desktop product exposes PPT Master 6.1.0 as the buil
 
 The default Web composition mounts this package with no configuration. `ppt-master` therefore appears in the session skill catalog and can be loaded by the model or invoked by the user. The desktop installer includes that Web composition and the complete packaged resource directory.
 
-### Enable it in another composition
+### Configuration
 
-Add the provider after `@deepseek-ai/dsh-skill`:
+Add the provider after `@deepseek-ai/dsh-skill`; no configuration is required for the normal package layout:
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-ppt-master'
 ```
 
-The provider has no configuration. Omit the row when a smaller deployment does not need presentation authoring.
+Omit the row when a smaller deployment does not need presentation authoring. The desktop launcher owns the archive fields; ordinary compositions leave them empty.
+
+| Field | Default | Meaning |
+|---|---|---|
+| `archivePath` | `''` | Absolute trusted `.tgz` path; an empty value reads `assets/ppt-master/` directly |
+| `cacheRoot` | `$DSH_HOME/cache/bundled-skills/ppt-master` | Absolute parent for content-addressed archive materializations |
+
+The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-skill-ppt-master) is the exhaustive source for accepted fields.
 
 ### Runtime requirements
 
@@ -43,7 +50,7 @@ Discovery and loading need only the JavaScript application. Executing PPT Master
 
 ### Observable success and failures
 
-A successful composition lists one `bundled` skill named `ppt-master`, loads a body beginning with `# PPT Master Skill`, and resolves relative resources from the packaged `assets/ppt-master/` directory. A missing or damaged upstream attribution bundle causes PPT Master's own integrity guard to stop its scripts. The desktop payload gate rejects an installer missing the provider entry, attribution files, scripts, references, layouts, or representative binary resources.
+A successful composition lists one `bundled` skill named `ppt-master`, loads a body beginning with `# PPT Master Skill`, and returns an absolute directory for relative resources. Archive mode validates absolute paths and archive presence during plugin load, hashes the archive on first skill load, then publishes the extracted directory only after all required attribution files exist. A missing or damaged upstream attribution bundle causes PPT Master's own integrity guard to stop its scripts. The desktop payload gate reads the archive and rejects an installer with the wrong file count, logical bytes, provider entry, attribution files, scripts, references, layouts, or representative binary resources.
 
 -----
 
@@ -53,13 +60,14 @@ A successful composition lists one `bundled` skill named `ppt-master`, loads a b
 <details>
 <summary>Implementation internals — click to expand</summary>
 
-This package registers one immutable candidate at `BUNDLED_SKILL_RANK`. Its candidate metadata mirrors the pinned upstream frontmatter, while the loaded body excludes that frontmatter. `resourceBase` and `path` are derived from `import.meta.url`, so neither the current working directory nor a mutable user skill folder participates in resolution.
+This package registers one immutable candidate at `BUNDLED_SKILL_RANK`. Its candidate metadata mirrors the pinned upstream frontmatter, while the loaded body excludes that frontmatter. Loose mode derives `resourceBase` and `path` from `import.meta.url`. Archive mode keeps discovery free of extraction work, shares concurrent materialization, extracts into a temporary sibling, and renames the completed content-addressed directory atomically; later loads reuse that directory.
 
 ### Source map
 
 | File | Role |
 |---|---|
 | [`src/index.ts`](src/index.ts) | Immutable provider, catalog metadata, packaged path resolution, and body loading |
+| [`src/materialized.ts`](src/materialized.ts) | Archive validation, hashing, atomic materialization, and process-local request sharing |
 | [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
 | [`assets/ppt-master/`](assets/ppt-master/) | Unmodified upstream PPT Master 6.1.0 skill distribution |
 | [`tests/skill-ppt-master.spec.ts`](tests/skill-ppt-master.spec.ts) | Registration, attribution, and complete-distribution inventory checks |
@@ -94,7 +102,7 @@ The catalog summary changes the session-prefix skill list. Loading `ppt-master` 
 
 - **Python remains external** — the installer carries the Skill resources, not a dedicated Python environment or its optional packages.
 - **Pinned upstream release** — the package contains PPT Master 6.1.0; updating it requires importing and verifying a complete newer upstream distribution.
-- **Installer size** — the complete resource tree contains 12,939 files and 79,496,215 logical bytes before installer compression.
+- **First archived load writes the resource tree** — the desktop's first `ppt-master` load extracts 12,939 files and 79,496,215 logical bytes into the DSH cache; later loads reuse the content-addressed directory, and uninstalling the application does not remove it.
 
 <a id="dev-note"></a>
 ### Dev Note

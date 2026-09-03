@@ -2,7 +2,12 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { afterPack, copyDesktopRuntimePackages } from '../scripts/after-pack.mjs'
+import { x as extractTar } from 'tar'
+import {
+  afterPack,
+  copyDesktopRuntimePackages,
+  PPT_MASTER_ARCHIVE_NAME,
+} from '../scripts/after-pack.mjs'
 
 const roots: string[] = []
 
@@ -43,6 +48,16 @@ function createFixture(): { appDir: string; appOutDir: string; dominoRoot: strin
     'resources/app/node_modules/turndown/stale.js',
     'stale collector output',
   )
+  write(
+    appOutDir,
+    'resources/app/node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/SKILL.md',
+    'fixture skill',
+  )
+  write(
+    appOutDir,
+    'resources/app/node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master/templates/icon.svg',
+    '<svg/>',
+  )
   return { appDir, appOutDir, dominoRoot }
 }
 
@@ -68,6 +83,20 @@ describe('desktop after-pack runtime staging', () => {
     expect(existsSync(join(appRoot, 'node_modules/turndown/stale.js'))).toBe(false)
     expect(existsSync(join(appRoot, 'node_modules/turndown/test/fixture.js'))).toBe(false)
     expect(existsSync(join(appRoot, 'node_modules/turndown/lib/ignored.js.map'))).toBe(false)
+    expect(existsSync(join(
+      appRoot,
+      'node_modules/@deepseek-ai/dsh-skill-ppt-master/assets/ppt-master',
+    ))).toBe(false)
+
+    const extracted = join(appOutDir, 'extracted-ppt-master')
+    mkdirSync(extracted)
+    await extractTar({
+      cwd: extracted,
+      file: join(appOutDir, 'resources', PPT_MASTER_ARCHIVE_NAME),
+      strict: true,
+    })
+    expect(readFileSync(join(extracted, 'SKILL.md'), 'utf8')).toBe('fixture skill')
+    expect(readFileSync(join(extracted, 'templates/icon.svg'), 'utf8')).toBe('<svg/>')
   })
 
   it('fails when a declared runtime entry is absent', async () => {
@@ -77,6 +106,25 @@ describe('desktop after-pack runtime staging', () => {
     await expect(copyDesktopRuntimePackages({ appDir, appOutDir })).rejects.toMatchObject({
       code: 'ENOENT',
     })
+  })
+
+  it('writes a deterministic archive for identical resource trees', async () => {
+    const first = createFixture()
+    const second = createFixture()
+
+    await afterPack({
+      appOutDir: first.appOutDir,
+      electronPlatformName: 'win32',
+      packager: { projectDir: first.appDir },
+    })
+    await afterPack({
+      appOutDir: second.appOutDir,
+      electronPlatformName: 'win32',
+      packager: { projectDir: second.appDir },
+    })
+
+    expect(readFileSync(join(first.appOutDir, 'resources', PPT_MASTER_ARCHIVE_NAME)))
+      .toEqual(readFileSync(join(second.appOutDir, 'resources', PPT_MASTER_ARCHIVE_NAME)))
   })
 
   it('does not stage packages for a non-Windows target', async () => {

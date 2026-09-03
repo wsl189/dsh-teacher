@@ -55,9 +55,16 @@ export interface DesktopStartupOperations<Window extends StartupWindow> {
 export async function runDesktopStartup<Window extends StartupWindow>(
   operations: DesktopStartupOperations<Window>,
 ): Promise<void> {
-  const startupWindow = await operations.createStartupWindow()
+  const startupWindowPromise = operations.createStartupWindow()
+  const backendResult = operations.startBackend().then(
+    url => ({ ok: true, url }) as const,
+    (error: unknown) => ({ ok: false, error }) as const,
+  )
+  const startupWindow = await startupWindowPromise
   if (operations.shouldStop() || startupWindow.isDestroyed()) return
-  const url = await operations.startBackend()
+  const backend = await backendResult
+  if (!backend.ok) throw backend.error
+  const url = backend.url
   if (operations.shouldStop() || startupWindow.isDestroyed()) return
   const applicationWindow = await operations.createApplicationWindow(url)
   if (operations.shouldStop() || startupWindow.isDestroyed()) {

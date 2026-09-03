@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
 import type { StreamChunk } from '@deepseek-ai/dsh-llm'
 
 const streamSimple = vi.hoisted(() => vi.fn())
@@ -32,6 +33,21 @@ function gatewayAdapter(): PiAiAdapter {
   })
 }
 
+/** A hand-declared Z.ai route, whose tool-choice API accepts only auto. */
+function zaiAdapter(): PiAiAdapter {
+  return new PiAiAdapter({
+    profiles: () => resolveProfiles({
+      'zhipu-cn': {
+        api: 'openai-completions',
+        baseURL: 'https://open.bigmodel.cn/api/paas/v4',
+        models: [{ id: 'glm-tool', contextWindow: 8192, maxTokens: 1024 }],
+      },
+    }),
+    resolveApiKey: () => Promise.resolve('test-key'),
+    auth: memoryAuth(),
+  })
+}
+
 async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
   const chunks: StreamChunk[] = []
   for await (const chunk of adapter.stream({
@@ -42,11 +58,15 @@ async function drain(adapter: PiAiAdapter): Promise<StreamChunk[]> {
   return chunks
 }
 
-async function drainRequiredTool(adapter: PiAiAdapter): Promise<StreamChunk[]> {
+async function drainRequiredTool(
+  adapter: PiAiAdapter,
+  provider = 'local-gateway',
+  model = 'local-model',
+): Promise<StreamChunk[]> {
   const chunks: StreamChunk[] = []
   for await (const chunk of adapter.stream({
-    provider: 'local-gateway',
-    model: 'local-model',
+    provider,
+    model,
     messages: [],
     tools: [{ name: 'submit', description: 'Submit', parameters: { type: 'object' } }],
     toolChoice: 'required',
@@ -62,6 +82,17 @@ async function drainRequiredToolWithoutDefinitions(adapter: PiAiAdapter): Promis
     messages: [],
     tools: [],
     toolChoice: 'required',
+  })) chunks.push(chunk)
+  return chunks
+}
+
+async function drainExplicitOff(adapter: PiAiAdapter): Promise<StreamChunk[]> {
+  const chunks: StreamChunk[] = []
+  for await (const chunk of adapter.stream({
+    provider: 'zhipu-cn',
+    model: 'glm-tool',
+    messages: [],
+    reasoningEffort: ReasoningEffortId('off'),
   })) chunks.push(chunk)
   return chunks
 }
@@ -103,6 +134,17 @@ describe('pi-ai SDK retry boundary', () => {
     await drainRequiredTool(gatewayAdapter())
 
     expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ toolChoice: 'required' })
+  })
+
+  it('uses Z.ai auto tool choice and serializes explicit off for a model without reasoning metadata', async () => {
+    streamSimple.mockImplementation(() => { throw new Error('mock SDK boundary') })
+
+    await drainRequiredTool(zaiAdapter(), 'zhipu-cn', 'glm-tool')
+    await drainExplicitOff(zaiAdapter())
+
+    expect(streamSimple.mock.calls[0]?.[2]).toMatchObject({ toolChoice: 'auto' })
+    expect(streamSimple.mock.calls[1]?.[0]).toMatchObject({ reasoning: true })
+    expect(streamSimple.mock.calls[1]?.[2]).not.toHaveProperty('reasoning')
   })
 
   it('rejects required tool choice without a tool definition', async () => {

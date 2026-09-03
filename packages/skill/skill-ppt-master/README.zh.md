@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-随附 Web 与 Windows 桌面产品把 PPT Master 6.1.0 作为内置 `ppt-master` skill（技能）公开。该提供方无需把文件复制到 `DSH_HOME` 即可注册 skill，并向加载器提供随包资源目录的绝对路径，因此 PPT Master 的脚本、参考资料、布局、图片、声音、许可证和赞助记录在源码检出与已安装 EXE 中都从同一路径使用。上游完整分发保留在 `assets/ppt-master/` 下，并继续受其 MIT 许可证与归属门禁约束。
+随附 Web 与 Windows 桌面产品把 PPT Master 6.1.0 作为内置 `ppt-master` skill（技能）公开。源码与普通 Node 分发会直接读取完整的 `assets/ppt-master/` 目录。桌面安装器把同一目录存为一个归档，并且只在调用方加载该 skill 时才把按内容寻址的目录实体化到 DSH 缓存下，因此应用安装与启动不会创建或扫描 12,939 个独立资源文件。实体化后的脚本、参考资料、布局、图片、声音、许可证和赞助记录仍受上游 MIT 许可证与归属门禁约束。
 
 ## 目录
 
@@ -27,15 +27,22 @@ kind: "package-reference"
 
 默认 Web 组合无配置挂载本包，因此 `ppt-master` 会出现在会话 skill 目录中，可由模型加载或用户直接调用。桌面安装器包含该 Web 组合和完整的随包资源目录。
 
-### 在其他组合中启用
+### 配置
 
-在 `@deepseek-ai/dsh-skill` 之后添加提供方：
+在 `@deepseek-ai/dsh-skill` 之后添加提供方；普通包布局不需要配置：
 
 ```yaml
 - name: '@deepseek-ai/dsh-skill-ppt-master'
 ```
 
-该提供方没有配置。不需要演示文稿创作的小型部署可以省略这一行。
+不需要演示文稿创作的小型部署可以省略这一行。桌面启动器负责提供归档字段；普通组合会把这些字段留空。
+
+| 字段 | 默认值 | 含义 |
+|---|---|---|
+| `archivePath` | `''` | 受信任 `.tgz` 的绝对路径；空值会直接读取 `assets/ppt-master/` |
+| `cacheRoot` | `$DSH_HOME/cache/bundled-skills/ppt-master` | 按内容寻址的归档实体化目录所用的绝对父目录 |
+
+生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-skill-ppt-master)是所有可接受字段的完整来源。
 
 ### 运行环境要求
 
@@ -43,7 +50,7 @@ kind: "package-reference"
 
 ### 可观察的成功与失败
 
-组合成功时会列出一个名为 `ppt-master` 的 `bundled` skill，加载以 `# PPT Master Skill` 开头的正文，并从随包 `assets/ppt-master/` 目录解析相对资源。上游归属文件缺失或损坏时，PPT Master 自身的完整性门禁会停止其脚本。桌面载荷门禁会拒绝缺少提供方入口、归属文件、脚本、参考资料、布局或代表性二进制资源的安装包。
+组合成功时会列出一个名为 `ppt-master` 的 `bundled` skill，加载以 `# PPT Master Skill` 开头的正文，并返回用于解析相对资源的绝对目录。归档模式会在插件加载时校验绝对路径与归档是否存在，在首次加载 skill 时计算归档哈希，并且只在所有必需归属文件都存在后才发布解压目录。上游归属文件缺失或损坏时，PPT Master 自身的完整性门禁会停止其脚本。桌面载荷门禁会读取归档，并拒绝文件数、逻辑字节数、提供方入口、归属文件、脚本、参考资料、布局或代表性二进制资源不符合要求的安装包。
 
 -----
 
@@ -53,13 +60,14 @@ kind: "package-reference"
 <details>
 <summary>实现细节——点击展开</summary>
 
-本包以 `BUNDLED_SKILL_RANK` 注册一个不可变候选项。候选项元数据与固定上游 frontmatter 一致，加载后的正文则不包含 frontmatter。`resourceBase` 与 `path` 从 `import.meta.url` 派生，因此路径解析不依赖当前工作目录或可变的用户 skill 文件夹。
+本包以 `BUNDLED_SKILL_RANK` 注册一个不可变候选项。候选项元数据与固定上游 frontmatter 一致，加载后的正文则不包含 frontmatter。散文件模式会从 `import.meta.url` 派生 `resourceBase` 与 `path`。归档模式不会在发现阶段解压资源；它会共享并发的实体化操作，把资源解压到临时同级目录，再以原子方式把完整的按内容寻址目录重命名到目标位置，后续加载会复用该目录。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | 不可变提供方、目录元数据、随包路径解析与正文加载 |
+| [`src/materialized.ts`](src/materialized.ts) | 归档校验、哈希、原子实体化与进程内请求共享 |
 | [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
 | [`assets/ppt-master/`](assets/ppt-master/) | 未修改的上游 PPT Master 6.1.0 skill 完整分发 |
 | [`tests/skill-ppt-master.spec.ts`](tests/skill-ppt-master.spec.ts) | 注册、归属与完整分发清单检查 |
@@ -94,7 +102,7 @@ kind: "package-reference"
 
 - **Python 仍在安装包外部**——安装器携带 Skill 资源，但不携带专用 Python 环境或其可选软件包。
 - **固定上游版本**——本包包含 PPT Master 6.1.0；升级时必须重新导入并验证完整的新版上游分发。
-- **安装包体积**——完整资源树在安装器压缩前包含 12,939 个文件，共 79,496,215 个逻辑字节。
+- **首次归档加载会写入资源树**——桌面版首次加载 `ppt-master` 时会向 DSH 缓存解压 12,939 个文件，共 79,496,215 个逻辑字节；后续加载复用按内容寻址的目录，卸载应用不会删除该目录。
 
 <a id="dev-note"></a>
 ### 开发备注

@@ -16,7 +16,7 @@ import {
   QUESTION_CROP_REVIEW_SKILL,
   QUESTION_SEGMENTATION_SKILL,
 } from './question-segmentation-skill.ts'
-import { lowLatencyToolSelection } from './tool-agent-model.ts'
+import { reasoningEnabledToolSelection } from './tool-agent-model.ts'
 import type {
   TeacherQuestionLayoutElement,
   TeacherQuestionLayoutElementId,
@@ -64,7 +64,7 @@ export interface TeacherQuestionSegmentationAgentConfig {
   questionRepeatedImagePositionToleranceRatio: number
   /** Maximum page or crop images returned by one image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
-  /** Wall-clock deadline for one segmentation child. */
+  /** Wall-clock deadline for one segmentation child, or zero for no child deadline. */
   questionSegmentationAgentTimeoutMs: number
 }
 
@@ -278,6 +278,23 @@ interface QuestionChildDeadline {
 }
 
 function createQuestionChildDeadline(timeoutMs: number, timeoutMessage: string): QuestionChildDeadline {
+  if (timeoutMs === 0) {
+    let controller = new AbortController()
+    return {
+      get signal() {
+        return controller.signal
+      },
+      get expired() {
+        return false
+      },
+      renew() {
+        controller = new AbortController()
+      },
+      dispose() {
+        return undefined
+      },
+    }
+  }
   const arm = (controller: AbortController): ReturnType<typeof setTimeout> => setTimeout(() => {
     controller.abort(new Error(timeoutMessage))
   }, timeoutMs)
@@ -4040,7 +4057,7 @@ export async function segmentQuestionsWithAgent(
         parent,
         signal: deadline.signal,
         agentOptions: {
-          ...lowLatencyToolSelection(selected, modelInfo),
+          ...reasoningEnabledToolSelection(selected, modelInfo),
           toolChoice: 'required',
           ...(inlineEvidence ? { maxTokens: config.maxQuestionCompactBoundaryOutputTokens } : {}),
         },
@@ -4402,7 +4419,7 @@ export async function reviewQuestionCropsWithAgent(
         parent,
         signal: deadline.signal,
         agentOptions: {
-          ...lowLatencyToolSelection(selected, modelInfo),
+          ...reasoningEnabledToolSelection(selected, modelInfo),
           toolChoice: 'required',
           ...(compactReview ? { maxTokens: config.maxQuestionCompactReviewOutputTokens } : {}),
         },
@@ -4451,7 +4468,7 @@ export async function reviewQuestionCropsWithAgent(
             parent,
             signal: deadline.signal,
             agentOptions: {
-              ...lowLatencyToolSelection(selected, modelInfo),
+              ...reasoningEnabledToolSelection(selected, modelInfo),
               toolChoice: 'required',
               maxTokens: config.maxQuestionCompactReviewOutputTokens,
             },

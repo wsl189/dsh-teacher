@@ -146,7 +146,7 @@ const DEFAULT_MIN_QUESTION_REPEATED_IMAGE_PAGES = 3
 const DEFAULT_QUESTION_REPEATED_IMAGE_POSITION_TOLERANCE_RATIO = 0.015
 const DEFAULT_QUESTION_RECUT_ATTEMPTS = 2
 const DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL = 20
-const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 50_000
+const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 0
 const DEFAULT_SOURCE_DOCUMENT_BYTES = 100 * 1024 * 1024
 const DEFAULT_REMINDER_RETRY_MS = 60_000
 
@@ -254,7 +254,7 @@ export interface Config {
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
-  /** Wall-clock deadline for one question-segmentation agent run. */
+  /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number
 }
 
@@ -307,7 +307,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxQuestionRecutAttempts: z.natural().min(1).max(5).default(DEFAULT_QUESTION_RECUT_ATTEMPTS),
     maxQuestionVisionImagesPerToolCall: z.natural().min(1).max(20)
       .default(DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL),
-    questionSegmentationAgentTimeoutMs: z.natural().min(1_000).max(3_600_000)
+    questionSegmentationAgentTimeoutMs: z.natural().max(3_600_000)
       .default(DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS),
     reminderRetryMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_REMINDER_RETRY_MS),
   })

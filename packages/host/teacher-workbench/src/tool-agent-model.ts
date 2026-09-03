@@ -17,3 +17,25 @@ export function lowLatencyToolSelection(
     ?? info.reasoning?.efforts.find(candidate => candidate.id === 'low')
   return effort === undefined ? selection : { ...selection, reasoningEffort: effort.id }
 }
+
+/**
+ * Select an enabled reasoning effort for semantic workbench agents.
+ * A route that advertises only Off receives no explicit effort so its provider
+ * default remains available instead of being forced into non-reasoning mode.
+ * @param selection - User-selected provider, model, and optional reasoning effort.
+ * @param info - Resolved capabilities for the selected model.
+ * @returns The same route with an enabled effort when the model advertises one.
+ */
+export function reasoningEnabledToolSelection(
+  selection: ToolModelSelection,
+  info: LlmResolvedModelInfo,
+): ToolModelSelection {
+  if (selection.reasoningEffort !== undefined && selection.reasoningEffort !== 'off') return selection
+  const defaultEffort = info.reasoning?.defaultEffort
+  const effort = defaultEffort !== undefined && defaultEffort !== 'off'
+    ? info.reasoning?.efforts.find(candidate => candidate.id === defaultEffort)
+    : info.reasoning?.efforts.find(candidate => candidate.id === 'low')
+      ?? info.reasoning?.efforts.find(candidate => candidate.id !== 'off')
+  const { reasoningEffort: _disabledEffort, ...route } = selection
+  return effort === undefined ? route : { ...route, reasoningEffort: effort.id }
+}

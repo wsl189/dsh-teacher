@@ -43,7 +43,7 @@ describe('desktop startup lifecycle', () => {
     ])
   })
 
-  it('does not start the backend after shutdown takes ownership', async () => {
+  it('does not continue after shutdown takes ownership during parallel startup', async () => {
     const events: string[] = []
     await runDesktopStartup({
       async createStartupWindow() {
@@ -63,7 +63,43 @@ describe('desktop startup lifecycle', () => {
       async startUpdates() { events.push('updates') },
       shouldStop: () => true,
     })
-    expect(events).toEqual(['startup-visible'])
+    expect(events).toEqual(['startup-visible', 'backend-started'])
+  })
+
+  it('starts the backend while the startup card is still loading', async () => {
+    const startup = Promise.withResolvers<StartupWindow>()
+    const events: string[] = []
+    const running = runDesktopStartup({
+      createStartupWindow() {
+        events.push('startup-loading')
+        return startup.promise
+      },
+      async startBackend() {
+        events.push('backend-started')
+        return 'http://127.0.0.1:43125/?token=fixture'
+      },
+      async createApplicationWindow() {
+        events.push('application-loaded')
+        return { isDestroyed: () => false }
+      },
+      showApplicationWindow() { events.push('application-visible') },
+      destroyWindow() { events.push('startup-destroyed') },
+      async startUpdates() { events.push('updates') },
+      shouldStop: () => false,
+    })
+
+    await Promise.resolve()
+    expect(events).toEqual(['startup-loading', 'backend-started'])
+    startup.resolve({ isDestroyed: () => false })
+    await running
+    expect(events).toEqual([
+      'startup-loading',
+      'backend-started',
+      'application-loaded',
+      'application-visible',
+      'startup-destroyed',
+      'updates',
+    ])
   })
 
   it('does not create an application window when the startup card closes during backend startup', async () => {

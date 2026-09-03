@@ -205,10 +205,11 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
-  it('defaults compact question children to the 32K output allowance', () => {
+  it('defaults compact question children to 32K output without a child deadline', () => {
     expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
       maxQuestionCompactBoundaryOutputTokens: 32_768,
       maxQuestionCompactReviewOutputTokens: 32_768,
+      questionSegmentationAgentTimeoutMs: 0,
     })
     expect(() => TeacherWorkbenchService.Config({
       maxQuestionCompactBoundaryOutputTokens: 32_769,

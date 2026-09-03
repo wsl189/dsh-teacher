@@ -36,6 +36,18 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: DSH Teacher
   deleteAppDataOnUninstall: false
+  preCompressedFileExtensions:
+    - .avi
+    - .mov
+    - .m4v
+    - .mp4
+    - .m4p
+    - .qt
+    - .mkv
+    - .webm
+    - .vmdk
+    - .tgz
+    - .zip
 publish:
   provider: github
   owner: wsl189

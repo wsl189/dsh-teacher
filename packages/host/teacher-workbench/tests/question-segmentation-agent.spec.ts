@@ -29,7 +29,7 @@ const CONFIG: TeacherQuestionSegmentationAgentConfig = {
   minQuestionRepeatedImagePages: 3,
   questionRepeatedImagePositionToleranceRatio: 0.015,
   maxQuestionVisionImagesPerToolCall: 4,
-  questionSegmentationAgentTimeoutMs: 30_000,
+  questionSegmentationAgentTimeoutMs: 0,
 }
 
 function request(): TeacherQuestionSegmentRequest {
@@ -296,7 +296,7 @@ describe('segmentQuestionsWithAgent', () => {
       expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(0)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_layout_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_page_preview_'))).toBe(false)
-      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, reasoningEffort: 'off', toolChoice: 'required' })
+      expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, reasoningEffort: 'high', toolChoice: 'required' })
       const submit = [...registered.values()].find(tool => tool.name.startsWith('submit_question_boundaries_'))
       if (submit === undefined) throw new Error('boundary submission tool was not registered')
       expect(startRequest.persona).toContain(`The only callable tool in this run is ${submit.name}`)
@@ -4130,7 +4130,7 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
-  it('keeps compact repair tools locked and gives the repair child a fresh deadline', async () => {
+  it('keeps compact repair tools locked and gives the repair child a fresh cancellation signal', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
     ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
@@ -4308,7 +4308,7 @@ describe('segmentQuestionsWithAgent', () => {
     const options = start.mock.calls[0]?.[1]
     expect(options).toMatchObject({
       parent,
-      agentOptions: { provider: 'p', model: 'm', reasoningEffort: 'off' },
+      agentOptions: { provider: 'p', model: 'm', reasoningEffort: 'high' },
       toolFilter: { allow: [
         expect.stringMatching(/^question_layout_[a-f0-9]{12}$/u),
         expect.stringMatching(/^submit_question_boundaries_[a-f0-9]{12}$/u),

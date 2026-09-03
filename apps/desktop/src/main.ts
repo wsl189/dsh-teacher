@@ -5,7 +5,6 @@ import { fileURLToPath } from 'node:url'
 import { createRequire } from 'node:module'
 import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron'
 import log from 'electron-log/main'
-import { autoUpdater } from './updater-runtime.ts'
 import {
   DesktopUpdateController, type AutoUpdaterLike,
 } from './update-controller.ts'
@@ -15,7 +14,7 @@ import {
 import { installRendererPermissions } from './renderer-permissions.ts'
 import { resolveDesktopIconPath } from './desktop-assets.ts'
 import { resolveRuntimeEnvironment } from './runtime-environment.ts'
-import { waitForBackendReady } from './backend-process.ts'
+import { stopBackendProcess, waitForBackendReady } from './backend-process.ts'
 import { startupPageUrl } from './startup-page.ts'
 import { runDesktopStartup } from './startup-lifecycle.ts'
 import {
@@ -26,6 +25,8 @@ import {
 const require = createRequire(import.meta.url)
 const BACKEND_ENTRY = require.resolve('@deepseek-ai/dsh/desktop-backend')
 const BACKEND_STOP_TIMEOUT_MS = 8_000
+const UPDATE_BACKEND_STOP_TIMEOUT_MS = 1_000
+const INITIAL_UPDATE_STATE: DesktopUpdateState = Object.freeze({ status: 'checking' })
 
 let mainWindow: BrowserWindow | undefined
 let startupWindow: BrowserWindow | undefined
@@ -33,6 +34,8 @@ let backend: ChildProcess | undefined
 let backendStop: Promise<void> | undefined
 let allowQuit = false
 let quitRequested = false
+let updates: DesktopUpdateController | undefined
+let updatesLoading: Promise<DesktopUpdateController> | undefined
 
 /** Start the DSH Web profile under Electron's embedded Node runtime. */
 function startBackend(): Promise<string> {
@@ -59,30 +62,11 @@ function startBackend(): Promise<string> {
 }
 
 /** Dispose the profile tree, terminating only if its bounded shutdown stalls. */
-function stopBackend(): Promise<void> {
+function stopBackend(timeoutMs = BACKEND_STOP_TIMEOUT_MS): Promise<void> {
   if (backendStop !== undefined) return backendStop
   const child = backend
   if (child === undefined || child.exitCode !== null || child.signalCode !== null) return Promise.resolve()
-  backendStop = new Promise<void>((resolve) => {
-    const timeout = setTimeout(() => {
-      log.warn('desktop backend did not stop in time; terminating it')
-      child.kill()
-    }, BACKEND_STOP_TIMEOUT_MS)
-    const done = (): void => {
-      clearTimeout(timeout)
-      child.off('exit', done)
-      child.off('error', done)
-      resolve()
-    }
-    child.once('exit', done)
-    child.once('error', done)
-    child.send({ type: 'shutdown' }, (error) => {
-      if (error !== null) {
-        log.warn(`could not request desktop backend shutdown: ${error.message}`)
-        child.kill()
-      }
-    })
-  })
+  backendStop = stopBackendProcess(child, timeoutMs, log)
   return backendStop
 }
 
@@ -92,17 +76,28 @@ function publishUpdateState(state: DesktopUpdateState): void {
   mainWindow.webContents.send(UPDATE_CHANNELS.state, state)
 }
 
-const updates = new DesktopUpdateController(autoUpdater as unknown as AutoUpdaterLike, {
-  enabled: app.isPackaged,
-  currentVersion: app.getVersion(),
-  publish: publishUpdateState,
-  beforeInstall: async () => {
-    await stopBackend()
-    allowQuit = true
-  },
-  logger: log,
-})
-autoUpdater.logger = log
+/** Load the updater only after the application window is visible. */
+function loadUpdates(): Promise<DesktopUpdateController> {
+  if (updates !== undefined) return Promise.resolve(updates)
+  updatesLoading ??= import('./updater-runtime.ts').then(({ autoUpdater }) => {
+    autoUpdater.logger = log
+    const controller = new DesktopUpdateController(autoUpdater as unknown as AutoUpdaterLike, {
+      enabled: app.isPackaged,
+      currentVersion: app.getVersion(),
+      publish: publishUpdateState,
+      beforeInstall: async () => {
+        if (mainWindow !== undefined && !mainWindow.isDestroyed()) mainWindow.hide()
+        if (startupWindow !== undefined && !startupWindow.isDestroyed()) startupWindow.hide()
+        await stopBackend(UPDATE_BACKEND_STOP_TIMEOUT_MS)
+        allowQuit = true
+      },
+      logger: log,
+    })
+    updates = controller
+    return controller
+  })
+  return updatesLoading
+}
 
 /** Create the transparent, script-free startup card. */
 async function createStartupWindow(): Promise<BrowserWindow> {
@@ -190,9 +185,9 @@ function destroyWindow(window: BrowserWindow): void {
   if (!window.isDestroyed()) window.destroy()
 }
 
-ipcMain.handle(UPDATE_CHANNELS.getState, () => updates.getState())
-ipcMain.handle(UPDATE_CHANNELS.download, async () => { await updates.download() })
-ipcMain.handle(UPDATE_CHANNELS.install, async () => { await updates.install() })
+ipcMain.handle(UPDATE_CHANNELS.getState, () => updates?.getState() ?? INITIAL_UPDATE_STATE)
+ipcMain.handle(UPDATE_CHANNELS.download, async () => { await (await loadUpdates()).download() })
+ipcMain.handle(UPDATE_CHANNELS.install, async () => { await (await loadUpdates()).install() })
 
 if (!app.requestSingleInstanceLock()) {
   allowQuit = true
@@ -206,7 +201,7 @@ if (!app.requestSingleInstanceLock()) {
     window?.focus()
   })
   app.on('before-quit', (event) => {
-    updates.stop()
+    updates?.stop()
     if (allowQuit) return
     quitRequested = true
     event.preventDefault()
@@ -224,7 +219,7 @@ if (!app.requestSingleInstanceLock()) {
         createApplicationWindow,
         showApplicationWindow,
         destroyWindow,
-        startUpdates: async () => { await updates.start() },
+        startUpdates: async () => { await (await loadUpdates()).start() },
         shouldStop: () => quitRequested,
       })
     } catch (error) {
