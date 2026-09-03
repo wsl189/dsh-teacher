@@ -600,6 +600,67 @@ describe('per-model reasoning efforts', () => {
     return model
   }
 
+  it('supplies Ollama reasoning controls for documented model families', () => {
+    const resolved = resolveProfiles({
+      ollama: {
+        api: 'openai-completions',
+        baseURL: 'http://localhost:11434/v1',
+        models: [
+          { id: 'qwen3.8:27b' },
+          { id: 'registry.example/team/deepseek-r1:32b' },
+          { id: 'deepseek-v3.1:671b' },
+          { id: 'gpt-oss:20b' },
+          { id: 'llama3.2:8b' },
+        ],
+      },
+    })
+    const models = new Map(
+      (resolved.get('ollama')?.piProvider.getModels() ?? []).map(model => [model.id, model]),
+    )
+
+    expect(getSupportedThinkingLevels(models.get('qwen3.8:27b') as Model<Api>)).toEqual(['off', 'high'])
+    expect(getSupportedThinkingLevels(
+      models.get('registry.example/team/deepseek-r1:32b') as Model<Api>,
+    )).toEqual(['off', 'high'])
+    expect(getSupportedThinkingLevels(models.get('deepseek-v3.1:671b') as Model<Api>)).toEqual(['off', 'high'])
+    // Ollama documents GPT-OSS as level-controlled but not disableable.
+    expect(getSupportedThinkingLevels(models.get('gpt-oss:20b') as Model<Api>)).toEqual([
+      'low', 'medium', 'high',
+    ])
+    expect(models.get('llama3.2:8b')?.reasoning).toBe(false)
+    expect(models.get('qwen3.8:27b')?.compat).toMatchObject({
+      thinkingFormat: 'openai',
+      supportsReasoningEffort: true,
+    })
+  })
+
+  it('keeps Ollama defaults scoped and lets explicit declarations win', () => {
+    const resolved = resolveProfiles({
+      ollama: {
+        api: 'openai-completions',
+        baseURL: 'http://localhost:11434/v1',
+        compat: { supportsReasoningEffort: false },
+        models: [
+          { id: 'qwen3:8b' },
+          { id: 'qwen3.8:27b', reasoningEfforts: false, compat: { thinkingFormat: 'qwen' } },
+        ],
+      },
+      'local-gateway': {
+        api: 'openai-completions',
+        baseURL: 'http://localhost:11434/v1',
+        models: [{ id: 'qwen3:8b' }],
+      },
+    })
+    const ollama = resolved.get('ollama')?.piProvider.getModels() ?? []
+    const gateway = resolved.get('local-gateway')?.piProvider.getModels()[0]
+
+    expect(ollama[0]?.reasoning).toBe(false)
+    expect(ollama[0]?.compat).toMatchObject({ thinkingFormat: 'openai', supportsReasoningEffort: false })
+    expect(ollama[1]?.reasoning).toBe(false)
+    expect(ollama[1]?.compat).toMatchObject({ thinkingFormat: 'qwen', supportsReasoningEffort: false })
+    expect(gateway?.reasoning).toBe(false)
+  })
+
   it('declares selectable levels with their wire spellings on a hand-declared model', () => {
     const model = modelOf(declared([{
       id: 'acme-think',

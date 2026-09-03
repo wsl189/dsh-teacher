@@ -98,7 +98,7 @@ profile 的 `models` 列表会替换而非扩展路由的已安装目录；每�
 
 ### 带推理与协议兼容运行
 
-`reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是该等级过线的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。
+`reasoningEfforts` 声明模型可选择的 thinking 等级：每个键都是选择器提供的等级，其值是该等级过线的拼写，因此 `max: ultra` 可以为拥有自有词汇的网关重命名等级。省略该字段时保留已安装目录条目的能力；`false` 声明非推理模型。精确命名为 `ollama` 的路由是有文档依据的例外：使用 `openai-completions` 时，Qwen 3、DeepSeek R1 与 DeepSeek v3.1 模型会自动提供 `off` 和 `high`（`off` 发送 `reasoning_effort: none`）；GPT-OSS 只提供 `low`、`medium`、`high`，不会展示虚假的 Off 开关。未知 Ollama 系列仍沿用普通的省略行为，显式 `reasoningEfforts` 或 `compat` 值始终优先。对于 pi-ai 无法识别的端点，`compat` 开关重塑请求——哪个角色携带系统提示词、哪个字段限制输出、thinking 等级如何传递——可逐路由、逐模型配置。条目与已安装目录都没有尺寸的模型，会采用路由的 `defaultContextWindow` 与 `defaultMaxTokens` 回退值。
 
 ### 运行时更改配置
 
@@ -174,7 +174,7 @@ pi-ai 不提供的路由需要 `api`、`baseURL` 与非空 `models` 列表；无
 
 #### 模型看到什么
 
-所选目录模型会收到 `GenerateOptions.system`、历史、工具、`toolChoice` 与 pi-ai 通用流式 API 支持的采样字段。必需选择会映射为协议可用的最强工具使用值：`required`、`any` 或 Z.ai 的 `auto`；没有工具却提供任意选择会在提供方 I/O 前失败。手动声明的 Z.ai 兼容补全路由即使模型条目没有推理元数据，也会把 `off` 公开为可选推理强度，并将其序列化为 `thinking.type: disabled`。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。当累计 base64 图片载荷超过路由的 `maxRequestImageBytes` 时，每张卸载图片都会在替换文本中保留自己的身份与当前已解析访问方式。卸载的规范化附件不会读取或变换。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。
+所选目录模型会收到 `GenerateOptions.system`、历史、工具、`toolChoice` 与 pi-ai 通用流式 API 支持的采样字段。必需选择会映射为协议可用的最强工具使用值：`required`、`any` 或 Z.ai 的 `auto`；没有工具却提供任意选择会在提供方 I/O 前失败。手动声明的 Z.ai 兼容补全路由即使模型条目没有推理元数据，也会把 `off` 公开为可选推理强度，并将其序列化为 `thinking.type: disabled`。在精确命名为 `ollama` 的补全路由上，已识别、可切换系列所选的 Off 会序列化为 `reasoning_effort: none`；Ollama 无法关闭 GPT-OSS，所以它绝不会被标成可关闭。每张保留图片前都会有文本，注明其完整附件 id 与实际请求尺寸。当前执行文件系统可以映射附件提供方的宿主对象时，该文本还会携带只读规范化对象路径，并警告规范化或请求投影可能缩放或重新编码上传内容。当累计 base64 图片载荷超过路由的 `maxRequestImageBytes` 时，每张卸载图片都会在替换文本中保留自己的身份与当前已解析访问方式。卸载的规范化附件不会读取或变换。提供方原生回放元数据只在适配器针对历史内容校验通过后恢复。
 
 #### Token 影响
 

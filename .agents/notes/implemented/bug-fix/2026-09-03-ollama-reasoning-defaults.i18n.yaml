@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-ollama-reasoning-defaults.md
+2026-09-03-ollama-reasoning-defaults.md: 7917a49a1469b5fd8e721ab845787af071ea8da1
+2026-09-03-ollama-reasoning-defaults.zh.md: 9c7a101a2cd834d7f11842cba24cca8165334b1b

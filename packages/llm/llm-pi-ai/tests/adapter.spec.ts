@@ -780,6 +780,39 @@ describe('provider profile lifecycle', () => {
     expect(server.requests[0]).toMatchObject({ reasoning_effort: 'none' })
   })
 
+  it('sends Ollama Off without per-model reasoning configuration', async () => {
+    const server = await mockServer([{ events: textEvents }])
+    const ctx = new Context()
+    await ctx.plugin(LlmRuntime)
+    await ctx.plugin(LlmPiAi, {
+      providers: {
+        ollama: {
+          apiKeyEnv: 'PI_TEST_KEY',
+          api: 'openai-completions',
+          baseURL: `${server.url}/v1`,
+          models: [{ id: 'qwen3.8:27b' }],
+        },
+      },
+    })
+
+    await expect(ctx.llm.resolveModelInfo('ollama', 'qwen3.8:27b')).resolves.toMatchObject({
+      reasoning: {
+        efforts: [
+          { id: ReasoningEffortId('off'), name: 'Off' },
+          { id: ReasoningEffortId('high'), name: 'High' },
+        ],
+      },
+    })
+    await assemble(ctx, {
+      provider: 'ollama',
+      model: 'qwen3.8:27b',
+      reasoningEffort: ReasoningEffortId('off'),
+      messages: [],
+    })
+
+    expect(server.requests[0]).toMatchObject({ reasoning_effort: 'none' })
+  })
+
   it('holds back reasoning_effort when the endpoint cannot take it', async () => {
     vi.stubEnv('PI_TEST_KEY', 'test-key')
     const server = await mockServer([{ events: textEvents }])

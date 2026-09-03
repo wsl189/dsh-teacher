@@ -1266,10 +1266,12 @@ export interface PiAiModelProfile {
   input?: PiAiModality[]
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
-   * entry's capability (a hand-declared model has none and does not reason);
-   * `false` declares a non-reasoning model, which is how a profile strips
-   * reasoning from a catalog model its gateway cannot serve; a non-empty dict
-   * declares the offered levels and their wire spellings.
+   * entry's capability. A known reasoning family on the exact `ollama` route
+   * receives Ollama's built-in OpenAI-compatible levels; other hand-declared
+   * models have none and do not reason. `false` declares a non-reasoning
+   * model, which is how a profile strips reasoning from a catalog model or
+   * overrides the Ollama default; a non-empty dict declares the offered
+   * levels and their wire spellings.
    */
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** pi-ai wire-compatibility switches for this model, winning over the route's per field; one its protocol does not declare is refused. */

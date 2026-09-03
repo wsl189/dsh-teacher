@@ -574,10 +574,12 @@ export interface PiAiModelProfile {
   input?: PiAiModality[]
   /**
    * Selectable reasoning efforts. Absent inherits the installed catalog
-   * entry's capability (a hand-declared model has none and does not reason);
-   * `false` declares a non-reasoning model, which is how a profile strips
-   * reasoning from a catalog model its gateway cannot serve; a non-empty dict
-   * declares the offered levels and their wire spellings.
+   * entry's capability. A known reasoning family on the exact `ollama` route
+   * receives Ollama's built-in OpenAI-compatible levels; other hand-declared
+   * models have none and do not reason. `false` declares a non-reasoning
+   * model, which is how a profile strips reasoning from a catalog model or
+   * overrides the Ollama default; a non-empty dict declares the offered
+   * levels and their wire spellings.
    */
   reasoningEfforts?: false | PiAiReasoningEfforts
   /** pi-ai wire-compatibility switches for this model, winning over the route's per field; one its protocol does not declare is refused. */
@@ -592,6 +594,45 @@ export interface PiAiModelProfile {
  * model, keep the other thirty-seven" a three-line edit.
  */
 export type PiAiModelOverride = Omit<PiAiModelProfile, 'id'>
+
+/** The route id whose OpenAI-compatible reasoning behavior this adapter knows. */
+const OLLAMA_PROVIDER = 'ollama'
+
+/** The model-name stem Ollama uses before an optional `:tag`. */
+function ollamaModelStem(id: string): string {
+  const name = id.slice(id.lastIndexOf('/') + 1).toLowerCase()
+  const tag = name.indexOf(':')
+  return tag < 0 ? name : name.slice(0, tag)
+}
+
+/**
+ * Apply Ollama's documented thinking controls when a model declaration leaves
+ * them unspecified. GPT-OSS deliberately has no Off entry because Ollama
+ * cannot disable its reasoning; the other known families use `none` on the
+ * OpenAI-compatible endpoint. An explicit declaration, including `false`,
+ * always wins.
+ */
+function withOllamaReasoningDefaults(
+  provider: string,
+  api: string,
+  entry: PiAiModelProfile,
+  routeCompat: PiAiCompatProfile | undefined,
+): PiAiModelProfile {
+  if (provider !== OLLAMA_PROVIDER || api !== 'openai-completions'
+    || entry.reasoningEfforts !== undefined) return entry
+  const thinkingFormat = entry.compat?.thinkingFormat ?? routeCompat?.thinkingFormat ?? 'openai'
+  const acceptsEffort = entry.compat?.supportsReasoningEffort ?? routeCompat?.supportsReasoningEffort ?? true
+  if (thinkingFormat === 'openai' && !acceptsEffort) return entry
+  const stem = ollamaModelStem(entry.id)
+  if (stem.startsWith('gpt-oss')) {
+    return { ...entry, reasoningEfforts: { low: 'low', medium: 'medium', high: 'high' } }
+  }
+  const qwen = stem.startsWith('qwen3') && !stem.includes('embedding') && !stem.includes('reranker')
+  const toggleable = qwen || stem.startsWith('deepseek-r1') || stem.startsWith('deepseek-v3.1')
+  return toggleable
+    ? { ...entry, reasoningEfforts: { off: 'none', high: 'high' } }
+    : entry
+}
 
 /** The route-level facts model materialization reads. */
 export interface RouteCatalogRequest {
@@ -744,7 +785,12 @@ function resolveModelCompat(
   api: string,
 ): { compat: ModelCompat } | Record<string, never> {
   const gate = compatGate(api)
-  const configured: Record<string, unknown> = {}
+  // The route name is the explicit opt-in to Ollama semantics. Its OpenAI
+  // compatibility endpoint documents both the dialect and reasoning_effort;
+  // profile values below still override either field.
+  const configured: Record<string, unknown> = provider === OLLAMA_PROVIDER && api === 'openai-completions'
+    ? { thinkingFormat: 'openai', supportsReasoningEffort: true }
+    : {}
   for (const [field, value] of configuredCompatEntries(route)) {
     if (gate?.[field] !== 'offer') continue
     configured[field] = value
@@ -855,6 +901,7 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
       invalid(provider, `model "${entry.id}" needs an api; the installed catalog does not describe it, so set the`
         + ' route\'s api to the wire protocol its endpoint speaks')
     }
+    const resolvedEntry = withOllamaReasoningDefaults(provider, api, entry, request.compat)
     const baseUrl = request.baseURL ?? base?.baseUrl ?? providerBaseUrl
     if (baseUrl === undefined) {
       invalid(provider, `model "${entry.id}" needs a baseURL; the installed catalog does not describe this route`)
@@ -890,8 +937,8 @@ export function resolveRouteModels(request: RouteCatalogRequest): RouteCatalog {
       cost: base?.cost ?? NO_COST,
       contextWindow,
       maxTokens,
-      ...resolveModelReasoning(provider, entry, base),
-      ...resolveModelCompat(provider, entry, request.compat, base, api),
+      ...resolveModelReasoning(provider, resolvedEntry, base),
+      ...resolveModelCompat(provider, resolvedEntry, request.compat, base, api),
     }
   })
   // Per field, not per block: a route may default a switch its completions
