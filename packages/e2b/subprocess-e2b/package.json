@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-subprocess-e2b",
   "description": "E2B subprocess implementation for DeepSeek Harness",
-  "version": "1.2.0",
+  "version": "1.2.1-rc1",
   "publishConfig": {
     "access": "public"
   },

@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-client-ui-image-generation",
   "description": "Independent final-answer image previews for the bundled image-generation tools",
-  "version": "1.2.0",
+  "version": "1.2.1-rc1",
   "publishConfig": {
     "access": "public"
   },
