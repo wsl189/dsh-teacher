@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -171,8 +171,11 @@ async function callTool(
   })
 }
 
-function promptAgent(text: string): Agent {
-  const session = Session.create(SessionId(`teacher-prompt-${String(randomCallId)}`))
+function promptAgent(text: string, cwd?: string): Agent {
+  const id = SessionId(`teacher-prompt-${String(randomCallId)}`)
+  const session = cwd === undefined
+    ? Session.create(id)
+    : Session.create(id, [], { version: 0, id, createdAt: Date.now(), cwd })
   session.append('turn/start', { turn: 1 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text }],
@@ -233,6 +236,10 @@ describe('TeacherWorkbenchService', () => {
       'teacher_question_workbench',
       'teacher_question_image_read',
     ]))
+    expect(b.ctx.tools.schemas().find(tool => tool.name === 'teacher_question_workbench')?.description)
+      .toContain('never pre-extract it with document-reading, shell, or filesystem tools')
+    expect(b.ctx.tools.schemas().find(tool => tool.name === 'teacher_question_workbench')?.description)
+      .toContain('never create workspace scratch or sidecar files')
 
     const rosterClass = await callTool(b.ctx, 'teacher_student_roster', {
       action: 'save_class', data: { name: '高一（1）班', grade: '高一', subject: '数学' },
@@ -650,6 +657,7 @@ describe('TeacherWorkbenchService', () => {
     pdfPage.drawText('1. question', { x: 20, y: 260, size: 16 })
     pdfPage.drawRectangle({ x: 130, y: 220, width: 30, height: 30, color: rgb(1, 0, 0) })
     pdf.addPage([200, 300])
+    pdf.addPage([200, 300])
     const bytes = await pdf.save()
     const staged = await b.service.stageSource({
       name: 'paper.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(bytes).toString('base64'),
@@ -680,7 +688,7 @@ describe('TeacherWorkbenchService', () => {
       ok: true,
       value: {
         groupCount: 1,
-        groups: [{ groupIndex: 0, corePageIndexes: [1], inspectionPageIndexes: [0, 1, 2] }],
+        groups: [{ groupIndex: 0, corePageIndexes: [0, 1, 2, 3], inspectionPageIndexes: [0, 1, 2, 3] }],
         maxConcurrentGroups: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
         maxRecutAttempts: 2,
@@ -706,20 +714,45 @@ describe('TeacherWorkbenchService', () => {
         }],
       },
     })
-    const reviewQuestionCrops = vi.spyOn(b.service, 'reviewQuestionCrops').mockImplementation(request => Promise.resolve({
-      ok: true,
-      value: { decision: 'accepted', affectedQuestionIds: [], questions: request.questions },
-    }))
+    let reviewPass = 0
+    const reviewQuestionCrops = vi.spyOn(b.service, 'reviewQuestionCrops').mockImplementation((request) => {
+      reviewPass += 1
+      expect(request.pagePreviews.map(preview => preview.pageIndex)).toEqual(
+        reviewPass === 1 ? [0, 1, 2, 3] : [0, 1, 2],
+      )
+      return Promise.resolve(reviewPass === 1
+        ? {
+          ok: true,
+          value: {
+            decision: 'revised' as const,
+            affectedQuestionIds: request.reviewQuestionIds,
+            questions: request.questions.map(question => ({
+              ...question,
+              regions: question.regions.map(region => ({ ...region, bottom: region.bottom + 1 })),
+            })),
+          },
+        }
+        : {
+          ok: true,
+          value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: request.questions },
+        })
+    })
+    const extractionSidecar = join(root, 'paper.extract.txt')
+    const missingDestinationAgent = promptAgent('请帮我切题', root)
+    await writeFile(extractionSidecar, 'temporary extraction')
     const missingDestination = await callTool(b.ctx, 'teacher_question_workbench', {
       action: 'segment_pdf',
       data: {
         sourceId: staged.value.id,
         sourceName: 'paper.pdf',
       },
-    }, promptAgent('请帮我切题'))
+    }, missingDestinationAgent)
     expect(missingDestination.isError).toBe(true)
     expect(missingDestination.content.find(block => block.type === 'text')?.text)
       .toContain('has no default save destination')
+    await expect(stat(extractionSidecar)).rejects.toMatchObject({ code: 'ENOENT' })
+    await writeFile(extractionSidecar, 'pre-existing user content')
+    await utimes(extractionSidecar, new Date(1_000), new Date(1_000))
     const guessedDestination = await callTool(b.ctx, 'teacher_question_workbench', {
       action: 'segment_pdf',
       data: {
@@ -727,17 +760,18 @@ describe('TeacherWorkbenchService', () => {
         sourceName: 'paper.pdf',
         destinationKind: 'library-root',
       },
-    }, promptAgent('请帮我切题'))
+    }, promptAgent('请帮我切题', root))
     expect(guessedDestination.isError).toBe(true)
     expect(guessedDestination.content.find(block => block.type === 'text')?.text)
       .toContain('does not explicitly name the question-library root')
+    await expect(readFile(extractionSidecar, 'utf8')).resolves.toBe('pre-existing user content')
     const cut = await callTool(b.ctx, 'teacher_question_workbench', {
       action: 'segment_pdf',
       data: {
         sourceId: staged.value.id,
         sourceName: 'paper.pdf',
         destinationKind: 'library-root',
-        pageRange: '2',
+        pageRange: '1-4',
         batchName: '自动切题',
         padding: 8,
       },
@@ -745,16 +779,18 @@ describe('TeacherWorkbenchService', () => {
     expect(cut.isError).toBe(false)
     expect(extractLayout).toHaveBeenCalledOnce()
     expect(segmentQuestions).toHaveBeenCalledWith(expect.objectContaining({
-      corePageIndexes: [1],
+      corePageIndexes: [0, 1, 2, 3],
       pages: [
         expect.objectContaining({ pageIndex: 0 }),
         expect.objectContaining({ pageIndex: 1 }),
         expect.objectContaining({ pageIndex: 2 }),
+        expect.objectContaining({ pageIndex: 3 }),
       ],
       pagePreviews: [
         expect.objectContaining({ pageIndex: 0 }),
         expect.objectContaining({ pageIndex: 1 }),
         expect.objectContaining({ pageIndex: 2 }),
+        expect.objectContaining({ pageIndex: 3 }),
       ],
     }))
     const result = cut.value as {
@@ -818,7 +854,7 @@ describe('TeacherWorkbenchService', () => {
         sourceId: staged.value.id,
         sourceName: 'paper.pdf',
         destinationKind: 'library-root',
-        pageRange: '2',
+        pageRange: '1-4',
         batchName: '不得落盘的未复核结果',
         padding: 8,
       },
@@ -826,7 +862,7 @@ describe('TeacherWorkbenchService', () => {
     expect(unverified.isError).toBe(false)
     expect(unverified.value).toMatchObject({ questionCount: 2, groupCount: 1, unverifiedGroupCount: 1 })
     expect(extractLayout).toHaveBeenCalledTimes(4)
-    expect(reviewQuestionCrops).toHaveBeenCalledTimes(2)
+    expect(reviewQuestionCrops).toHaveBeenCalledTimes(3)
     expect((await b.service.read({})).value.state.questionBatches).toHaveLength(2)
   })
 

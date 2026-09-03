@@ -114,6 +114,18 @@ export async function segmentStagedQuestionPdf(
   let questions = [...segmented.value.questions]
   // Crop-local review cannot replace the PDF-wide outlier-filtered width.
   const outputWidthRatio = segmented.value.maxQuestionWidthRatio
+  const renderedUploads = new Map<TeacherQuestionLayoutElementId, TeacherQuestionImageUpload>()
+  const rememberUploads = (
+    renderedQuestions: readonly TeacherSegmentedQuestion[],
+    uploads: readonly TeacherQuestionImageUpload[],
+  ): void => {
+    if (renderedQuestions.length !== uploads.length) throw new Error('rendered question count is inconsistent')
+    renderedQuestions.forEach((question, index) => {
+      const upload = uploads[index]
+      if (upload === undefined) throw new Error('rendered question image is missing')
+      renderedUploads.set(question.sourceHeadId, upload)
+    })
+  }
   const reviewedGroups = await mapConcurrently(
     segmented.value.groups,
     segmented.value.maxConcurrentGroups,
@@ -124,6 +136,7 @@ export async function segmentStagedQuestionPdf(
       let unverified = false
       for (;;) {
         const crops = await renderQuestionUploads(bytes, pages, reviewQuestions, outputWidthRatio, signal)
+        rememberUploads(reviewQuestions, crops)
         const localPageIndexes = recutAttempt === 0 || reviewQuestions.length === 0
           ? group.corePageIndexes
           : [...new Set(reviewQuestions.flatMap(question => (
@@ -161,6 +174,7 @@ export async function segmentStagedQuestionPdf(
           throw new Error('reviewed question group identity is inconsistent')
         }
         groupQuestions = [...reviewed.value.questions]
+        for (const questionId of reviewed.value.affectedQuestionIds) renderedUploads.delete(questionId)
         recutAttempt += 1
         if (recutAttempt >= segmented.value.maxRecutAttempts) {
           unverified = true
@@ -183,13 +197,23 @@ export async function segmentStagedQuestionPdf(
       segmented.value.groupCount,
     )
   }
-  const uploads = await renderQuestionUploads(
+  const missingRenderedQuestions = questions.filter(question => !renderedUploads.has(question.sourceHeadId))
+  rememberUploads(missingRenderedQuestions, await renderQuestionUploads(
     bytes,
     pages,
-    questions,
+    missingRenderedQuestions,
     outputWidthRatio,
     signal,
-  )
+  ))
+  const uploads = questions.map((question) => {
+    const upload = renderedUploads.get(question.sourceHeadId)
+    if (upload === undefined) throw new Error('reviewed question image is missing')
+    return {
+      ...upload,
+      questionNo: question.questionNo,
+      fileName: `第${String(question.questionNo)}题.png`,
+    }
+  })
   if (uploads.length === 0) throw new Error('question segmentation returned no images')
   const parts = partitionUploads(uploads, segmented.value.maxSaveBatchBytes)
   let batchId: TeacherQuestionBatchId | undefined

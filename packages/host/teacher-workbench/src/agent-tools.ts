@@ -1,6 +1,8 @@
 /** Model-facing read and mutation tools for the teacher workbench. */
 
 import { randomUUID } from 'node:crypto'
+import { lstat, unlink } from 'node:fs/promises'
+import { basename, join } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { Agent } from '@deepseek-ai/dsh-agent'
 import { AttachmentId } from '@deepseek-ai/dsh-attachment'
@@ -195,7 +197,7 @@ export function registerTeacherWorkbenchTools(ctx: Context, service: TeacherWork
 
   ctx.tools.register(defineTool({
     name: 'teacher_question_workbench',
-    description: `Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: ${QUESTION_ACTIONS.join(', ')}. segment_pdf has no default save destination and uses {sourceId,sourceName,destinationKind:library-root|library-folder,folderId?,pageRange?,batchName?,padding?} from uploaded-document context. Use library-root only when the current user explicitly names the question-library root. Use library-folder with the folderId from teacher_workbench_read only when the current user explicitly names that folder's complete path. Otherwise ask which destination to use and do not call segment_pdf. It keeps each accepted region's MinerU left, top, and bottom coordinates and gives every output the PDF-wide maximum non-outlier normalized safe-lane width from its fixed left edge. Source pixels stop at the inset horizontal lane limit; any remaining width is white padding instead of gutter or neighboring-column pixels. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.`,
+    description: `Split an uploaded PDF, edit/delete question images, manage student folders and assignments, and generate Word or PowerPoint files. Call teacher_workbench_read before actions that use stored workbench state. Actions: ${QUESTION_ACTIONS.join(', ')}. segment_pdf has no default save destination and uses {sourceId,sourceName,destinationKind:library-root|library-folder,folderId?,pageRange?,batchName?,padding?} from uploaded-document context. segment_pdf consumes the retained source directly: never pre-extract it with document-reading, shell, or filesystem tools, and never create workspace scratch or sidecar files. Use library-root only when the current user explicitly names the question-library root. Use library-folder with the folderId from teacher_workbench_read only when the current user explicitly names that folder's complete path. Otherwise ask which destination to use and do not call segment_pdf. It keeps each accepted region's MinerU left, top, and bottom coordinates and gives every output the PDF-wide maximum non-outlier normalized safe-lane width from its fixed left edge. Source pixels stop at the inset horizontal lane limit; any remaining width is white padding instead of gutter or neighboring-column pixels. Image actions use {kind:batch|assignment,id}; inspect the stored raster with teacher_question_image_read before choosing source-pixel coordinates. rotate_image adds degrees 90|180|270; crop_image adds left,top,width,height; erase_image_regions adds regions:[{left,top,width,height}] and replaces each rectangle with its sampled surrounding background. Both crop and erase overwrite the stored image. assign_questions {studentId,folderId?,imageIds}. generate_folder_document accepts {kind:word|ppt,directoryPath} for an ordinary local image directory, requires no student assignment, and does not require teacher_workbench_read. generate_document accepts kind word|ppt and ordered stored targets [{kind:batch|assignment,id}]. To reproduce Question Cutting class Word or PowerPoint output, use generate_student_documents {kind,source?,students:[{studentId,title?,includeName?,includeDate?}]}; omitted fields match the browser defaults: source temporary, empty title, and no printed name or date. Set source assigned only when the user requests all assigned images.`,
     parameters: {
       action: { type: 'string', required: true, enum: [...QUESTION_ACTIONS] },
       data: { type: 'object', required: true, additionalProperties: true },
@@ -205,23 +207,28 @@ export function registerTeacherWorkbenchTools(ctx: Context, service: TeacherWork
       if (args.action === 'segment_pdf') {
         if (exec.agent === undefined) throw new Error('question segmentation requires an owning agent session')
         const sourceName = textField(args.data, 'sourceName')
-        const state = (await service.read({})).value.state
-        const result = await segmentStagedQuestionPdf(ctx, service, {
-          sourceId: textField(args.data, 'sourceId') as never,
-          sourceName,
-          destination: questionSegmentationDestination(state, args.data, exec.agent),
-          pageRange: optionalText(args.data, 'pageRange') ?? '',
-          batchName: optionalText(args.data, 'batchName')?.trim() || sourceName.replace(/\.pdf$/iu, ''),
-          padding: optionalNumber(args.data, 'padding') ?? 8,
-        }, exec.agent.id, exec.signal)
-        return {
-          revision: result.revision,
-          summary: `Segmented ${String(result.questionCount)} questions`,
-          createdIds: [result.batchId],
-          batchId: result.batchId,
-          questionCount: result.questionCount,
-          groupCount: result.groupCount,
-          unverifiedGroupCount: result.unverifiedGroupCount,
+        await removeCurrentTurnQuestionExtractionSidecar(exec.agent, sourceName)
+        try {
+          const state = (await service.read({})).value.state
+          const result = await segmentStagedQuestionPdf(ctx, service, {
+            sourceId: textField(args.data, 'sourceId') as never,
+            sourceName,
+            destination: questionSegmentationDestination(state, args.data, exec.agent),
+            pageRange: optionalText(args.data, 'pageRange') ?? '',
+            batchName: optionalText(args.data, 'batchName')?.trim() || sourceName.replace(/\.pdf$/iu, ''),
+            padding: optionalNumber(args.data, 'padding') ?? 8,
+          }, exec.agent.id, exec.signal)
+          return {
+            revision: result.revision,
+            summary: `Segmented ${String(result.questionCount)} questions`,
+            createdIds: [result.batchId],
+            batchId: result.batchId,
+            questionCount: result.questionCount,
+            groupCount: result.groupCount,
+            unverifiedGroupCount: result.unverifiedGroupCount,
+          }
+        } finally {
+          await removeCurrentTurnQuestionExtractionSidecar(exec.agent, sourceName)
         }
       }
       if (args.action === 'delete_batch') {
@@ -773,6 +780,23 @@ function currentTurnUserText(agent: Agent): string {
   }).join('\n').trim()
   if (text === '') throw new Error('the current agent turn has no direct user text')
   return text
+}
+
+async function removeCurrentTurnQuestionExtractionSidecar(agent: Agent, sourceName: string): Promise<void> {
+  const cwd = agent.session.header.cwd
+  const turnStart = agent.session.events.findLast(event => event.type === 'turn/start')
+  const fileName = basename(sourceName)
+  if (cwd === undefined || turnStart === undefined || !/\.pdf$/iu.test(fileName)) return
+  const stem = fileName.slice(0, -4)
+  if (stem === '') return
+  const path = join(cwd, `${stem}.extract.txt`)
+  try {
+    const metadata = await lstat(path)
+    if (!metadata.isFile() || metadata.mtimeMs + 1_000 < turnStart.time) return
+    await unlink(path)
+  } catch {
+    // Sidecar cleanup is best-effort and must not replace the segmentation result.
+  }
 }
 
 function questionSegmentationDestination(

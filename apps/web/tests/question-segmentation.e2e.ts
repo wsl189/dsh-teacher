@@ -38,7 +38,6 @@ class QuestionSegmentationAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
   failCropReviews = false
   private readonly boundaryTools: string[] = []
-  private readonly reviewPhases = new Map<string, number>()
 
   override providerInfo(provider: string): LlmProviderInfo {
     return { id: provider, name: 'Question segmentation test' }
@@ -56,12 +55,9 @@ class QuestionSegmentationAdapter extends LlmAdapter {
 
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
-    const reviewSheet = options.tools?.find(tool => tool.name.startsWith('question_review_sheet_'))?.name
     const reviewFindings = options.tools?.find(tool => tool.name.startsWith('submit_question_crop_findings_'))?.name
-    if (reviewSheet !== undefined && reviewFindings !== undefined) {
+    if (reviewFindings !== undefined) {
       if (this.failCropReviews) throw new Error('simulated crop-review provider failure')
-      const phase = this.reviewPhases.get(reviewFindings) ?? 0
-      this.reviewPhases.set(reviewFindings, phase + 1)
       const promptText = options.messages.flatMap(message => message.content)
         .find(block => block.type === 'text' && block.text.includes('"visualAttention"'))
       if (promptText?.type !== 'text') throw new Error('crop-review metadata is missing')
@@ -70,9 +66,10 @@ class QuestionSegmentationAdapter extends LlmAdapter {
         readonly visualAttention: readonly { readonly cropId: string }[]
         readonly preliminaryQuestions: readonly { readonly cropId: string }[]
       }
-      if (phase === 0) {
-        yield * toolCall(reviewSheet, { ids: metadata.reviewSheetIds }, this.requests.length)
-        return
+      const attachedReviewSheets = options.messages.flatMap(message => message.content)
+        .filter(block => block.type === 'image')
+      if (attachedReviewSheets.length !== metadata.reviewSheetIds.length) {
+        throw new Error('compact review sheets are not attached to the initial request')
       }
       yield * toolCall(reviewFindings, {
         verifiedCrops: metadata.preliminaryQuestions.map(question => ({

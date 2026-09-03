@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-agent-loop-question-segmentation.md
-2026-08-21-agent-loop-question-segmentation.md: 8a0779b75381c66d7fae68ec3220caca880f6ee2
-2026-08-21-agent-loop-question-segmentation.zh.md: d7ef74929ce8e0e77610de380a33e57eec7c6411
+2026-08-21-agent-loop-question-segmentation.md: 6015e51c53f312a6bca083fb5620e11b64ef58b8
+2026-08-21-agent-loop-question-segmentation.zh.md: 037b481e6ef5227410c692e92562ff4dd02fc8ed

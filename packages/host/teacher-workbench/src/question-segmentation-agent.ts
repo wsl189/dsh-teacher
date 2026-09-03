@@ -1381,20 +1381,43 @@ function visionImageContent(value: VisionImageValue): Array<
   ])
 }
 
+async function saveVisionImages(
+  sources: readonly VisionImageSource[],
+  saveImage: (source: { data: Uint8Array; mediaType: ImageMediaType; name: string }) => Promise<ImageAttachmentRef>,
+): Promise<VisionImageValue> {
+  return {
+    images: await Promise.all(sources.map(async (source) => {
+      const data = decodeCanonicalBase64(source.contentBase64)
+      if (data === undefined) throw new Error(`preview is not canonical base64: ${source.id}`)
+      const attachment = await saveImage({ data, mediaType: source.mediaType, name: `${source.id}.png` })
+      return {
+        id: source.id,
+        label: source.label,
+        attachmentId: attachment.attachmentId,
+        mediaType: attachment.mediaType,
+        bytes: attachment.bytes,
+        width: attachment.width,
+        height: attachment.height,
+        ...(attachment.name === undefined ? {} : { name: attachment.name }),
+        ...(attachment.originalDimensions === undefined ? {} : {
+          originalDimensions: { ...attachment.originalDimensions },
+        }),
+      }
+    })),
+  }
+}
+
 function visionImageTool(
   name: string,
   sources: readonly VisionImageSource[],
   inspected: Set<string>,
   maxImages: number,
   saveImage: (source: { data: Uint8Array; mediaType: ImageMediaType; name: string }) => Promise<ImageAttachmentRef>,
-  requireAllSources = false,
 ) {
   const byId = new Map(sources.map(source => [source.id, source] as const))
   return defineTool({
     name,
-    description: requireAllSources
-      ? `Read all ${String(sources.length)} listed review sheets in one request. Partial or repeated sheet requests are rejected.`
-      : `Read one through ${String(maxImages)} source previews by opaque id. Every returned image is authoritative visual evidence and must be inspected before the final submission.`,
+    description: `Read one through ${String(maxImages)} source previews by opaque id. Every returned image is authoritative visual evidence and must be inspected before the final submission.`,
     parameters: {
       ids: {
         type: 'array',
@@ -1414,11 +1437,6 @@ function visionImageTool(
     },
     async execute(args) {
       const ids = args.ids
-      if (requireAllSources && (
-        ids.length !== sources.length || ids.some(id => !byId.has(id))
-      )) {
-        throw new Error(`review sheet request must contain all ${String(sources.length)} ids in one call`)
-      }
       if (ids.length < 1 || ids.length > maxImages) {
         throw new Error(`preview request must contain one through ${String(maxImages)} ids`)
       }
@@ -1430,26 +1448,9 @@ function visionImageTool(
         if (inspected.has(id)) throw new Error(`preview was already inspected: ${id}`)
         requested.push(source)
       }
-      const images = await Promise.all(requested.map(async (source) => {
-        const data = decodeCanonicalBase64(source.contentBase64)
-        if (data === undefined) throw new Error(`preview is not canonical base64: ${source.id}`)
-        const attachment = await saveImage({ data, mediaType: source.mediaType, name: `${source.id}.png` })
-        return {
-          id: source.id,
-          label: source.label,
-          attachmentId: attachment.attachmentId,
-          mediaType: attachment.mediaType,
-          bytes: attachment.bytes,
-          width: attachment.width,
-          height: attachment.height,
-          ...(attachment.name === undefined ? {} : { name: attachment.name }),
-          ...(attachment.originalDimensions === undefined ? {} : {
-            originalDimensions: { ...attachment.originalDimensions },
-          }),
-        }
-      }))
+      const value = await saveVisionImages(requested, saveImage)
       for (const source of requested) inspected.add(source.id)
-      return { images }
+      return { images: [...value.images] }
     },
   })
 }
@@ -2818,6 +2819,10 @@ function validateCropReviewRequest(
     || request.reviewQuestionIds.some(id => !sourceHeadIds.has(id))) {
     return 'reviewQuestionIds must be unique preliminary sourceHeadId values'
   }
+  const reviewsCompleteGroup = request.recutAttempt === 0
+  if (reviewsCompleteGroup && reviewQuestionIds.size !== sourceHeadIds.size) {
+    return 'the initial complete-group review must include every preliminary question'
+  }
   const reviewedQuestions = request.questions.filter(question => reviewQuestionIds.has(question.sourceHeadId))
   const reviewedNumbers = new Set(reviewedQuestions.map(question => question.questionNo))
   const cropNumbers = new Set<number>()
@@ -2854,7 +2859,6 @@ function validateCropReviewRequest(
     }
     previewPages.add(preview.pageIndex)
   }
-  const reviewsCompleteGroup = reviewQuestionIds.size === sourceHeadIds.size
   const requiredPreviewPages = new Set(reviewedQuestions.length === 0 || reviewsCompleteGroup
     ? request.corePageIndexes
     : reviewedQuestions.flatMap(question => question.regions.map(region => region.pageIndex)))
@@ -4194,7 +4198,7 @@ export async function reviewQuestionCropsWithAgent(
   const cropQuestionIdByPreviewId: ReadonlyMap<string, TeacherQuestionLayoutElementId> = new Map(request.questions.map(question => (
     [`crop-${String(question.sourceHeadId)}`, question.sourceHeadId] as const
   )))
-  const reviewsCompleteGroup = request.reviewQuestionIds.length === request.questions.length
+  const reviewsCompleteGroup = request.recutAttempt === 0
   let pageSources = rawPageSources
   const corePageIds = request.corePageIndexes.map(pageIndex => `page-${String(pageIndex + 1)}`)
   const answerSectionCorePageIndexes = [...new Set([
@@ -4224,7 +4228,6 @@ export async function reviewQuestionCropsWithAgent(
   ))
   const toolSuffix = runToolSuffix()
   const sourceToolName = `question_review_context_${toolSuffix}`
-  const sheetToolName = `question_review_sheet_${toolSuffix}`
   const pageToolName = `question_review_page_${toolSuffix}`
   const cropToolName = `question_review_crop_${toolSuffix}`
   const findingsToolName = `submit_question_crop_findings_${toolSuffix}`
@@ -4267,6 +4270,9 @@ export async function reviewQuestionCropsWithAgent(
       : []
     const compactReview = compactReviewSources.length > 0 && compactReviewSources.length <= maxImages
     const reviewPageSources = compactReview ? compactReviewSources : pageSources
+    const compactReviewValue = compactReview
+      ? await saveVisionImages(reviewPageSources, source => attachments.saveImage(source))
+      : undefined
     const expectedImageIds = new Set(compactReview
       ? reviewPageSources.map(source => source.id)
       : [...expectedPageIds, ...expectedCropIds])
@@ -4302,19 +4308,7 @@ export async function reviewQuestionCropsWithAgent(
       ), rejectedToolBudget)),
       'teacher-workbench: revised question boundaries',
     )
-    if (compactReview) {
-      disposePageTool = ctx.effect(
-        () => tools.register(visionImageTool(
-          sheetToolName,
-          reviewPageSources,
-          inspectedImageIds,
-          maxImages,
-          source => attachments.saveImage(source),
-          true,
-        )),
-        'teacher-workbench: annotated question review sheets',
-      )
-    } else {
+    if (!compactReview) {
       disposePageTool = ctx.effect(
         () => tools.register(visionImageTool(
           pageToolName,
@@ -4360,6 +4354,9 @@ export async function reviewQuestionCropsWithAgent(
     for (let agentRun = 0; agentRun < config.maxQuestionBoundaryAgentRuns; agentRun += 1) {
       deadline.renew()
       inspectedImageIds.clear()
+      if (compactReview) {
+        for (const id of expectedImageIds) inspectedImageIds.add(id)
+      }
       inspectedRepairChunks.clear()
       delete reviewState.findings
       reviewState.findingSubmissions = 0
@@ -4373,15 +4370,15 @@ export async function reviewQuestionCropsWithAgent(
         : ' This is a crop-local recut review. Classify only the listed cropIds. Opaque gray vertical bands on annotated pages hide unrelated lanes: masked pixels are unavailable and cannot be cited as missing content, options, figures, continuation, or contamination. Unmasked unlisted questions remain present and unchanged and may be used only as same-lane boundary context. Do not report an unlisted question as missing, do not submit a pageId-only finding or missingQuestionHead, and do not replace the complete group.'
       const recoveryInstruction = agentRun === 0
         ? coreCoverageInstruction
-        : ` A previous crop-review child ended without a Host-accepted result. Start the visual classification again and use only the listed cropIds and reviewSheetIds; an accepted review tool ends this run.${coreCoverageInstruction}`
+        : ` A previous crop-review child ended without a Host-accepted result. Start the visual classification again and use only the listed cropIds and ${compactReview ? 'attached review sheets' : 'preview ids'}; an accepted review tool ends this run.${coreCoverageInstruction}`
       const reviewClassificationInstruction = reviewsCompleteGroup
         ? 'Match every independent source-page problem to exactly one crop. A pageId-only finding is permitted when an independent source problem has no one-question crop, even when its pixels are inside a larger crop that combines several problems; set missingQuestionHead to its visible printed head and cite the containing crop in evidence when applicable. Also classify that combined crop as defective with reassign-content. This explicit missing-question record requires a complete-group repair. Missing content from an existing single-question crop, including a diagram or options printed elsewhere on the source page, must cite that cropId and may include pageId in the same finding; never set missingQuestionHead for it. If content missing from one crop appears in another, cite both cropIds as separate findings with complementary repairIntents so both boundaries change. Build one complete classification: use cropId, answerDemand, evidence, topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, rightmostVisibleContent, and requiredVisuals for a complete crop, plus attentionEvidence when visualAttention names it; use issue, evidence, cropId, and every required repairIntent for an existing-crop defect; use issue, evidence, pageId, and missingQuestionHead only for an independent problem with no one-question crop. A finding with missingQuestionHead requires a complete processing-group draft that explicitly classifies every possible question-head candidate and image element.'
         : 'Classify every listed crop exactly once and ignore unlisted questions except as read-only boundary context. Missing content from a listed crop must cite that cropId and may include pageId. If pixels belonging to one listed crop appear in another listed crop, cite both cropIds with complementary repairIntents so both local boundaries change. Never submit a pageId-only finding or missingQuestionHead in this crop-local recut. Record a complete crop with the exact cropId field, never verifyCropId, plus answerDemand, evidence, topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, rightmostVisibleContent, and requiredVisuals, plus attentionEvidence when visualAttention names it; record an existing-crop defect with issue, evidence, cropId, and every required repairIntent. Host validation preserves every unlisted question and rejects a complete-group replacement.'
       const promptText = compactReview
-        ? `Review every annotated source page and rendered crop from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First call ${sheetToolName} once with every reviewSheetId. These ids exist only in that tool; never call read_image or any filesystem tool. A review-page sheet contains annotated source pages: each magenta rectangle is the exact sampled source region for its Q label, the blue dashed line is final owned OCR content before permitted white right padding, a red crossed region is erased, repeated Q labels form one stitched crop, and any opaque gray vertical band hides an unrelated page lane. Masked pixels are unavailable evidence and must never be cited as missing content, options, figures, continuation, or contamination. Except for a red crossed region, every source pixel inside a magenta rectangle is already present in that crop; never report those pixels as absent from the rendered crop. They can still prove that one crop incorrectly combines several independent questions. Unmasked source pixels outside a magenta rectangle are same-lane page context and are not inside that crop. A review-crop sheet contains the rendered outputs: the cyan frame is the exact outer boundary of the actual crop, while the gray field outside that frame is only sheet layout and is never crop whitespace. Judge margins and gaps only inside the cyan frame. Map Q labels through preliminaryQuestions and compare every actual crop with its boxed source region. Check that every crop has exactly one complete independent answer demand with all figures, options, subparts, and continuations, contains no second independent problem, answer, explanation, footer, adjacent problem, or avoidable vertical gap, and that every core-page problem has its own output crop. A collective answerDemand such as solving several separately labelled problems never verifies a crop. A magenta rectangle or Q label proves only that a crop exists; it never proves that the crop is one learner question. A page-only missing-question finding may identify a visible independent problem outside every box or inside a box that combines multiple problems; suggestedUncoveredQuestionHeads is only a non-exhaustive OCR hint. Compare adjacent and repeated boxes for missing or duplicated pixels. Report only visibly confirmed defects; possible or suspected findings are rejected. Immediately submit one ${findingsToolName} call listing every complete crop in verifiedCrops with its exact single visible answerDemand and visible task evidence, and every defect in findings. If a crop has no learner answer demand because it contains only theory, a method summary, an answer, a solution, or explanatory prose, report remove-crop instead of verifying it. Every expansion finding supplies outsideCropEvidence naming the required pixels outside the magenta rectangle; every trim finding supplies insideCropEvidence naming unwanted pixels actually visible in the rendered crop. A reassign-content finding that claims a missing continuation must identify source content outside the magenta rectangle; a page-binding line or the blue owned-content marker does not prove missing content. Resolve every visualAttention flag for a verified crop through attentionChecks. A crop defect cites cropId and every repairIntent; an independent problem without its own crop cites pageId plus missingQuestionHead. Never declare both expansion and trimming on the same crop edge. Recorded defects cannot be withdrawn during this visual run. A findings call with defects ends this visual pass; the Host starts a separate text-only repair child. Do not call a repair-context or revision tool here. An accepted clean findings call also ends the run. Do not narrate individual crops.\n${JSON.stringify({
+        ? `Review every annotated source page and rendered crop from ${JSON.stringify(request.fileName)}.${recoveryInstruction} The complete set of review sheets is attached to this request and each image is labelled by reviewSheetId; inspect every attached image now and never call read_image or any filesystem tool. A review-page sheet contains annotated source pages: each magenta rectangle is the exact sampled source region for its Q label, the blue dashed line is final owned OCR content before permitted white right padding, a red crossed region is erased, repeated Q labels form one stitched crop, and any opaque gray vertical band hides an unrelated page lane. Masked pixels are unavailable evidence and must never be cited as missing content, options, figures, continuation, or contamination. Except for a red crossed region, every source pixel inside a magenta rectangle is already present in that crop; never report those pixels as absent from the rendered crop. They can still prove that one crop incorrectly combines several independent questions. Unmasked source pixels outside a magenta rectangle are same-lane page context and are not inside that crop. A review-crop sheet contains the rendered outputs: the cyan frame is the exact outer boundary of the actual crop, while the gray field outside that frame is only sheet layout and is never crop whitespace. Judge margins and gaps only inside the cyan frame. Map Q labels through preliminaryQuestions and compare every actual crop with its boxed source region. Check that every crop has exactly one complete independent answer demand with all figures, options, subparts, and continuations, contains no second independent problem, answer, explanation, footer, adjacent problem, or avoidable vertical gap, and that every core-page problem has its own output crop. A collective answerDemand such as solving several separately labelled problems never verifies a crop. A magenta rectangle or Q label proves only that a crop exists; it never proves that the crop is one learner question. A page-only missing-question finding may identify a visible independent problem outside every box or inside a box that combines multiple problems; suggestedUncoveredQuestionHeads is only a non-exhaustive OCR hint. Compare adjacent and repeated boxes for missing or duplicated pixels. Report only visibly confirmed defects; possible or suspected findings are rejected. Immediately submit one ${findingsToolName} call as the first action, listing every complete crop in verifiedCrops with its exact single visible answerDemand and visible task evidence, and every defect in findings. If a crop has no learner answer demand because it contains only theory, a method summary, an answer, a solution, or explanatory prose, report remove-crop instead of verifying it. Every expansion finding supplies outsideCropEvidence naming the required pixels outside the magenta rectangle; every trim finding supplies insideCropEvidence naming unwanted pixels actually visible in the rendered crop. A reassign-content finding that claims a missing continuation must identify source content outside the magenta rectangle; a page-binding line or the blue owned-content marker does not prove missing content. Resolve every visualAttention flag for a verified crop through attentionChecks. A crop defect cites cropId and every repairIntent; an independent problem without its own crop cites pageId plus missingQuestionHead. Never declare both expansion and trimming on the same crop edge. Recorded defects cannot be withdrawn during this visual run. A findings call with defects ends this visual pass; the Host starts a separate text-only repair child. Do not call a repair-context or revision tool here. An accepted clean findings call also ends the run. Do not narrate individual crops.\n${JSON.stringify({
           groupIndex: request.groupIndex,
           recutAttempt: request.recutAttempt,
-          fullGroupCoverage: request.reviewQuestionIds.length === request.questions.length,
+          fullGroupCoverage: reviewsCompleteGroup,
           cropLocalLaneMask: !reviewsCompleteGroup,
           corePageIds,
           answerSectionPageIds,
@@ -4398,7 +4395,7 @@ export async function reviewQuestionCropsWithAgent(
         : `Review the listed crops from ${JSON.stringify(request.fileName)}.${recoveryInstruction} First inspect every pagePreviewId through ${pageToolName}; then inspect every cropId through ${cropToolName}. Keep source pages and crops in separate calls and request at most ${String(maxImages)} ids per call. Each page-x tool label is the authoritative source-page identity and must not be reordered or inferred from printed footer numbering; OCR pageIndex is zero-based and is used only for coordinate edits. Printed source text and each crop label's OCR head text identify the problem; no internal sequence position is a printed question number. In a crop-local recut, opaque gray vertical bands hide unrelated page lanes; masked pixels are unavailable and cannot support a finding. Content visible on an unmasked source lane is context, not proof that it appears inside a crop. Crops share one output width, so blank white pixels on the right are intentional padding and contain no source-page content; report neighboring-column contamination only when its text or graphics are visibly present inside the crop image. Before verifying any crop, fill answerDemand with the visible response the learner must produce; numbering, a topic title, definitions, formulas, theory summaries, and explanatory prose are not answer demands. A worked example with a visible problem stem still needs one crop containing only that stem, even when the source prints its answer and analysis immediately afterward. A crop is defective when it has no independent answer demand, omits any stem, option, subpart, continuation, answer blank, or figure, or includes any adjacent question, next-section title, answer or explanation, footer, decoration, or neighboring-column content that is not part of the question. A page-sized crop containing several theory topics or summary sections without one answer demand is a spurious question: submit one finding containing both cropId and pageId with repairIntents=["remove-crop"], then put that cropId in removedCropIds so the Host removes only that crop. A QR code, publisher resource label, or optional dynamic-demo block is furniture unless the problem explicitly instructs the learner to scan or use it; proximity alone never makes it required content. Compare each crop's first and last owned pixels with the source; trace unfinished clauses to the next source line and inspect every referenced or adjacent figure through its final edge or vertex. Thin answer lines, boxes, and other response marks may have no OCR element: inspect the source strip immediately after an unfinished prompt and require their actual dark pixels in the crop. Never infer that a response mark is visible from answerDemand or source text; if it is missing at an edge, report the crop for local expansion and correct it with verticalRegionEdits. Before marking a crop complete, scan all four edges: topmostVisibleContent, bottommostVisibleContent, leftmostVisibleContent, and rightmostVisibleContent must name the actual non-white edge pixels, not merely the intended question text, and requiredVisuals must name every required source visual with its visible crop location or say none when the source requires none. Inspect the final non-white pixels before intentional blank right padding. Registration fields, binding or trim lines, vertical page labels, printed page numbers, and running headers or footers are page furniture unless explicitly required by the question; report visible right-edge residue with trim-right. visualAttention is generated from suspicious source geometry. A named crop cannot be verified until attentionEvidence resolves every listed flag against source and crop pixels; if a detached slice is a watermark or an erased source image is a required diagram, report the defect instead. Compare every adjacent crop pair: a line, option, continuation, or figure missing from one crop but visible at the edge of the other requires two findings with complementary boundary repairIntents. A leading answer line in the next crop is not harmless whitespace when it completes the preceding prompt. A detached watermark, publisher mark, answer block, or other unrelated pixels below the last required line or figure are contamination even when separated by a large white gap; report only that crop for local correction. A visually detached lower-page block is not part of the preceding question merely because no later question head was detected; verify its semantic connection or report contamination. repairIntents are structural obligations: use expand-top or expand-bottom for missing edge pixels, trim-top or trim-bottom for extra vertical edge pixels, trim-right for unrelated right-edge pixels, reassign-content for an OCR element or figure that must change owner without a directional edge edit, and remove-crop only for a spurious crop. List every applicable intent and never use reassign-content to avoid naming a known edge direction. ${reviewClassificationInstruction} Submit exactly one ${findingsToolName} call containing complete verifiedCrops and findings arrays after every cropId has one classification. Recorded visual defects cannot be replaced or withdrawn in the same run. If defects are recorded, call ${sourceToolName} for chunk 0 of each repairTargetId returned by the findings tool and every remaining chunk it reports, then submit corrections to ${reviseToolName}. For any finding that cites a cropId, submit only the cited question heads and the Host will merge them into the unchanged group even when pageId is also present as evidence; the Host rejects changes to uncited questions. Put every spurious crop in removedCropIds; its combined cropId and pageId finding authorizes local deletion without a complete-group draft. outsideBoundaryElementIds names the first OCR element of each title, later-paper preamble, summary, answer, or other block that belongs to no question; it stops preceding automatic ownership until the next submitted head. stopBeforeElementId is exclusive: it names the first OCR element outside one question, never its last option, subpart, continuation line, or figure. When visible pixels have no usable OCR element, use verticalRegionEdits with exact pageIndex and top or bottom in the OCR page units reported by the repair-context tool; do not invent an element id for whitespace or a drawn line. Increasing top removes pixels from the crop top; decreasing top adds them; increasing bottom adds bottom pixels. Every edited side must move in a direction authorized by that crop's repairIntents. Expanding into a neighboring crop requires a cited complementary trim finding for that neighbor, so transferred pixels do not remain duplicated. Coordinate-only edits apply only to the cited question. verticalRegionEdits change top or bottom. sourceRightLimitEdits may only reduce rightLimit for trim-right without moving left or right; the document-wide output width remains fixed and the removed source area becomes white padding. Unrelated question boundaries remain unchanged. A correction that removes a previously sampled image must list that image in excludedElementIds and carry reassign-content; otherwise the Host preserves it. The Host rejects a correction that crosses another question head, contradicts a repairIntent, or leaves any cited crop geometry unchanged. A Host-accepted ${findingsToolName} or ${reviseToolName} call concludes this run immediately; do not call another tool after acceptance.\n${JSON.stringify({
           groupIndex: request.groupIndex,
           recutAttempt: request.recutAttempt,
-          fullGroupCoverage: request.reviewQuestionIds.length === request.questions.length,
+          fullGroupCoverage: reviewsCompleteGroup,
           cropLocalLaneMask: !reviewsCompleteGroup,
           corePageIds,
           answerSectionPageIds,
@@ -4423,6 +4420,7 @@ export async function reviewQuestionCropsWithAgent(
         })}`
       const prompt: SubagentStartRequest['prompt'] = [
         { type: 'text', text: promptText },
+        ...(compactReviewValue === undefined ? [] : visionImageContent(compactReviewValue)),
       ]
       run = await subagents.start('spawn', {
         label: `Question crop review: ${request.fileName} group ${String(request.groupIndex + 1)}${agentRun === 0 ? '' : ` (recovery ${String(agentRun + 1)})`}`,
@@ -4439,7 +4437,7 @@ export async function reviewQuestionCropsWithAgent(
           ...(compactReview ? { maxTokens: config.maxQuestionCompactReviewOutputTokens } : {}),
         },
         toolFilter: { allow: [
-          ...(compactReview ? [sheetToolName] : [pageToolName, cropToolName]),
+          ...(!compactReview ? [pageToolName, cropToolName] : []),
           findingsToolName,
           ...(!compactReview ? [sourceToolName, reviseToolName] : []),
         ] },

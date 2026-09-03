@@ -279,7 +279,7 @@ describe('QuestionCuttingController', () => {
     await controller.dispose()
   })
 
-  it('previews every core page during the first complete-group review', async () => {
+  it('narrows a follow-up recut to local pages even when every current question changed', async () => {
     const multiPageLayout: OcrLayoutDocument = {
       name: '整页漏题.pdf',
       provider: 'mineru',
@@ -296,8 +296,25 @@ describe('QuestionCuttingController', () => {
         excludedAreas: [], pageWidth: 100, pageHeight: 100,
       }],
     }
+    let reviewPass = 0
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
-      expect(review.pagePreviews.map(preview => preview.pageIndex)).toEqual([0, 1, 2])
+      reviewPass += 1
+      expect(review.pagePreviews.map(preview => preview.pageIndex)).toEqual(
+        reviewPass === 1 ? [0, 1, 2] : [1, 2],
+      )
+      if (reviewPass === 1) {
+        return {
+          ok: true as const,
+          value: {
+            decision: 'revised' as const,
+            affectedQuestionIds: [question.sourceHeadId],
+            questions: review.questions.map(item => ({
+              ...item,
+              regions: item.regions.map(region => ({ ...region, bottom: region.bottom + 1 })),
+            })),
+          },
+        }
+      }
       return {
         ok: true as const,
         value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
@@ -311,6 +328,7 @@ describe('QuestionCuttingController', () => {
           value: {
             ...initial.value,
             groups: [{ groupIndex: 0, corePageIndexes: [0, 1, 2], inspectionPageIndexes: [0, 1, 2] }],
+            maxRecutAttempts: 2,
             questions: [question],
           },
         }),
@@ -332,7 +350,7 @@ describe('QuestionCuttingController', () => {
     controller.enqueue({ ...request('整页漏题.pdf'), pageIndexes: [0, 1, 2], pageRange: '1-3' })
     await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
 
-    expect(reviewCrops).toHaveBeenCalledOnce()
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
     await controller.dispose()
   })
 

@@ -2197,7 +2197,7 @@ describe('segmentQuestionsWithAgent', () => {
     await ctx.fiber.dispose()
   })
 
-  it('forbids page-level missing-question recovery during a crop-local recut', async () => {
+  it('keeps an all-question follow-up crop-local and forbids page-level recovery', async () => {
     const ctx = new Context()
     const registered = provideTools(ctx)
     ctx.provide('agents', { get: () => ({ session: { id: SessionId('parent') } }) } as never)
@@ -2217,13 +2217,18 @@ describe('segmentQuestionsWithAgent', () => {
           throw new Error('crop review tools were not registered')
         }
         await pages.execute({ ids: ['page-1'] }, TOOL_CONTEXT)
-        await crops.execute({ ids: ['crop-p0e0'] }, TOOL_CONTEXT)
+        await crops.execute({ ids: ['crop-p0e0', 'crop-p0e2'] }, TOOL_CONTEXT)
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
             ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求集合交集',
             evidence: 'question 1 ends after its option row',
+          }, {
+            cropId: 'crop-p0e2',
+            ...VERIFIED_VISUAL_CHECK,
+            answerDemand: '求集合并集',
+            evidence: 'question 2 ends after its option row',
           }],
           findings: [{
             pageId: 'page-1',
@@ -2239,6 +2244,11 @@ describe('segmentQuestionsWithAgent', () => {
             ...VERIFIED_VISUAL_CHECK,
             answerDemand: '求集合交集',
             evidence: 'question 1 starts at its printed head and ends after its option row',
+          }, {
+            cropId: 'crop-p0e2',
+            ...VERIFIED_VISUAL_CHECK,
+            answerDemand: '求集合并集',
+            evidence: 'question 2 starts at its printed head and ends after its option row',
           }],
           findings: [],
         }, TOOL_CONTEXT))
@@ -2272,7 +2282,7 @@ describe('segmentQuestionsWithAgent', () => {
       groupIndex: 0,
       corePageIndexes: [0],
       recutAttempt: 1,
-      reviewQuestionIds: ['p0e0' as TeacherQuestionLayoutElementId],
+      reviewQuestionIds: questions.map(question => question.sourceHeadId),
       pages: [{
         pageIndex: 0, width: 600, height: 800,
         elements: [
@@ -2286,6 +2296,9 @@ describe('segmentQuestionsWithAgent', () => {
       questions,
       crops: [{
         questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1,
+        contentBase64: PIXEL,
+      }, {
+        questionNo: 2, fileName: '第2题.png', mediaType: 'image/png', width: 1, height: 1,
         contentBase64: PIXEL,
       }],
       padding: 5,
@@ -2907,7 +2920,7 @@ describe('segmentQuestionsWithAgent', () => {
       fileName: '填空题.pdf',
       groupIndex: 0,
       corePageIndexes: [0],
-      recutAttempt: 0,
+      recutAttempt: 1,
       reviewQuestionIds: [questions[0]!.sourceHeadId],
       pages: [{
         pageIndex: 0, width: 600, height: 800,
@@ -3011,7 +3024,7 @@ describe('segmentQuestionsWithAgent', () => {
       fileName: '装订栏.pdf',
       groupIndex: 0,
       corePageIndexes: [0],
-      recutAttempt: 0,
+      recutAttempt: 1,
       reviewQuestionIds: [questions[0]!.sourceHeadId],
       pages: [{
         pageIndex: 0, width: 600, height: 800,
@@ -3245,7 +3258,7 @@ describe('segmentQuestionsWithAgent', () => {
       fileName: '双栏填空题.pdf',
       groupIndex: 0,
       corePageIndexes: [0],
-      recutAttempt: 0,
+      recutAttempt: 1,
       reviewQuestionIds: [questions[0]!.sourceHeadId],
       pages: [{
         pageIndex: 0, width: 600, height: 800,
@@ -3725,6 +3738,7 @@ describe('segmentQuestionsWithAgent', () => {
     const start = vi.fn(async (_mode: string, startRequest: {
       readonly prompt: readonly { readonly type: string; readonly text?: string }[]
       readonly toolFilter: { readonly allow: readonly string[] }
+      readonly persona: string
       readonly agentOptions?: { readonly maxTokens?: number; readonly toolChoice?: string }
     }) => {
       expect(startRequest.prompt[0]?.text).toContain('magenta rectangle')
@@ -3743,18 +3757,16 @@ describe('segmentQuestionsWithAgent', () => {
       expect(promptText).toContain('Masked pixels are unavailable evidence')
       expect(metadata.preliminaryQuestions).toEqual([{ cropId: 'crop-p0e0', questionNo: 1, headPageId: 'page-1', regionPageIds: ['page-1'] }])
       expect(metadata.reviewSheetIds).toEqual(['review-page-sheet-1', 'review-crop-sheet-1'])
-      expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(0)
-      const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
-      if (sheets === undefined) throw new Error('annotated review sheet tool was not registered')
-      await expect(sheets.execute({ ids: [metadata.reviewSheetIds[0]] }, TOOL_CONTEXT))
-        .rejects.toThrow('review sheet request must contain all 2 ids in one call')
-      await sheets.execute({ ids: metadata.reviewSheetIds }, TOOL_CONTEXT)
-      expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_sheet_'))).toBe(true)
+      expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(2)
+      expect(startRequest.persona).toContain('review sheet attached to the initial task')
+      expect(startRequest.persona).not.toContain('through the named sheet tool')
+      expect([...registered.values()].some(tool => tool.name.startsWith('question_review_sheet_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_page_'))).toBe(false)
       expect(startRequest.toolFilter.allow.some(name => name.startsWith('question_review_crop_'))).toBe(false)
       expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, toolChoice: 'required' })
       const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
       if (findings === undefined) throw new Error('crop findings tool was not registered')
+      expect(startRequest.toolFilter.allow).toEqual([findings.name])
       expect(findings.parameters).toHaveProperty('properties.verifiedCrops')
       expect(findings.parameters).not.toHaveProperty('properties.verifiedCropIds')
       expect(findings.parameters).toHaveProperty('properties.verifiedCrops.items.properties.answerDemand')
@@ -3914,17 +3926,16 @@ describe('segmentQuestionsWithAgent', () => {
       }],
     }
     ctx.provide('subagents', {
-      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly type?: string; readonly text?: string }[] }) => {
         const promptText = startRequest.prompt[0]?.text ?? ''
         const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
           readonly corePageIds: readonly string[]
           readonly reviewSheetIds: readonly string[]
         }
         expect(metadata.corePageIds).toEqual(['page-1'])
-        const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
-        if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
-        await sheets.execute({ ids: metadata.reviewSheetIds }, TOOL_CONTEXT)
+        if (findings === undefined) throw new Error('compact review findings tool was not registered')
+        expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(metadata.reviewSheetIds.length)
         await expect(findings.execute({
           verifiedCrops: [{
             cropId: 'crop-p0e0',
@@ -3996,7 +4007,7 @@ describe('segmentQuestionsWithAgent', () => {
     provideModelInfo(ctx, ['text', 'image'])
     provideAttachments(ctx)
     ctx.provide('subagents', {
-      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly type?: string; readonly text?: string }[] }) => {
         const promptText = startRequest.prompt[0]?.text ?? ''
         const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
           readonly answerSectionPageIds: readonly string[]
@@ -4004,10 +4015,9 @@ describe('segmentQuestionsWithAgent', () => {
         }
         expect(metadata.answerSectionPageIds).toEqual(['page-2'])
         expect(promptText).toContain('numbered solution or explanation heads')
-        const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
-        if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
-        await sheets.execute({ ids: metadata.reviewSheetIds }, TOOL_CONTEXT)
+        if (findings === undefined) throw new Error('compact review findings tool was not registered')
+        expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(metadata.reviewSheetIds.length)
         await expect(findings.execute({
           verifiedCrops: [],
           findings: [{
@@ -4076,7 +4086,7 @@ describe('segmentQuestionsWithAgent', () => {
     provideModelInfo(ctx, ['text', 'image'])
     provideAttachments(ctx)
     ctx.provide('subagents', {
-      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly text?: string }[] }) => {
+      start: async (_mode: string, startRequest: { readonly prompt: readonly { readonly type?: string; readonly text?: string }[] }) => {
         const promptText = startRequest.prompt[0]?.text ?? ''
         const metadata = JSON.parse(promptText.slice(promptText.lastIndexOf('\n') + 1)) as {
           readonly suggestedUncoveredQuestionHeads: readonly unknown[]
@@ -4084,10 +4094,9 @@ describe('segmentQuestionsWithAgent', () => {
         }
         expect(metadata.suggestedUncoveredQuestionHeads).toEqual([])
         expect(promptText).toContain('non-exhaustive OCR hint, never an allowlist')
-        const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
-        if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
-        await sheets.execute({ ids: metadata.reviewSheetIds }, TOOL_CONTEXT)
+        if (findings === undefined) throw new Error('compact review findings tool was not registered')
+        expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(metadata.reviewSheetIds.length)
         const accepted = String(await findings.execute({
           verifiedCrops: [],
           findings: [],
@@ -4143,15 +4152,16 @@ describe('segmentQuestionsWithAgent', () => {
     ctx.provide('subagents', {
       start: async (_mode: string, startRequest: {
         readonly signal: AbortSignal
+        readonly prompt: readonly { readonly type?: string }[]
         readonly toolFilter: { readonly allow: readonly string[] }
         readonly agentOptions?: { readonly maxTokens?: number; readonly toolChoice?: string }
       }) => {
         childRun += 1
         childSignals.push(startRequest.signal)
         expect(startRequest.agentOptions).toMatchObject({ maxTokens: 32_768, toolChoice: 'required' })
-        const sheets = [...registered.values()].find(tool => tool.name.startsWith('question_review_sheet_'))
         const findings = [...registered.values()].find(tool => tool.name.startsWith('submit_question_crop_findings_'))
-        if (sheets === undefined || findings === undefined) throw new Error('compact review tools were not registered')
+        if (findings === undefined) throw new Error('compact review findings tool was not registered')
+        expect([...registered.values()].some(tool => tool.name.startsWith('question_review_sheet_'))).toBe(false)
         const source = [...registered.values()].find(tool => tool.name.startsWith('question_review_context_'))
         const revise = [...registered.values()].find(tool => tool.name.startsWith('revise_question_boundaries_'))
         if (source === undefined || revise === undefined) throw new Error('compact repair tools were not registered')
@@ -4180,12 +4190,12 @@ describe('segmentQuestionsWithAgent', () => {
             dispose: () => Promise.resolve(),
           }
         }
-        expect(startRequest.toolFilter.allow).toEqual([sheets.name, findings.name])
+        expect(startRequest.toolFilter.allow).toEqual([findings.name])
+        expect(startRequest.prompt.filter(block => block.type === 'image')).toHaveLength(2)
         await expect(source.execute({ targetId: 'crop-p0e0', chunk: 0 }, TOOL_CONTEXT))
           .resolves.toContain('recorded repair targets')
         await expect(revise.execute({ headConvention: 'premature', questions: [] }, TOOL_CONTEXT))
           .resolves.toContain('record at least one visual defect')
-        await sheets.execute({ ids: ['review-page-sheet-1', 'review-crop-sheet-1'] }, TOOL_CONTEXT)
         await expect(findings.execute({
           verifiedCrops: [],
           findings: [{
@@ -5666,6 +5676,45 @@ describe('segmentQuestionsWithAgent', () => {
       ok: false,
       error: { code: 'invalid-request', message: 'a complete-group review must preview every core page' },
     })
+  })
+
+  it('accepts local previews when a follow-up recut covers every current question', async () => {
+    const ctx = new Context()
+    const question = {
+      sourceHeadId: 'p1e0' as TeacherQuestionLayoutElementId,
+      questionNo: 1, headPageIndex: 1, groupIndex: 0,
+      regions: [{
+        pageIndex: 1, left: 10, top: 10, right: 500, rightLimit: 600, bottom: 100,
+        excludedAreas: [], pageWidth: 600, pageHeight: 800,
+      }],
+    }
+    const result = await reviewQuestionCropsWithAgent(ctx, {
+      parentSessionId: SessionId('parent'),
+      fileName: '局部全题复核.pdf',
+      groupIndex: 0,
+      corePageIndexes: [0, 1],
+      recutAttempt: 1,
+      reviewQuestionIds: [question.sourceHeadId],
+      pages: [0, 1].map(pageIndex => ({
+        pageIndex, width: 600, height: 800,
+        elements: pageIndex === 1
+          ? [{ type: 'text' as const, text: '1. 求函数值', bbox: [20, 20, 500, 80] as const }]
+          : [],
+      })),
+      pagePreviews: [{ pageIndex: 1, mediaType: 'image/png', width: 1, height: 1, contentBase64: PIXEL }],
+      questions: [question],
+      crops: [{
+        questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 1, height: 1,
+        contentBase64: PIXEL,
+      }],
+      padding: 5,
+    }, CONFIG)
+
+    expect(result).toMatchObject({
+      ok: true,
+      value: { decision: 'unresolved', affectedQuestionIds: [question.sourceHeadId] },
+    })
+    await ctx.fiber.dispose()
   })
 
   it('rejects a citation-only pseudo-question but permits a cited label with owned problem content', async () => {
