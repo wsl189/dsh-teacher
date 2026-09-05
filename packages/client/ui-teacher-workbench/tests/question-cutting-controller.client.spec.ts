@@ -7,6 +7,7 @@ import type {
   TeacherQuestionBatchId,
   TeacherQuestionBatchSaveRequest,
   TeacherQuestionCropReviewRequest,
+  TeacherQuestionCropReviewResult,
   TeacherQuestionImageUpload,
   TeacherQuestionLayoutElementId,
   TeacherQuestionLibraryFolderId,
@@ -110,6 +111,69 @@ describe('QuestionCuttingController', () => {
     await controller.dispose()
   })
 
+  it('skips an unverified empty boundary group and still saves questions from later groups', async () => {
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const laterQuestion = { ...initial.value.questions[0]!, groupIndex: 1 }
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => (
+      review.groupIndex === 0
+        ? {
+          ok: false as const,
+          error: { code: 'invalid-output' as const, message: 'no accepted boundary draft' },
+        }
+        : {
+          ok: true as const,
+          value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+        }
+    ))
+    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'later-group' as TeacherQuestionBatchId }))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async () => ({ ok: true, value: layout('局部题界失败.pdf') }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: {
+            ...initial.value,
+            groupCount: 2,
+            groups: [0, 1].map(groupIndex => ({
+              groupIndex,
+              corePageIndexes: [0],
+              inspectionPageIndexes: [0],
+            })),
+            questions: [laterQuestion],
+          },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'partial-boundary',
+        renderCrops: async (_file, _layout, questions) => questions.map(question => ({
+          ...upload(`${String(question.sourceHeadId)}.png`),
+          questionNo: question.questionNo,
+        })),
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('局部题界失败.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(saveBatch).toHaveBeenCalledOnce()
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      stage: 'completed',
+      savedCount: 1,
+      completedGroupCount: 2,
+      unverifiedGroupCount: 1,
+    })
+    expect(controller.getSnapshot().jobs[0]?.unverifiedQuestionCount).toBeUndefined()
+    await controller.dispose()
+  })
+
   it('extracts adjacent source pages as context while assigning heads only to selected pages', async () => {
     const sourceLayout: OcrLayoutDocument = {
       name: '跨页题.pdf',
@@ -143,11 +207,11 @@ describe('QuestionCuttingController', () => {
     const segmentQuestions = vi.fn(async (
       receivedLayout: OcrLayoutDocument,
       _padding: number,
-      pagePreviews: readonly { readonly pageIndex: number }[],
+      pagePreviews: readonly { readonly pageIndex: number }[] | undefined,
       corePageIndexes: readonly number[],
     ): Promise<TeacherQuestionSegmentResult> => {
       expect(receivedLayout.pages.map(page => page.pageIndex)).toEqual([0, 1, 2])
-      expect(pagePreviews).toEqual([])
+      expect(pagePreviews).toBeUndefined()
       expect(corePageIndexes).toEqual([1])
       return {
         ok: true,
@@ -202,7 +266,7 @@ describe('QuestionCuttingController', () => {
     await controller.dispose()
   })
 
-  it('reviews and saves semantic groups sequentially through one reusable PDF rasterizer', async () => {
+  it('reviews semantic groups concurrently and saves them in source order through one PDF rasterizer', async () => {
     const sourceLayout: OcrLayoutDocument = {
       name: '并行复核.pdf',
       provider: 'mineru',
@@ -221,10 +285,16 @@ describe('QuestionCuttingController', () => {
     let active = 0
     let maximumActive = 0
     const operations: string[] = []
+    const firstReviewStarted = Promise.withResolvers<undefined>()
+    const releaseFirstReview = Promise.withResolvers<undefined>()
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
       active += 1
       maximumActive = Math.max(maximumActive, active)
       operations.push(`review:${String(review.groupIndex)}`)
+      if (review.groupIndex === 0) {
+        firstReviewStarted.resolve(undefined)
+        await releaseFirstReview.promise
+      }
       active -= 1
       return {
         ok: true as const,
@@ -283,18 +353,95 @@ describe('QuestionCuttingController', () => {
     )
 
     controller.enqueue({ ...request('并行复核.pdf'), pageIndexes: [0, 1], pageRange: '1-2' })
+    await firstReviewStarted.promise
+    try {
+      await waitFor(() => { expect(reviewCrops).toHaveBeenCalledTimes(2) })
+      expect(maximumActive).toBe(2)
+      expect(savedQuestionNos).toEqual([])
+    } finally {
+      releaseFirstReview.resolve(undefined)
+    }
     await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
 
     expect(reviewCrops).toHaveBeenCalledTimes(2)
-    expect(maximumActive).toBe(1)
     expect(savedQuestionNos).toEqual([1, 2])
-    expect(operations).toEqual(['review:0', 'save:1', 'review:1', 'save:2'])
+    expect(operations).toEqual(['review:0', 'review:1', 'save:1', 'save:2'])
     expect(renderPagePreviews.mock.calls.map(([indexes]) => indexes)).toEqual([[0], [1]])
     expect(openPdfRasterizer).toHaveBeenCalledOnce()
     expect(disposeRasterizer).toHaveBeenCalledOnce()
     expect(controller.getSnapshot().jobs[0]).toMatchObject({
       groupCount: 2,
       completedGroupCount: 2,
+    })
+    await controller.dispose()
+  })
+
+  it('stops ordered persistence after a save failure while concurrent reviews settle', async () => {
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const questions = [0, 1].map(groupIndex => ({
+      ...initial.value.questions[0]!,
+      sourceHeadId: `p0e${String(groupIndex)}` as TeacherQuestionLayoutElementId,
+      questionNo: groupIndex + 1,
+      groupIndex,
+    }))
+    const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => ({
+      ok: true as const,
+      value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
+    }))
+    const saveBatch = vi.fn(async () => ({
+      ok: false as const,
+      error: { code: 'storage-failure', message: 'question storage is unavailable' },
+    }))
+    const disposeRasterizer = vi.fn(async () => {})
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: {
+            ...initial.value,
+            groupCount: 2,
+            maxConcurrentGroups: 2,
+            groups: [0, 1].map(groupIndex => ({
+              groupIndex,
+              corePageIndexes: [0],
+              inspectionPageIndexes: [0],
+            })),
+            questions,
+          },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'failed-persistence',
+        openPdfRasterizer: async () => ({
+          pageCount: 1,
+          renderPageForOcr: vi.fn(),
+          renderPagePreviews: async () => [{
+            pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+          }],
+          renderCrops: async (_layout, renderedQuestions) => renderedQuestions.map(question => ({
+            ...upload(`${String(question.sourceHeadId)}.png`),
+            questionNo: question.questionNo,
+          })),
+          dispose: disposeRasterizer,
+        }),
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('保存失败.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('failed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(saveBatch).toHaveBeenCalledOnce()
+    expect(disposeRasterizer).toHaveBeenCalledOnce()
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      completedGroupCount: 0,
+      failureMessage: 'question storage is unavailable',
+      savedCount: 0,
     })
     await controller.dispose()
   })
@@ -549,11 +696,14 @@ describe('QuestionCuttingController', () => {
     await controller.dispose()
   })
 
-  it('saves the latest safe regions and reports an unverified group when the final recut remains defective', async () => {
+  it.each([true, false])('retains the latest safe crop after three repairs unless final review accepts it (accepted=%s)', async (accepted) => {
     const initial = segmented()
     if (!initial.ok) throw new Error('segmentation fixture is invalid')
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
-      const right = review.recutAttempt === 0 ? 45 : 35
+      if (accepted && review.recutAttempt === 3) {
+        return { ok: true as const, value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions } }
+      }
+      const right = [45, 40, 35, 30][review.recutAttempt] ?? 30
       return {
         ok: true as const,
         value: {
@@ -583,7 +733,7 @@ describe('QuestionCuttingController', () => {
         extractLayout: async file => ({ ok: true, value: layout(file.name) }),
         resolveSegmentation: () => async () => ({
           ...initial,
-          value: { ...initial.value, maxRecutAttempts: 2 },
+          value: { ...initial.value, maxRecutAttempts: 3 },
         }),
         resolveCropReview: () => reviewCrops,
         saveBatch,
@@ -601,43 +751,63 @@ describe('QuestionCuttingController', () => {
     controller.enqueue(request('持续异常.pdf'))
     await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
 
-    expect(reviewCrops).toHaveBeenCalledTimes(2)
-    expect(renderedRights).toEqual([50, 45, 35])
+    expect(reviewCrops).toHaveBeenCalledTimes(4)
+    expect(renderedRights).toEqual([50, 45, 40, 35, 35])
     expect(saveBatch).toHaveBeenCalledWith(expect.objectContaining({
       images: [expect.objectContaining({ fileName: 'right-35.png' })],
     }))
     expect(controller.getSnapshot().jobs[0]).toMatchObject({
       stage: 'completed',
-      unverifiedGroupCount: 1,
+      savedCount: 1,
+      ...(accepted ? {} : { unverifiedQuestionCount: 1, unverifiedGroupCount: 1 }),
     })
     await controller.dispose()
   })
 
-  it('retains an unresolved group without repeating the same visual review', async () => {
+  it('retains an unresolved question and continues later groups in the same PDF', async () => {
     const reviewCrops = vi.fn(async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => ({
       ok: true as const,
       value: {
-        decision: 'unresolved' as const,
+        decision: review.groupIndex === 0 ? 'unresolved' as const : 'accepted' as const,
         affectedQuestionIds: review.reviewQuestionIds,
         questions: review.questions,
       },
     }))
-    const saveBatch = vi.fn(async () => ({ ok: true as const, batchId: 'unresolved' as TeacherQuestionBatchId }))
+    const saveBatch = vi.fn(async (_request: TeacherQuestionBatchSaveRequest) => (
+      { ok: true as const, batchId: 'unresolved' as TeacherQuestionBatchId }
+    ))
     const initial = segmented()
     if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const secondQuestion = {
+      ...initial.value.questions[0]!,
+      sourceHeadId: 'p0e1' as TeacherQuestionLayoutElementId,
+      questionNo: 2,
+      groupIndex: 1,
+    }
     const controller = new QuestionCuttingController(
       {
         extractLayout: async file => ({ ok: true, value: layout(file.name) }),
         resolveSegmentation: () => async () => ({
           ...initial,
-          value: { ...initial.value, maxRecutAttempts: 2 },
+          value: {
+            ...initial.value,
+            groupCount: 2,
+            groups: [
+              { groupIndex: 0, corePageIndexes: [0], inspectionPageIndexes: [0] },
+              { groupIndex: 1, corePageIndexes: [0], inspectionPageIndexes: [0] },
+            ],
+            questions: [initial.value.questions[0]!, secondQuestion],
+          },
         }),
         resolveCropReview: () => reviewCrops,
         saveBatch,
       },
       {
         key: () => 'unresolved-review',
-        renderCrops: async () => [{ ...upload('unresolved.png') }],
+        renderCrops: async (_file, _layout, questions) => questions.map(question => ({
+          ...upload(`${String(question.sourceHeadId)}.png`),
+          questionNo: question.questionNo,
+        })),
         renderPagePreviews: async () => [{
           pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
         }],
@@ -648,18 +818,99 @@ describe('QuestionCuttingController', () => {
     controller.enqueue(request('无法复核.pdf'))
     await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
 
-    expect(reviewCrops).toHaveBeenCalledOnce()
-    expect(saveBatch).toHaveBeenCalledOnce()
+    expect(reviewCrops).toHaveBeenCalledTimes(2)
+    expect(saveBatch).toHaveBeenCalledTimes(2)
     expect(controller.getSnapshot().jobs[0]).toMatchObject({
       stage: 'completed',
+      savedCount: 2,
+      completedGroupCount: 2,
+      unverifiedQuestionCount: 1,
       unverifiedGroupCount: 1,
     })
+    expect(saveBatch.mock.calls[1]?.[0]).toMatchObject({ appendToBatchId: 'unresolved' })
     await controller.dispose()
   })
 
-  it('captures independent reasoning choices for consecutive PDFs and completes without a mounted subscriber', async () => {
+  it('saves current crops and continues later groups when crop review fails or throws', async () => {
+    const reviewCrops = vi.fn(async (
+      review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>,
+    ): Promise<TeacherQuestionCropReviewResult> => {
+      if (review.groupIndex === 0) {
+        return {
+          ok: false,
+          error: { code: 'timed-out', message: 'image review did not finish before the deadline' },
+        }
+      }
+      if (review.groupIndex === 1) throw new Error('provider disconnected during crop review')
+      return {
+        ok: true,
+        value: { decision: 'accepted', affectedQuestionIds: [], questions: review.questions },
+      }
+    })
+    const saveBatch = vi.fn(async (_request: TeacherQuestionBatchSaveRequest) => (
+      { ok: true as const, batchId: 'review-fallback' as TeacherQuestionBatchId }
+    ))
+    const initial = segmented()
+    if (!initial.ok) throw new Error('segmentation fixture is invalid')
+    const questions = [0, 1, 2].map(groupIndex => ({
+      ...initial.value.questions[0]!,
+      sourceHeadId: `p0e${String(groupIndex)}` as TeacherQuestionLayoutElementId,
+      questionNo: groupIndex + 1,
+      groupIndex,
+    }))
+    const controller = new QuestionCuttingController(
+      {
+        extractLayout: async file => ({ ok: true, value: layout(file.name) }),
+        resolveSegmentation: () => async () => ({
+          ...initial,
+          value: {
+            ...initial.value,
+            groupCount: 3,
+            groups: [0, 1, 2].map(groupIndex => ({
+              groupIndex,
+              corePageIndexes: [0],
+              inspectionPageIndexes: [0],
+            })),
+            questions,
+          },
+        }),
+        resolveCropReview: () => reviewCrops,
+        saveBatch,
+      },
+      {
+        key: () => 'review-fallback',
+        renderCrops: async (_file, _layout, renderedQuestions) => renderedQuestions.map(question => ({
+          ...upload(`${String(question.sourceHeadId)}.png`),
+          questionNo: question.questionNo,
+        })),
+        renderPagePreviews: async () => [{
+          pageIndex: 0, mediaType: 'image/png', width: 1, height: 1, contentBase64: 'AQ==',
+        }],
+        partitionUploads: images => [images],
+      },
+    )
+
+    controller.enqueue(request('复核异常仍输出.pdf'))
+    await waitFor(() => { expect(controller.getSnapshot().jobs[0]?.stage).toBe('completed') })
+
+    expect(reviewCrops).toHaveBeenCalledTimes(3)
+    expect(saveBatch).toHaveBeenCalledTimes(3)
+    expect(controller.getSnapshot().jobs[0]).toMatchObject({
+      stage: 'completed',
+      savedCount: 3,
+      completedGroupCount: 3,
+      unverifiedQuestionCount: 2,
+      unverifiedGroupCount: 2,
+    })
+    expect(saveBatch.mock.calls[2]?.[0]).toMatchObject({ appendToBatchId: 'review-fallback' })
+    await controller.dispose()
+  })
+
+  it('keeps a consecutive PDF queued until the active PDF finishes visual review and persistence', async () => {
     let releaseFirst: (() => void) | undefined
     const firstGate = new Promise<void>((resolve) => { releaseFirst = resolve })
+    let markFirstReviewStarted: (() => void) | undefined
+    const firstReviewStarted = new Promise<void>((resolve) => { markFirstReviewStarted = resolve })
     const operations: string[] = []
     const extractLayout = vi.fn(async (
       file: File,
@@ -669,7 +920,6 @@ describe('QuestionCuttingController', () => {
     ) => {
       operations.push(`extract:${file.name}`)
       progress(1, 1)
-      if (file.name === '第一份.pdf') await firstGate
       return { ok: true as const, value: layout(file.name) }
     })
     const firstSegment = vi.fn(async () => {
@@ -683,8 +933,14 @@ describe('QuestionCuttingController', () => {
     const resolveSegmentation = vi.fn((_reasoningEnabled: boolean) => firstSegment)
       .mockReturnValueOnce(firstSegment)
       .mockReturnValueOnce(secondSegment)
+    let reviewCount = 0
     const resolveCropReview = vi.fn((_reasoningEnabled: boolean) => async (review: Omit<TeacherQuestionCropReviewRequest, 'parentSessionId'>) => {
       operations.push('review')
+      reviewCount += 1
+      if (reviewCount === 1) {
+        markFirstReviewStarted?.()
+        await firstGate
+      }
       return {
         ok: true as const,
         value: { decision: 'accepted' as const, affectedQuestionIds: [], questions: review.questions },
@@ -724,6 +980,7 @@ describe('QuestionCuttingController', () => {
     const unsubscribe = controller.subscribe(listener)
 
     controller.enqueue({ ...request('第一份.pdf'), reasoningEnabled: true })
+    await firstReviewStarted
     controller.enqueue({
       ...request('第二份.pdf'),
       folderId: 'selected-folder' as TeacherQuestionLibraryFolderId,
@@ -735,7 +992,7 @@ describe('QuestionCuttingController', () => {
     expect(resolveCropReview.mock.calls.map(([reasoningEnabled]) => reasoningEnabled)).toEqual([true, false])
     expect(extractLayout).toHaveBeenCalledTimes(1)
     expect(controller.getSnapshot().jobs.map(job => [job.fileName, job.stage, job.progress])).toEqual([
-      ['第一份.pdf', 'extracting', 40],
+      ['第一份.pdf', 'reviewing', 50],
       ['第二份.pdf', 'queued', 0],
     ])
 

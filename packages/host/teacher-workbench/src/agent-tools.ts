@@ -218,11 +218,16 @@ export function registerTeacherWorkbenchTools(ctx: Context, service: TeacherWork
             batchName: optionalText(args.data, 'batchName')?.trim() || sourceName.replace(/\.pdf$/iu, ''),
             padding: optionalNumber(args.data, 'padding') ?? 8,
           }, exec.agent.id, exec.signal)
+          const summary = result.questionCount > 0
+            ? `Segmented ${String(result.questionCount)} questions`
+            : result.unverifiedGroupCount > 0
+              ? `No question images were saved; ${String(result.unverifiedGroupCount)} page groups remain unverified`
+              : 'No learner questions were found; no batch was created'
           return {
             revision: result.revision,
-            summary: `Segmented ${String(result.questionCount)} questions`,
-            createdIds: [result.batchId],
-            batchId: result.batchId,
+            summary,
+            createdIds: result.batchId === undefined ? [] : [result.batchId],
+            ...(result.batchId === undefined ? {} : { batchId: result.batchId }),
             questionCount: result.questionCount,
             groupCount: result.groupCount,
             unverifiedGroupCount: result.unverifiedGroupCount,

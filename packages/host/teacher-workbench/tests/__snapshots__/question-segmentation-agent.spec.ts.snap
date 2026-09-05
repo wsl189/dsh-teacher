@@ -1,0 +1,48 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`segmentQuestionsWithAgent > separates semantic errors and exhausts repeated schema diagnostics through the tool runtime 1`] = `
+[
+  {
+    "content": [
+      {
+        "text": "REJECTED
+findings[0] crop defect requires at least one repairIntent",
+        "type": "text",
+      },
+    ],
+    "isError": false,
+  },
+  {
+    "content": [
+      {
+        "text": "Error: invalid arguments: "findings" must be an array",
+        "type": "text",
+      },
+    ],
+    "isError": true,
+  },
+  {
+    "content": [
+      {
+        "text": "Error: invalid arguments: "findings" must be an array",
+        "type": "text",
+      },
+    ],
+    "isError": true,
+  },
+  {
+    "content": [
+      {
+        "text": "Error: invalid arguments: "findings" must be an array",
+        "type": "text",
+      },
+      {
+        "text": "REJECTION_BUDGET_EXHAUSTED
+The Host stopped this stage after repeated failures of the same diagnostic.",
+        "type": "text",
+      },
+    ],
+    "isError": true,
+  },
+]
+`;

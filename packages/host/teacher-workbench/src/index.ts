@@ -4,10 +4,13 @@
  */
 
 import { Context, Service } from '@deepseek-ai/cordis'
+import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import type { DomainGlobal } from '@deepseek-ai/dsh-storage-domain'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from '@deepseek-ai/schemastery'
+import { randomUUID } from 'node:crypto'
 import { relative } from 'node:path'
 import {
   teacherWorkbenchDomainSpec,
@@ -127,27 +130,27 @@ const DEFAULT_TIMETABLE_ENTRIES = 1_000
 const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_QUESTION_LAYOUT_PAGES = 50
-const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 20
+const DEFAULT_QUESTION_SEGMENTATION_BATCH_PAGES = 4
 const DEFAULT_QUESTION_SEGMENTATION_BATCH_CANDIDATES = 300
-const DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY = 2
+const DEFAULT_QUESTION_SEGMENTATION_CONCURRENCY = 5
 const DEFAULT_MAX_QUESTION_WIDTH_OUTLIER_EXCESS_RATIO = 0.5
 const DEFAULT_QUESTION_LAYOUT_ELEMENTS = 5_000
 const DEFAULT_QUESTION_SOURCE_CHUNK_CHARACTERS = 14_000
 const DEFAULT_QUESTION_COMPACT_BOUNDARY_CHARACTERS = 24_000
 const DEFAULT_QUESTION_SEGMENTATION_INLINE_EVIDENCE = true
 const DEFAULT_QUESTION_COMPACT_BOUNDARY_OUTPUT_TOKENS = 32_768
-const DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS = 32_768
+const DEFAULT_QUESTION_COMPACT_REVIEW_OUTPUT_TOKENS = 8_192
 const DEFAULT_SEGMENTED_QUESTIONS = 300
 const DEFAULT_QUESTION_BOUNDARY_SUBMISSIONS = 5
-const DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS = 2
+const DEFAULT_QUESTION_BOUNDARY_AGENT_RUNS = 3
 const DEFAULT_QUESTION_REJECTED_TOOL_CALLS = 3
 const DEFAULT_QUESTION_AUTO_OWNED_GAP_RATIO = 0.18
 const DEFAULT_MIN_QUESTION_REPEATED_IMAGE_PAGES = 3
 const DEFAULT_QUESTION_REPEATED_IMAGE_POSITION_TOLERANCE_RATIO = 0.015
-const DEFAULT_QUESTION_RECUT_ATTEMPTS = 2
+const DEFAULT_QUESTION_RECUT_ATTEMPTS = 3
 const DEFAULT_QUESTION_VISION_IMAGES_PER_TOOL_CALL = 20
 const DEFAULT_QUESTION_SEGMENTATION_REASONING_ENABLED = false
-const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 0
+const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 5 * 60 * 1000
 const DEFAULT_SOURCE_DOCUMENT_BYTES = 100 * 1024 * 1024
 const DEFAULT_REMINDER_RETRY_MS = 60_000
 
@@ -243,7 +246,7 @@ export interface Config {
   maxQuestionBoundarySubmissions: number
   /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
   maxQuestionBoundaryAgentRuns: number
-  /** Maximum identical rejected tool results admitted before one child is stopped and safe output is retained. */
+  /** Maximum failed tool calls per child, including argument-validation failures, before stopping it. */
   maxQuestionRejectedToolCalls: number
   /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
   maxQuestionAutoOwnedGapRatio: number
@@ -251,7 +254,7 @@ export interface Config {
   minQuestionRepeatedImagePages: number
   /** Maximum normalized coordinate drift when matching repeated-position image furniture. */
   questionRepeatedImagePositionToleranceRatio: number
-  /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
+  /** Maximum local crop revisions before the latest safe regions continue as unverified. */
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
@@ -320,6 +323,8 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   private global?: DomainGlobal<TeacherWorkbenchDocument>
   private operationTail: Promise<void> = Promise.resolve()
   private acceptingWrites = true
+  private acceptingQuestionWork = true
+  private questionAgentParent: Promise<AgentHandle> | undefined
   private readonly weatherProvider: TeacherWeatherProvider
   private readonly reminderRuntime: TeacherReminderRuntime
   private configSource: () => Config
@@ -394,6 +399,12 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     const domain = await this.ctx.storageDomain.open(teacherWorkbenchDomainSpec)
     this.ctx.effect(() => async () => {
       await this.reminderRuntime.dispose()
+      this.acceptingQuestionWork = false
+      const questionAgentParent = await this.questionAgentParent?.catch(() => undefined)
+      this.questionAgentParent = undefined
+      await questionAgentParent?.dispose().catch((error: unknown) => {
+        this.ctx.logger.warn(`teacher-workbench: internal question session disposal failed: ${String(error)}`)
+      })
       this.acceptingWrites = false
       await this.operationTail
       await domain.close()
@@ -531,23 +542,85 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
+   * Return the service-owned hidden parent used by question-processing children.
+   *
+   * The parent belongs to the workbench rather than the selected conversation,
+   * so navigating, deleting, or cold-loading a user session cannot cancel a cut.
+   * Its subagent origin keeps it out of root-session navigation.
+   * @returns a live internal parent identity.
+   */
+  private async questionAgentParentSessionId(): Promise<SessionId> {
+    if (!this.acceptingQuestionWork) throw new Error('teacher-workbench: service is disposing')
+    const agents = this.ctx.get('agents')
+    if (agents === undefined) throw new Error('agent services are unavailable')
+    let creating = this.questionAgentParent
+    if (creating === undefined) {
+      creating = agents.create({
+        sessionId: SessionId(randomUUID()),
+        meta: {
+          cwd: process.cwd(),
+          origin: 'subagent',
+          delegationDepth: 0,
+        },
+      })
+      this.questionAgentParent = creating
+      void creating.catch(() => {
+        if (this.questionAgentParent === creating) this.questionAgentParent = undefined
+      })
+    }
+    return (await creating).agent.id
+  }
+
+  /**
    * Detect complete top-level question boundaries through the configured tool model.
-   * @param request - live parent session, selected OCR pages, captured reasoning choice, and crop padding.
+   * @param request - selected OCR pages, captured reasoning choice, and crop padding.
    * @returns validated source-page crop regions or a stable failure.
    */
   @Remote('segmentQuestions')
-  segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult> {
-    return segmentQuestionsInBatches(this.ctx, request, this.questionSegmentationConfig(request.reasoningEnabled))
+  async segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult> {
+    let parentSessionId: SessionId
+    try {
+      parentSessionId = await this.questionAgentParentSessionId()
+    } catch {
+      return Object.freeze({
+        ok: false,
+        error: Object.freeze({
+          code: 'tool-model-unavailable' as const,
+          message: 'the internal question processing session is unavailable',
+        }),
+      })
+    }
+    return segmentQuestionsInBatches(
+      this.ctx,
+      { ...request, parentSessionId },
+      this.questionSegmentationConfig(request.reasoningEnabled),
+    )
   }
 
   /**
    * Visually review preliminary question crops and correct one processing group when needed.
-   * @param request - crop evidence, current group regions, and the same captured reasoning choice.
+   * @param request - crop evidence, current group regions, and captured reasoning choice.
    * @returns accepted preliminary regions or one Host-validated corrected group.
    */
   @Remote('reviewQuestionCrops')
-  reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult> {
-    return reviewQuestionCropsWithAgent(this.ctx, request, this.questionSegmentationConfig(request.reasoningEnabled))
+  async reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult> {
+    let parentSessionId: SessionId
+    try {
+      parentSessionId = await this.questionAgentParentSessionId()
+    } catch {
+      return Object.freeze({
+        ok: false,
+        error: Object.freeze({
+          code: 'tool-model-unavailable' as const,
+          message: 'the internal question processing session is unavailable',
+        }),
+      })
+    }
+    return reviewQuestionCropsWithAgent(
+      this.ctx,
+      { ...request, parentSessionId },
+      this.questionSegmentationConfig(request.reasoningEnabled),
+    )
   }
 
   /**

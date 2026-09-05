@@ -49,6 +49,8 @@ Most users never set these; the command-line flags feed the four settings below 
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) is the exhaustive source for every accepted field and its JSDoc.
 
+The bundled sidebar's **Tasks** tab is disabled by default. Enable it under **Settings → Side card**. Saved tab choices override the default, including after an upgrade; this switch only controls the sidebar tab, not background subagent execution.
+
 ### LAN access and trusted hosts
 
 By default the GUI accepts connections from this machine only. A deployment that binds all network interfaces also allows browsers from the LAN, and the printed URL then includes a LAN address; `--trusted-host` adds extra hosts in either case. Host and Origin checks control reachability, while the token exchange authenticates every Host API method and WebSocket stream. The LAN addresses are sampled once at startup, so a network change later is not picked up — restart the GUI to re-advertise.

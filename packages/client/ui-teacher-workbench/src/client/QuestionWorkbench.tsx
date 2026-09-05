@@ -179,9 +179,10 @@ export function QuestionWorkbench({
   const questionMediaRefreshRef = useRef<Promise<void> | null>(null)
   const questionMediaFingerprintRef = useRef<string | null>(null)
   const questionMediaMountedRef = useRef(false)
+  const pdfReadGenerationRef = useRef(0)
   const [busy, setBusy] = useState<BusyTask>(null)
   const [toast, setToast] = useState<string | null>(null)
-  const [readingPdf, setReadingPdf] = useState<{ fileName: string; startedAt: number } | null>(null)
+  const [readingPdf, setReadingPdf] = useState<{ fileName: string } | null>(null)
   const [pendingPdf, setPendingPdf] = useState<File | null>(null)
   const [pdfPageCount, setPdfPageCount] = useState(0)
   const [pageRange, setPageRange] = useState('')
@@ -469,25 +470,41 @@ export function QuestionWorkbench({
 
   const choosePdf = async (file: File | null): Promise<void> => {
     if (file === null) return
-    setReadingPdf({ fileName: file.name, startedAt: Date.now() })
+    const generation = pdfReadGenerationRef.current + 1
+    pdfReadGenerationRef.current = generation
+    setReadingPdf({ fileName: file.name })
     setToast(null)
+    setPendingPdf(file)
+    setPdfPageCount(0)
+    setPageRange('')
+    setPageRangeFolderId('')
+    setPageRangeReasoningEnabled(questionCuttingReasoning.enabled)
+    setPageRangeOpen(true)
     try {
       const count = await readPdfPageCount(file)
-      setPendingPdf(file)
+      if (pdfReadGenerationRef.current !== generation) return
       setPdfPageCount(count)
-      setPageRange('')
-      setPageRangeFolderId('')
-      setPageRangeReasoningEnabled(questionCuttingReasoning.enabled)
-      setPageRangeOpen(true)
     } catch (cause) {
+      if (pdfReadGenerationRef.current !== generation) return
+      setPageRangeOpen(false)
+      setPendingPdf(null)
+      setPdfPageCount(0)
       setToast(errorMessage(cause, t('questions.pdfReadFailed')))
     } finally {
-      setReadingPdf(null)
+      if (pdfReadGenerationRef.current === generation) setReadingPdf(null)
     }
   }
 
+  const closePageRange = (): void => {
+    pdfReadGenerationRef.current += 1
+    setPageRangeOpen(false)
+    setReadingPdf(null)
+    setPendingPdf(null)
+    setPdfPageCount(0)
+  }
+
   const enqueuePdf = async (): Promise<void> => {
-    if (pendingPdf === null || pdfPageCount < 1) return
+    if (pendingPdf === null || pdfPageCount < 1 || readingPdf !== null) return
     let selection
     try {
       selection = parseQuestionPageRange(pageRange, pdfPageCount)
@@ -1284,7 +1301,7 @@ export function QuestionWorkbench({
           ))}
         </aside>
         <main className={css.legacyBlankMain} aria-label={t('questions.progressArea')}>
-          <QuestionCuttingProgress cutting={cutting} readingPdf={readingPdf} t={t} />
+          <QuestionCuttingProgress cutting={cutting} t={t} />
         </main>
       </div>
 
@@ -1571,10 +1588,14 @@ export function QuestionWorkbench({
 
       {pageRangeOpen && (
         <>
-          <button type="button" className={css.legacyDrawerMask} aria-label={t('close')} onClick={() => { setPageRangeOpen(false) }} />
+          <button type="button" className={css.legacyDrawerMask} aria-label={t('close')} onClick={closePageRange} />
           <section className={css.legacyTopSheet} role="dialog" aria-modal="true" aria-label={t('questions.pageRangeTitle')}>
-            <DrawerHeader title={t('questions.pageRangeTitle')} onClose={() => { setPageRangeOpen(false) }} t={t} />
-            <p>{t('questions.totalPages', { count: pdfPageCount })}</p>
+            <DrawerHeader title={t('questions.pageRangeTitle')} onClose={closePageRange} t={t} />
+            <p aria-live="polite">
+              {readingPdf === null
+                ? t('questions.totalPages', { count: pdfPageCount })
+                : `${readingPdf.fileName} · ${t('questions.readingPdf')}`}
+            </p>
             <p className={css.legacyMuted}>{t('questions.pageRangeHint')}</p>
             <input value={pageRange} onChange={(event) => { setPageRange(event.target.value) }} placeholder={t('questions.pageRangePlaceholder')} />
             <FormField label={t('questions.saveDirectory')}>
@@ -1602,7 +1623,7 @@ export function QuestionWorkbench({
               </span>
             </label>
             <div className={css.legacySheetActions}>
-              <button type="button" disabled={pageRangeSaving} onClick={() => { void enqueuePdf() }}>
+              <button type="button" disabled={pageRangeSaving || readingPdf !== null || pdfPageCount < 1} onClick={() => { void enqueuePdf() }}>
                 {t('questions.confirmCut')}
               </button>
             </div>
@@ -1695,28 +1716,14 @@ export function QuestionWorkbench({
   )
 }
 
-interface ReadingPdfProgress {
-  readonly fileName: string
-  readonly startedAt: number
-}
-
 interface QuestionCuttingProgressProps {
   readonly cutting: QuestionCuttingView
-  readonly readingPdf: ReadingPdfProgress | null
   readonly t: TeacherWorkbenchTranslate
 }
 
-function QuestionCuttingProgress({ cutting, readingPdf, t }: QuestionCuttingProgressProps) {
-  const running = readingPdf !== null || cutting.jobs.some(job => job.stage !== 'completed' && job.stage !== 'failed')
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    setNow(Date.now())
-    if (!running) return
-    const interval = window.setInterval(() => { setNow(Date.now()) }, 1_000)
-    return () => { window.clearInterval(interval) }
-  }, [running])
-  const activeCount = cutting.jobs.filter(job => job.stage !== 'completed' && job.stage !== 'failed').length
-    + (readingPdf === null ? 0 : 1)
+function QuestionCuttingProgress({ cutting, t }: QuestionCuttingProgressProps) {
+  const activeCount = cutting.jobs.filter(job => job.stage !== 'queued' && job.stage !== 'completed' && job.stage !== 'failed').length
+  const queuedCount = cutting.jobs.filter(job => job.stage === 'queued').length
   const completedCount = cutting.jobs.filter(job => job.stage === 'completed').length
 
   return (
@@ -1727,29 +1734,16 @@ function QuestionCuttingProgress({ cutting, readingPdf, t }: QuestionCuttingProg
           <strong id="question-cutting-progress-title">{t('questions.progressTitle')}</strong>
           <span>{t('questions.progressHint')}</span>
         </div>
-        {(activeCount > 0 || completedCount > 0) && (
-          <small>{t('questions.progressSummary', { active: activeCount, completed: completedCount })}</small>
+        {(activeCount > 0 || queuedCount > 0 || completedCount > 0) && (
+          <small>{t('questions.progressSummary', { active: activeCount, queued: queuedCount, completed: completedCount })}</small>
         )}
       </header>
-      {readingPdf === null && cutting.jobs.length === 0
+      {cutting.jobs.length === 0
         ? <p className={css.legacyCuttingEmpty}>{t('questions.progressEmpty')}</p>
         : (
           <div className={css.legacyCuttingJobs} role="list">
-            {readingPdf !== null && (
-              <article className={css.legacyCuttingJob} role="listitem" aria-label={readingPdf.fileName}>
-                <div className={css.legacyCuttingJobHeading}>
-                  <strong>{readingPdf.fileName}</strong>
-                  <b>0%</b>
-                </div>
-                <div className={css.legacyCuttingTrack} role="progressbar" aria-label={t('questions.readingPdf')} aria-valuemin={0} aria-valuemax={100} aria-valuenow={0}><span style={{ width: '0%' }} /></div>
-                <div className={css.legacyCuttingMeta}>
-                  <span>{t('questions.readingPdf')}</span>
-                  <time>{t('questions.progressElapsed', { time: formatElapsed(now - readingPdf.startedAt) })}</time>
-                </div>
-              </article>
-            )}
             {cutting.jobs.map(job => (
-              <QuestionCuttingJobRow key={job.key} job={job} now={now} t={t} />
+              <QuestionCuttingJobRow key={job.key} job={job} t={t} />
             ))}
           </div>
         )}
@@ -1759,17 +1753,14 @@ function QuestionCuttingProgress({ cutting, readingPdf, t }: QuestionCuttingProg
 
 function QuestionCuttingJobRow({
   job,
-  now,
   t,
 }: {
   readonly job: QuestionCuttingJob
-  readonly now: number
   readonly t: TeacherWorkbenchTranslate
 }) {
   const finished = job.stage === 'completed' || job.stage === 'failed'
   const stage = questionCuttingStageLabel(job, t)
   const failure = questionCuttingFailure(job, t)
-  const elapsed = job.startedAt === undefined ? 0 : (job.finishedAt ?? now) - job.startedAt
   return (
     <article
       className={`${css.legacyCuttingJob} ${job.stage === 'failed' ? css.legacyCuttingJobFailed : job.stage === 'completed' ? css.legacyCuttingJobCompleted : ''}`}
@@ -1800,16 +1791,59 @@ function QuestionCuttingJobRow({
           })}</span>
         )}
         {job.savedCount > 0 && <span>{t('questions.progressSaved', { count: job.savedCount })}</span>}
-        <time>{t('questions.progressElapsed', { time: formatElapsed(elapsed) })}</time>
+        <QuestionCuttingElapsed startedAt={job.startedAt} finishedAt={job.finishedAt} t={t} />
       </div>
       {job.unverifiedGroupCount !== undefined && job.unverifiedGroupCount > 0 && (
         <p className={css.legacyCuttingWarning}>
-          {t('questions.progressUnverified', { count: job.unverifiedGroupCount })}
+          {t('questions.progressUnverifiedGroups', { count: job.unverifiedGroupCount })}
+        </p>
+      )}
+      {job.unverifiedQuestionCount !== undefined && job.unverifiedQuestionCount > 0 && (
+        <p className={css.legacyCuttingWarning}>
+          {t('questions.progressUnverifiedQuestions', { count: job.unverifiedQuestionCount })}
         </p>
       )}
       {finished && failure !== null && <p className={css.legacyCuttingError}>{failure}</p>}
     </article>
   )
+}
+
+function QuestionCuttingElapsed({
+  startedAt,
+  finishedAt,
+  t,
+}: {
+  readonly startedAt: number | undefined
+  readonly finishedAt: number | undefined
+  readonly t: TeacherWorkbenchTranslate
+}) {
+  const timeRef = useRef<HTMLTimeElement | null>(null)
+  const [initialNow] = useState(() => Date.now())
+  const elapsed = startedAt === undefined ? 0 : (finishedAt ?? initialNow) - startedAt
+  useEffect(() => {
+    if (startedAt === undefined || finishedAt !== undefined) return
+    let displayedSecond = -1
+    let frame = 0
+    const refreshElapsed = (): void => {
+      const currentElapsed = Date.now() - startedAt
+      const currentSecond = Math.floor(currentElapsed / 1_000)
+      if (currentSecond === displayedSecond || timeRef.current === null) return
+      displayedSecond = currentSecond
+      timeRef.current.textContent = t('questions.progressElapsed', { time: formatElapsed(currentElapsed) })
+    }
+    const refreshOnFrame = (): void => {
+      refreshElapsed()
+      frame = window.requestAnimationFrame(refreshOnFrame)
+    }
+    refreshElapsed()
+    frame = window.requestAnimationFrame(refreshOnFrame)
+    const interval = window.setInterval(refreshElapsed, 1_000)
+    return () => {
+      window.cancelAnimationFrame(frame)
+      window.clearInterval(interval)
+    }
+  }, [finishedAt, startedAt, t])
+  return <time ref={timeRef}>{t('questions.progressElapsed', { time: formatElapsed(elapsed) })}</time>
 }
 
 function questionCuttingStageLabel(job: QuestionCuttingJob, t: TeacherWorkbenchTranslate): string {
@@ -1827,9 +1861,7 @@ function questionCuttingStageLabel(job: QuestionCuttingJob, t: TeacherWorkbenchT
 
 function questionCuttingFailure(job: QuestionCuttingJob, t: TeacherWorkbenchTranslate): string | null {
   if (job.stage !== 'failed') return null
-  const message = job.failureCode === 'no-session'
-    ? t('questions.progressNoSession')
-    : job.failureMessage ?? t('questions.cutFailed')
+  const message = job.failureMessage ?? t('questions.cutFailed')
   return job.savedCount > 0
     ? t('questions.cutPartiallySaved', { count: job.savedCount, message })
     : message

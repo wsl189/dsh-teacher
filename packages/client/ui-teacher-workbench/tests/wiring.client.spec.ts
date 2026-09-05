@@ -2,6 +2,7 @@
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TeacherWorkbenchDocument, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
+import { PDFDocument } from 'pdf-lib'
 import {
   apply as nodeApply,
   QUESTION_CUTTING_SETTINGS_NAMESPACE,
@@ -106,7 +107,10 @@ describe('teacher-workbench browser wiring', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
     ])
-    vi.stubGlobal('crypto', { randomUUID: vi.fn(() => 'generated-id') })
+    vi.stubGlobal('crypto', {
+      randomUUID: vi.fn(() => 'generated-id'),
+      getRandomValues: vi.fn((values: Uint32Array) => values.fill(1)),
+    })
     let document: TeacherWorkbenchDocument = { revision: 0, state: emptyState() }
     const read = vi.fn(async () => ({ ok: true, value: { ok: true, value: document } }))
     const write = vi.fn(async ({ state }: { state: TeacherWorkbenchState }) => {
@@ -125,18 +129,46 @@ describe('teacher-workbench browser wiring', () => {
       ok: true,
       value: { ok: true, value: { text: '课堂记录', provider: 'model-settings' } },
     }))
+    const layoutLimits = vi.fn(async () => ({
+      ok: true,
+      value: { ok: true, value: { maxFileBytes: 1_000_000, maxPagesPerRequest: 4 } },
+    }))
+    const extractLayout = vi.fn(async () => ({
+      ok: true,
+      value: {
+        ok: true,
+        value: {
+          name: 'paper.pdf',
+          provider: 'mineru',
+          pages: [{
+            pageIndex: 0,
+            width: 100,
+            height: 100,
+            elements: [{ type: 'text', text: '1. 题目', bbox: [10, 10, 50, 20] }],
+          }],
+        },
+      },
+    }))
+    const segmentQuestions = vi.fn(async (_request: Record<string, unknown>) => ({
+      ok: true,
+      value: { ok: false, error: { code: 'model-failed', message: 'captured request' } },
+    }))
     const setSetting = vi.fn(async () => {})
     const scope = { set: setSetting }
     const registrations: { entry: Record<string, unknown>; component: unknown }[] = []
     const resetListeners: (() => void)[] = []
     const navigationListeners: (() => void)[] = []
-    let currentSession = 'session-a'
+    let currentSession: string | undefined = 'session-a'
     const effectDisposers: (() => void | Promise<void>)[] = []
     const localeDispose = vi.fn()
     const slotDispose = vi.fn()
     const ctx = {
       locale: { register: vi.fn(() => localeDispose) },
-      remote: { speech: { transcribe }, teacherWorkbench: { read, write, weather, normalizeTimetable } },
+      remote: {
+        ocr: { layoutLimits, layout: extractLayout },
+        speech: { transcribe },
+        teacherWorkbench: { read, write, weather, normalizeTimetable, segmentQuestions },
+      },
       sessions: {
         list: {
           getSnapshot: () => ({ current: currentSession }),
@@ -273,6 +305,25 @@ describe('teacher-workbench browser wiring', () => {
     expect(typeof questionCutting.getSnapshot).toBe('function')
     expect(typeof questionCutting.subscribe).toBe('function')
     expect((settings.hooks as Record<string, unknown>).teacherSettings).toBe(scope)
+
+    const sourcePdf = await PDFDocument.create()
+    sourcePdf.addPage([100, 100])
+    const enqueueQuestionCutting = surface.enqueueQuestionCutting as (request: Record<string, unknown>) => void
+    currentSession = undefined
+    enqueueQuestionCutting({
+      file: new File([Uint8Array.from(await sourcePdf.save())], 'paper.pdf', { type: 'application/pdf' }),
+      pageCount: 1,
+      pageIndexes: [0],
+      pageRange: '1',
+      reasoningEnabled: false,
+      renderScale: 2,
+      padding: 8,
+    })
+    await vi.waitFor(() => { expect(segmentQuestions).toHaveBeenCalledOnce() })
+    const segmentationRequest = segmentQuestions.mock.calls[0]?.[0]
+    expect(segmentationRequest).toBeDefined()
+    expect(Object.hasOwn(segmentationRequest!, 'pagePreviews')).toBe(false)
+    expect(Object.hasOwn(segmentationRequest!, 'parentSessionId')).toBe(false)
 
     for (const disposer of effectDisposers) await Promise.resolve(disposer())
     await expect((surface.saveClass as (value: unknown) => Promise<unknown>)({

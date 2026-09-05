@@ -1,5 +1,5 @@
 {
-  "modelCalls": 7,
+  "modelCalls": 56,
   "ordinaryConversationTools": [
     "teacher_daily_management",
     "teacher_question_image_read",
@@ -21,6 +21,7 @@
     "cropReviewCrop": false,
     "cropReviewFindings": true,
     "cropReviewRevision": false,
+    "cropLocalRepair": true,
     "structuredOutput": false
   },
   "compactOutputTokenBudgets": {
@@ -28,7 +29,7 @@
       32768
     ],
     "review": [
-      32768
+      8192
     ]
   },
   "semanticChildrenRequireToolCalls": {
@@ -37,11 +38,78 @@
   },
   "boundaryUsesCompleteDraft": true,
   "boundaryHintsAreNonAuthoritative": true,
+  "boundaryRecoveryRetainsDraftAndDiagnostic": true,
+  "boundaryRejectsCrossQuestionHeadOwnership": true,
+  "boundaryRecoveryOnlyAllowsCorrections": true,
+  "recoverableBoundaryFailureKeepsLaterGroups": {
+    "ok": true,
+    "value": {
+      "groupCount": 2,
+      "groups": [
+        {
+          "groupIndex": 0,
+          "corePageIndexes": [
+            0
+          ],
+          "inspectionPageIndexes": [
+            0,
+            1
+          ]
+        },
+        {
+          "groupIndex": 1,
+          "corePageIndexes": [
+            1
+          ],
+          "inspectionPageIndexes": [
+            0,
+            1
+          ]
+        }
+      ],
+      "maxConcurrentGroups": 1,
+      "maxSaveBatchBytes": 100663296,
+      "maxRecutAttempts": 3,
+      "maxQuestionWidthRatio": 0.9633333333333334,
+      "questions": [
+        {
+          "sourceHeadId": "p1e0",
+          "questionNo": 1,
+          "headPageIndex": 1,
+          "groupIndex": 1,
+          "regions": [
+            {
+              "pageIndex": 1,
+              "left": 22,
+              "top": 40,
+              "right": 528,
+              "rightLimit": 600,
+              "bottom": 98,
+              "excludedAreas": [],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "boundaryEvidenceLabelsPageScope": true,
   "cropReviewSplitsCombinedQuestions": true,
+  "compactReviewRejectsOptionalResourceBlocks": true,
+  "cropReviewPreservesSourceOverlaysWithoutExcusingMissingContent": true,
+  "cropReviewSeparatesOutputFromUnsampledSourceImages": true,
+  "cropReviewPreservesCompleteReferenceAppendices": true,
+  "cropReviewDistinguishesImageEncodedTextFromIllustrations": true,
+  "cropReviewReturnsExactToolNameAfterMisspelledSuffix": false,
+  "cropReviewContinuesIncompleteClassificationWithoutRejection": true,
+  "ocrOnlyProtectedHeadsRequireVisualRemoval": true,
+  "cropReviewSeparatesCoreAndContext": true,
   "cropReviewPromptMentionsWhitePadding": true,
   "cropReviewPromptRequiresVisualEvidence": true,
   "cropReviewPromptRejectsMaskedLaneEvidence": true,
   "cropReviewUsesOneCompleteClassification": true,
+  "cropLocalRepairUsesFlatCropDecisions": false,
   "halfEmptySpread": {
     "maxQuestionWidthRatio": 0.976218787158145,
     "questionSourceHeadIds": [
@@ -88,7 +156,7 @@
       ],
       "maxConcurrentGroups": 1,
       "maxSaveBatchBytes": 100663296,
-      "maxRecutAttempts": 2,
+      "maxRecutAttempts": 3,
       "maxQuestionWidthRatio": 0.9583333333333334,
       "questions": [
         {
@@ -220,14 +288,11 @@
       ]
     }
   },
-  "degradedReview": {
+  "partialReview": {
     "ok": true,
     "value": {
-      "decision": "unresolved",
-      "affectedQuestionIds": [
-        "p0e3",
-        "p0e6"
-      ],
+      "decision": "accepted",
+      "affectedQuestionIds": [],
       "questions": [
         {
           "sourceHeadId": "p0e3",
@@ -280,5 +345,335 @@
         }
       ]
     }
-  }
+  },
+  "recoveredReview": {
+    "ok": true,
+    "value": {
+      "decision": "accepted",
+      "affectedQuestionIds": [],
+      "questions": [
+        {
+          "sourceHeadId": "p0e3",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 30,
+              "top": 133,
+              "right": 620,
+              "rightLimit": 720,
+              "bottom": 490,
+              "excludedAreas": [],
+              "pageWidth": 720,
+              "pageHeight": 1000
+            }
+          ]
+        },
+        {
+          "sourceHeadId": "p0e6",
+          "questionNo": 2,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 30,
+              "top": 510,
+              "right": 630,
+              "rightLimit": 720,
+              "bottom": 950,
+              "excludedAreas": [],
+              "pageWidth": 720,
+              "pageHeight": 1000
+            },
+            {
+              "pageIndex": 1,
+              "left": 35,
+              "top": 50,
+              "right": 510,
+              "rightLimit": 720,
+              "bottom": 195,
+              "excludedAreas": [],
+              "pageWidth": 720,
+              "pageHeight": 1000
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "incompleteReviewRetainsUnacceptedDraft": true,
+  "degradedReview": {
+    "ok": false,
+    "error": {
+      "code": "model-failed",
+      "message": "the image-review model stopped with error; this group was not verified"
+    }
+  },
+  "malformedReview": {
+    "ok": false,
+    "error": {
+      "code": "invalid-output",
+      "message": "image review stopped after repeated failed tool calls; this group was not verified; last rejection: REJECTED\nfindings[0] crop defect requires at least one repairIntent"
+    }
+  },
+  "malformedReviewCalls": 15,
+  "exhaustedLocalRepair": {
+    "ok": true,
+    "value": {
+      "decision": "unresolved",
+      "affectedQuestionIds": [
+        "p0e0"
+      ],
+      "questions": [
+        {
+          "sourceHeadId": "p0e0",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 16,
+              "top": 16,
+              "right": 544,
+              "rightLimit": 600,
+              "bottom": 654,
+              "excludedAreas": [],
+              "pageWidth": 600,
+              "pageHeight": 800
+            },
+            {
+              "pageIndex": 1,
+              "left": 16,
+              "top": 296,
+              "right": 544,
+              "rightLimit": 600,
+              "bottom": 334,
+              "excludedAreas": [],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "failedLocalRepairCalls": 12,
+  "localRepair": {
+    "ok": true,
+    "value": {
+      "decision": "revised",
+      "affectedQuestionIds": [
+        "p0e0"
+      ],
+      "questions": [
+        {
+          "sourceHeadId": "p0e0",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 16,
+              "top": 20,
+              "right": 544,
+              "rightLimit": 600,
+              "bottom": 165,
+              "excludedAreas": [
+                [
+                  360,
+                  155,
+                  390,
+                  160
+                ],
+                [
+                  360,
+                  160,
+                  410,
+                  164
+                ]
+              ],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "learnerLandmarkDoesNotBlockLocalRepair": true,
+  "defectWinsOverContradictoryVerification": true,
+  "jsonEncodedReviewArraysRetainStrictRepairValidation": true,
+  "explicitGeometryRetainsVisualBlockExclusions": true,
+  "laterRepairsPreserveEarlierCropPixels": true,
+  "cumulativeRepair": {
+    "ok": true,
+    "value": {
+      "decision": "revised",
+      "affectedQuestionIds": [
+        "p0e0"
+      ],
+      "questions": [
+        {
+          "sourceHeadId": "p0e0",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 16,
+              "top": 20,
+              "right": 544,
+              "rightLimit": 600,
+              "bottom": 165,
+              "excludedAreas": [
+                [
+                  360,
+                  155,
+                  390,
+                  160
+                ],
+                [
+                  360,
+                  160,
+                  410,
+                  164
+                ]
+              ],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "tableResult": {
+    "ok": true,
+    "value": {
+      "groupCount": 1,
+      "groups": [
+        {
+          "groupIndex": 0,
+          "corePageIndexes": [
+            0
+          ],
+          "inspectionPageIndexes": [
+            0
+          ]
+        }
+      ],
+      "maxConcurrentGroups": 1,
+      "maxSaveBatchBytes": 100663296,
+      "maxRecutAttempts": 3,
+      "maxQuestionWidthRatio": 0.94,
+      "questions": [
+        {
+          "sourceHeadId": "p0e0",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 36,
+              "top": 36,
+              "right": 504,
+              "rightLimit": 600,
+              "bottom": 74,
+              "excludedAreas": [],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        },
+        {
+          "sourceHeadId": "p0e3",
+          "questionNo": 2,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 36,
+              "top": 336,
+              "right": 504,
+              "rightLimit": 600,
+              "bottom": 714,
+              "excludedAreas": [],
+              "pageWidth": 600,
+              "pageHeight": 800
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "interleavedResult": {
+    "ok": true,
+    "value": {
+      "groupCount": 1,
+      "groups": [
+        {
+          "groupIndex": 0,
+          "corePageIndexes": [
+            0
+          ],
+          "inspectionPageIndexes": [
+            0
+          ]
+        }
+      ],
+      "maxConcurrentGroups": 1,
+      "maxSaveBatchBytes": 100663296,
+      "maxRecutAttempts": 3,
+      "maxQuestionWidthRatio": 0.4880952380952381,
+      "questions": [
+        {
+          "sourceHeadId": "p0e0",
+          "questionNo": 1,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 25,
+              "top": 17,
+              "right": 415,
+              "rightLimit": 435,
+              "bottom": 195,
+              "excludedAreas": [],
+              "pageWidth": 840,
+              "pageHeight": 600
+            }
+          ]
+        },
+        {
+          "sourceHeadId": "p0e2",
+          "questionNo": 2,
+          "headPageIndex": 0,
+          "groupIndex": 0,
+          "regions": [
+            {
+              "pageIndex": 0,
+              "left": 435,
+              "top": 16,
+              "right": 685,
+              "rightLimit": 840,
+              "bottom": 105,
+              "excludedAreas": [],
+              "pageWidth": 840,
+              "pageHeight": 600
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "detachedLabelAndStemRejected": true
 }

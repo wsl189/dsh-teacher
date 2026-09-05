@@ -21,6 +21,7 @@ import { newEnglishPage, saveFailureShot } from './support.ts'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/better-sidebar', import.meta.url))
 const FREE_WINDOW_MENU_EXPECTED = join(SNAPSHOT_DIR, 'free-window-menu.expected.md')
 const SIDE_CHAT_TRANSCRIPT_EXPECTED = join(SNAPSHOT_DIR, 'side-chat-transcript.expected.md')
+const TASKS_DISABLED_MENU_EXPECTED = join(SNAPSHOT_DIR, 'tasks-disabled-menu.expected.md')
 const MODE = webSnapshotMode()
 const FIXTURE = fileURLToPath(new URL('../../../snapshots/web/fresh-round-trip/session.jsonl', import.meta.url))
 const PDF_FIXTURE = fileURLToPath(new URL(
@@ -232,10 +233,60 @@ describe('web e2e: built-in better-sidebar workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('defaults Tasks off and preserves a user opt-in across reloads', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-better-sidebar-tasks-default'))
+    await page.reload({ waitUntil: 'load' })
+    await page.getByRole('button', { name: /^(Expand|Collapse) sidebar$/ }).waitFor({ timeout: 15_000 })
+    const workbench = page.locator('[data-dsh-better-sidebar]')
+    const panel = page.locator('[data-dsh-panel="true"]:not([data-dsh-bottom-panel])')
+    if (!await panel.isVisible()) await page.getByRole('button', { name: 'Expand sidebar' }).click()
+    await workbench.getByRole('button', { name: 'New tab' }).first().click()
+    const menu = page.getByRole('menu')
+    await menu.getByRole('menuitem', { name: 'Side Chat (beta)' }).waitFor({ timeout: 15_000 })
+    expect(await menu.getByRole('menuitem', { name: 'Tasks', exact: true }).count()).toBe(0)
+    await compareOrRefreshGolden(
+      TASKS_DISABLED_MENU_EXPECTED,
+      await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await page.keyboard.press('Escape')
+
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: 'Settings' })
+    await dialog.getByRole('button', { name: 'Side card', exact: true }).click()
+    const tasksSwitch = dialog.locator('button[title="subagent"][aria-pressed]')
+    await expect.poll(() => tasksSwitch.getAttribute('aria-pressed')).toBe('false')
+    const committed = page.waitForResponse(response => (
+      response.url().endsWith('/sidebar/api/settings.update') && response.ok()
+    ))
+    await tasksSwitch.click()
+    await committed
+    await expect.poll(() => tasksSwitch.getAttribute('aria-pressed')).toBe('true')
+    await page.keyboard.press('Escape')
+
+    await workbench.getByRole('button', { name: 'New tab' }).first().click()
+    await menu.getByRole('menuitem', { name: 'Tasks', exact: true }).waitFor({ timeout: 15_000 })
+    await page.keyboard.press('Escape')
+
+    await page.reload({ waitUntil: 'load' })
+    await page.getByRole('button', { name: 'Settings', exact: true }).click()
+    await dialog.getByRole('button', { name: 'Side card', exact: true }).click()
+    await expect.poll(() => tasksSwitch.getAttribute('aria-pressed')).toBe('true')
+    const disabled = page.waitForResponse(response => (
+      response.url().endsWith('/sidebar/api/settings.update') && response.ok()
+    ))
+    await tasksSwitch.click()
+    await disabled
+    await expect.poll(() => tasksSwitch.getAttribute('aria-pressed')).toBe('false')
+    await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'free-window-menu.expected.md',
       'side-chat-transcript.expected.md',
+      'tasks-disabled-menu.expected.md',
     ])
   })
 })

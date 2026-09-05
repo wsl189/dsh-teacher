@@ -965,7 +965,7 @@ export interface Config {
   maxQuestionBoundarySubmissions: number
   /** Maximum fresh child runs used to obtain one accepted result in each boundary or crop-review stage. */
   maxQuestionBoundaryAgentRuns: number
-  /** Maximum identical rejected tool results admitted before one child is stopped and safe output is retained. */
+  /** Maximum failed tool calls per child, including argument-validation failures, before stopping it. */
   maxQuestionRejectedToolCalls: number
   /** Maximum page-height gap between automatically owned elements before explicit attachment is required. */
   maxQuestionAutoOwnedGapRatio: number
@@ -973,7 +973,7 @@ export interface Config {
   minQuestionRepeatedImagePages: number
   /** Maximum normalized coordinate drift when matching repeated-position image furniture. */
   questionRepeatedImagePositionToleranceRatio: number
-  /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
+  /** Maximum local crop revisions before the latest safe regions continue as unverified. */
   maxQuestionRecutAttempts: number
   /** Maximum page or crop images returned by one child-agent image-tool call. */
   maxQuestionVisionImagesPerToolCall: number
@@ -984,7 +984,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:189`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:192`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

@@ -9,7 +9,7 @@
     - option "不选择（按 PDF 名新建文件夹）" [selected]
     - option "模拟题库 / 八月题库"
     - option "layout"
-  - switch "切题时启用思考"
-  - strong: 切题时启用思考
-  - text: 默认关闭；关闭后严格禁用思考，不支持 Off 档的模型不能执行切题。
+  - switch "开启深度模式"
+  - strong: 开启深度模式
+  - text: 深度模式会开启大模型视觉校验，显著增加切题耗时。
   - button "确认切割"

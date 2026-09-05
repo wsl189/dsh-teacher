@@ -112,47 +112,90 @@ describe('segmentQuestionsInBatches', () => {
     const result = await segmentQuestionsInBatches(ctx, request(6), {
       ...CONFIG,
       questionSegmentationBatchPages: 1,
-      questionSegmentationConcurrency: 2,
+      questionSegmentationConcurrency: 5,
     }, runner)
 
-    expect(maximumActive).toBe(2)
+    expect(maximumActive).toBe(5)
     expect(runner).toHaveBeenCalledTimes(6)
     expect(result.ok && result.value.questions.map(question => question.headPageIndex)).toEqual([0, 1, 2, 3, 4, 5])
-    expect(result.ok && result.value.maxConcurrentGroups).toBe(2)
+    expect(result.ok && result.value.maxConcurrentGroups).toBe(5)
     await ctx.fiber.dispose()
   })
 
-  it('waits for in-flight groups and stops admitting new groups after one fails', async () => {
-    const release = Promise.withResolvers<undefined>()
+  it('keeps successful groups and continues later pages after one boundary child returns invalid output', async () => {
     const started: number[] = []
-    let firstFinished = false
     const runner = vi.fn(async (_ctx: Context, groupRequest: TeacherQuestionSegmentRequest) => {
       const pageIndex = groupRequest.corePageIndexes?.[0] ?? -1
       started.push(pageIndex)
-      if (pageIndex === 0) {
-        await release.promise
-        firstFinished = true
-        return { ok: true as const, value: { questions: [] } }
-      }
-      return {
+      if (pageIndex === 1) return {
         ok: false as const,
         error: { code: 'invalid-output' as const, message: 'group failed' },
       }
+      return {
+        ok: true as const,
+        value: {
+          questions: [{
+            sourceHeadId: `p${String(pageIndex)}e0` as never,
+            questionNo: 1,
+            headPageIndex: pageIndex,
+            groupIndex: 0,
+            regions: [{
+              pageIndex, left: 20, top: 20, right: 200, rightLimit: 600, bottom: 50,
+              excludedAreas: [], pageWidth: 600, pageHeight: 800,
+            }],
+          }],
+        },
+      }
     })
     const ctx = new Context()
-    let settled = false
-    const operation = segmentQuestionsInBatches(ctx, request(4), {
+    const result = await segmentQuestionsInBatches(ctx, request(4), {
       ...CONFIG,
       questionSegmentationBatchPages: 1,
       questionSegmentationConcurrency: 2,
-    }, runner).finally(() => { settled = true })
-    await vi.waitFor(() => { expect(started).toEqual([0, 1]) })
+    }, runner)
 
-    expect(settled).toBe(false)
-    release.resolve(undefined)
-    await expect(operation).resolves.toMatchObject({ ok: false, error: { message: 'group failed' } })
-    expect(firstFinished).toBe(true)
-    expect(started).toEqual([0, 1])
+    expect(result.ok).toBe(true)
+    expect(result.ok && result.value.questions.map(question => question.headPageIndex)).toEqual([0, 2, 3])
+    expect(result.ok && result.value.groups).toHaveLength(4)
+    expect(started.sort((left, right) => left - right)).toEqual([0, 1, 2, 3])
+    await ctx.fiber.dispose()
+  })
+
+  it('surfaces a shared provider failure when every boundary group stops before producing geometry', async () => {
+    const runner = vi.fn(async () => ({
+      ok: false as const,
+      error: {
+        code: 'model-failed' as const,
+        message: 'the tool model stopped with error: provider authentication failed',
+      },
+    }))
+    const ctx = new Context()
+    const result = await segmentQuestionsInBatches(ctx, request(2), {
+      ...CONFIG,
+      questionSegmentationBatchPages: 1,
+    }, runner)
+
+    expect(result).toMatchObject({
+      ok: false,
+      error: { code: 'model-failed' },
+    })
+    if (result.ok) throw new Error('expected segmentation to fail')
+    expect(result.error.message).toContain('provider authentication failed')
+    expect(runner).toHaveBeenCalledTimes(2)
+    await ctx.fiber.dispose()
+  })
+
+  it('still rejects a systemic model configuration failure', async () => {
+    const ctx = new Context()
+    const result = await segmentQuestionsInBatches(ctx, request(2), {
+      ...CONFIG,
+      questionSegmentationBatchPages: 1,
+    }, async () => ({
+      ok: false,
+      error: { code: 'tool-model-unavailable', message: 'tool model is unavailable' },
+    }))
+
+    expect(result).toMatchObject({ ok: false, error: { code: 'tool-model-unavailable' } })
     await ctx.fiber.dispose()
   })
 

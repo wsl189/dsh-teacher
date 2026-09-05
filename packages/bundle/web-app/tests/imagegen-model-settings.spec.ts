@@ -29,11 +29,7 @@ interface ImageSelectionReader {
 
 const require = createRequire(import.meta.url)
 const entry = pathToFileURL(require.resolve('@dickpy/dsh-imagegen')).href
-const {
-  generateImage,
-  resolveModelSettingsImageRoute,
-  selectedImageRuntimeView,
-} = await import(entry) as {
+const imagegen = await import(entry) as {
   generateImage(
     upstream: ImageUpstream,
     request: ImageRequest,
@@ -123,7 +119,7 @@ afterEach(() => {
 describe('bundled image generation unified model settings', () => {
   it('resolves the selected exact route and supplier credential on every task', async () => {
     const serviceSettings = settings('minimax-image', 'https://api.minimax.cn/v1/image_generation')
-    expect(resolveModelSettingsImageRoute(selection, serviceSettings)).toEqual({
+    expect(imagegen.resolveModelSettingsImageRoute(selection, serviceSettings)).toEqual({
       provider: 'supplier',
       providerName: 'Supplier API',
       model: 'image-model',
@@ -132,7 +128,7 @@ describe('bundled image generation unified model settings', () => {
       credential: 'SUPPLIER_KEY',
     })
     const resolve = vi.fn(async () => ({ value: 'secret', source: 'test' }))
-    await expect(selectedImageRuntimeView(selection, serviceSettings, { resolve })).resolves.toEqual({
+    await expect(imagegen.selectedImageRuntimeView(selection, serviceSettings, { resolve })).resolves.toEqual({
       channels: [{
         id: 'supplier',
         preset: '',
@@ -158,7 +154,7 @@ describe('bundled image generation unified model settings', () => {
       return { value: 'secret', source: 'test' }
     })
 
-    await expect(selectedImageRuntimeView(liveSelection, settings(), { resolve })).resolves.toMatchObject({
+    await expect(imagegen.selectedImageRuntimeView(liveSelection, settings(), { resolve })).resolves.toMatchObject({
       channels: [{ id: 'supplier', apiKey: 'secret', models: [{ id: 'image-model' }] }],
       defaultChannelId: 'supplier',
     })
@@ -168,7 +164,7 @@ describe('bundled image generation unified model settings', () => {
     const fetch = vi.fn(async () => Response.json({ data: [{ b64_json: PNG }] }))
     vi.stubGlobal('fetch', fetch)
 
-    await expect(generateImage({
+    await expect(imagegen.generateImage({
       apiUrl: 'https://images.example/custom/generations',
       apiKey: 'secret',
       protocol: 'openai-images',
@@ -196,7 +192,7 @@ describe('bundled image generation unified model settings', () => {
     })
     vi.stubGlobal('fetch', fetch)
 
-    await expect(generateImage({
+    await expect(imagegen.generateImage({
       apiUrl: 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation',
       apiKey: 'secret',
       protocol: 'dashscope-image',
@@ -218,7 +214,7 @@ describe('bundled image generation unified model settings', () => {
     })
     vi.stubGlobal('fetch', fetch)
 
-    await expect(generateImage({
+    await expect(imagegen.generateImage({
       apiUrl: 'https://api.minimax.cn/v1/image_generation',
       apiKey: 'secret',
       protocol: 'minimax-image',
@@ -228,12 +224,12 @@ describe('bundled image generation unified model settings', () => {
   })
 
   it('fails before network I/O when selection, adapter, or credential is unavailable', async () => {
-    expect(() => resolveModelSettingsImageRoute(
+    expect(() => imagegen.resolveModelSettingsImageRoute(
       { currentImageSelection: () => undefined }, settings(),
     )).toThrow('尚未选择图像生成模型')
-    expect(() => resolveModelSettingsImageRoute(selection, settings('openai-completions')))
+    expect(() => imagegen.resolveModelSettingsImageRoute(selection, settings('openai-completions')))
       .toThrow('没有可用请求适配器')
-    await expect(selectedImageRuntimeView(selection, settings(), {
+    await expect(imagegen.selectedImageRuntimeView(selection, settings(), {
       resolve: vi.fn(async () => undefined),
     })).rejects.toThrow('没有可用 API 密钥')
   })

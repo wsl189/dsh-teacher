@@ -786,8 +786,11 @@ export interface TeacherQuestionPagePreview {
 
 /** Detect semantic question boundaries in an already extracted PDF layout. */
 export interface TeacherQuestionSegmentRequest {
-  /** Live root session that owns the short-lived child agent. */
-  readonly parentSessionId: SessionId
+  /**
+   * Legacy caller-owned parent retained for wire compatibility. The Host owns
+   * the processing session, so browser callers do not need a conversation.
+   */
+  readonly parentSessionId?: SessionId
   /** Per-operation reasoning choice; omission uses the current Host default. */
   readonly reasoningEnabled?: boolean
   /** Original PDF display name used only as task context. */
@@ -842,8 +845,11 @@ export interface TeacherSegmentedQuestion {
 
 /** Review one preliminary crop set and return accepted or corrected source regions. */
 export interface TeacherQuestionCropReviewRequest {
-  /** Live root session that owns the short-lived review child. */
-  readonly parentSessionId: SessionId
+  /**
+   * Legacy caller-owned parent retained for wire compatibility. The Host owns
+   * the processing session, so browser callers do not need a conversation.
+   */
+  readonly parentSessionId?: SessionId
   /** Per-operation reasoning choice; omission uses the current Host default. */
   readonly reasoningEnabled?: boolean
   /** Original PDF display name used only as task context. */
@@ -913,7 +919,7 @@ export interface TeacherQuestionSegmentSuccess {
     readonly maxConcurrentGroups: number
     /** Maximum decoded image bytes sent in one automatic save part. */
     readonly maxSaveBatchBytes: number
-    /** Maximum visual review attempts before the latest safe regions are retained and marked unverified. */
+    /** Maximum local crop revisions before the latest safe regions continue as unverified. */
     readonly maxRecutAttempts: number
     /** Maximum non-outlier safe-lane extent from a question's fixed left edge, divided by its OCR page width. */
     readonly maxQuestionWidthRatio: number

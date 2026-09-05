@@ -1,14 +1,41 @@
 diff --git a/lib/client-registry.js b/lib/client-registry.js
-index b1630afa37..5dcc13d4d6 100644
+index b1630afa375df6b3ec03ceca5178bce14d7d67a9..62f76d362075777e9e0001ff7af3010d245b38fd 100644
 --- a/lib/client-registry.js
 +++ b/lib/client-registry.js
-@@ -10652,0 +10652,5 @@ window.__ModuleLoader__.load({
+@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
+ 			browserInterceptHttp: true,
+ 			browserInterceptHttps: false,
+ 			browserAllowedLoopback: "",
+-			tabsEnabled: {},
++			tabsEnabled: { subagent: false },
+ 			viewersEnabled: {},
+ 			pluginSettings: {}
+ 		};
+@@ -10649,6 +10649,11 @@ window.__ModuleLoader__.load({
+ 			sidechatDispose: (childId) => call("sidechat.dispose", { childId }),
+ 			/** Live state + agent identity (provider/model/preset) of a thread. */
+ 			sidechatInfo: (childId) => call("sidechat.info", { childId }),
 +			/** Return the thread's own transcript events after the optional sequence. */
 +			sidechatEvents: (childId, afterSeq, signal) => call("sidechat.events", {
 +				childId,
 +				...afterSeq !== void 0 ? { afterSeq } : {}
 +			}, signal),
-@@ -16398,6 +16403,3 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			/** The effective terminal shell and its display name (plugin-global). */
+ 			shellGet: () => call("shell.get", {}),
+ 			/** Read the side card preferences (plugin-global, no session scope). */
+@@ -12447,7 +12452,7 @@ window.__ModuleLoader__.load({
+ 				browserInterceptHttp: typeof record.browserInterceptHttp === "boolean" ? record.browserInterceptHttp : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttp,
+ 				browserInterceptHttps: typeof record.browserInterceptHttps === "boolean" ? record.browserInterceptHttps : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttps,
+ 				browserAllowedLoopback: typeof record.browserAllowedLoopback === "string" ? record.browserAllowedLoopback : SIDEBAR_PREFS_DEFAULTS.browserAllowedLoopback,
+-				tabsEnabled: booleanMapOf(record.tabsEnabled),
++				tabsEnabled: { ...SIDEBAR_PREFS_DEFAULTS.tabsEnabled, ...booleanMapOf(record.tabsEnabled) },
+ 				viewersEnabled: booleanMapOf(record.viewersEnabled),
+ 				pluginSettings: pluginSettingsMapOf(record.pluginSettings)
+ 			};
+@@ -16395,20 +16400,10 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		*
+ 		* Each side thread is a child session the plugin created itself with a
+ 		* custom seed (the parent's full log up to the click moment — see
 -		* sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
 -		* info go through the plugin's own /sidebar/api sidechat.* routes
 -		* (subagent-origin identities are fenced from the generic session RPCs);
@@ -18,7 +45,7 @@ index b1630afa37..5dcc13d4d6 100644
 +		* sidechat-core.ts). Every thread operation, including transcript polling,
 +		* goes through the plugin's own /sidebar/api sidechat.* routes. The host
 +		* removes inherited seed events before returning transcript deltas.
-@@ -16405,7 +16406,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		*/
 -		/** Tail-page size for one transcript poll (events per page). Small on
 -		*  purpose: streaming polls ride the tail and merge by seq. */
 -		const PAGE_MESSAGES = 8;
@@ -26,20 +53,35 @@ index b1630afa37..5dcc13d4d6 100644
 -		*  event per streamed delta, so a single answer can be hundreds of events —
 -		*  the walk must page big or earlier tool/call rows fall out of the window. */
 -		const WALK_PAGE_EVENTS = 200;
-@@ -16554,4 +16549 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		/** Poll cadence while the selected thread is running and the tab visible. */
+ 		const POLL_MS = 2e3;
+ 		/** Textarea auto-grow ceiling (px) — the composer scrolls beyond it. */
+@@ -16551,10 +16546,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const [revision, setRevision] = (0, react.useState)(0);
+ 			const [info, setInfo] = (0, react.useState)(null);
+ 			const [menuOpen, setMenuOpen] = (0, react.useState)(false);
 -			const cacheRef = (0, react.useRef)({
 -				seedBoundary: null,
 -				entries: []
 -			});
 +			const cacheRef = (0, react.useRef)({ entries: [] });
-@@ -16610,3 +16602 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const controllerRef = (0, react.useRef)(null);
+ 			const scrollRef = (0, react.useRef)(null);
+ 			const composerRef = (0, react.useRef)(null);
+@@ -16607,38 +16599,22 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				tab.title,
+ 				ctx
+ 			]);
 -			/** One transcript pull: the first read walks back to the seed boundary
 -			*  (big pages — chunk deltas re-expand on cold reads), later reads fetch
 -			*  one tail page and merge (seq-deduped). */
 +			/** Pull and merge the thread's own events beyond the cached tail. */
-@@ -16617 +16606,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const fetchThread = (0, react.useCallback)(async (childId) => {
+ 				controllerRef.current?.abort();
+ 				const controller = new AbortController();
+ 				controllerRef.current = controller;
 -				const cache = cacheRef.current;
-@@ -16619,19 +16608,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				try {
 -					if (cache.seedBoundary === null) {
 -						const walk = await collectOwnEvents(async (beforeSeq) => {
 -							const response = await ctx.connection.api.sessions.history({
@@ -66,32 +108,64 @@ index b1630afa37..5dcc13d4d6 100644
 +						const incoming = events.map((event) => ({ event }));
 +						cache.entries = mergeBySeq(cache.entries, incoming);
 +						setRevision((value) => value + 1);
-@@ -16639 +16615,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 					}
 -					setRevision((value) => value + 1);
-@@ -16641 +16617 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				} catch {}
 -			}, [ctx]);
 +			}, []);
-@@ -16649,4 +16625 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			/** The thread header badge pull (live state + preset/model identity). */
+ 			const fetchInfo = (0, react.useCallback)(async (childId) => {
+ 				try {
+@@ -16646,10 +16622,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				} catch {}
+ 			}, []);
+ 			(0, react.useEffect)(() => {
 -				cacheRef.current = {
 -					seedBoundary: null,
 -					entries: []
 -				};
 +				cacheRef.current = { entries: [] };
-@@ -22432 +22405 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
--//# sourceMappingURL=client-registry.js.map
-\ No newline at end of file
-+//# sourceMappingURL=client-registry.js.map
+ 				controllerRef.current?.abort();
+ 				setError(null);
+ 				setSaved(false);
 diff --git a/lib/client.js b/lib/client.js
-index 4f339ef28e..2f1e0f09a4 100644
+index 4f339ef28ed7eebd08cf7195b145924ca383b6be..92bfa1e27b86af8e6b3f691dc377ab0c5d68530b 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -10652,0 +10652,5 @@ window.__ModuleLoader__.load({
+@@ -66,7 +66,7 @@ window.__ModuleLoader__.load({
+ 			browserInterceptHttp: true,
+ 			browserInterceptHttps: false,
+ 			browserAllowedLoopback: "",
+-			tabsEnabled: {},
++			tabsEnabled: { subagent: false },
+ 			viewersEnabled: {},
+ 			pluginSettings: {}
+ 		};
+@@ -10649,6 +10649,11 @@ window.__ModuleLoader__.load({
+ 			sidechatDispose: (childId) => call("sidechat.dispose", { childId }),
+ 			/** Live state + agent identity (provider/model/preset) of a thread. */
+ 			sidechatInfo: (childId) => call("sidechat.info", { childId }),
 +			/** Return the thread's own transcript events after the optional sequence. */
 +			sidechatEvents: (childId, afterSeq, signal) => call("sidechat.events", {
 +				childId,
 +				...afterSeq !== void 0 ? { afterSeq } : {}
 +			}, signal),
-@@ -16398,6 +16403,3 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			/** The effective terminal shell and its display name (plugin-global). */
+ 			shellGet: () => call("shell.get", {}),
+ 			/** Read the side card preferences (plugin-global, no session scope). */
+@@ -12447,7 +12452,7 @@ window.__ModuleLoader__.load({
+ 				browserInterceptHttp: typeof record.browserInterceptHttp === "boolean" ? record.browserInterceptHttp : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttp,
+ 				browserInterceptHttps: typeof record.browserInterceptHttps === "boolean" ? record.browserInterceptHttps : SIDEBAR_PREFS_DEFAULTS.browserInterceptHttps,
+ 				browserAllowedLoopback: typeof record.browserAllowedLoopback === "string" ? record.browserAllowedLoopback : SIDEBAR_PREFS_DEFAULTS.browserAllowedLoopback,
+-				tabsEnabled: booleanMapOf(record.tabsEnabled),
++				tabsEnabled: { ...SIDEBAR_PREFS_DEFAULTS.tabsEnabled, ...booleanMapOf(record.tabsEnabled) },
+ 				viewersEnabled: booleanMapOf(record.viewersEnabled),
+ 				pluginSettings: pluginSettingsMapOf(record.pluginSettings)
+ 			};
+@@ -16395,20 +16400,10 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		*
+ 		* Each side thread is a child session the plugin created itself with a
+ 		* custom seed (the parent's full log up to the click moment — see
 -		* sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
 -		* info go through the plugin's own /sidebar/api sidechat.* routes
 -		* (subagent-origin identities are fenced from the generic session RPCs);
@@ -101,7 +175,7 @@ index 4f339ef28e..2f1e0f09a4 100644
 +		* sidechat-core.ts). Every thread operation, including transcript polling,
 +		* goes through the plugin's own /sidebar/api sidechat.* routes. The host
 +		* removes inherited seed events before returning transcript deltas.
-@@ -16405,7 +16406,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		*/
 -		/** Tail-page size for one transcript poll (events per page). Small on
 -		*  purpose: streaming polls ride the tail and merge by seq. */
 -		const PAGE_MESSAGES = 8;
@@ -109,20 +183,35 @@ index 4f339ef28e..2f1e0f09a4 100644
 -		*  event per streamed delta, so a single answer can be hundreds of events —
 -		*  the walk must page big or earlier tool/call rows fall out of the window. */
 -		const WALK_PAGE_EVENTS = 200;
-@@ -16554,4 +16549 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 		/** Poll cadence while the selected thread is running and the tab visible. */
+ 		const POLL_MS = 2e3;
+ 		/** Textarea auto-grow ceiling (px) — the composer scrolls beyond it. */
+@@ -16551,10 +16546,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const [revision, setRevision] = (0, react.useState)(0);
+ 			const [info, setInfo] = (0, react.useState)(null);
+ 			const [menuOpen, setMenuOpen] = (0, react.useState)(false);
 -			const cacheRef = (0, react.useRef)({
 -				seedBoundary: null,
 -				entries: []
 -			});
 +			const cacheRef = (0, react.useRef)({ entries: [] });
-@@ -16610,3 +16602 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const controllerRef = (0, react.useRef)(null);
+ 			const scrollRef = (0, react.useRef)(null);
+ 			const composerRef = (0, react.useRef)(null);
+@@ -16607,38 +16599,22 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				tab.title,
+ 				ctx
+ 			]);
 -			/** One transcript pull: the first read walks back to the seed boundary
 -			*  (big pages — chunk deltas re-expand on cold reads), later reads fetch
 -			*  one tail page and merge (seq-deduped). */
 +			/** Pull and merge the thread's own events beyond the cached tail. */
-@@ -16617 +16606,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			const fetchThread = (0, react.useCallback)(async (childId) => {
+ 				controllerRef.current?.abort();
+ 				const controller = new AbortController();
+ 				controllerRef.current = controller;
 -				const cache = cacheRef.current;
-@@ -16619,19 +16608,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				try {
 -					if (cache.seedBoundary === null) {
 -						const walk = await collectOwnEvents(async (beforeSeq) => {
 -							const response = await ctx.connection.api.sessions.history({
@@ -149,40 +238,84 @@ index 4f339ef28e..2f1e0f09a4 100644
 +						const incoming = events.map((event) => ({ event }));
 +						cache.entries = mergeBySeq(cache.entries, incoming);
 +						setRevision((value) => value + 1);
-@@ -16639 +16615,0 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 					}
 -					setRevision((value) => value + 1);
-@@ -16641 +16617 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				} catch {}
 -			}, [ctx]);
 +			}, []);
-@@ -16649,4 +16625 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 			/** The thread header badge pull (live state + preset/model identity). */
+ 			const fetchInfo = (0, react.useCallback)(async (childId) => {
+ 				try {
+@@ -16646,10 +16622,7 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
+ 				} catch {}
+ 			}, []);
+ 			(0, react.useEffect)(() => {
 -				cacheRef.current = {
 -					seedBoundary: null,
 -					entries: []
 -				};
 +				cacheRef.current = { entries: [] };
-@@ -22432 +22405 @@ Mode: this is a continuable side conversation. Your answers stay in this side th
--//# sourceMappingURL=client.js.map
-\ No newline at end of file
-+//# sourceMappingURL=client.js.map
+ 				controllerRef.current?.abort();
+ 				setError(null);
+ 				setSaved(false);
 diff --git a/lib/index.js b/lib/index.js
-index a3bab6f349..7b247a9776 100644
+index a3bab6f349e58d100d3133acd806295ed7a9e1fa..99e9680106d6e66549399086c6e49cd79a9f8657 100644
 --- a/lib/index.js
 +++ b/lib/index.js
-@@ -3328,0 +3328,6 @@ function messageLeadText(data) {
+@@ -50,7 +50,7 @@ const SIDEBAR_PREFS_DEFAULTS = {
+ 	browserInterceptHttp: true,
+ 	browserInterceptHttps: false,
+ 	browserAllowedLoopback: "",
+-	tabsEnabled: {},
++	tabsEnabled: { subagent: false },
+ 	viewersEnabled: {},
+ 	pluginSettings: {}
+ };
+@@ -123,7 +123,7 @@ const PrefsSchema = z.object({
+ 	browserInterceptHttp: z.boolean().default(true),
+ 	browserInterceptHttps: z.boolean().default(false),
+ 	browserAllowedLoopback: z.string().default(""),
+-	tabsEnabled: z.dict(z.boolean()).default({}),
++	tabsEnabled: z.dict(z.boolean()).default(SIDEBAR_PREFS_DEFAULTS.tabsEnabled),
+ 	viewersEnabled: z.dict(z.boolean()).default({}),
+ 	pluginSettings: z.dict(z.dict(z.any())).default({})
+ });
+@@ -3325,6 +3325,12 @@ function messageLeadText(data) {
+ 	const first = Array.isArray(content) ? content[0] : content;
+ 	return typeof first === "string" ? first : typeof first === "object" && first !== null && "text" in first ? String(first.text) : "";
+ }
 +/** The events a thread produced itself: everything after the last
 +* `session/end-seed` marker. A log without a marker is returned whole. */
 +function threadOwnLogEvents(events) {
 +	for (let index = events.length - 1; index >= 0; index--) if (events[index]?.type === "session/end-seed") return events.slice(index + 1);
 +	return [...events];
 +}
-@@ -3436 +3442,2 @@ function buildSubagentLiveApi(ctx) {
+ /**
+ * The agent preset a session actually runs: newest `agent-preset/selected`
+ * event wins, else the creation header (mirror of the dsh-agent-presets
+@@ -3433,7 +3439,8 @@ function buildSubagentLiveApi(ctx) {
+ //#region src/sidechat-routes.ts
+ /**
+ * Side Chat routes of the /sidebar JSON API ('sidechat.start' /
 -* 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose').
 +* 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose' /
 +* 'sidechat.info' / 'sidechat.events').
-@@ -3459,0 +3466,2 @@ const CREATE_TIMEOUT_MS = 15e3;
+ *
+ * A side thread is a child session the plugin creates ITSELF with a custom
+ * seed — the parent's full event log up to the click moment, honestly closed
+@@ -3456,6 +3463,8 @@ function buildSubagentLiveApi(ctx) {
+ /** Timeout guarding the create call (the registry detaches it before the
+ *  handle becomes visible, so the child is never cancelled by it). */
+ const CREATE_TIMEOUT_MS = 15e3;
 +/** Maximum number of transcript events returned by one request. */
 +const EVENTS_CAP = 8e3;
-@@ -3535,0 +3544,12 @@ function liveThreadAgent(ctx, childId) {
+ /** Per-activation disposers of created thread agents (the dispose route
+ *  releases them; the session and its history always stay persisted). */
+ const threadDisposers = /* @__PURE__ */ new Map();
+@@ -3532,6 +3541,18 @@ function admitFirstContact(agent, injectionText, question) {
+ function liveThreadAgent(ctx, childId) {
+ 	return ctx.get("agents")?.get(childId);
+ }
 +/** Read a thread's freshest logical event log from its live agent or persistence. */
 +async function threadLogEvents(ctx, childId) {
 +	const agent = liveThreadAgent(ctx, childId);
@@ -195,7 +328,13 @@ index a3bab6f349..7b247a9776 100644
 +		throw new SidebarError("not-found", `thread "${childId}" is not available: ${error instanceof Error ? error.message : String(error)}`, 404);
 +	}
 +}
-@@ -3681,0 +3702,8 @@ function buildSidechatApi(ctx) {
+ /** Build the Side Chat routes (all optional services degrade to a wire
+ *  error the tab surfaces inline). The record keys are the FULL wire method
+ *  names the /sidebar/api dispatcher looks up (`api[method]`). */
+@@ -3678,6 +3699,14 @@ function buildSidechatApi(ctx) {
+ 				};
+ 			} catch {}
+ 			return { live: false };
 +		},
 +		"sidechat.events": async (payload) => {
 +			const childId = requireString(payload, "childId");
@@ -204,62 +343,125 @@ index a3bab6f349..7b247a9776 100644
 +			const own = threadOwnLogEvents(await threadLogEvents(ctx, childId));
 +			const fresh = rawAfter === void 0 ? own : own.filter((event) => event.seq > rawAfter);
 +			return { events: fresh.length > EVENTS_CAP ? fresh.slice(fresh.length - EVENTS_CAP) : fresh };
+ 		}
+ 	};
+ }
+@@ -4131,7 +4160,9 @@ function apply(ctx, config) {
+ 	};
+ 	ctx.inject(["settings"], (sctx) => {
+ 		const ns = settingsNamespace(SIDEBAR_PREFS_NS);
+-		const scope = sctx.settings.register(ns, PrefsSchema);
++		const scope = sctx.settings.register(ns, PrefsSchema, {
++			base: { tabsEnabled: SIDEBAR_PREFS_DEFAULTS.tabsEnabled }
++		});
+ 		const viewOf = () => {
+ 			const descriptor = sctx.settings.describe({ redactSecrets: true }).find((candidate) => candidate.ns === ns);
+ 			return descriptor === void 0 ? {
 diff --git a/lib/types/client/api.d.ts b/lib/types/client/api.d.ts
-index 014e8d3a18..0a89bac971 100644
+index 014e8d3a180f2444f8f006f2f887f02ba9f25adf..0a89bac9715fcf36cc3e09bc0fa8e69cd030c3cb 100644
 --- a/lib/types/client/api.d.ts
 +++ b/lib/types/client/api.d.ts
-@@ -2 +2 @@ import type { LastActivity } from '../subagent-activity.ts';
+@@ -1,5 +1,5 @@
+ import type { LastActivity } from '../subagent-activity.ts';
 -import type { SidechatThreadInfo } from '../sidechat-core.ts';
 +import type { SidechatLogEvent, SidechatThreadInfo } from '../sidechat-core.ts';
-@@ -229,0 +229,4 @@ export declare const api: {
+ import type { BrowserProbeResult } from './browser.ts';
+ /** One wire failure. */
+ export declare class SidebarApiError extends Error {
+@@ -226,6 +226,10 @@ export declare const api: {
+     }>;
+     /** Live state + agent identity (provider/model/preset) of a thread. */
+     sidechatInfo: (childId: string) => Promise<SidechatThreadInfo>;
 +    /** Return the thread's own transcript events after the optional sequence. */
 +    sidechatEvents: (childId: string, afterSeq?: number, signal?: AbortSignal) => Promise<{
 +        events: SidechatLogEvent[];
 +    }>;
+     /** The effective terminal shell and its display name (plugin-global). */
+     shellGet: () => Promise<{
+         shell: string;
+diff --git a/lib/types/prefs-shared.d.ts b/lib/types/prefs-shared.d.ts
+index 84b7cefa551cf5c2987406e75d8212d269a30045..bf1ef56eff245b95323bd311a00990cb0795c9c0 100644
+--- a/lib/types/prefs-shared.d.ts
++++ b/lib/types/prefs-shared.d.ts
+@@ -193,7 +193,8 @@ export interface SidebarPrefs {
+     browserAllowedLoopback: string;
+     /**
+      * Per-tab enable switches, keyed by tab descriptor id (`'explorer'`,
+-     * `'my-plugin:db'`). An ABSENT key means enabled — only an explicit
++     * `'my-plugin:db'`). Resolution defaults `subagent` to false; an explicit
++     * user value overrides it. Other absent keys mean enabled — only an explicit
+      * `false` disables a tab type (hidden from the + menu, `openTab` refuses,
+      * and derived flows like subagent auto-open / agent-terminal tabs stop).
+      * Already-open tabs of a disabled type keep rendering (closing one
 diff --git a/lib/types/sidechat-core.d.ts b/lib/types/sidechat-core.d.ts
-index 40b93a99b5..360fd5e48a 100644
+index 40b93a99b5c7816643f8c6bae88f2fdf87f92257..360fd5e48ab354626d4808b11c7d099a18da572f 100644
 --- a/lib/types/sidechat-core.d.ts
 +++ b/lib/types/sidechat-core.d.ts
-@@ -151,2 +151,4 @@ export interface SidechatThreadInfo {
+@@ -148,8 +148,10 @@ export interface SidechatThreadInfo {
+     /** The recorded agent preset (live header, or persisted on cold reads). */
+     preset?: string;
+ }
 -/** The events a thread produced itself: everything after the LAST
 - *  `session/end-seed` marker (the fork-seed boundary). */
 +/** The events a thread produced itself: everything after the last
 + * `session/end-seed` marker. A log without a marker is returned whole. */
 +export declare function threadOwnLogEvents(events: readonly SidechatLogEvent[]): SidechatLogEvent[];
 +/** {@link threadOwnLogEvents} over client history rows. */
+ export declare function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[];
+ /**
+  * Whether the thread has at least one completed turn — the save-as-new-
 diff --git a/lib/types/sidechat-routes.d.ts b/lib/types/sidechat-routes.d.ts
-index 8e52e51c58..fec188c835 100644
+index 8e52e51c58d34f299b423576837556881982b664..fec188c83523992f2e826655487a0cfd3c976c24 100644
 --- a/lib/types/sidechat-routes.d.ts
 +++ b/lib/types/sidechat-routes.d.ts
-@@ -2,2 +2,2 @@ import type { Context } from './context-types.ts';
+@@ -1,6 +1,6 @@
+ import type { Context } from './context-types.ts';
 -import { type SidechatThreadInfo } from './sidechat-core.ts';
 -/** The five Side Chat routes of the sidebar API (wire method names). */
 +import { type SidechatLogEvent, type SidechatThreadInfo } from './sidechat-core.ts';
 +/** The six Side Chat routes of the sidebar API (wire method names). */
-@@ -26,0 +26,4 @@ export interface SidechatRoutes {
+ export interface SidechatRoutes {
+     /** Create a side thread child seeded with the parent's log up to now.
+      *  `question` is optional: empty creates an EMPTY thread (Codex-style
+@@ -23,6 +23,10 @@ export interface SidechatRoutes {
+     }>;
+     /** Live state + agent identity for the thread header. */
+     'sidechat.info'(payload: unknown): Promise<SidechatThreadInfo>;
 +    /** Return the thread's own transcript events after the optional sequence. */
 +    'sidechat.events'(payload: unknown): Promise<{
 +        events: SidechatLogEvent[];
 +    }>;
+ }
+ /** Build the Side Chat routes (all optional services degrade to a wire
+  *  error the tab surfaces inline). The record keys are the FULL wire method
 diff --git a/package.json b/package.json
-index f59585a988..57fe7de913 100644
+index f59585a988749bc6cf2b01bed66a4a61231cd8d4..57fe7de91369fc24dd7ed6da073658bc67e13220 100644
 --- a/package.json
 +++ b/package.json
-@@ -48 +48,3 @@
+@@ -45,10 +45,13 @@
+     },
+     "client": {
+       "inject": [
 -        "@deepseek-ai/dsh-client-runtime",
 +        "@deepseek-ai/dsh-api-session-controller",
 +        "@deepseek-ai/dsh-api-workspace-controller",
 +        "@deepseek-ai/dsh-client-connection",
-@@ -50 +52 @@
+         "@deepseek-ai/dsh-client-locale",
 -        "@deepseek-ai/dsh-client-ui-slots",
 +        "@deepseek-ai/dsh-client-ui-renderer",
-@@ -52,0 +54 @@
+         "@deepseek-ai/dsh-client-ui-conversation",
 +        "@deepseek-ai/dsh-client-ui-settings",
+         "@deepseek-ai/dsh-client-modules"
+       ],
+       "platform": "web"
 diff --git a/src/client/SideChatView.tsx b/src/client/SideChatView.tsx
-index 0dc500d171..893ee10ba6 100644
+index 0dc500d1712f4d6138df5e99ed51474a9b428b63..893ee10ba67894db8d16a11cd18b3d0bde94d292 100644
 --- a/src/client/SideChatView.tsx
 +++ b/src/client/SideChatView.tsx
-@@ -16,6 +16,3 @@
+@@ -13,12 +13,9 @@
+  *
+  * Each side thread is a child session the plugin created itself with a
+  * custom seed (the parent's full log up to the click moment — see
 - * sidechat-core.ts). Transport: thread creation/follow-up/cancel/dispose/
 - * info go through the plugin's own /sidebar/api sidechat.* routes
 - * (subagent-origin identities are fenced from the generic session RPCs);
@@ -269,13 +471,30 @@ index 0dc500d171..893ee10ba6 100644
 + * sidechat-core.ts). Every thread operation, including transcript polling,
 + * goes through the plugin's own /sidebar/api sidechat.* routes. The host
 + * removes inherited seed events before returning transcript deltas.
-@@ -39 +36 @@ import { IconHistoryOutline16, IconSaveOutline16 } from './icons.tsx'
+  */
+ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+ import { useSyncExternalStore } from 'react'
+@@ -36,7 +33,7 @@ import {
+ } from '@deepseek-ai/dsh-client-ui-primitives'
+ import { markdownTextProps } from './markdown-labels.tsx'
+ import { IconHistoryOutline16, IconSaveOutline16 } from './icons.tsx'
 -import type { Context, SidebarHistoryEntry } from '../context-types.ts'
 +import type { Context, SidebarHistoryEntry, SidebarSessionEvent } from '../context-types.ts'
-@@ -48 +45 @@ import {
+ import {
+   SIDE_LABEL_PREFIX,
+   SIDE_NEW_THREAD_TITLE,
+@@ -45,20 +42,13 @@ import {
+   threadTrailingPending,
+   type SidechatThreadInfo,
+ } from '../sidechat-core.ts'
 -import { collectOwnEvents, toolArgsSummary, transcriptRows, type SidechatTranscriptRow } from './sidechat-transcript.ts'
 +import { toolArgsSummary, transcriptRows, type SidechatTranscriptRow } from './sidechat-transcript.ts'
-@@ -55,7 +51,0 @@ import css from './SideChatView.module.css'
+ import { api } from './api.ts'
+ import { t } from './locales.ts'
+ import type { SessionScope } from './api.ts'
+ import type { SidebarTab } from './state.ts'
+ import css from './SideChatView.module.css'
+ 
 -/** Tail-page size for one transcript poll (events per page). Small on
 - *  purpose: streaming polls ride the tail and merge by seq. */
 -const PAGE_MESSAGES = 8
@@ -283,23 +502,44 @@ index 0dc500d171..893ee10ba6 100644
 - *  event per streamed delta, so a single answer can be hundreds of events —
 - *  the walk must page big or earlier tool/call rows fall out of the window. */
 -const WALK_PAGE_EVENTS = 200
-@@ -95,2 +85 @@ const inFlightStarts = new Set<string>()
+ /** Poll cadence while the selected thread is running and the tab visible. */
+ const POLL_MS = 2000
+ /** Textarea auto-grow ceiling (px) — the composer scrolls beyond it. */
+@@ -92,10 +82,8 @@ export function consumeSidechatSeed(): string | undefined {
+  *  StrictMode / HMR must not mint two threads for one tab). */
+ const inFlightStarts = new Set<string>()
+ 
 -/** Per-thread transcript cache: seed boundary + thread-own events merged by
 - *  seq (streaming polls never re-download the inherited seed). */
 +/** Per-thread transcript cache, merged by event sequence. */
-@@ -98 +86,0 @@ interface ThreadCache {
+ interface ThreadCache {
 -  seedBoundary: number | null
-@@ -277 +265 @@ export function SideChatView(props: {
+   entries: SidebarHistoryEntry[]
+ }
+ 
+@@ -274,7 +262,7 @@ export function SideChatView(props: {
+   const [info, setInfo] = useState<SidechatThreadInfo | null>(null)
+   const [menuOpen, setMenuOpen] = useState(false)
+ 
 -  const cacheRef = useRef<ThreadCache>({ seedBoundary: null, entries: [] })
 +  const cacheRef = useRef<ThreadCache>({ entries: [] })
-@@ -330,3 +318 @@ export function SideChatView(props: {
+   const controllerRef = useRef<AbortController | null>(null)
+   const scrollRef = useRef<HTMLDivElement | null>(null)
+   const composerRef = useRef<HTMLTextAreaElement | null>(null)
+@@ -327,43 +315,24 @@ export function SideChatView(props: {
+     }
+   }, [summary, tab.id, tab.title, ctx])
+ 
 -  /** One transcript pull: the first read walks back to the seed boundary
 -   *  (big pages — chunk deltas re-expand on cold reads), later reads fetch
 -   *  one tail page and merge (seq-deduped). */
 +  /** Pull and merge the thread's own events beyond the cached tail. */
-@@ -337 +322,0 @@ export function SideChatView(props: {
+   const fetchThread = useCallback(async (childId: string): Promise<void> => {
+     controllerRef.current?.abort()
+     const controller = new AbortController()
+     controllerRef.current = controller
 -    const cache = cacheRef.current
-@@ -339,22 +324,7 @@ export function SideChatView(props: {
+     try {
 -      if (cache.seedBoundary === null) {
 -        const walk = await collectOwnEvents(async (beforeSeq) => {
 -          const response = await ctx.connection.api.sessions.history(
@@ -329,39 +569,145 @@ index 0dc500d171..893ee10ba6 100644
 +        const incoming = events.map(event => ({ event: event as SidebarSessionEvent }))
 +        cache.entries = mergeBySeq(cache.entries, incoming)
 +        setRevision(value => value + 1)
-@@ -362 +331,0 @@ export function SideChatView(props: {
+       }
 -      setRevision(value => value + 1)
-@@ -366 +335 @@ export function SideChatView(props: {
+     } catch {
+       // Aborted by a newer pull or a wire failure: keep the last rows.
+     }
 -  }, [ctx])
 +  }, [])
-@@ -380 +349 @@ export function SideChatView(props: {
+ 
+   /** The thread header badge pull (live state + preset/model identity). */
+   const fetchInfo = useCallback(async (childId: string): Promise<void> => {
+@@ -377,7 +346,7 @@ export function SideChatView(props: {
+   // Reset the transcript cache whenever the binding changes, then focus
+   // the composer — it owns the first message of a fresh thread.
+   useEffect(() => {
 -    cacheRef.current = { seedBoundary: null, entries: [] }
 +    cacheRef.current = { entries: [] }
+     controllerRef.current?.abort()
+     setError(null)
+     setSaved(false)
 diff --git a/src/client/api.ts b/src/client/api.ts
-index 8173cd90cb..472391d9e5 100644
+index 8173cd90cb4917dbae044d286236a109c2f3ae40..7f4d58d588d0946bf6145f8804ac8910f2763f6f 100644
 --- a/src/client/api.ts
 +++ b/src/client/api.ts
-@@ -11 +11 @@ import type { LastActivity } from '../subagent-activity.ts'
+@@ -8,7 +8,7 @@
+  */
+ import { encodeHtmlUrl } from '../html-route.ts'
+ import type { LastActivity } from '../subagent-activity.ts'
 -import type { SidechatThreadInfo } from '../sidechat-core.ts'
 +import type { SidechatLogEvent, SidechatThreadInfo } from '../sidechat-core.ts'
-@@ -122 +122 @@ async function call<T>(method: string, payload: Record<string, unknown>, signal?
+ import type { BrowserProbeResult } from './browser.ts'
+ 
+ /** One wire failure. */
+@@ -119,7 +119,7 @@ async function call<T>(method: string, payload: Record<string, unknown>, signal?
+       method: 'POST',
+       headers: { 'content-type': 'application/json' },
+       body: JSON.stringify(payload),
 -      signal,
 +      ...(signal === undefined ? {} : { signal }),
-@@ -160 +160 @@ async function fetchUpload<T>(
+     })
+   } catch (error) {
+     throw new SidebarApiError('network', error instanceof Error ? error.message : String(error))
+@@ -157,7 +157,7 @@ async function fetchUpload<T>(
+       method: 'POST',
+       headers: { 'content-type': 'application/octet-stream' },
+       body,
 -      signal,
 +      ...(signal === undefined ? {} : { signal }),
-@@ -304,0 +304,6 @@ export const api = {
+     })
+   } catch (error) {
+     if (error instanceof DOMException && error.name === 'AbortError') throw error
+@@ -301,6 +301,12 @@ export const api = {
+   /** Live state + agent identity (provider/model/preset) of a thread. */
+   sidechatInfo: (childId: string) =>
+     call<SidechatThreadInfo>('sidechat.info', { childId }),
 +  /** Return the thread's own transcript events after the optional sequence. */
 +  sidechatEvents: (childId: string, afterSeq?: number, signal?: AbortSignal) =>
 +    call<{ events: SidechatLogEvent[] }>('sidechat.events', {
 +      childId,
 +      ...(afterSeq !== undefined ? { afterSeq } : {}),
 +    }, signal),
+   /** The effective terminal shell and its display name (plugin-global). */
+   shellGet: () =>
+     call<{ shell: string; name: string }>('shell.get', {}),
+diff --git a/src/client/prefs.ts b/src/client/prefs.ts
+index a855109d9c262e85a205fbfceeadd07f48148640..77f5fb64205eaf10e4796b69f2ff8acc972d8011 100644
+--- a/src/client/prefs.ts
++++ b/src/client/prefs.ts
+@@ -125,7 +125,7 @@ export function parsePrefs(value: unknown): SidebarPrefs {
+     browserAllowedLoopback: typeof record.browserAllowedLoopback === 'string'
+       ? record.browserAllowedLoopback
+       : SIDEBAR_PREFS_DEFAULTS.browserAllowedLoopback,
+-    tabsEnabled: booleanMapOf(record.tabsEnabled),
++    tabsEnabled: { ...SIDEBAR_PREFS_DEFAULTS.tabsEnabled, ...booleanMapOf(record.tabsEnabled) },
+     viewersEnabled: booleanMapOf(record.viewersEnabled),
+     pluginSettings: pluginSettingsMapOf(record.pluginSettings),
+   }
+diff --git a/src/config.ts b/src/config.ts
+index b28b2a7868faebd510ece59c93636a9de6b03c67..86c1627ba2b0aff1b7f50356d82fcb65c6643620 100644
+--- a/src/config.ts
++++ b/src/config.ts
+@@ -143,9 +143,9 @@ export const PrefsSchema: z<SidebarPrefs> = z.object({
+   browserInterceptHttps: z.boolean().default(false),
+   browserAllowedLoopback: z.string().default(''),
+   // Per-feature enable switches are OPEN maps (any tab/viewer id, built-in or
+-  // external): an absent key means enabled, so old documents resolve to {}
+-  // (everything on) with no migration. Non-boolean values fail validation.
+-  tabsEnabled: z.dict(z.boolean()).default({}),
++  // external). Tasks default off; explicit user choices override the base.
++  // Other absent keys stay enabled. Non-boolean values fail validation.
++  tabsEnabled: z.dict(z.boolean()).default(SIDEBAR_PREFS_DEFAULTS.tabsEnabled),
+   viewersEnabled: z.dict(z.boolean()).default({}),
+   // Plugin-owned settings blobs (v0.12.0+) are an OPEN nested map: any
+   // descriptor id may carry any JSON-serializable values. This is the
+diff --git a/src/index.ts b/src/index.ts
+index 46c94816c6ede48f7df69fedb700716fe183d685..8b4947eb3cef4c326f47d598a69a8a5899e8d239 100644
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -706,7 +706,9 @@ export function apply(ctx: Context, config?: SidebarConfig): void {
+     // The structural settings mirror types `schema` as unknown, so the
+     // generic is not inferred here; the real service resolves it from the
+     // schemastery schema (PrefsSchema) — narrow the owner scope explicitly.
+-    const scope = sctx.settings.register(ns, PrefsSchema) as {
++    const scope = sctx.settings.register(ns, PrefsSchema, {
++      base: { tabsEnabled: SIDEBAR_PREFS_DEFAULTS.tabsEnabled },
++    }) as {
+       get(): SidebarPrefs
+       watch(callback: (next: SidebarPrefs, prev: SidebarPrefs) => void): () => void
+     }
+diff --git a/src/prefs-shared.ts b/src/prefs-shared.ts
+index 0b4408417bcf08a57cd765286b88f0e20550a6bf..afe4cda2bf57dfce27e6018df81e8833a2928d3b 100644
+--- a/src/prefs-shared.ts
++++ b/src/prefs-shared.ts
+@@ -195,7 +195,8 @@ export interface SidebarPrefs {
+   browserAllowedLoopback: string
+   /**
+    * Per-tab enable switches, keyed by tab descriptor id (`'explorer'`,
+-   * `'my-plugin:db'`). An ABSENT key means enabled — only an explicit
++   * `'my-plugin:db'`). Resolution defaults `subagent` to false; an explicit
++   * user value overrides it. Other absent keys mean enabled — only an explicit
+    * `false` disables a tab type (hidden from the + menu, `openTab` refuses,
+    * and derived flows like subagent auto-open / agent-terminal tabs stop).
+    * Already-open tabs of a disabled type keep rendering (closing one
+@@ -267,7 +268,7 @@ export const SIDEBAR_PREFS_DEFAULTS: SidebarPrefs = {
+   browserInterceptHttp: true,
+   browserInterceptHttps: false,
+   browserAllowedLoopback: '',
+-  tabsEnabled: {},
++  tabsEnabled: { subagent: false },
+   viewersEnabled: {},
+   pluginSettings: {},
+ }
 diff --git a/src/sidechat-core.ts b/src/sidechat-core.ts
-index 1171dd3d71..abfdd47f85 100644
+index 1171dd3d7109e0b3092fdf02d6044049bbff540f..abfdd47f852aecee81a7a879d592315bfe996a9d 100644
 --- a/src/sidechat-core.ts
 +++ b/src/sidechat-core.ts
-@@ -418,4 +418,3 @@ export interface SidechatThreadInfo {
+@@ -415,14 +415,18 @@ export interface SidechatThreadInfo {
+   preset?: string
+ }
+ 
 -/** The events a thread produced itself: everything after the LAST
 - *  `session/end-seed` marker (the fork-seed boundary). */
 -export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[] {
@@ -369,7 +715,9 @@ index 1171dd3d71..abfdd47f85 100644
 +/** The events a thread produced itself: everything after the last
 + * `session/end-seed` marker. A log without a marker is returned whole. */
 +export function threadOwnLogEvents(events: readonly SidechatLogEvent[]): SidechatLogEvent[] {
-@@ -425 +424,6 @@ export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): Sidech
+   for (let index = events.length - 1; index >= 0; index--) {
+     if (events[index]?.type === 'session/end-seed') return events.slice(index + 1)
+   }
 -  return events
 +  return [...events]
 +}
@@ -377,27 +725,57 @@ index 1171dd3d71..abfdd47f85 100644
 +/** {@link threadOwnLogEvents} over client history rows. */
 +export function threadOwnEvents(entries: readonly SidebarHistoryEntry[]): SidechatLogEvent[] {
 +  return threadOwnLogEvents(entries.map(entry => entry.event))
+ }
+ 
+ /**
 diff --git a/src/sidechat-routes.ts b/src/sidechat-routes.ts
-index c718de9a0b..52662ddc54 100644
+index c718de9a0bde75e57084e86ec8d0fa3bec58efff..52662ddc544aa2cbba600c3353152bfe23e646b3 100644
 --- a/src/sidechat-routes.ts
 +++ b/src/sidechat-routes.ts
-@@ -3 +3,2 @@
+@@ -1,6 +1,7 @@
+ /**
+  * Side Chat routes of the /sidebar JSON API ('sidechat.start' /
 - * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose').
 + * 'sidechat.prompt' / 'sidechat.cancel' / 'sidechat.dispose' /
 + * 'sidechat.info' / 'sidechat.events').
-@@ -46,0 +47 @@ import {
+  *
+  * A side thread is a child session the plugin creates ITSELF with a custom
+  * seed — the parent's full event log up to the click moment, honestly closed
+@@ -43,10 +44,11 @@ import {
+   type SeedEvent,
+   type SidechatLogEvent,
+   type SidechatThreadInfo,
 +  threadOwnLogEvents,
-@@ -49 +51 @@ import { requireString, SidebarError } from './wire.ts'
+ } from './sidechat-core.ts'
+ import { requireString, SidebarError } from './wire.ts'
+ 
 -/** The five Side Chat routes of the sidebar API (wire method names). */
 +/** The six Side Chat routes of the sidebar API (wire method names). */
-@@ -64,0 +66,2 @@ export interface SidechatRoutes {
+ export interface SidechatRoutes {
+   /** Create a side thread child seeded with the parent's log up to now.
+    *  `question` is optional: empty creates an EMPTY thread (Codex-style
+@@ -61,12 +63,17 @@ export interface SidechatRoutes {
+   'sidechat.dispose'(payload: unknown): Promise<{ accepted: true }>
+   /** Live state + agent identity for the thread header. */
+   'sidechat.info'(payload: unknown): Promise<SidechatThreadInfo>
 +  /** Return the thread's own transcript events after the optional sequence. */
 +  'sidechat.events'(payload: unknown): Promise<{ events: SidechatLogEvent[] }>
-@@ -70,0 +74,3 @@ const CREATE_TIMEOUT_MS = 15_000
+ }
+ 
+ /** Timeout guarding the create call (the registry detaches it before the
+  *  handle becomes visible, so the child is never cancelled by it). */
+ const CREATE_TIMEOUT_MS = 15_000
+ 
 +/** Maximum number of transcript events returned by one request. */
 +const EVENTS_CAP = 8_000
 +
-@@ -154,0 +161,22 @@ function liveThreadAgent(ctx: Context, childId: string): Agent | undefined {
+ /** Per-activation disposers of created thread agents (the dispose route
+  *  releases them; the session and its history always stay persisted). */
+ const threadDisposers = new Map<string, () => Promise<void>>()
+@@ -151,6 +158,28 @@ function liveThreadAgent(ctx: Context, childId: string): Agent | undefined {
+   return agents?.get(childId)
+ }
+ 
 +/** Read a thread's freshest logical event log from its live agent or persistence. */
 +async function threadLogEvents(ctx: Context, childId: string): Promise<readonly SidechatLogEvent[]> {
 +  const agent = liveThreadAgent(ctx, childId)
@@ -420,7 +798,13 @@ index c718de9a0b..52662ddc54 100644
 +  }
 +}
 +
-@@ -343,0 +373,13 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
+ /** Build the Side Chat routes (all optional services degrade to a wire
+  *  error the tab surfaces inline). The record keys are the FULL wire method
+  *  names the /sidebar/api dispatcher looks up (`api[method]`). */
+@@ -340,5 +369,18 @@ export function buildSidechatApi(ctx: Context): SidechatRoutes {
+       }
+       return { live: false }
+     },
 +
 +    'sidechat.events': async (payload: unknown) => {
 +      const childId = requireString(payload, 'childId')
@@ -434,3 +818,5 @@ index c718de9a0b..52662ddc54 100644
 +      const fresh = rawAfter === undefined ? own : own.filter(event => event.seq > rawAfter)
 +      return { events: fresh.length > EVENTS_CAP ? fresh.slice(fresh.length - EVENTS_CAP) : fresh }
 +    },
+   }
+ }

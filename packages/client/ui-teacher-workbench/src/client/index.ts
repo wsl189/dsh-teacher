@@ -100,16 +100,13 @@ export function apply(ctx: ClientContext): void {
     extractLayout: (file, pageIndexes, renderScale, progress) => (
       extractWorkbenchLayout(file, ctx.remote.ocr, pageIndexes, renderScale, progress)
     ),
-    resolveSegmentation: (reasoningEnabled) => {
-      const parentSessionId = ctx.sessions.list.getSnapshot().current
-      if (parentSessionId === undefined) return undefined
-      return (layout, padding, pagePreviews, corePageIndexes) => ctx.remote.teacherWorkbench.segmentQuestions({
-        parentSessionId,
+    resolveSegmentation: reasoningEnabled => (
+      (layout, padding, pagePreviews, corePageIndexes) => ctx.remote.teacherWorkbench.segmentQuestions({
         reasoningEnabled,
         fileName: layout.name,
         pages: layout.pages,
         corePageIndexes,
-        pagePreviews,
+        ...(pagePreviews === undefined ? {} : { pagePreviews }),
         padding,
       }).then(carried => carried.ok
         ? carried.value
@@ -124,13 +121,10 @@ export function apply(ctx: ClientContext): void {
             message: error instanceof Error ? error.message : String(error),
           },
         }))
-    },
-    resolveCropReview: (reasoningEnabled) => {
-      const parentSessionId = ctx.sessions.list.getSnapshot().current
-      if (parentSessionId === undefined) return undefined
-      return request => ctx.remote.teacherWorkbench.reviewQuestionCrops({
+    ),
+    resolveCropReview: reasoningEnabled => (
+      request => ctx.remote.teacherWorkbench.reviewQuestionCrops({
         ...request,
-        parentSessionId,
         reasoningEnabled,
       }).then(carried => carried.ok
         ? carried.value
@@ -145,7 +139,7 @@ export function apply(ctx: ClientContext): void {
             message: error instanceof Error ? error.message : String(error),
           },
         }))
-    },
+    ),
     saveBatch: request => controller.saveQuestionBatch(request),
   })
   const viewStore = createTeacherWorkbenchViewStore()

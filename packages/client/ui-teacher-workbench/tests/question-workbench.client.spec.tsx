@@ -196,6 +196,7 @@ describe('QuestionWorkbench reference shell', () => {
     )
 
     const progress = screen.getByLabelText('试题切割进度')
+    expect(within(progress).getByText('1 项处理中 · 1 项排队中 · 0 项已完成')).toBeTruthy()
     expect(within(progress).getByRole('progressbar', { name: '正在提取 PDF 版面' }).getAttribute('aria-valuenow')).toBe('37')
     expect(within(progress).getByRole('progressbar', { name: '等待切割' }).getAttribute('aria-valuenow')).toBe('0')
     expect(within(progress).getByText('37%')).toBeTruthy()
@@ -213,7 +214,57 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(queued).getByText('用时 00:00')).toBeTruthy()
   })
 
-  it('shows completed groups that were saved without final crop verification', () => {
+  it('refreshes elapsed time from animation frames when interval callbacks are throttled', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(15_000)
+    let frameCallback: FrameRequestCallback | undefined
+    const requestFrame = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((callback) => {
+      frameCallback = callback
+      return 1
+    })
+    const cancelFrame = vi.spyOn(window, 'cancelAnimationFrame').mockImplementation(() => {})
+    const setInterval = vi.spyOn(window, 'setInterval')
+    const clearInterval = vi.spyOn(window, 'clearInterval').mockImplementation(() => {})
+    try {
+      render(
+        <QuestionWorkbenchComponent
+          state={state}
+          settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+          commands={commands()}
+          questionCuttingReasoning={defaultQuestionCuttingReasoning}
+          cutting={{
+            jobs: [{
+              key: 'active',
+              fileName: '连续计时.pdf',
+              pageRange: '1-5',
+              stage: 'reviewing',
+              progress: 50,
+              queuedAt: 10_000,
+              startedAt: 11_000,
+              savedCount: 0,
+            }],
+          }}
+          t={t}
+        />,
+      )
+
+      const job = screen.getByRole('listitem', { name: '连续计时.pdf' })
+      expect(within(job).getByText('用时 00:04')).toBeTruthy()
+      vi.setSystemTime(16_050)
+      act(() => { frameCallback?.(0) })
+      expect(within(job).getByText('用时 00:05')).toBeTruthy()
+      expect(requestFrame).toHaveBeenCalled()
+      expect(setInterval).toHaveBeenCalled()
+    } finally {
+      cleanup()
+      requestFrame.mockRestore()
+      cancelFrame.mockRestore()
+      setInterval.mockRestore()
+      clearInterval.mockRestore()
+    }
+  })
+
+  it('shows retained unverified questions as a completed-job warning', () => {
     render(
       <QuestionWorkbenchComponent
         state={state}
@@ -232,6 +283,7 @@ describe('QuestionWorkbench reference shell', () => {
             finishedAt: 12_000,
             savedCount: 18,
             unverifiedGroupCount: 1,
+            unverifiedQuestionCount: 2,
           }],
         }}
         t={t}
@@ -239,8 +291,10 @@ describe('QuestionWorkbench reference shell', () => {
     )
 
     const job = screen.getByRole('listitem', { name: '复杂双栏试卷.pdf' })
-    expect(within(job).getByText('有 1 个分组未通过最终复核，已按最后一次安全边界保存')).toBeTruthy()
-    expect(within(job).getByText('切割完成，共 18 道题')).toBeTruthy()
+    expect(within(job).getByText(t('questions.progressUnverifiedGroups', { count: 1 }))).toBeTruthy()
+    expect(within(job).getByText(t('questions.progressUnverifiedQuestions', { count: 2 }))).toBeTruthy()
+    expect(within(job).getByText(t('questions.progressCompleted', { count: 18 }))).toBeTruthy()
+    expect(within(job).queryByText(t('questions.progressFailed'))).toBeNull()
   })
 
   it('shows each filesystem question directory once while preserving direct images and nested folders', async () => {
@@ -770,9 +824,11 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(images).getByRole('button', { name: '第 2 题' })).toBeTruthy()
   })
 
-  it('defaults to a PDF-named directory and offers only leaf library directories', async () => {
+  it('opens page-range selection before PDF parsing settles and offers only leaf library directories', async () => {
+    let resolvePdf!: (pdf: { readonly numPages: number }) => void
+    const loadedPdf = new Promise<{ readonly numPages: number }>((resolve) => { resolvePdf = resolve })
     pdfMocks.getDocument.mockReturnValue({
-      promise: Promise.resolve({ numPages: 1 }),
+      promise: loadedPdf,
       destroy: vi.fn(async () => {}),
     })
     const source = await PDFDocument.create()
@@ -828,7 +884,14 @@ describe('QuestionWorkbench reference shell', () => {
     expect(input).not.toBeNull()
     fireEvent.change(input!, { target: { files: [pdf] } })
 
-    const dialog = await screen.findByRole('dialog', { name: '选择页码范围' })
+    const dialog = screen.getByRole('dialog', { name: '选择页码范围' })
+    const confirmCut = within(dialog).getByRole('button', { name: '确认切割' })
+    expect(within(dialog).getByText('月考试卷.pdf · 正在读取 PDF')).toBeTruthy()
+    expect((confirmCut as HTMLButtonElement).disabled).toBe(true)
+    expect(c.enqueueQuestionCutting).not.toHaveBeenCalled()
+    resolvePdf({ numPages: 1 })
+    await waitFor(() => { expect(within(dialog).getByText('总页数：1')).toBeTruthy() })
+    expect((confirmCut as HTMLButtonElement).disabled).toBe(false)
     const directory = within(dialog).getByLabelText('保存目录')
     expect((directory as HTMLSelectElement).value).toBe('')
     expect(within(directory).getByRole('option', { name: '不选择（按 PDF 名新建文件夹）' })).toBeTruthy()
@@ -837,7 +900,7 @@ describe('QuestionWorkbench reference shell', () => {
     expect(within(directory).getByRole('option', { name: '月考 / 高一' })).toBeTruthy()
     expect(within(directory).getByRole('option', { name: '周考' })).toBeTruthy()
     expect(within(directory).getByRole('option', { name: '当前根目录 / 扫描叶目录' })).toBeTruthy()
-    const reasoning = within(dialog).getByRole('switch', { name: '切题时启用思考' })
+    const reasoning = within(dialog).getByRole('switch', { name: '开启深度模式' })
     expect((reasoning as HTMLInputElement).checked).toBe(false)
     expect(directory.compareDocumentPosition(reasoning) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     fireEvent.click(reasoning)

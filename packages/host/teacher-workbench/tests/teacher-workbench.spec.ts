@@ -209,13 +209,17 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
-  it('defaults question source chunks below spill size with 32K compact output and no deadline', () => {
+  it('defaults to small question groups, compact review output, and a finite child deadline', () => {
     expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
       maxQuestionSourceChunkCharacters: 14_000,
       maxQuestionCompactBoundaryOutputTokens: 32_768,
-      maxQuestionCompactReviewOutputTokens: 32_768,
+      maxQuestionCompactReviewOutputTokens: 8_192,
+      questionSegmentationBatchPages: 4,
+      questionSegmentationConcurrency: 5,
+      maxQuestionBoundaryAgentRuns: 3,
+      maxQuestionRejectedToolCalls: 3,
       questionSegmentationReasoningEnabled: false,
-      questionSegmentationAgentTimeoutMs: 0,
+      questionSegmentationAgentTimeoutMs: 300_000,
     })
     expect(() => TeacherWorkbenchService.Config({
       maxQuestionCompactBoundaryOutputTokens: 32_769,
@@ -692,7 +696,7 @@ describe('TeacherWorkbenchService', () => {
         groups: [{ groupIndex: 0, corePageIndexes: [0, 1, 2, 3], inspectionPageIndexes: [0, 1, 2, 3] }],
         maxConcurrentGroups: 1,
         maxSaveBatchBytes: 16 * 1024 * 1024,
-        maxRecutAttempts: 2,
+        maxRecutAttempts: 1,
         maxQuestionWidthRatio: 0.7,
         questions: [{
           sourceHeadId: 'p1e0' as never,
@@ -837,14 +841,13 @@ describe('TeacherWorkbenchService', () => {
       .toBuffer()
     const erasedCropStats = await sharp(erasedCrop).stats()
     expect(erasedCropStats.channels.slice(0, 3).every(channel => channel.min === 255)).toBe(true)
-    reviewQuestionCrops.mockImplementation(request => Promise.resolve({
-      ok: true,
-      value: {
-        decision: 'unresolved',
-        affectedQuestionIds: request.reviewQuestionIds,
-        questions: request.questions,
+    reviewQuestionCrops.mockResolvedValue({
+      ok: false,
+      error: {
+        code: 'timed-out',
+        message: 'image review did not finish before the deadline',
       },
-    }))
+    })
     extractLayout.mockImplementationOnce(() => Promise.resolve({
       ok: false,
       error: { code: 'provider-failure', message: 'MinerU returned HTTP 409' },
@@ -856,7 +859,7 @@ describe('TeacherWorkbenchService', () => {
         sourceName: 'paper.pdf',
         destinationKind: 'library-root',
         pageRange: '1-4',
-        batchName: '不得落盘的未复核结果',
+        batchName: '保留最后安全裁切的未复核结果',
         padding: 8,
       },
     }, promptAgent('请重新切题并保存到试题图片库根目录'))
@@ -864,6 +867,39 @@ describe('TeacherWorkbenchService', () => {
     expect(unverified.value).toMatchObject({ questionCount: 2, groupCount: 1, unverifiedGroupCount: 1 })
     expect(extractLayout).toHaveBeenCalledTimes(4)
     expect(reviewQuestionCrops).toHaveBeenCalledTimes(3)
+    expect((await b.service.read({})).value.state.questionBatches).toHaveLength(2)
+
+    segmentQuestions.mockResolvedValueOnce({
+      ok: true,
+      value: {
+        groupCount: 1,
+        groups: [{ groupIndex: 0, corePageIndexes: [0, 1, 2, 3], inspectionPageIndexes: [0, 1, 2, 3] }],
+        maxConcurrentGroups: 1,
+        maxSaveBatchBytes: 16 * 1024 * 1024,
+        maxRecutAttempts: 1,
+        maxQuestionWidthRatio: 1,
+        questions: [],
+      },
+    })
+    const noUsableImages = await callTool(b.ctx, 'teacher_question_workbench', {
+      action: 'segment_pdf',
+      data: {
+        sourceId: staged.value.id,
+        sourceName: 'paper.pdf',
+        destinationKind: 'library-root',
+        pageRange: '1-4',
+        batchName: '无法确认题界',
+        padding: 8,
+      },
+    }, promptAgent('请重新切题并保存到试题图片库根目录'))
+    expect(noUsableImages.isError).toBe(false)
+    expect(noUsableImages.value).toMatchObject({
+      questionCount: 0,
+      groupCount: 1,
+      unverifiedGroupCount: 1,
+      createdIds: [],
+    })
+    expect(noUsableImages.value).not.toHaveProperty('batchId')
     expect((await b.service.read({})).value.state.questionBatches).toHaveLength(2)
   })
 

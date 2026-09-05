@@ -1,0 +1,16 @@
+- menu:
+  - menuitem "Files":
+    - img
+    - text: Files
+  - menuitem "Source Control":
+    - img
+    - text: Source Control
+  - menuitem "Side Chat (beta)":
+    - img
+    - text: Side Chat (beta)
+  - menuitem "Terminal":
+    - img
+    - text: Terminal
+  - menuitem "Browser":
+    - img
+    - text: Browser

@@ -2480,15 +2480,15 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'structured rows for browser review or a stable failure.',
       },
       {
-        signature: '@Remote(\'segmentQuestions\') segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>',
+        signature: '@Remote(\'segmentQuestions\') async segmentQuestions(request: TeacherQuestionSegmentRequest): Promise<TeacherQuestionSegmentResult>',
         description: 'Detect complete top-level question boundaries through the configured tool model.',
-        parameters: [{ name: 'request', description: 'live parent session, selected OCR pages, captured reasoning choice, and crop padding.' }],
+        parameters: [{ name: 'request', description: 'selected OCR pages, captured reasoning choice, and crop padding.' }],
         returns: 'validated source-page crop regions or a stable failure.',
       },
       {
-        signature: '@Remote(\'reviewQuestionCrops\') reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult>',
+        signature: '@Remote(\'reviewQuestionCrops\') async reviewQuestionCrops(request: TeacherQuestionCropReviewRequest): Promise<TeacherQuestionCropReviewResult>',
         description: 'Visually review preliminary question crops and correct one processing group when needed.',
-        parameters: [{ name: 'request', description: 'crop evidence, current group regions, and the same captured reasoning choice.' }],
+        parameters: [{ name: 'request', description: 'crop evidence, current group regions, and captured reasoning choice.' }],
         returns: 'accepted preliminary regions or one Host-validated corrected group.',
       },
       {
@@ -6033,7 +6033,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionCropReviewRequest',
-    declaration: 'export interface TeacherQuestionCropReviewRequest {\n    readonly parentSessionId: SessionId;\n    readonly reasoningEnabled?: boolean;\n    readonly fileName: string;\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly recutAttempt: number;\n    readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[];\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews: readonly TeacherQuestionPagePreview[];\n    readonly questions: readonly TeacherSegmentedQuestion[];\n    readonly crops: readonly TeacherQuestionImageUpload[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionCropReviewRequest {\n    readonly parentSessionId?: SessionId;\n    readonly reasoningEnabled?: boolean;\n    readonly fileName: string;\n    readonly groupIndex: number;\n    readonly corePageIndexes: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly recutAttempt: number;\n    readonly reviewQuestionIds: readonly TeacherQuestionLayoutElementId[];\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly pagePreviews: readonly TeacherQuestionPagePreview[];\n    readonly questions: readonly TeacherSegmentedQuestion[];\n    readonly crops: readonly TeacherQuestionImageUpload[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionCropReviewResult',
@@ -6213,7 +6213,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionSegmentRequest',
-    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId: SessionId;\n    readonly reasoningEnabled?: boolean;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly corePageIndexes?: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
+    declaration: 'export interface TeacherQuestionSegmentRequest {\n    readonly parentSessionId?: SessionId;\n    readonly reasoningEnabled?: boolean;\n    readonly fileName: string;\n    readonly pages: readonly TeacherQuestionLayoutPage[];\n    readonly corePageIndexes?: readonly number[];\n    readonly answerSectionPageIndexes?: readonly number[];\n    readonly pagePreviews?: readonly TeacherQuestionPagePreview[];\n    readonly padding: number;\n}',
   },
   {
     name: 'TeacherQuestionSegmentResult',

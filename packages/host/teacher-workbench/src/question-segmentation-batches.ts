@@ -28,7 +28,7 @@ export interface TeacherQuestionSegmentationBatchConfig extends TeacherQuestionS
   readonly maxQuestionWidthOutlierExcessRatio: number
   /** Maximum decoded image bytes accepted by one automatic save part. */
   readonly maxQuestionBatchBytes: number
-  /** Maximum visual review attempts admitted before an unverified group fails. */
+  /** Maximum local crop revisions before the latest safe regions continue as unverified. */
   readonly maxQuestionRecutAttempts: number
 }
 
@@ -53,12 +53,30 @@ type SuccessfulGroupRun = {
   readonly result: Extract<TeacherQuestionSegmentationAgentResult, { readonly ok: true }>
 }
 
+type GroupRun = {
+  readonly group: TeacherQuestionSegmentationPageGroup
+  readonly result: TeacherQuestionSegmentationAgentResult
+}
+
 class QuestionSegmentationGroupFailure extends Error {
   override name = 'QuestionSegmentationGroupFailure'
 
   constructor(readonly result: Extract<TeacherQuestionSegmentationAgentResult, { readonly ok: false }>) {
     super(result.error.message)
   }
+}
+
+function recoverableGroupFailure(
+  result: Extract<TeacherQuestionSegmentationAgentResult, { readonly ok: false }>,
+): boolean {
+  return result.error.code === 'invalid-output'
+    || result.error.code === 'timed-out'
+    || result.error.code === 'model-failed'
+    || result.error.code === 'source-too-large'
+}
+
+function successfulGroupRun(run: GroupRun): run is SuccessfulGroupRun {
+  return run.result.ok
 }
 
 function maxQuestionWidthRatio(
@@ -147,7 +165,9 @@ export function planQuestionSegmentationPageGroups(
  * @param request - complete selected-page layout from the browser.
  * @param config - group size, save size, and per-agent validation limits.
  * @param run - overridable single-group runner used by focused tests.
- * @returns merged questions with stable group ownership or the first group failure.
+ * Recoverable failures become empty preliminary groups so full-page visual review can
+ * recover them or leave them unverified without blocking later groups.
+ * @returns merged questions with stable group ownership or a systemic group failure.
  */
 export async function segmentQuestionsInBatches(
   ctx: Context,
@@ -238,18 +258,25 @@ export async function segmentQuestionsInBatches(
       }),
     })
   }
-  let successfulGroups: readonly SuccessfulGroupRun[]
+  let groupRuns: readonly GroupRun[]
   try {
-    successfulGroups = await mapConcurrently(groups, config.questionSegmentationConcurrency, async (group) => {
+    groupRuns = await mapConcurrently(groups, config.questionSegmentationConcurrency, async (group): Promise<GroupRun> => {
       const groupRequest = requests.get(group.groupIndex)
       if (groupRequest === undefined) throw new Error('question group request is missing')
       const result = await run(ctx, groupRequest, config)
-      if (!result.ok) throw new QuestionSegmentationGroupFailure(result)
+      if (!result.ok && !recoverableGroupFailure(result)) throw new QuestionSegmentationGroupFailure(result)
       return { group, result }
     })
   } catch (error) {
     if (error instanceof QuestionSegmentationGroupFailure) return error.result
     throw error
+  }
+  const successfulGroups = groupRuns.filter(successfulGroupRun)
+  if (successfulGroups.length === 0 && groupRuns.every(item => (
+    !item.result.ok && item.result.error.code === 'model-failed'
+  ))) {
+    const firstFailure = groupRuns[0]?.result
+    if (firstFailure !== undefined && !firstFailure.ok) return firstFailure
   }
 
   const questions: TeacherSegmentedQuestion[] = []
