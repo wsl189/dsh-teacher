@@ -1,11 +1,11 @@
 /** Filesystem discovery for question media stored outside the durable workbench document. */
 
 import { createHash } from 'node:crypto'
-import { constants } from 'node:fs'
-import { copyFile, lstat, readFile, readdir, realpath, stat, unlink } from 'node:fs/promises'
+import { lstat, readFile, readdir, realpath, stat, unlink } from 'node:fs/promises'
 import { basename, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import sharp from 'sharp'
 import {
+  copyQuestionFileWithUniqueName,
   questionLibraryDirectory,
   questionMediaPathSegment,
   studentQuestionDirectory,
@@ -223,7 +223,7 @@ export async function persistDiscoveredQuestionCopies(
       const discovered = files.get(discoveredQuestionTargetKey(target))
       if (discovered === undefined) throw new TeacherQuestionMediaError('not-found', '部分切题图片已变化，请刷新后重试')
       const source = await resolveDiscoveredQuestionFile(config, discovered, target)
-      created.push(await copyUniqueQuestionFile(source.path, destination, source.fileName))
+      created.push((await copyQuestionFileWithUniqueName(source.path, destination, source.fileName)).path)
     }
   } catch (error) {
     await removeCopiedQuestionFiles(created)
@@ -308,7 +308,7 @@ async function discoverBatches(
     const byStoredName = new Map((imagesByDirectory.get(directory) ?? []).map(file => [file.fileName, file] as const))
     const images: TeacherQuestionImage[] = []
     for (const image of durable.images) {
-      const file = byStoredName.get(storedImageName(image))
+      const file = byStoredName.get(image.fileName) ?? byStoredName.get(legacyStoredImageName(image))
       if (file === undefined) continue
       images.push(image)
       claimedPaths.add(file.absolutePath)
@@ -799,23 +799,6 @@ function configuredRoot(raw: string, label: string): string {
   return resolve(value)
 }
 
-async function copyUniqueQuestionFile(source: string, directory: string, fileName: string): Promise<string> {
-  const safeName = basename(fileName)
-  const extension = extname(safeName)
-  const stem = extension === '' ? safeName : safeName.slice(0, -extension.length)
-  for (let suffix = 1; suffix <= 10_000; suffix += 1) {
-    const candidate = join(directory, suffix === 1 ? safeName : `${stem}-${String(suffix)}${extension}`)
-    try {
-      await copyFile(source, candidate, constants.COPYFILE_EXCL)
-      return candidate
-    } catch (error) {
-      if (isNodeError(error) && error.code === 'EEXIST') continue
-      throw error
-    }
-  }
-  throw new TeacherQuestionMediaError('storage-failure', '学生试题目录没有可用文件名')
-}
-
 async function removeCopiedQuestionFiles(paths: readonly string[]): Promise<void> {
   await Promise.all(paths.map(async (path) => {
     await unlink(path).catch((error: unknown) => {
@@ -844,7 +827,7 @@ function stableId(kind: string, value: string): string {
   return `filesystem-${kind}-${createHash('sha256').update(`${kind}\0${value}`).digest('hex').slice(0, 32)}`
 }
 
-function storedImageName(image: TeacherQuestionImage): string {
+function legacyStoredImageName(image: TeacherQuestionImage): string {
   return `${String(image.id)}${extensionFor(image.mediaType)}`
 }
 

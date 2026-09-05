@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { mkdir, mkdtemp, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, readdir, rename, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { unzipSync } from 'fflate'
@@ -819,7 +819,7 @@ describe('TeacherWorkbenchService', () => {
     const firstImage = document.state.questionBatches[0]?.images[0]
     const secondImage = document.state.questionBatches[0]?.images[1]
     if (firstImage === undefined || secondImage === undefined) throw new Error('segmented question image is missing')
-    expect((await stat(join(root, 'segments', `${String(firstImage.id)}.png`))).isFile()).toBe(true)
+    expect((await stat(join(root, 'segments', firstImage.fileName))).isFile()).toBe(true)
     await expect(stat(join(root, 'segments', 'paper'))).rejects.toMatchObject({ code: 'ENOENT' })
     const storedFirstImage = await b.service.readQuestionImage({ target: { kind: 'batch', id: firstImage.id } })
     if (!storedFirstImage.ok) throw new Error(storedFirstImage.error.message)
@@ -997,7 +997,7 @@ describe('TeacherWorkbenchService', () => {
     const automaticFolder = first.value.document.state.questionLibraryFolders.find(folder => folder.name === 'math')
     if (firstBatch === undefined || automaticFolder === undefined) throw new Error('missing automatic PDF directory')
     expect(firstBatch.folderId).toBe(automaticFolder.id)
-    expect((await stat(join(root, 'segments', 'math', `${String(firstBatch.images[0]!.id)}.png`))).isFile()).toBe(true)
+    expect((await stat(join(root, 'segments', 'math', firstBatch.images[0]!.fileName))).isFile()).toBe(true)
     const second = await b.service.saveQuestionBatch({
       appendToBatchId: first.value.batchId,
       destination: { kind: 'source-folder' },
@@ -1017,13 +1017,17 @@ describe('TeacherWorkbenchService', () => {
     })
     const separate = await b.service.saveQuestionBatch({
       destination: { kind: 'source-folder' },
-      name: '另一批次', sourceName: 'math.pdf', pageRange: '1', images: [await image(3, '#00ff00')],
+      name: '另一批次', sourceName: 'math.pdf', pageRange: '1', images: [await image(1, '#00ff00')],
     })
     expect(separate).toMatchObject({ ok: true })
     if (!separate.ok || separate.value.batchId === undefined) throw new Error('missing separate batch')
     expect(separate.value.document.state.questionLibraryFolders.filter(folder => folder.name === 'math')).toHaveLength(1)
     expect(separate.value.document.state.questionBatches.find(batch => batch.id === separate.value.batchId)?.folderId)
       .toBe(automaticFolder.id)
+    const separateImage = separate.value.document.state.questionBatches
+      .find(batch => batch.id === separate.value.batchId)?.images[0]
+    expect(separateImage?.fileName).toBe('第1题-2.png')
+    expect((await stat(join(root, 'segments', 'math', '第1题-2.png'))).isFile()).toBe(true)
     expect(await b.service.saveQuestionBatch({
       appendToBatchId: 'missing' as TeacherQuestionBatchId,
       destination: { kind: 'source-folder' },
@@ -1114,7 +1118,7 @@ describe('TeacherWorkbenchService', () => {
     })
     if (!saved.ok || saved.value.batchId === undefined) throw new Error('missing saved batch')
     const batch = saved.value.document.state.questionBatches.find(item => item.id === saved.value.batchId)!
-    const storedPath = join(selectedDirectory, `${String(batch.images[0]!.id)}.png`)
+    const storedPath = join(selectedDirectory, batch.images[0]!.fileName)
     await expect(readFile(storedPath)).resolves.toEqual(bytes)
     await expect(stat(join(selectedDirectory, '期中试卷'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(stat(join(selectedDirectory, String(batch.id)))).rejects.toMatchObject({ code: 'ENOENT' })
@@ -1135,7 +1139,7 @@ describe('TeacherWorkbenchService', () => {
     expect(renamed.value.document.state.questionLibraryFolders.find(item => item.id === nestedLibraryFolderId))
       .toMatchObject({ name: '解析几何' })
     const renamedDirectory = join(segmentsRoot, '高二数学', '解析几何')
-    const renamedStoredPath = join(renamedDirectory, `${String(batch.images[0]!.id)}.png`)
+    const renamedStoredPath = join(renamedDirectory, batch.images[0]!.fileName)
     await expect(stat(selectedDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(readFile(renamedStoredPath)).resolves.toEqual(bytes)
     await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: batch.images[0]!.id } }))
@@ -1174,7 +1178,7 @@ describe('TeacherWorkbenchService', () => {
     const retainedAssignment = assigned.value.document.state.questionAssignments[0]!
     const retainedAssignmentPath = join(studentsRoot, retainedAssignment.relativePath)
     await expect(readFile(retainedAssignmentPath)).resolves.toEqual(bytes)
-    const retainedStoredPath = join(renamedDirectory, `${String(retainedImage.id)}.png`)
+    const retainedStoredPath = join(renamedDirectory, retainedImage.fileName)
     await rm(retainedStoredPath)
     await expect(b.service.deleteQuestionMediaDirectory({
       target: { kind: 'library-folder', id: nestedLibraryFolderId },
@@ -1187,7 +1191,7 @@ describe('TeacherWorkbenchService', () => {
       } } },
     })
     await expect(stat(renamedDirectory)).rejects.toMatchObject({ code: 'ENOENT' })
-    const movedImagePath = join(segmentsRoot, '高二数学', `${String(retainedImage.id)}.png`)
+    const movedImagePath = join(segmentsRoot, '高二数学', retainedImage.fileName)
     await expect(stat(movedImagePath)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(stat(retainedAssignmentPath)).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: retainedImage.id } }))
@@ -1532,6 +1536,11 @@ describe('TeacherWorkbenchService', () => {
     })
     expect(saved.ok).toBe(true)
     if (!saved.ok) throw new Error(saved.error.message)
+    expect(new Set(await readdir(join(root, 'segments', 'math')))).toEqual(new Set([
+      '第1题.png',
+      '第2题.png',
+      '第10题.png',
+    ]))
     const textMark = await sharp({ create: { width: 2, height: 3, channels: 3, background: '#000000' } }).png().toBuffer()
     const editableBytes = await sharp({ create: { width: 20, height: 16, channels: 3, background: '#ffffff' } })
       .composite([{ input: textMark, left: 9, top: 7 }])
@@ -1628,6 +1637,14 @@ describe('TeacherWorkbenchService', () => {
     await expect(callTool(b.ctx, 'teacher_question_workbench', {
       action: 'assign_questions', data: { studentId, folderId, imageIds: [image.id] },
     })).resolves.toMatchObject({ isError: false })
+    const assignmentDirectory = join(root, 'students', '2026', '高一(1)班', '张同学', '第一次作业')
+    expect(new Set((await readdir(assignmentDirectory, { withFileTypes: true }))
+      .filter(entry => entry.isFile()).map(entry => entry.name))).toEqual(new Set([
+      '第1题.png',
+      '第1题-2.png',
+      '第2题.png',
+      '第10题.png',
+    ]))
     const nestedAssignment = assigned.value.document.state.questionAssignments[0]!
     expect(nestedAssignment.folderId).toBe(folderId)
     expect(nestedAssignment.relativePath.split(/[\\/]/u).slice(0, 4)).toEqual(['2026', '高一(1)班', '张同学', '第一次作业'])
@@ -1826,6 +1843,14 @@ describe('TeacherWorkbenchService', () => {
     await expect(callTool(b.ctx, 'teacher_question_workbench', {
       action: 'delete_image', data: { kind: 'assignment', id: nestedAssignment.id },
     })).resolves.toMatchObject({ isError: false })
+
+    const batchDirectory = join(root, 'segments', 'math')
+    await rename(join(batchDirectory, image.fileName), join(batchDirectory, `${String(image.id)}.png`))
+    await expect(b.service.readQuestionImage({ target: { kind: 'batch', id: image.id } }))
+      .resolves.toMatchObject({ ok: true, value: { width: 12, height: 12 } })
+    const browsedLegacyBatch = await b.service.browseQuestionMedia({})
+    expect(browsedLegacyBatch.ok && browsedLegacyBatch.value.questionBatches
+      .flatMap(item => item.images).some(item => item.id === image.id)).toBe(true)
 
     await expect(callTool(b.ctx, 'teacher_question_workbench', {
       action: 'delete_batch', data: { batchId: batch.id },

@@ -231,4 +231,6 @@ Independent of the parent conversation cache. The fixed skill and schemas form a
 <a id="dev-note"></a>
 ### Dev Note
 
+Newly saved crops use their validated display names as physical file names, so numbered crops remain `第1题.png`, `第2题.png`, and so on when the library or student directory is opened outside the app. Batch saves and assignments create a numeric suffix such as `第1题-2.png` when a name is already present and never replace the existing file. Durable records created before this rule remain readable through their opaque-id file names.
+
 Treat `segmentsRoot` and `studentsRoot` as live authorities: resolve every opaque scan identity again beneath the current setting immediately before a filesystem mutation.

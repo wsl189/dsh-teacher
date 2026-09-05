@@ -233,4 +233,6 @@ Within an overlapping semantic group, only `corePageIndexes` own question heads 
 <a id="dev-note"></a>
 ### 开发备注
 
+新保存的裁剪图片会把经过校验的显示名称同时用作物理文件名，因此从应用外打开试题库或学生目录时，带题号的图片仍显示为 `第1题.png`、`第2题.png` 等。批次保存与分发遇到同名文件时会生成 `第1题-2.png` 这样的数字后缀，且不会覆盖已有文件；在本规则实施前创建的持久化记录仍可通过其不透明 id 文件名读取。
+
 把 `segmentsRoot` 与 `studentsRoot` 视为实时权威来源：每次文件系统修改前，都要在当前设置下重新解析扫描返回的不透明身份并确认其仍位于根目录内。

@@ -1,8 +1,9 @@
 /** Filesystem and Office-artifact operations for teacher question images. */
 
 import { randomUUID } from 'node:crypto'
-import { copyFile, lstat, mkdir, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
-import { dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { constants, existsSync } from 'node:fs'
+import { copyFile, link, lstat, mkdir, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   AlignmentType,
   Document,
@@ -709,7 +710,7 @@ export async function persistQuestionBatch(
   const batchId = existingBatch?.id ?? randomUUID() as TeacherQuestionBatchId
   const folderId = resolvedDirectory.folderId
   const root = configuredRoot(config.segmentsRoot, '试题切割目录')
-  const images: TeacherQuestionImage[] = request.images.map((upload, index) => {
+  const preparedImages: TeacherQuestionImage[] = request.images.map((upload, index) => {
     const image = decoded[index]
     if (image === undefined) throw new TeacherQuestionMediaError('storage-failure', '切题图片准备不完整')
     return {
@@ -725,6 +726,7 @@ export async function persistQuestionBatch(
   })
   const createdPaths: string[] = []
   const createdDirectories: string[] = []
+  const images: TeacherQuestionImage[] = []
   let temporary = within(root, `.pending-${String(batchId)}-${randomUUID()}`)
   const rollback = async (): Promise<void> => {
     await removeQuestionFiles(createdPaths)
@@ -740,17 +742,26 @@ export async function persistQuestionBatch(
     )
     temporary = within(physicalRoot, `.pending-${String(batchId)}-${randomUUID()}`)
     await mkdir(temporary, { recursive: true })
-    await Promise.all(images.map(async (image, index) => {
+    await Promise.all(preparedImages.map(async (image, index) => {
       const decodedImage = decoded[index]
       if (decodedImage === undefined) throw new Error('missing decoded image')
-      await writeFile(join(temporary, storedImageName(String(image.id), image.mediaType)), decodedImage.bytes, { flag: 'wx' })
+      await writeFile(join(temporary, legacyStoredImageName(String(image.id), image.mediaType)), decodedImage.bytes, { flag: 'wx' })
     }))
-    for (const image of images) {
-      const storedName = storedImageName(String(image.id), image.mediaType)
-      const destination = within(destinationDirectory, storedName)
-      await assertFileMissing(destination)
-      await rename(within(temporary, storedName), destination)
-      createdPaths.push(destination)
+    const libraryDirectory = questionLibraryDirectory(resolvedDirectory.state, folderId)
+    const usedNames = new Set(state.questionBatches
+      .filter(batch => questionLibraryDirectory(state, batch.folderId) === libraryDirectory)
+      .flatMap(batch => batch.images.map(image => image.fileName)))
+    for (const image of preparedImages) {
+      const storedName = legacyStoredImageName(String(image.id), image.mediaType)
+      const copied = await linkQuestionFileWithUniqueName(
+        within(temporary, storedName),
+        destinationDirectory,
+        image.fileName,
+        usedNames,
+      )
+      createdPaths.push(copied.path)
+      await unlink(within(temporary, storedName))
+      images.push({ ...image, fileName: copied.fileName })
     }
     await rm(temporary, { recursive: true, force: true })
   } catch (error) {
@@ -801,14 +812,58 @@ function assertNeverQuestionBatchDestination(destination: never): never {
   throw new TypeError(`unsupported question batch destination: ${JSON.stringify(destination)}`)
 }
 
-async function assertFileMissing(path: string): Promise<void> {
-  try {
-    await lstat(path)
-  } catch (error) {
-    if (isNodeError(error) && error.code === 'ENOENT') return
-    throw error
+/**
+ * Copy one question image under its readable name without replacing an existing file.
+ * @param source - validated source image path.
+ * @param directory - validated destination directory.
+ * @param fileName - preferred visible and physical file name.
+ * @param usedNames - names reserved by metadata or earlier copies in the same operation.
+ * @returns the selected file name and complete destination path.
+ */
+export async function copyQuestionFileWithUniqueName(
+  source: string,
+  directory: string,
+  fileName: string,
+  usedNames: Set<string> = new Set(),
+): Promise<{ readonly fileName: string; readonly path: string }> {
+  return materializeQuestionFileWithUniqueName(source, directory, fileName, usedNames, async (from, to) => {
+    await copyFile(from, to, constants.COPYFILE_EXCL)
+  })
+}
+
+async function linkQuestionFileWithUniqueName(
+  source: string,
+  directory: string,
+  fileName: string,
+  usedNames: Set<string>,
+): Promise<{ readonly fileName: string; readonly path: string }> {
+  return materializeQuestionFileWithUniqueName(source, directory, fileName, usedNames, link)
+}
+
+async function materializeQuestionFileWithUniqueName(
+  source: string,
+  directory: string,
+  fileName: string,
+  usedNames: Set<string>,
+  create: (source: string, destination: string) => Promise<void>,
+): Promise<{ readonly fileName: string; readonly path: string }> {
+  const safeName = safeFileName(basename(fileName), '试题.png')
+  const extension = extname(safeName)
+  const stem = extension === '' ? safeName : safeName.slice(0, -extension.length)
+  for (let suffix = 1; suffix <= 10_000; suffix += 1) {
+    const candidateName = suffix === 1 ? safeName : `${stem}-${String(suffix)}${extension}`
+    if (usedNames.has(candidateName)) continue
+    const candidate = within(directory, candidateName)
+    try {
+      await create(source, candidate)
+      usedNames.add(candidateName)
+      return { fileName: candidateName, path: candidate }
+    } catch (error) {
+      if (isNodeError(error) && error.code === 'EEXIST') continue
+      throw error
+    }
   }
-  throw new TeacherQuestionMediaError('storage-failure', '切题图片存储名称冲突')
+  throw new TeacherQuestionMediaError('storage-failure', '试题目录没有可用文件名')
 }
 
 async function removeQuestionFiles(paths: readonly string[]): Promise<void> {
@@ -855,17 +910,15 @@ export async function persistQuestionAssignments(
     for (const image of sourceImages) {
       const source = resolveBatchImage(config, state, image.id)
       const id = randomUUID() as TeacherQuestionAssignmentId
-      const relativePath = join(folder, storedImageName(String(id), image.mediaType))
-      const destination = within(root, relativePath)
-      await mkdir(dirname(destination), { recursive: true })
-      await copyFile(source.path, destination)
-      createdPaths.push(destination)
+      const copied = await copyQuestionFileWithUniqueName(source.path, destinationDirectory, image.fileName)
+      const relativePath = join(folder, copied.fileName)
+      createdPaths.push(copied.path)
       assignments.push({
         id,
         studentId: student.id,
         sourceImageId: image.id,
         ...(folderId === undefined ? {} : { folderId }),
-        fileName: image.fileName,
+        fileName: copied.fileName,
         relativePath,
         mediaType: image.mediaType,
         width: image.width,
@@ -1499,15 +1552,15 @@ function resolveBatchImage(
     const image = batch.images.find(item => item.id === imageId)
     if (image === undefined) continue
     const root = configuredRoot(config.segmentsRoot, '试题切割目录')
+    const directory = questionLibraryDirectory(state, batch.folderId)
+    const readablePath = within(root, join(directory, image.fileName))
+    const legacyPath = within(root, join(directory, legacyStoredImageName(String(image.id), image.mediaType)))
     return {
       fileName: image.fileName,
       mediaType: image.mediaType,
       width: image.width,
       height: image.height,
-      path: within(root, join(
-        questionLibraryDirectory(state, batch.folderId),
-        storedImageName(String(image.id), image.mediaType),
-      )),
+      path: existsSync(readablePath) || !existsSync(legacyPath) ? readablePath : legacyPath,
     }
   }
   throw new TeacherQuestionMediaError('not-found', '切题图片不存在')
@@ -1781,7 +1834,7 @@ function mediaExtension(mediaType: TeacherQuestionImageMediaType): 'png' | 'jpg'
   return mediaType === 'image/png' ? 'png' : 'jpg'
 }
 
-function storedImageName(id: string, mediaType: TeacherQuestionImageMediaType): string {
+function legacyStoredImageName(id: string, mediaType: TeacherQuestionImageMediaType): string {
   return `${id}${extensionFor(mediaType)}`
 }
 
