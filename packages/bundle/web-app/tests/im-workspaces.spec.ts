@@ -18,6 +18,14 @@ const qqProduction = pathToFileURL(join(
   dirname(fileURLToPath(entry)),
   'plugin-src/host/channels/qq/production.mjs',
 )).href
+const harnessConnectionModule = pathToFileURL(join(
+  dirname(fileURLToPath(entry)),
+  'plugin-src/host/harness-connection.mjs',
+)).href
+const harnessClientModule = pathToFileURL(join(
+  dirname(fileURLToPath(entry)),
+  'src/channels/shared/harness-client.mjs',
+)).href
 const { createDshSpeechTranscriber } = await import(qqProduction) as {
   createDshSpeechTranscriber: (
     speech: {
@@ -33,6 +41,27 @@ const { createDshSpeechTranscriber } = await import(qqProduction) as {
       attachment: { asr_refer_text?: string; voice_wav_url?: string },
       options?: { signal?: AbortSignal },
     ): Promise<string>
+  }
+}
+const weixinRuntimeModule = pathToFileURL(join(
+  dirname(fileURLToPath(entry)),
+  'src/channels/weixin/weixin-runtime.mjs',
+)).href
+const { harnessConnection } = await import(harnessConnectionModule) as {
+  harnessConnection: (
+    ctx: object,
+    config?: { harnessBaseUrl?: string },
+  ) => { apiProxy?: object; baseUrl?: URL; interactionScope?: object }
+}
+const { HarnessClient } = await import(harnessClientModule) as {
+  HarnessClient: new (options: Record<string, unknown>) => {
+    health(): Promise<boolean>
+    sessionExists(sessionId: string): Promise<boolean>
+  }
+}
+const { WeixinRuntime } = await import(weixinRuntimeModule) as {
+  WeixinRuntime: new (options: Record<string, unknown>) => {
+    start(): Promise<unknown>
   }
 }
 
@@ -59,7 +88,10 @@ describe('bundled IM bot workspace defaults', () => {
     await createImHostPlugin(callbacks).apply({}, { office })
 
     for (const channel of channels) {
-      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith({}, { workspace: desktop })
+      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ workspace: desktop }),
+      )
     }
     expect(callbacks.applyOffice).toHaveBeenCalledWith({}, office)
   })
@@ -70,7 +102,10 @@ describe('bundled IM bot workspace defaults', () => {
     await createImHostPlugin(callbacks).apply({})
 
     for (const channel of channels) {
-      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith({}, { workspace: join(homedir(), 'Desktop') })
+      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining({ workspace: join(homedir(), 'Desktop') }),
+      )
     }
   })
 
@@ -83,7 +118,10 @@ describe('bundled IM bot workspace defaults', () => {
     await createImHostPlugin(callbacks).apply({}, configs)
 
     for (const channel of channels) {
-      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith({}, configs[channel.toLowerCase()])
+      expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith(
+        {},
+        expect.objectContaining(configs[channel.toLowerCase()]),
+      )
     }
   })
 
@@ -94,6 +132,48 @@ describe('bundled IM bot workspace defaults', () => {
       'DSH_DESKTOP_DIR must be an absolute directory path',
     )
     for (const callback of Object.values(callbacks)) expect(callback).not.toHaveBeenCalled()
+  })
+})
+
+describe('bundled IM Host RPC adapter', () => {
+  it('runs the shared Harness health check through the same-process Host adapter', async () => {
+    const fetchImpl = vi.fn(() => { throw new Error('HTTP must not be used') })
+    const ctx = {
+      typertGateway: { invoke: vi.fn(), stream: vi.fn() },
+    }
+    const harness = new HarnessClient({
+      ...harnessConnection(ctx),
+      workspace: process.cwd(),
+      fetchImpl,
+    })
+
+    await expect(harness.health()).resolves.toBe(true)
+    expect(fetchImpl).not.toHaveBeenCalled()
+  })
+
+  it('leaves an explicitly configured remote Harness URL on HTTP', () => {
+    const connection = harnessConnection({}, { harnessBaseUrl: 'https://harness.example.test' })
+    expect(connection).toEqual({ baseUrl: new URL('https://harness.example.test') })
+  })
+})
+
+describe('bundled Weixin connection diagnosis', () => {
+  it('reports an expired scan token as an actionable stale-token error', async () => {
+    const runtime = new WeixinRuntime({
+      api: {
+        notifyStart: vi.fn(async () => ({ errcode: -14 })),
+      },
+      config: { botId: 'wx-course', baseUrl: 'https://ilinkai.weixin.qq.com' },
+      token: 'expired-token',
+      harness: { ensureRunning: vi.fn(async () => true) },
+      state: {},
+      startRetryDelaysMs: [],
+    })
+
+    await expect(runtime.start()).rejects.toMatchObject({
+      code: 'stale-token',
+      message: '微信登录凭据已失效，请移除账号后重新扫码。',
+    })
   })
 })
 

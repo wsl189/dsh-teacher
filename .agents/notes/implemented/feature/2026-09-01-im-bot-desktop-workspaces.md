@@ -10,7 +10,7 @@ A process launch directory can be a repository, an installation folder, or anoth
 
 ## Decision
 
-The [IM distribution patch](../../../../patches/xmanrui-dsh-im@1.0.3.patch) supplies desktop defaults through a small Host entry that passes explicit workspace settings to the unchanged upstream plugin. All nine bot platforms share the rule; Office retains its own configuration. [Electron](../../../../apps/desktop/src/main.ts) obtains the system desktop through `app.getPath('desktop')` and supplies it as `DSH_DESKTOP_DIR`. Other Host launches use that absolute override or `<home>/Desktop`.
+The [IM distribution patch](../../../../patches/xmanrui-dsh-im@4.11.0.patch) supplies desktop defaults through a small Host entry that passes explicit workspace settings to the unchanged upstream plugin. All nine bot platforms share the rule; Office retains its own configuration. [Electron](../../../../apps/desktop/src/main.ts) obtains the system desktop through `app.getPath('desktop')` and supplies it as `DSH_DESKTOP_DIR`. Other Host launches use that absolute override or `<home>/Desktop`.
 
 An explicit per-platform workspace overrides the desktop default. The upstream workspace store only initializes missing assignments, so saved bot paths and subsequent user selections remain authoritative. The adapter does not rewrite configuration files, create desktop directories, or change the application's working directory.
 
@@ -24,7 +24,7 @@ An explicit per-platform workspace overrides the desktop default. The upstream w
 
 ## Consequences
 
-New bot workspaces are independent of the launch directory, while saved assignments survive upgrades. Non-Electron hosts with a relocated desktop must supply `DSH_DESKTOP_DIR` or explicit platform settings. The maintained entry uses the upstream configuration API and leaves its compiled Host artifact intact.
+New bot workspaces are independent of the launch directory, while saved assignments survive upgrades. Non-Electron hosts with a relocated desktop must supply `DSH_DESKTOP_DIR` or explicit platform settings. The maintained entry uses the upstream configuration API; the distribution patch rebuilds the Host artifact so this entry and the other reviewed compatibility changes ship together.
 
 ## Testing
 

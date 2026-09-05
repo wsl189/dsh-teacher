@@ -10,7 +10,7 @@
 |---|---|---:|---|---|
 | `anysearch-dsh/` | `anysearch-anysearch-dsh-0.1.4.tgz` | 0.1.4 | [anysearch-team/anysearch-dsh](https://github.com/anysearch-team/anysearch-dsh) | Web 默认搜索与正文提取提供方、能力发现、垂直搜索和批量搜索。 |
 | `dsh-imagegen/` | `dickpy-dsh-imagegen-1.5.1-dsh.1.tgz` | 1.5.1，DSH 运行时重打包 1 | [dickpy/dsh-imagegen](https://github.com/dickpy/dsh-imagegen) | AI 生图工作室、文生图与图生图工具、画廊和提示词模板。 |
-| `dsh-im/` | `xmanrui-dsh-im-1.0.3.tgz` | 1.0.3 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、QQ 文件发送、手机提醒，以及把 QQ 语音转交共享语音运行时。 |
+| `dsh-im/` | `xmanrui-dsh-im-4.11.0.tgz` | 4.11.0 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、现代 Host 同进程集成、QQ 文件发送、手机提醒，以及把 QQ 语音转交共享语音运行时。 |
 | `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | [abiaoa1314/dsh-plugin-cron](https://github.com/abiaoa1314/dsh-plugin-cron) | 持久 cron 任务、模型工具与浏览器管理页。 |
 | `dsh-skill-mcp-panel/` | `dsh-skill-mcp-panel-2.0.1.tgz` | 2.0.1 | [Fishquito7/dsh-skill-mcp-panel](https://github.com/Fishquito7/dsh-skill-mcp-panel) | 通过 Web 与 CLI 管理全局／工作区技能和 profile MCP 服务器。 |
 | `dsh-univer-office/` | `dsh-univer-office-0.2.12-dsh.2.tgz` | 0.2.12，DSH 重构建 2 | [dream-num/dsh-univer-office](https://github.com/dream-num/dsh-univer-office) | 由 agent 创建 Sheets、Docs、Slides、Bases 与 Boards，并通过隔离草稿审阅和导入／导出 Office 文件。 |
@@ -35,7 +35,7 @@ Windows 桌面控制在运行时可用时默认启动；已持久化的用户值
 
 **设置 → 插件 → 连接平台**中全部九个平台的新建机器人都默认使用 Host 用户的桌面。Electron 通过 `DSH_DESKTOP_DIR` 提供操作系统的桌面路径，包括 OneDrive 和迁移后的桌面。源码与独立 Web 启动在未通过 `DSH_DESKTOP_DIR` 提供其他绝对路径时使用 `<home>/Desktop`。各平台 IM 配置中显式指定的 `workspace` 优先于默认值。已有机器人保存的工作区保持不变；**选择目录**会为该机器人保存替换路径。
 
-[IM 补丁](../patches/xmanrui-dsh-im@1.0.3.patch)通过 `desktop-workspace.mjs` Host 入口拥有这项发行版默认值。上游控制器仍负责工作区持久化和机器人生命周期；Office 配置保持不变。[决策记录](../.agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.zh.md)说明路径归属和已保存值的保留规则。
+[IM 补丁](../patches/xmanrui-dsh-im@4.11.0.patch)通过 `desktop-workspace.mjs` Host 入口拥有这项发行版默认值。上游控制器仍负责工作区持久化和机器人生命周期；Office 配置保持不变。[决策记录](../.agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.zh.md)说明路径归属和已保存值的保留规则。
 
 ## 验证
 
@@ -48,7 +48,7 @@ AnySearch 压缩包使用固定 lockfile 从用户提供的 0.1.4 源码编译�
 
 生图压缩包是上游 npm 1.5.1 发行版的仅运行时重打包。它保留未经修改的 Host 与 Client 编译 bundle、内置 441 案例模板快照、包元数据、组合补丁、README 与 Apache-2.0 许可证；上游 50 MB 发行包中的截图、演示视频、非运行时 TypeScript 源码与 Source Map 不进入安装包。[生图兼容补丁](../patches/dickpy-dsh-imagegen@1.5.1.patch)会移除单独的模型卡片、为每项任务读取生图分配与准确的服务接入线路、通过共享存储解析凭据、分发 OpenAI Images、DashScope 或 MiniMax 格式，并把 Host 与 Client 配置指引更新到统一位置。官方 npm tarball 的 SHA-256 为 `f95c6ac0099d2dc958e07efb2a4a35dd036c832db30d6e3d37fb63b916bda820`；经过审阅的运行时重打包 SHA-256 为 `dc0877229e38fbd19d716654460a0f0a4346992e37318fb8e48853f34a29ec51`。
 
-dsh-im 压缩包包含源码与 MIT 许可证。cron 压缩包包含编译后的 `lib/`、组合补丁、README 与 MIT 许可证。技能／MCP 压缩包是上游 MIT 发行产物；仓库兼容补丁会为当前 DSH 版本更新其客户端注入项与会话查询。其 SHA-256 为 `5e8523cfea0c4ca2cf7a71600f6eaa67655258b1ddce317e5c06f0658620737a`。
+dsh-im 官方 npm 压缩包包含源码与 MIT 许可证，SHA-256 为 `0a5b6e1018d238b4fba39be9c27b6d6acad177b496f4ee8699bbc8526c74c603`。发行补丁保留桌面工作区与 QQ 共享语音行为，使用该版本的现代 Host 同进程适配层，并把已过期的微信扫码令牌报告为可操作的重新扫码错误。cron 压缩包包含编译后的 `lib/`、组合补丁、README 与 MIT 许可证。技能／MCP 压缩包是上游 MIT 发行产物；仓库兼容补丁会为当前 DSH 版本更新其客户端注入项与会话查询。其 SHA-256 为 `5e8523cfea0c4ca2cf7a71600f6eaa67655258b1ddce317e5c06f0658620737a`。
 
 Windows 运行时装配会在 `windows-mcp/runtime.json` 中按 SHA-256 固定官方 CPython 3.14.7 AMD64 嵌入式压缩包、Windows-MCP 0.8.5 wheel，以及用户提供项目的完整 Python 源码压缩包。wheel 提供 distribution 元数据；`windows-mcp/source.py` 会安装已审阅源码以覆盖 wheel 源码，并校验全部二十项工具签名。完整且仅含二进制 wheel 的闭包在 `windows-mcp/requirements.lock` 中逐项固定哈希。已审阅补丁把 `fuzzywuzzy` 替换为兼容的 MIT `TheFuzz` API，并将 Scrape 采样关联到发起调用的 DSH 工具。`fuzzywuzzy`、`Levenshtein` 与 `python-Levenshtein` 保持排除。打包必须通过真实 stdio 发现与 `Wait`，以及 FastMCP 采样、DOM、关闭采样和失败回退冒烟。[源码对齐决策](../.agents/notes/implemented/feature/2026-09-01-windows-mcp-source-parity.zh.md)拥有源码与补丁规则。
 

@@ -72,7 +72,7 @@ pnpm dsh web
 
 ### 2. 内置生图、IM、cron、技能／MCP 管理与 Office
 
-Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 1.0.3、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 模型 → 生图模型**中配置；只向普通提供方列表添加生图模型并不会创建生图工具。机器人在**设置 → 插件 → 连接平台**中配置。请先在**设置 → 模型 → 服务接入**中配置供应商线路，再于**使用场景**分配语音识别模型；输入框、QQ 与日常管理共用该分配。技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
+Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 4.11.0、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 模型 → 生图模型**中配置；只向普通提供方列表添加生图模型并不会创建生图工具。机器人在**设置 → 插件 → 连接平台**中配置。请先在**设置 → 模型 → 服务接入**中配置供应商线路，再于**使用场景**分配语音识别模型；输入框、QQ 与日常管理共用该分配。技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
 
 Univer 封装层采用 Apache-2.0，但其可执行依赖闭包含有商业 `@univerjs-pro/*` 组件。启动前必须通过 `UNIVER_LICENSE` 提供有效许可证，分发安装器前还要取得所需分发权；内置配置项已关闭产品遥测。部分 Slide 布局、SVG 测量与截图操作还需要本机 Chrome 或 Chromium，可用 `UNIVER_RENDER_BROWSER` 指定其可执行文件。
 

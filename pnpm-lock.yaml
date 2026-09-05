@@ -35,7 +35,7 @@ patchedDependencies:
   '@anysearch/anysearch-dsh@0.1.4': f2925fa1b83771db9128515e1d75a1ac89aff9c94a6db006bfc5a76ce858af82
   '@dickpy/dsh-imagegen@1.5.1': d30144d0af5650311f09c146c6a6da68416c56f209a8af20aa8b3a7020b18f7e
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2': 34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd
-  '@xmanrui/dsh-im@1.0.3': ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762
+  '@xmanrui/dsh-im@4.11.0': 76a2de26743b892c49b8c78e932705bc382a8628b970e0b15cb9e45a25b72699
   dsh-better-sidebar@0.17.1: 8ea1292ecde710b0ba079872481e1517c3faaa8bf44fd90e23a0c6c2ca4f5d1d
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.1: 5d0df683dd92b21df2238f151ed5c3700e2dc73158c2e58e2fd77f361a1ec835
@@ -1877,8 +1877,8 @@ importers:
         specifier: 0.1.2
         version: 0.1.2(patch_hash=34808da49cb852c24379c12a702b4507e2eb8543141bd7749067bf2ccb3b4bfd)(83052fc59ac7caedaf0339f8867576b2)
       '@xmanrui/dsh-im':
-        specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz
-        version: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762)
+        specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz
+        version: file:third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz(patch_hash=76a2de26743b892c49b8c78e932705bc382a8628b970e0b15cb9e45a25b72699)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -15670,9 +15670,9 @@ packages:
       react:
         optional: true
 
-  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz':
-    resolution: {integrity: sha512-WL6baD2qwO4cWfkwSK6SUmhEnEMnU/r3xdPzlk0gfOX0CjajKb6NigJulPkV6CbfJqJKTp1TpsQVUjyPVrrXHw==, tarball: file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz}
-    version: 1.0.3
+  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz':
+    resolution: {integrity: sha512-sCH/k5DczGun7t4oBAPYvGQKl0A10qF9+xpSMHqiSSUI2MqHVuGq449fOjEhuYq+/atXj/PCJkL9lZc7j33F0A==, tarball: file:third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz}
+    version: 4.11.0
     engines: {node: '>=22.19'}
     hasBin: true
 
@@ -19254,6 +19254,10 @@ packages:
 
   undici@7.28.0:
     resolution: {integrity: sha512-cRZYrTDwWznlnRiPjggAGxZXanty6M8RV1ff8Wm4LWXBp7/IG8v5DnOm74DtUBp9OONpK75YlPnIjQqX0dBDtA==}
+    engines: {node: '>=20.18.1'}
+
+  undici@7.29.0:
+    resolution: {integrity: sha512-IDxfleLmmbSskfWSUATiN1nfn2rDuvnMOqb5CWR92iIfojA0Ud+ulOAAEQ57LPr9rWmsreUyf5lwyao+7GNNVw==}
     engines: {node: '>=20.18.1'}
 
   undici@8.10.0:
@@ -24923,13 +24927,14 @@ snapshots:
     optionalDependencies:
       react: 18.3.1
 
-  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz(patch_hash=ab86f9d4df901c0515131c2bd804591cca46867cfb60fd4700435124d62a5762)':
+  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz(patch_hash=76a2de26743b892c49b8c78e932705bc382a8628b970e0b15cb9e45a25b72699)':
     dependencies:
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4
       '@wecom/aibot-node-sdk': 1.0.7
       dingtalk-stream: 2.1.4
       qrcode: 1.5.4
+      undici: 7.29.0
     transitivePeerDependencies:
       - bufferutil
       - debug
@@ -29106,6 +29111,8 @@ snapshots:
   undici@6.28.0: {}
 
   undici@7.28.0: {}
+
+  undici@7.29.0: {}
 
   undici@8.10.0: {}
 

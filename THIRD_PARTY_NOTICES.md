@@ -155,8 +155,8 @@ pnpm applies local patches to the following packages at install time, so shipped
 
 - `@anysearch/anysearch-dsh@0.1.4` — [`patches/anysearch-anysearch-dsh@0.1.4.patch`](patches/anysearch-anysearch-dsh@0.1.4.patch)
 - `@dickpy/dsh-imagegen@1.5.1` — [`patches/dickpy-dsh-imagegen@1.5.1.patch`](patches/dickpy-dsh-imagegen@1.5.1.patch)
+- `@xmanrui/dsh-im@4.11.0` — [`patches/xmanrui-dsh-im@4.11.0.patch`](patches/xmanrui-dsh-im@4.11.0.patch)
 - `@huanlin/dsh-plugin-better-sidebar-plugin-office@0.1.2` — [`patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch`](patches/huanlin-dsh-plugin-better-sidebar-plugin-office@0.1.2.patch)
-- `@xmanrui/dsh-im@1.0.3` — [`patches/xmanrui-dsh-im@1.0.3.patch`](patches/xmanrui-dsh-im@1.0.3.patch)
 - `dsh-better-sidebar@0.17.1` — [`patches/dsh-better-sidebar@0.17.1.patch`](patches/dsh-better-sidebar@0.17.1.patch)
 - `dsh-plugin-cron@0.1.3` — [`patches/dsh-plugin-cron@0.1.3.patch`](patches/dsh-plugin-cron@0.1.3.patch)
 - `dsh-skill-mcp-panel@2.0.1` — [`patches/dsh-skill-mcp-panel@2.0.1.patch`](patches/dsh-skill-mcp-panel@2.0.1.patch)

@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[IM 发行补丁](../../../../patches/xmanrui-dsh-im@1.0.3.patch)通过一个小型 Host 入口提供桌面默认值，并将明确的工作区设置传给未修改的上游插件。全部九个机器人平台共用这项规则；Office 保留自己的配置。[Electron](../../../../apps/desktop/src/main.ts)通过 `app.getPath('desktop')` 获取系统桌面，并通过 `DSH_DESKTOP_DIR` 提供该路径。其他 Host 启动方式使用这个绝对路径覆盖值或 `<home>/Desktop`。
+[IM 发行补丁](../../../../patches/xmanrui-dsh-im@4.11.0.patch)通过一个小型 Host 入口提供桌面默认值，并将明确的工作区设置传给未修改的上游插件。全部九个机器人平台共用这项规则；Office 保留自己的配置。[Electron](../../../../apps/desktop/src/main.ts)通过 `app.getPath('desktop')` 获取系统桌面，并通过 `DSH_DESKTOP_DIR` 提供该路径。其他 Host 启动方式使用这个绝对路径覆盖值或 `<home>/Desktop`。
 
 显式指定的平台工作区优先于桌面默认值。上游工作区存储只初始化缺失的分配，因此已保存的机器人路径和后续用户选择保持权威。适配入口不会重写配置文件、创建桌面目录或改变应用的工作目录。
 
@@ -24,7 +24,7 @@ Status: implemented
 
 ## Consequences
 
-新建机器人的工作区不依赖启动目录，已保存的分配则跨升级保留。非 Electron Host 若迁移了桌面，必须提供 `DSH_DESKTOP_DIR` 或显式平台设置。受维护的入口使用上游配置 API，并保持其编译后的 Host 产物不变。
+新建机器人的工作区不依赖启动目录，已保存的分配则跨升级保留。非 Electron Host 若迁移了桌面，必须提供 `DSH_DESKTOP_DIR` 或显式平台设置。受维护的入口使用上游配置 API；发行补丁会重建 Host 产物，使该入口与其他已审阅的兼容更改一起发布。
 
 ## Testing
 

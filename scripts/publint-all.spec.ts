@@ -100,7 +100,7 @@ describe('publint package runner', () => {
     const dependencies = {
       '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz',
       '@dickpy/dsh-imagegen': 'file:../../../third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.1-dsh.1.tgz',
-      '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-1.0.3.tgz',
+      '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-4.11.0.tgz',
       'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
       'dsh-skill-mcp-panel': 'file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.1.tgz',
       'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.2.12-dsh.2.tgz',
