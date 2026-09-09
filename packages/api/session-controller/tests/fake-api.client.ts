@@ -209,6 +209,7 @@ export class FakeApiClient {
         execute: () => Promise.resolve({ ok: true, value: undefined }),
       },
       session: {
+        checkModel: request => Promise.resolve(remoteOk({ ...request, sessionId: 'model-check' as SessionId })),
         canOpenWorkspacePath: () => Promise.resolve(remoteOk(true)),
         list: payload => this.remoteResult('session.list', payload, this.onList(payload)),
         modelCatalog: () => Promise.resolve({

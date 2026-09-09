@@ -12,8 +12,8 @@ export const name = 'host-teacher-workbench-invariant'
 export const inject = ['invariants']
 
 /**
- * No runtime invariant: one private service owns the singleton and the domain
- * schema validates its complete document whenever the medium is reopened.
+ * No runtime invariant: the private service owns workbench and example records;
+ * domain schemas validate their references and source/Word status on reopen.
  */
 const install: InvariantInstaller = Object.assign(() => {}, { inject: ['teacherWorkbench'] })
 

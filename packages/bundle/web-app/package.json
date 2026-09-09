@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-web-app",
   "description": "The dsh browser-surface bundle: the web patch layer over dsh-base plus the runtime glue plugin (frontend dist serving, web-surface prompt, bash runtime variables, URL line)",
-  "version": "1.2.3",
+  "version": "1.2.4",
   "publishConfig": {
     "access": "public"
   },
@@ -125,6 +125,7 @@
     "@deepseek-ai/dsh-client-ui-desktop-update": "workspace:^",
     "@deepseek-ai/dsh-client-ui-teacher-workbench": "workspace:^",
     "@deepseek-ai/dsh-host-teacher-workbench": "workspace:^",
+    "@deepseek-ai/dsh-storage-sqlite": "workspace:^",
     "@deepseek-ai/dsh-tool-teacher-workbench": "workspace:^",
     "@deepseek-ai/dsh-ocr": "workspace:^",
     "@deepseek-ai/dsh-ocr-mineru": "workspace:^",

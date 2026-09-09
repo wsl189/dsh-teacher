@@ -4,6 +4,8 @@
  */
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
+
+export type * from './example-types.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Opaque class identity. */
@@ -455,6 +457,8 @@ export interface TeacherQuestionLibraryFolder {
   readonly parentId?: TeacherQuestionLibraryFolderId
   /** Teacher-facing folder name. */
   readonly name: string
+  /** Exact disk name of an adopted directory; omission derives a safe segment from the display name. */
+  readonly physicalName?: string
   /** Creation time in Unix epoch milliseconds. */
   readonly createdAt: number
   /** Last metadata update time in Unix epoch milliseconds. */
@@ -670,15 +674,13 @@ export interface TeacherTimetableNormalizeDefaults {
   readonly teacherName: string
 }
 
-/** Normalize one OCR document through a one-shot structured-output agent. */
+/** Normalize one upload through an independent structured-output agent. */
 export interface TeacherTimetableNormalizeRequest {
-  /** Live root session that owns the short-lived child agent. */
-  readonly parentSessionId: SessionId
   /** Uploaded file name used only as task context. */
   readonly fileName: string
   /** MinerU Markdown, including discarded text when available. */
   readonly markdown: string
-  /** Original raster source offered directly when the configured tool model accepts image input. */
+  /** Original raster evidence used alongside OCR when the tool model accepts images. */
   readonly image?: {
     /** Browser-declared raster media type, verified by the attachment service. */
     readonly mediaType: 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif'
@@ -716,7 +718,6 @@ export interface TeacherTimetableNormalizedEntry {
 /** Stable failure codes for timetable normalization. */
 export type TeacherTimetableNormalizeErrorCode =
   | 'invalid-request'
-  | 'session-unavailable'
   | 'tool-model-unavailable'
   | 'vision-unavailable'
   | 'source-too-large'

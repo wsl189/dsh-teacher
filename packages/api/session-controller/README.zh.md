@@ -8,7 +8,7 @@ kind: "package-reference"
 
 ## 概述
 
-`@deepseek-ai/dsh-api-session-controller` 拥有 Host 的 `ctx.sessionController` 服务，以及生成的 Client `session`、`skills` 和 `fileReferences` Remote namespace。它提供 Session 生命周期与历史、Host generation 模型目录、工作区路径打开、用户可调用 skill 发现，以及面向 Agent 的文件引用 adapter。当 Client 需要按 Session 寻址的操作时，请通过 API Gateway 使用它。
+`@deepseek-ai/dsh-api-session-controller` 拥有 Host 的 `ctx.sessionController` 服务，以及生成的 Client `session`、`skills` 和 `fileReferences` Remote namespace。它提供 Session 生命周期与历史、携带适配器解析后输入能力的 Host generation 模型目录、工作区路径打开、用户可调用 skill 发现，以及面向 Agent 的文件引用 adapter。当 Client 需要按 Session 寻址的操作时，请通过 API Gateway 使用它。
 
 ## 目录
 
@@ -35,6 +35,8 @@ Session 对象还承载本地提交回显：`session.beginSubmission` 在调用�
 
 Client 的 `sessions.open`、`sessions.openSubagent` 与 `sessions.clear` 会在每次成功的导航请求后发出 `sessions/navigate`，包括重新选择当前 Session 或再次清除空选择。功能界面因此能在用户明确返回 Conversation 时退出临时主区域视图，而无需从 Session id 是否变化来推断用户意图。
 
+`session.checkModel` 检查一条已保存的对话模型线路，不携带工具或对话历史。它仅在提供方成功结束响应后返回，并将完整请求与响应记录在私有诊断会话中。提供方错误、取消和配置的截止时间都会使检查失败；验证不会修改配置。
+
 -----
 
 <a id="configuration"></a>
@@ -44,6 +46,8 @@ Client 的 `sessions.open`、`sessions.openSubagent` 与 `sessions.clear` 会在
 |---|---:|---|
 | `coldBlankProbeMaxBytes` | `1,024` | 可进行空白状态验证的冷 Session 工件最大物理大小；`0` 禁用探测 |
 | `nativeOpen` | 平台探测 | 是否能把 Session 工作区路径交给原生桌面打开器 |
+| `modelCheckTimeoutMs` | `20,000` | 每次自动模型验证的最长时限 |
+| `modelCheckMaxTokens` | `16` | 每次模型验证最多生成的 token 数 |
 
 生成的[配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-api-session-controller)是所有受支持字段及其 JSDoc 的完整来源。
 
@@ -52,11 +56,19 @@ Client 的 `sessions.open`、`sessions.openSubagent` 与 `sessions.clear` 会在
 <a id="model-experience"></a>
 ## 模型体验
 
-无，因为被调用的 Agent 命令拥有任何模型可见效果。
+### 自动模型验证
+
+#### 模型看到的内容
+
+一条内容为 `Reply with OK.` 的用户消息，不含系统提示词、工具或已有对话。
+
+#### Token 影响
+
+每次验证发送一条简短输入，并以 `modelCheckMaxTokens` 限制输出 token 数（默认 16）。
 
 #### KV Cache 影响
 
-无直接影响；模型请求仍由 Agent 和 LLM 包拥有。
+独立请求，不会追加或替换既有对话的前缀。
 
 ## 已知限制与延期工作
 

@@ -2828,6 +2828,36 @@
   padding: 6px 8px;
 }
 
+.timetableImportNotice {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+  padding: 12px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+}
+
+.timetableImportNotice > div {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+  gap: 4px;
+  overflow-wrap: anywhere;
+}
+
+.timetableImportNotice span {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 13px;
+}
+
+.timetableImportReview {
+  min-width: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
 .timetableCourseActions {
   display: inline-flex;
   flex: none;
@@ -2947,7 +2977,25 @@
 }
 
 .timetableGradeTable thead th:nth-child(2) {
-  width: 88px;
+  width: 112px;
+}
+
+.timetableGrid thead th:first-child {
+  width: 112px;
+}
+
+.timetablePeriodHeading {
+  display: grid;
+  gap: 4px;
+}
+
+.timetablePeriodHeading time {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 400;
+  line-height: 18px;
+  white-space: nowrap;
 }
 
 .timetableEntry {
@@ -2969,12 +3017,7 @@
   display: grid;
   min-width: 0;
   flex: 1;
-  grid-template-areas:
-    "subject time"
-    "details details";
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: baseline;
-  column-gap: 8px;
+  grid-template-columns: minmax(0, 1fr);
   row-gap: 4px;
   padding: 0;
   border: 0;
@@ -2986,8 +3029,7 @@
 }
 
 .timetableEntryMain strong,
-.timetableEntryMain span,
-.timetableEntryMain time {
+.timetableEntryMain span {
   overflow: hidden;
   letter-spacing: 0;
   text-overflow: ellipsis;
@@ -2995,26 +3037,15 @@
 }
 
 .timetableEntryMain strong {
-  grid-area: subject;
   color: var(--dsw-alias-label-primary);
   font-size: 14px;
   font-weight: 500;
+  line-height: 20px;
 }
 
 .timetableEntryMain span {
-  grid-area: details;
   color: var(--dsw-alias-label-secondary);
   font-size: 13px;
-  line-height: 18px;
-}
-
-.timetableEntryMain time {
-  grid-area: time;
-  justify-self: end;
-  color: var(--dsw-alias-label-secondary);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  font-weight: 500;
   line-height: 18px;
 }
 

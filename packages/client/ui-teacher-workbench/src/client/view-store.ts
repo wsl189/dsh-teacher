@@ -7,6 +7,7 @@ export type TeacherWorkbenchModule =
   | 'daily'
   | 'timetable'
   | 'questions'
+  | 'examples'
   | 'lesson'
   | 'students'
   | 'scores'

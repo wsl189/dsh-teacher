@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
@@ -38,6 +38,7 @@ describe('web e2e: supplier-selected voice input', () => {
   let server: Server
   let successfulUploads = 0
   let rejectNextUpload = false
+  let suppliedTranscript: string | undefined
   const uploads: string[] = []
 
   beforeAll(async () => {
@@ -59,7 +60,7 @@ describe('web e2e: supplier-selected voice input', () => {
         }
         successfulUploads += 1
         response.end(JSON.stringify({
-          text: successfulUploads === 1 ? '课堂口述' : '批改语音作业',
+          text: suppliedTranscript ?? (successfulUploads === 1 ? '课堂口述' : '批改语音作业'),
         }))
       })
     })
@@ -122,7 +123,7 @@ describe('web e2e: supplier-selected voice input', () => {
         }
 
         createAnalyser(): AnalyserNode {
-          let audibleFrames = 4
+          let audibleFrames = 40
           return {
             fftSize: 256,
             smoothingTimeConstant: 0,
@@ -279,11 +280,151 @@ describe('web e2e: supplier-selected voice input', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
+  it('records synthetic audio with MediaRecorder and saves the returned example description', async () => {
+    const nativePage = await browser.newPage({
+      viewport: { width: 1440, height: 900 }, locale: ZH_BROWSER_LOCALE,
+    })
+    nativePage.setDefaultTimeout(10_000)
+    onTestFailed(() => saveFailureShot(nativePage, 'web-e2e-voice-example-native'))
+    const nativeTripwire = watchConsole(nativePage)
+    await nativePage.addInitScript(() => {
+      const sources = new Set<{ audio: AudioContext; oscillator: OscillatorNode }>()
+      Object.defineProperty(navigator.mediaDevices, 'getUserMedia', {
+        configurable: true,
+        value: async () => {
+          const audio = new AudioContext()
+          const destination = audio.createMediaStreamDestination()
+          const oscillator = audio.createOscillator()
+          const source = { audio, oscillator }
+          sources.add(source)
+          oscillator.connect(destination)
+          oscillator.start()
+          await audio.resume()
+          for (const track of destination.stream.getTracks()) {
+            const stop = track.stop.bind(track)
+            track.stop = () => {
+              stop()
+              if (!sources.delete(source)) return
+              oscillator.stop()
+              void audio.close()
+            }
+          }
+          return destination.stream
+        },
+      })
+    })
+    suppliedTranscript = '关注向量数量积的符号。'
+    onTestFinished(async () => {
+      suppliedTranscript = undefined
+      await nativePage.close()
+    })
+    await nativePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
+    await nativePage.getByRole('button', { name: '打开工作台' }).click()
+    await nativePage.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    await nativePage.getByRole('complementary', { name: '题目目录', exact: true })
+      .getByRole('button', { name: '添加新题', exact: true }).click()
+    const description = nativePage.getByRole('region', { name: '题目描述', exact: true })
+    const text = description.getByRole('textbox', { name: '题目描述', exact: true })
+    await text.fill('课堂讲评')
+    expect(await description.getByRole('button', { name: '保存', exact: true }).count()).toBe(0)
+    await expect.poll(async () => {
+      const saved = await scaffold.ctx.teacherWorkbench.listExamples({})
+      return saved.ok ? saved.value.questions.at(-1)?.description : ''
+    }).toBe('课堂讲评')
+    const uploadCount = uploads.length
+    await nativePage.keyboard.down('Space')
+    await expect.poll(() => description.locator('button[aria-pressed]').getAttribute('aria-label'))
+      .toBe('停止语音输入')
+    const stop = description.getByRole('button', { name: '停止语音输入' })
+    await expect.poll(async () => Number(await stop.locator('[data-voice-level]').getAttribute('data-voice-level')), { timeout: 5_000 })
+      .toBeGreaterThan(0)
+    await nativePage.keyboard.up('Space')
+    await expect.poll(() => text.inputValue(), { timeout: 12_000 })
+      .toBe('课堂讲评\n关注向量数量积的符号。')
+    expect(uploads).toHaveLength(uploadCount + 1)
+    const upload = uploads.at(-1)!
+    expect(upload).toContain('name="file"; filename="voice-input.wav"')
+    expect(upload).toContain('Content-Type: audio/wav')
+    expect(upload).toContain('glm-asr-2512')
+    const wave = Buffer.from(upload.slice(upload.indexOf('RIFF')), 'latin1')
+    expect(wave.subarray(8, 12).toString()).toBe('WAVE')
+    expect(wave.readUInt16LE(22)).toBe(1)
+    expect(wave.readUInt32LE(24)).toBe(16_000)
+    expect(wave.readUInt32LE(40)).toBeGreaterThan(0)
+    await expect.poll(async () => {
+      const saved = await scaffold.ctx.teacherWorkbench.listExamples({})
+      return saved.ok ? saved.value.questions.at(-1)?.description : ''
+    }).toBe('课堂讲评\n关注向量数量积的符号。')
+    await nativePage.reload({ waitUntil: 'load' })
+    await nativePage.getByRole('button', { name: '打开工作台' }).click()
+    await nativePage.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    await expect.poll(() => text.inputValue()).toBe('课堂讲评\n关注向量数量积的符号。')
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-description.expected.md'),
+      await captureStableAria(nativePage, 'section[aria-label="题目描述"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    expect(nativeTripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('dictates search keywords by microphone and hold-Space without changing the description', async () => {
+    page.setDefaultTimeout(10_000)
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-voice-example-search'))
+    onTestFinished(() => { suppliedTranscript = undefined })
+    await page.reload({ waitUntil: 'load' })
+    await page.getByRole('button', { name: '打开工作台' }).click()
+    await page.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
+    if (!catalog.ok) throw new Error('Example catalog is unavailable')
+    const nextName = String(Math.max(0, ...catalog.value.questions.map(question => question.number)) + 1)
+    const directory = page.getByRole('complementary', { name: '题目目录', exact: true })
+    await directory.getByRole('button', { name: '添加新题', exact: true }).click()
+    await directory.getByRole('button', { name: nextName, exact: true }).waitFor()
+    const text = page.getByRole('textbox', { name: '题目描述', exact: true })
+    await text.fill('空间向量，用于课堂讲评。')
+    await expect.poll(async () => {
+      const saved = await scaffold.ctx.teacherWorkbench.listExamples({})
+      return saved.ok ? saved.value.questions.at(-1)?.description : ''
+    }, { timeout: 5_000 }).toBe('空间向量，用于课堂讲评。')
+    const uploadCount = uploads.length
+    const search = page.getByRole('search')
+    const query = search.getByRole('textbox', { name: '搜索题目', exact: true })
+    suppliedTranscript = '空间向量'
+    await search.getByRole('button', { name: '开始语音输入', exact: true }).click()
+    const searchStop = search.getByRole('button', { name: '停止语音输入', exact: true })
+    await expect.poll(async () => Number(await searchStop.locator('[data-voice-level]').getAttribute('data-voice-level')), { timeout: 5_000 })
+      .toBeGreaterThan(0)
+    await searchStop.click()
+    await expect.poll(() => query.inputValue()).toBe('空间向量')
+    await query.press('End')
+    await query.press('Space')
+    expect(await query.inputValue()).toBe('空间向量 ')
+    suppliedTranscript = '空间向量'
+    await page.keyboard.down('Space')
+    await searchStop.waitFor()
+    await expect.poll(async () => Number(await searchStop.locator('[data-voice-level]').getAttribute('data-voice-level')), { timeout: 5_000 })
+      .toBeGreaterThan(0)
+    await page.keyboard.up('Space')
+    await expect.poll(() => query.inputValue()).toBe('空间向量')
+    expect(await text.inputValue()).toBe('空间向量，用于课堂讲评。')
+    expect(uploads).toHaveLength(uploadCount + 2)
+    await search.getByRole('button', { name: '搜索', exact: true }).click()
+    await page.getByRole('dialog', { name: '搜索结果', exact: true }).getByText('找到 1 道题目', { exact: true }).waitFor()
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-search.expected.md'),
+      await captureStableAria(page, 'form[role="search"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'composer-error.expected.md',
       'composer-recording.expected.md',
       'composer.expected.md',
+      'example-description.expected.md',
+      'example-search.expected.md',
       'workbench-error.expected.md',
       'workbench-recording.expected.md',
       'workbench.expected.md',

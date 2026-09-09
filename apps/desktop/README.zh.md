@@ -22,6 +22,8 @@ Electron 为[新建 IM 机器人的工作区](../../third-party/README.zh.md)提
 
 AnySearch 已内置，用于网页搜索与正文提取。可选密钥、服务地址与单次搜索结果上限在**设置 → 插件 → 插件配置 → 网页搜索**中配置；未配置密钥时使用匿名访问。[网页搜索配置](../../packages/bundle/web-app/README.zh.md#built-in-web-search)说明可接受的结果范围、远程服务限制与向外发送的数据。桌面载荷门禁要求包含其编译插件与 MIT 许可证。
 
+第三方许可声明安装于 `resources/THIRD_PARTY_NOTICES.md`。[可编辑公式库资料包](../../packages/host/teacher-workbench/third-party/mathml2omml/NOTICE.txt)包含完整 GPL/LGPL 文本、对应源码和替换说明，位于 `resources/licenses/mathml2omml`。其独立 Node 模块在安装后仍可替换。
+
 ## 本机构建
 
 请在原生 Windows PowerShell 中，从仓库根目录运行：

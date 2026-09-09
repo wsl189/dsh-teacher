@@ -28,6 +28,12 @@
     path: ':memory:'
     openAt: never
 
+- id: storage-domain
+  config:
+    backend: json
+    routes:
+      teacher_example_collection: sqlite
+
 - id: tools
   config:
     # TEMPORARY workaround: DSH_TOOLS_MODE (native|ptc|both) opts a whole dsh
@@ -56,6 +62,11 @@
 # `dsh.client` rows are the browser roster the modules node half scans into
 # window.__DSH_BOOT__; the modules row is simultaneously a host row.
 - insert:
+    - id: storage-sqlite
+      name: '@deepseek-ai/dsh-storage-sqlite'
+      config:
+        path: !!js dshHomePath('teacher-workbench/examples.sqlite')
+
     # Host-owned opt-in sampled when a new Web session receives its preset
     # delegation tools. The Plugins page edits this settings namespace.
     - id: subagent-model-selection-settings

@@ -16,6 +16,8 @@ The model list is a component shared by both flows; the create is its own card.
 
 `ModelListEditor` edits a profile's `models` array — one row per model with id, display name, context window, and output cap — and owns the fetch action. An empty list means "serve this route's built-in catalog", so a row is only ever added deliberately; clearing an optional field drops it rather than storing a value the schema would reject, and a capacity that is not a positive integer is not stored at all.
 
+The capacity controls use the [shared fixed-budget selectors](../feature/2026-09-09-model-capacity-selects.md); existing provider counts outside the choices remain exact current values.
+
 Fetching asks about the endpoint **the form currently shows** — a base URL edited but unsaved, a key typed but unstored — so adding a provider is one pass instead of save-then-return. The reply opens a picker rather than being written: candidates already configured start unchecked, so adopting a selection never overwrites a capacity the user corrected. A provider that cannot be interrogated is a detour, not a dead end; the adapter's own message appears beside rows that stay editable by hand.
 
 `CustomProviderCard` declares a route pi-ai does not ship. It is a separate card because the route id is chosen here: one `settings.mutate` sets the whole profile at `providers.<route>`, and the key travels separately through `credentials.set` under the same `<ROUTE>_API_KEY` derivation an existing provider uses. The three facts a hand-declared route cannot default — endpoint, protocol, and at least one model — gate the create button, so a failure names the field while the user is still looking at it.

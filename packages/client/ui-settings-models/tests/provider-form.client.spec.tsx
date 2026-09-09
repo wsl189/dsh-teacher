@@ -8,7 +8,7 @@ import type { JsonValue, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remo
 import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
-import { formatCapacity, parseCapacity } from '../src/client/DeepSeekModelsEditor.tsx'
+import { formatCapacity } from '../src/client/CapacitySelect.tsx'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
 import { ModelsSettingsStore, deriveKeyRef, protocolChoices } from '../src/client/store.ts'
 import { en } from '../src/client/locales.ts'
@@ -198,7 +198,7 @@ async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
 function openEditor(provider: string): void {
   const row = screen.getByText(provider).closest('li')
   if (row === null) throw new Error(`no row for ${provider}`)
-  fireEvent.click(within_(row, en.edit))
+  fireEvent.click([...row.querySelectorAll('button')].find(button => button.textContent === en.edit || button.textContent === en.configure)!)
   const summary = document.querySelector('summary')
   if (summary === null) throw new Error('no customized fold')
   fireEvent.click(summary)
@@ -244,7 +244,7 @@ describe('model list editing', () => {
     expect(screen.getByRole('button', { name: `${en.modelAdvanced} 1` }).textContent)
       .toContain(en.modelAdvanced)
     expandModel(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '64000' } })
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Acme' } })
     // Clearing an optional field must drop it rather than store an empty value.
     fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: '' } })
@@ -257,7 +257,7 @@ describe('model list editing', () => {
       ops: [{
         op: 'set',
         path: ['providers', 'openai', 'models'],
-        value: [{ id: 'acme-large', contextWindow: 65_536, input: ['text'] }],
+        value: [{ id: 'acme-large', contextWindow: 64_000, input: ['text'] }],
       }],
     })
   })
@@ -338,63 +338,50 @@ describe('model list editing', () => {
     expect(mutate).not.toHaveBeenCalled()
   })
 
-  it('reads K and M suffixes and keeps the text the user typed', async () => {
+  it('saves fixed capacity choices as exact counts', async () => {
     const { mutate } = await mountSection()
     openEditor('openai')
-
     fireEvent.click(screen.getByRole('button', { name: en.addModel }))
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     expandModel(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '1M' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelMaxTokens} 1`), { target: { value: '32K' } })
-
-    // The field keeps the spelling rather than snapping to the expansion, and
-    // a plain count is not rewritten into a suffix mid-word either.
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelContextWindow} 1`).value).toBe('1M')
-    fireEvent.change(screen.getByLabelText(`${en.modelMaxTokens} 1`), { target: { value: '1000' } })
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelMaxTokens} 1`).value).toBe('1000')
-
+    const context = screen.getByRole<HTMLSelectElement>('combobox', { name: `${en.modelContextWindow} 1` })
+    const output = screen.getByRole<HTMLSelectElement>('combobox', { name: `${en.modelMaxTokens} 1` })
+    expect(Array.from(context.options, option => option.text)).toEqual([
+      en.capacityDefault, '32K', '64K', '128K', '256K', '512K', '1M',
+    ])
+    expect(Array.from(output.options, option => option.text)).toEqual([
+      en.capacityDefault, '8K', '16K', '32K', '64K',
+    ])
+    fireEvent.change(context, { target: { value: '1000000' } })
+    fireEvent.change(output, { target: { value: '32000' } })
     fireEvent.click(screen.getByText(en.apply))
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
-    // What lands in settings is always a plain token count.
     expect(firstMutate(mutate).ops[0]?.value)
-      .toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 1000, input: ['text'] }])
+      .toEqual([{ id: 'm', contextWindow: 1_000_000, maxTokens: 32_000, input: ['text'] }])
   })
 
-  it('refuses to apply while a capacity is unreadable', async () => {
-    const { mutate } = await mountSection()
-    openEditor('openai')
-
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
-    expandModel(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelMaxTokens} 1`), { target: { value: 'abc' } })
-
-    // Silently dropping it would store a route sized differently from what the
-    // field shows, so the text stays put and the write is refused instead.
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelMaxTokens} 1`).value).toBe('abc')
-    expect(screen.getByText(`${en.model} 1: ${en.modelMaxTokensInvalid}`)).toBeTruthy()
-    expect(buttonNamed(en.apply).disabled).toBe(true)
-    expect(mutate).not.toHaveBeenCalled()
-  })
-
-  it('spells a stored capacity back the way it is typed', async () => {
-    await mountSection({
+  it('preserves existing nonstandard capacities when the model is renamed', async () => {
+    const { mutate } = await mountSection({
       providers: {
         openai: {
           baseURL: 'https://proxy.example/v1',
-          models: [{ id: 'kept', contextWindow: 1_000_000, maxTokens: 256_000 }],
+          models: [{ id: 'kept', contextWindow: 262_144, maxTokens: 256_000 }],
         },
       },
     })
     openEditor('openai')
     expandModel(1)
-
-    // Opening a row reads the stored counts, which are plain integers; showing
-    // them as such would make an already-configured route look unlike one the
-    // user just typed, and re-applying would rewrite the field it read.
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelContextWindow} 1`).value).toBe('1M')
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelMaxTokens} 1`).value).toBe('256K')
+    const context = screen.getByLabelText<HTMLSelectElement>(`${en.modelContextWindow} 1`)
+    const output = screen.getByLabelText<HTMLSelectElement>(`${en.modelMaxTokens} 1`)
+    expect(context.value).toBe('262144')
+    expect(context.selectedOptions[0]?.text).toBe('Current value (262144)')
+    expect(output.value).toBe('256000')
+    expect(output.selectedOptions[0]?.text).toBe('Current value (256K)')
+    fireEvent.change(screen.getByLabelText(`${en.modelName} 1`), { target: { value: 'Renamed' } })
+    fireEvent.click(screen.getByText(en.apply))
+    await waitFor(() => { expect(mutate).toHaveBeenCalled() })
+    expect(firstMutate(mutate).ops[0]?.value)
+      .toEqual([{ id: 'kept', name: 'Renamed', contextWindow: 262_144, maxTokens: 256_000 }])
   })
 
   it('edits one row of several and lets a cleared capacity leave the profile', async () => {
@@ -404,9 +391,9 @@ describe('model list editing', () => {
     openEditor('openai')
 
     expandModel(2)
-    fireEvent.change(screen.getByLabelText(`${en.modelMaxTokens} 2`), { target: { value: '2048' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelMaxTokens} 2`), { target: { value: '8000' } })
     fireEvent.change(screen.getByLabelText(`${en.modelName} 2`), { target: { value: 'Second' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 2`), { target: { value: '4096' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 2`), { target: { value: '32000' } })
     // Clearing it back to empty must drop the field, not store a zero.
     fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 2`), { target: { value: '' } })
     fireEvent.click(screen.getByText(en.apply))
@@ -414,7 +401,7 @@ describe('model list editing', () => {
     await waitFor(() => { expect(mutate).toHaveBeenCalled() })
     expect(firstMutate(mutate).ops[0]?.value).toEqual([
       { id: 'first' },
-      { id: 'second', name: 'Second', maxTokens: 2048 },
+      { id: 'second', name: 'Second', maxTokens: 8000 },
     ])
   })
 
@@ -494,41 +481,15 @@ describe('model list editing', () => {
 
 })
 
-describe('capacity spellings', () => {
-  it.each([
-    ['', undefined],
-    ['65536', 65_536],
-    ['256K', 256_000],
-    ['1m', 1_000_000],
-    // A decimal multiple is exact in intent but not in binary floating point,
-    // so an integral result snaps back instead of landing a few ULPs high.
-    ['2.3M', 2_300_000],
-    // Not an integral count: kept as written rather than silently rounded.
-    ['1.0005K', 1000.5],
-  ])('reads %j as %j', (text, expected) => {
-    expect(parseCapacity(text)).toBe(expected)
-  })
-
-  it.each(['abc', '12x', '1 000', '-5', ''])('refuses %j rather than guessing', (text) => {
-    const parsed = parseCapacity(text)
-    expect(parsed === undefined || Number.isNaN(parsed)).toBe(true)
-  })
-
+describe('capacity labels', () => {
   it.each([
     [1_000_000, '1M'],
     [256_000, '256K'],
     [65_536, '65536'],
-    // Never a spelling that would not survive being read back.
     [0, '0'],
     [1.5, '1.5'],
-  ])('spells %j as %j', (value, expected) => {
+  ])('displays %j without rounding as %j', (value, expected) => {
     expect(formatCapacity(value)).toBe(expected)
-  })
-
-  it('round-trips every spelling it produces', () => {
-    for (const value of [1_000_000, 256_000, 65_536, 4096, 1000]) {
-      expect(parseCapacity(formatCapacity(value))).toBe(value)
-    }
   })
 })
 
@@ -825,13 +786,13 @@ describe('hand-declared providers', () => {
     expandModel(1)
     expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelInput} 1`).value).toBe('image')
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
-    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '65536' } })
+    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '64000' } })
     fireEvent.change(screen.getByLabelText(`${en.modelInput} 1`), { target: { value: 'text' } })
     expect(screen.getByLabelText<HTMLSelectElement>(en.requestType).value).toBe('chat')
     fireEvent.change(screen.getByLabelText(`${en.modelInput} 2`), { target: { value: 'image' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     expect(firstMutate(mutate)).toEqual({
       ns: 'llm-pi-ai',
       ops: [{
@@ -844,7 +805,7 @@ describe('hand-declared providers', () => {
           baseURL: 'https://gateway.acme.example/v1',
           models: [
             { id: 'acme-chat', input: ['text'] },
-            { id: 'acme-large', contextWindow: 65_536, input: ['text', 'image'] },
+            { id: 'acme-large', contextWindow: 64_000, input: ['text', 'image'] },
           ],
         },
       }],
@@ -871,7 +832,7 @@ describe('hand-declared providers', () => {
     })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     expect(firstMutate(mutate)).toEqual({
       ns: 'model-service-settings',
       ops: [{
@@ -921,7 +882,6 @@ describe('hand-declared providers', () => {
     openEditor('openai')
     fireEvent.click(screen.getByText(en.customized))
     expect(fields()).toEqual([
-      en.accessMethod,
       en.customApi,
       en.keyInput,
       en.requestType,
@@ -939,7 +899,6 @@ describe('hand-declared providers', () => {
     openEditor('acme-gateway')
     fireEvent.click(screen.getByText(en.customized))
     expect(fields()).toEqual([
-      en.accessMethod,
       en.customApi,
       en.keyInput,
       en.customDisplayName,
@@ -1106,7 +1065,7 @@ describe('hand-declared providers', () => {
 
     fireEvent.change(screen.getByLabelText(en.keyInput), { target: { value: 'gw-key-2' } })
     fireEvent.click(screen.getByText(en.create))
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     // Re-running the profile write would carry the revision this card's own
     // first write superseded, so the Host would answer settings-conflict and
     // the key could never be stored from here at all.
@@ -1131,7 +1090,7 @@ describe('hand-declared providers', () => {
     // Walking away leaves a real provider behind; reporting no change would
     // leave the page without the row it now has.
     fireEvent.click(screen.getByText(en.cancel))
-    expect(onClose).toHaveBeenCalledWith(true)
+    expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true)
   })
 
   it('never contradicts a filled-in field with the next gate\u2019s copy', () => {
@@ -1215,22 +1174,7 @@ describe('hand-declared providers', () => {
     expect(buttonNamed(en.create).disabled).toBe(false)
   })
 
-  it('refuses to create while a capacity is unreadable', () => {
-    mountCard()
-    fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
-    fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
-      target: { value: 'https://acme.test/v1/chat/completions' },
-    })
-    fireEvent.click(screen.getByRole('button', { name: en.addModel }))
-    fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
-    expandModel(1)
-    fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} 1`), { target: { value: '64 KiB' } })
-
-    expect(screen.getByText(`${en.model} 1: ${en.modelContextInvalid}`)).toBeTruthy()
-    expect(buttonNamed(en.create).disabled).toBe(true)
-  })
-
-  it('keeps each half-typed capacity with its own row across a removal', () => {
+  it('keeps selected capacities with their rows across a removal', () => {
     mountCard()
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {
@@ -1240,18 +1184,15 @@ describe('hand-declared providers', () => {
       fireEvent.click(screen.getByRole('button', { name: en.addModel }))
       fireEvent.change(screen.getByLabelText(`${en.modelId} ${String(at)}`), { target: { value: id } })
       expandModel(at)
-      // Deliberately mid-word: the buffer exists so text like this survives.
       fireEvent.change(screen.getByLabelText(`${en.modelContextWindow} ${String(at)}`),
-        { target: { value: `${String(at)}.` } })
+        { target: { value: String(at === 1 ? 32_000 : at === 2 ? 64_000 : 128_000) } })
     }
 
-    // Removing the middle row: the one before keeps its position and text, the
-    // one after moves down carrying its own, and the removed row's text goes.
     fireEvent.click(screen.getByLabelText(`${en.removeModel} 2`))
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 1`).value).toBe('first')
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelContextWindow} 1`).value).toBe('1.')
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelContextWindow} 1`).value).toBe('32000')
     expect(screen.getByLabelText<HTMLInputElement>(`${en.modelId} 2`).value).toBe('third')
-    expect(screen.getByLabelText<HTMLInputElement>(`${en.modelContextWindow} 2`).value).toBe('3.')
+    expect(screen.getByLabelText<HTMLSelectElement>(`${en.modelContextWindow} 2`).value).toBe('128000')
   })
 
   it('refuses two models sharing one id', () => {
@@ -1288,7 +1229,7 @@ describe('hand-declared providers', () => {
     expect(buttonNamed(en.create).disabled).toBe(false)
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     expect(firstMutate(mutate).ops[0]?.value).toMatchObject({ models: [{ id: 'bare', input: ['text'] }] })
   })
 
@@ -1377,7 +1318,7 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'm' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     // No display name configured means none stored; the route id is the name.
     // No key typed means no reference either, matching the editor: the route
     // keeps its provider-native auth path instead of resolving a reference
@@ -1397,7 +1338,7 @@ describe('hand-declared providers', () => {
   it('closes without writing on cancel, and honors a read-only deployment', () => {
     const { onClose, mutate } = mountCard()
     fireEvent.click(screen.getByText(en.cancel))
-    expect(onClose).toHaveBeenCalledWith(false)
+    expect(onClose).toHaveBeenCalledWith(false, expect.any(String))
     expect(mutate).not.toHaveBeenCalled()
     cleanup()
 
@@ -1409,6 +1350,7 @@ describe('hand-declared providers', () => {
   it('closes the create card when an existing row is opened for editing', async () => {
     await mountSection({ providers: { openai: { baseURL: 'https://proxy.example/v1' } } })
 
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
     fireEvent.click(screen.getByRole('button', { name: en.customAdd }))
     expect(screen.getByText(en.customTitle)).toBeTruthy()
 
@@ -1421,12 +1363,13 @@ describe('hand-declared providers', () => {
   it('reaches the card from the section and returns to the button on cancel', async () => {
     await mountSection()
 
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
     fireEvent.click(screen.getByRole('button', { name: en.customAdd }))
     expect(screen.getByText(en.customTitle)).toBeTruthy()
 
     fireEvent.click(screen.getByText(en.cancel))
     await waitFor(() => { expect(screen.queryByText(en.customTitle)).toBeNull() })
-    expect(screen.getByRole('button', { name: en.customAdd })).toBeTruthy()
+    expect(screen.getByRole('button', { name: en.add })).toBeTruthy()
   })
 
   it('refuses an unusable key on the field and blocks creation', () => {
@@ -1497,7 +1440,7 @@ describe('hand-declared providers', () => {
     fireEvent.change(screen.getByLabelText(`${en.modelId} 1`), { target: { value: 'acme-large' } })
     fireEvent.click(screen.getByText(en.create))
 
-    await waitFor(() => { expect(onClose).toHaveBeenCalledWith(true) })
+    await waitFor(() => { expect(onClose.mock.calls.some(([changed, provider]) => changed === true && typeof provider === 'string')).toBe(true) })
     expect(set).not.toHaveBeenCalled()
   })
 })
@@ -1605,6 +1548,7 @@ describe('API key field', () => {
     const { controller, mutate } = await mountSection()
     const load = vi.spyOn(controller, 'load')
 
+    fireEvent.click(screen.getByRole('button', { name: en.add }))
     fireEvent.click(screen.getByRole('button', { name: en.customAdd }))
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })
     fireEvent.change(screen.getByLabelText(en.fullRequestUrl), {

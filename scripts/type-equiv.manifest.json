@@ -13,6 +13,11 @@
     },
     {
       "doc": "docs/subsystems/ocr.md",
+      "symbol": "OcrExtractedImage",
+      "source": "packages/ocr/ocr/src/types.ts"
+    },
+    {
+      "doc": "docs/subsystems/ocr.md",
       "symbol": "OcrExtractedDocument",
       "source": "packages/ocr/ocr/src/types.ts"
     },

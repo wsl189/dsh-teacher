@@ -1,0 +1,108 @@
+- region "工作台":
+  - main:
+    - heading "点例收集" [level=1]
+    - paragraph: 题目、解析与教学笔记
+    - search:
+      - textbox "搜索题目":
+        - /placeholder: 按标签或描述关键词搜索…
+      - button "开始语音输入"
+      - button "搜索"
+    - status: 已保存
+    - complementary "题目目录":
+      - text: 题目目录 2
+      - paragraph: 双击名称修改 · 右键更多操作
+      - button "方程例题"
+      - button "题目“方程例题”的操作"
+      - button "2"
+      - button "题目“2”的操作"
+      - button "添加新题"
+    - main:
+      - region "题目原件":
+        - heading "题目原件" [level=3]
+        - button "更换原件"
+        - iframe
+        - text: equation.pdf
+        - link "下载题目原件":
+          - /url: blob:{{webOrigin}}/{{uuid}}
+          - text: 下载
+      - region "Word 预览":
+        - heading "Word 预览" [level=3]
+        - button "AI 校对"
+        - text: MinerU OCR
+        - article:
+          - paragraph: 已知 x² − 3x + 2 = 0，求 x。
+          - paragraph: 提示：尝试因式分解。
+          - paragraph:
+            - text: 向量与分数：
+            - math: P A → ⋅ ( P B → + P C → ) = − 3 2
+            - text: 。
+          - paragraph:
+            - text: 上下标：
+            - math: x 1 2
+            - text: 。
+          - paragraph:
+            - text: 校对：点 O，
+            - math: "a : b : c"
+            - text: 。
+          - paragraph:
+            - text: A.
+            - math: a
+            - text: B.
+            - math: b
+            - text: C.
+            - math: "1"
+            - text: D.
+            - math: "2"
+          - paragraph:
+            - img
+        - text: 方程例题.docx
+        - link "下载 Word 文件":
+          - /url: blob:{{webOrigin}}/{{uuid}}
+          - text: 下载
+      - region "题目解析":
+        - heading "题目解析" [level=3]
+        - button "更换解析"
+        - iframe
+        - text: solution.pdf
+        - link "下载解析原件":
+          - /url: blob:{{webOrigin}}/{{uuid}}
+          - text: 下载
+      - region "解析 Word 预览":
+        - heading "解析 Word 预览" [level=3]
+        - button "AI 校对"
+        - text: MinerU OCR
+        - article:
+          - paragraph: 题目解析
+          - paragraph:
+            - text: （1）因式分解得
+            - math: ( x − 1 ) ( x − 2 ) = 0
+            - text: ，所以
+            - math: x 1 = 1
+            - text: ，
+            - math: x 2 = 2
+            - text: 。
+          - paragraph:
+            - text: （2）检验：
+            - math: 1 + 2 3 = 1
+            - text: 。
+          - paragraph: （i）结合函数图像讨论两个根的位置，并说明它们与横坐标轴交点之间的对应关系，写出完整的推理过程。
+          - paragraph: （ii）将所得结果代入原方程，验证两个根。
+          - paragraph:
+            - img
+        - text: 方程例题-解析.docx
+        - link "下载解析 Word 文件":
+          - /url: blob:{{webOrigin}}/{{uuid}}
+          - text: 下载
+      - region "题目标签":
+        - heading "题目标签" [level=3]
+        - text: 可多选 二次方程
+        - button "取消标签“二次方程”"
+        - button "选择预设标签"
+        - button "添加标签"
+      - region "题目描述":
+        - heading "题目描述" [level=3]
+        - button "开始语音输入"
+        - textbox "题目描述":
+          - /placeholder: 记录考点、解题思路或课堂用途，也可以点击麦克风语音输入…
+          - text: 适合讲解因式分解，关注学生的符号错误。
+        - img "题目描述手写区域"

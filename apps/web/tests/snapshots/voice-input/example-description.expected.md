@@ -1,0 +1,6 @@
+- region "题目描述":
+  - heading "题目描述" [level=3]
+  - button "开始语音输入"
+  - textbox "题目描述":
+    - /placeholder: 记录考点、解题思路或课堂用途，也可以点击麦克风语音输入…
+    - text: 课堂讲评 关注向量数量积的符号。

@@ -1,0 +1,14 @@
+- listitem:
+  - text: 智谱 GLM · 标准 API 官方预设
+  - button "编辑 智谱 GLM · 标准 API (zhipu-cn)": 编辑
+  - button "删除 智谱 GLM · 标准 API (zhipu-cn)": 删除
+  - text: 连接已验证 5 个模型 对话 / 推理 · 图像生成 · 语音识别 尚未分配使用场景
+  - button "分配使用场景"
+  - group:
+    - text: 查看模型 测试模型：GLM-5.2
+    - list:
+      - listitem: GLM-5.2 对话 / 推理
+      - listitem: GLM-5 Turbo 对话 / 推理
+      - listitem: GLM-5V Turbo 视觉理解
+      - listitem: GLM-Image 图像生成
+      - listitem: GLM-ASR-2512 语音识别

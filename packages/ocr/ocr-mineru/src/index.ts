@@ -9,6 +9,7 @@ import {
   type OcrBoundingBox,
   type OcrExtractRequest,
   type OcrExtractedDocument,
+  type OcrExtractedImage,
   type OcrLayoutDocument,
   type OcrLayoutElement,
   type OcrLayoutLimits,
@@ -22,6 +23,7 @@ import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-sett
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { z as validation } from 'zod'
+import { tableRasterPasses } from './table-raster.ts'
 
 const DEFAULT_ENDPOINT = 'http://127.0.0.1:8000/file_parse'
 const BACKEND_VALUES = ['pipeline', 'vlm-engine', 'hybrid-engine'] as const
@@ -65,12 +67,19 @@ const mineruResponseSchema = validation.looseObject({
   results: validation.record(validation.string(), validation.looseObject({
     md_content: validation.string().optional(),
     middle_json: validation.string().optional(),
+    images: validation.record(validation.string(), validation.string()).optional(),
   })),
 })
 
 const mineruLayoutResponseSchema = validation.looseObject({
   results: validation.record(validation.string(), validation.looseObject({
     middle_json: validation.string().optional(),
+  })),
+})
+
+const mineruTextMiddleSchema = validation.looseObject({
+  pdf_info: validation.array(validation.looseObject({
+    discarded_blocks: validation.array(validation.unknown()).optional(),
   })),
 })
 
@@ -150,9 +159,10 @@ export class MinerUProvider implements OcrProvider {
 
   /**
    * Upload one document to MinerU and normalize its Markdown response.
+   * Text extraction does not require PDF page geometry in Office metadata.
    * @param request - base64 bytes and source metadata.
    * @param signal - optional caller cancellation.
-   * @returns extracted reading-order Markdown.
+   * @returns reading-order Markdown and, when requested, bounded embedded image assets.
    */
   async extract(request: OcrExtractRequest, signal?: AbortSignal): Promise<OcrExtractedDocument> {
     const config = this.source()
@@ -160,6 +170,8 @@ export class MinerUProvider implements OcrProvider {
     const imageDetail = request.enhanceImageDetail === true && request.mediaType.startsWith('image/')
     const passes = imageDetail ? await rasterPasses(decoded.bytes) : [{ label: 'whole document', bytes: decoded.bytes }]
     const extracted: string[] = []
+    const images = new Map<string, OcrExtractedImage>()
+    let imageBytes = 0
     for (const [index, pass] of passes.entries()) {
       const passRequest = imageDetail
         ? { ...request, name: `${request.name}.detail-${String(index + 1)}.png`, mediaType: 'image/png' }
@@ -168,7 +180,20 @@ export class MinerUProvider implements OcrProvider {
         bytes: pass.bytes,
         uploadName: imageDetail ? passRequest.name : decoded.uploadName,
       }, config, 'markdown'), signal)
-      extracted.push(`## OCR pass: ${pass.label}\n\n${markdownFromResponse(parsed, request.includeDiscardedText === true)}`)
+      const content = contentFromResponse(parsed, request)
+      extracted.push(`## OCR pass: ${pass.label}\n\n${content.markdown}`)
+      for (const image of content.images) {
+        const previous = images.get(image.name)
+        if (previous !== undefined) {
+          if (previous.contentBase64 !== image.contentBase64 || previous.mediaType !== image.mediaType) {
+            throw new OcrError('MinerU returned conflicting image targets', 'invalid-response')
+          }
+          continue
+        }
+        imageBytes += image.contentBase64.length
+        if (imageBytes > config.maxResponseBytes) throw new OcrError('MinerU images exceed the configured response limit', 'invalid-response')
+        images.set(image.name, image)
+      }
     }
     const completeMarkdown = imageDetail
       ? extracted.join('\n\n')
@@ -180,6 +205,7 @@ export class MinerUProvider implements OcrProvider {
       markdown: truncated ? completeMarkdown.slice(0, config.maxOutputCharacters) : completeMarkdown,
       provider: this.id,
       truncated,
+      ...(request.includeImages === true ? { images: [...images.values()] } : {}),
     }
   }
 
@@ -244,7 +270,7 @@ export class MinerUProvider implements OcrProvider {
       .map(result => result.middle_json ?? '')
       .find(content => content.trim() !== '')
     if (encoded === undefined) throw new OcrError('MinerU returned no structured document layout', 'empty-result')
-    const middle = parseMiddleJson(encoded)
+    const middle = parseMiddleJson(encoded, mineruMiddleSchema)
     return middle.pdf_info.map(page => normalizePage(page, pageRange?.start ?? 0))
   }
 
@@ -360,7 +386,7 @@ function createForm(
   form.append('return_middle_json', output === 'layout' || request.includeDiscardedText === true ? 'true' : 'false')
   form.append('return_model_output', 'false')
   form.append('return_content_list', 'false')
-  form.append('return_images', 'false')
+  form.append('return_images', output === 'markdown' && request.includeImages === true ? 'true' : 'false')
   form.append('response_format_zip', 'false')
   form.append('return_original_file', 'false')
   const pageRange = (request as OcrLayoutRequest).pageRange
@@ -399,6 +425,8 @@ async function rasterPasses(bytes: Uint8Array): Promise<RasterPass[]> {
     height: Math.max(height, Math.round(height * scale)),
     fit: 'fill',
   }).png().toBuffer()
+  const tableRegions = await tableRasterPasses(bytes, ENHANCED_IMAGE_LONG_EDGE)
+  if (tableRegions.length > 0) return [{ label: 'enhanced whole image', bytes: whole }, ...tableRegions]
   const columns = width >= height ? LANDSCAPE_COLUMNS : PORTRAIT_COLUMNS
   const rows = width >= height ? LANDSCAPE_ROWS : PORTRAIT_ROWS
   const regions: RasterPass[] = []
@@ -432,14 +460,25 @@ async function rasterPasses(bytes: Uint8Array): Promise<RasterPass[]> {
   return [{ label: 'enhanced whole image', bytes: whole }, ...regions]
 }
 
-function markdownFromResponse(parsed: unknown, includeDiscardedText: boolean): string {
+function contentFromResponse(parsed: unknown, request: OcrExtractRequest): { markdown: string; images: readonly OcrExtractedImage[] } {
   const validated = mineruResponseSchema.safeParse(parsed)
   if (!validated.success) throw new OcrError('MinerU response fields are invalid', 'invalid-response')
-  const markdown = Object.values(validated.data.results)
-    .map(result => result.md_content ?? '')
-    .find(content => content.trim() !== '')
-  if (markdown === undefined) throw new OcrError('MinerU returned no document content', 'empty-result')
-  return includeDiscardedText ? prependDiscardedText(markdown, validated.data.results) : markdown
+  const selected = Object.values(validated.data.results).find(result => result.md_content?.trim())
+  if (selected?.md_content === undefined) throw new OcrError('MinerU returned no document content', 'empty-result')
+  const markdown = request.includeDiscardedText === true
+    ? prependDiscardedText(selected.md_content, validated.data.results)
+    : selected.md_content
+  const images = request.includeImages === true ? Object.entries(selected.images ?? {}).map(([name, value]) => {
+    const encoded = /^data:(image\/[a-z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})$/u.exec(value)
+    const mediaType = encoded?.[1]
+    const contentBase64 = encoded?.[2]
+    if (/[/\\]/u.test(name) || mediaType === undefined || contentBase64 === undefined ||
+      Buffer.from(contentBase64, 'base64').toString('base64') !== contentBase64) {
+      throw new OcrError('MinerU returned an invalid embedded image', 'invalid-response')
+    }
+    return { name: `images/${name}`, mediaType, contentBase64 }
+  }) : []
+  return { markdown, images }
 }
 
 function prependDiscardedText(markdown: string, results: MinerUMarkdownResults): string {
@@ -447,7 +486,7 @@ function prependDiscardedText(markdown: string, results: MinerUMarkdownResults):
     .map(result => result.middle_json ?? '')
     .find(content => content.trim() !== '')
   if (encoded === undefined) return markdown
-  const middle = parseMiddleJson(encoded)
+  const middle = parseMiddleJson(encoded, mineruTextMiddleSchema)
   const seen = new Set<string>()
   const supplemental = middle.pdf_info
     .flatMap(page => page.discarded_blocks ?? [])
@@ -461,14 +500,14 @@ function prependDiscardedText(markdown: string, results: MinerUMarkdownResults):
   return supplemental.length === 0 ? markdown : `${supplemental.join('\n')}\n\n${markdown}`
 }
 
-function parseMiddleJson(encoded: string): validation.infer<typeof mineruMiddleSchema> {
+function parseMiddleJson<T>(encoded: string, schema: validation.ZodType<T>): T {
   let middle: unknown
   try {
     middle = JSON.parse(encoded)
   } catch (error) {
     throw new OcrError('MinerU returned invalid middle JSON', 'invalid-response', { cause: error })
   }
-  const parsed = mineruMiddleSchema.safeParse(middle)
+  const parsed = schema.safeParse(middle)
   if (!parsed.success) throw new OcrError('MinerU middle JSON fields are invalid', 'invalid-response')
   return parsed.data
 }

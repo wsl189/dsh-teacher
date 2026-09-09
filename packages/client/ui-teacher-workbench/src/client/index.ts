@@ -19,9 +19,12 @@ import {
   type TeacherWorkbenchSettings,
 } from '../settings.ts'
 import { TeacherWorkbenchController } from './controller.ts'
+import { ExampleCollectionController } from './example-collection-controller.ts'
 import { QuestionCuttingController } from './question-cutting-controller.ts'
-import type { TeacherWorkbenchInjected, TeacherWorkbenchSettingsInjected } from './contracts.ts'
-import { bytesToBase64, extractWorkbenchDocument, extractWorkbenchLayout } from './extract-document.ts'
+import { TimetableImportController } from './timetable-import-controller.ts'
+import type { TeacherWorkbenchCommands, TeacherWorkbenchInjected, TeacherWorkbenchSettingsInjected } from './contracts.ts'
+import { extractWorkbenchDocument, extractWorkbenchLayout } from './extract-document.ts'
+import { bytesToBase64 } from './document-bytes.ts'
 import { fetchTeacherWeather } from './weather.ts'
 import { createTeacherWorkbenchViewStore } from './view-store.ts'
 import { SidebarWorkbench } from './SidebarWorkbench.tsx'
@@ -96,6 +99,15 @@ export function apply(ctx: ClientContext): void {
     namespace: QUESTION_CUTTING_SETTINGS_NAMESPACE,
   })
   const controller = new TeacherWorkbenchController(ctx.remote.teacherWorkbench)
+  const examples = new ExampleCollectionController(ctx.remote.teacherWorkbench)
+  ctx.effect(() => {
+    const protectDrafts = (event: BeforeUnloadEvent): void => {
+      if (Object.keys(examples.getSnapshot().drafts).length === 0) return
+      event.preventDefault()
+    }
+    window.addEventListener('beforeunload', protectDrafts)
+    return () => { window.removeEventListener('beforeunload', protectDrafts) }
+  }, 'ui-teacher-workbench: unsaved example descriptions')
   const questionCutting = new QuestionCuttingController({
     extractLayout: (file, pageIndexes, renderScale, progress) => (
       extractWorkbenchLayout(file, ctx.remote.ocr, pageIndexes, renderScale, progress)
@@ -142,18 +154,55 @@ export function apply(ctx: ClientContext): void {
     ),
     saveBatch: request => controller.saveQuestionBatch(request),
   })
+  const extractDocument: TeacherWorkbenchCommands['extractDocument'] = (file, options) => (
+    extractWorkbenchDocument(file, ctx.remote.ocr, options)
+  )
+  const normalizeTimetable: TeacherWorkbenchCommands['normalizeTimetable'] = async (fileName, markdown, defaults, image) => {
+    return ctx.remote.teacherWorkbench.normalizeTimetable({
+      fileName,
+      markdown,
+      defaults,
+      ...(image === undefined ? {} : {
+        image: {
+          mediaType: image.type as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
+          contentBase64: bytesToBase64(new Uint8Array(await image.arrayBuffer())),
+        },
+      }),
+    })
+      .then(carried => carried.ok
+        ? carried.value
+        : {
+          ok: false as const,
+          error: { code: 'tool-model-unavailable' as const, message: carried.error.message },
+        })
+      .catch((error: unknown) => ({
+        ok: false as const,
+        error: {
+          code: 'tool-model-unavailable' as const,
+          message: error instanceof Error ? error.message : String(error),
+        },
+      }))
+  }
+  const timetableImport = new TimetableImportController({
+    extractDocument, normalizeTimetable, importTimetableEntries: inputs => controller.importTimetableEntries(inputs),
+  })
   const viewStore = createTeacherWorkbenchViewStore()
 
   ctx.effect(() => async () => {
+    timetableImport.dispose()
+    await examples.dispose()
     await questionCutting.dispose()
     controller.dispose()
   }, 'ui-teacher-workbench: object layer and question-cutting queue')
   ctx.on('connection/reset', () => {
+    if (examples.getSnapshot().loaded) void examples.commands.refresh()
     if (controller.getSnapshot().status !== 'cold') void controller.resync()
   })
 
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
-    hooks: { workbench: controller, teacherSettings: settings, questionCuttingSettings, questionCutting },
+    hooks: { workbench: controller, teacherSettings: settings, questionCuttingSettings, questionCutting, examples, timetableImport },
+    timetableImportCommands: timetableImport.commands,
+    exampleCommands: examples.commands,
     ensure: () => controller.refresh(),
     subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
     setTeacherName: name => settings.set('teacherName', name),
@@ -183,40 +232,8 @@ export function apply(ctx: ClientContext): void {
     deleteLedgerEntry: id => controller.deleteLedgerEntry(id),
     saveCalendarItem: input => controller.saveCalendarItem(input),
     deleteCalendarItem: id => controller.deleteCalendarItem(id),
-    extractDocument: (file, options) => extractWorkbenchDocument(file, ctx.remote.ocr, options),
-    normalizeTimetable: async (fileName, markdown, defaults, image) => {
-      const parentSessionId = ctx.sessions.list.getSnapshot().current
-      return parentSessionId === undefined
-        ? Promise.resolve({
-          ok: false as const,
-          error: { code: 'session-unavailable' as const, message: 'no current session' },
-        })
-        : ctx.remote.teacherWorkbench.normalizeTimetable({
-          parentSessionId,
-          fileName,
-          markdown,
-          defaults,
-          ...(image === undefined ? {} : {
-            image: {
-              mediaType: image.type as 'image/png' | 'image/jpeg' | 'image/webp' | 'image/gif',
-              contentBase64: bytesToBase64(new Uint8Array(await image.arrayBuffer())),
-            },
-          }),
-        })
-          .then(carried => carried.ok
-            ? carried.value
-            : {
-              ok: false as const,
-              error: { code: 'tool-model-unavailable' as const, message: carried.error.message },
-            })
-          .catch((error: unknown) => ({
-            ok: false as const,
-            error: {
-              code: 'tool-model-unavailable' as const,
-              message: error instanceof Error ? error.message : String(error),
-            },
-          }))
-    },
+    extractDocument,
+    normalizeTimetable,
     enqueueQuestionCutting: (request) => { questionCutting.enqueue(request) },
     importCalendarItems: inputs => controller.importCalendarItems(inputs),
     saveTimetableEntry: input => controller.saveTimetableEntry(input),

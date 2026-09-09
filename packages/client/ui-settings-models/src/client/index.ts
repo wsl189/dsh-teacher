@@ -82,6 +82,7 @@ export function apply(ctx: ClientContext): void {
     settings: ctx.remote.settings,
   }
   const controller = new ModelsSettingsStore(wire, schema, ctx.settingsScope.describe())
+  ctx.effect(() => () => { controller.dispose() }, 'ui-settings-models: cancel verification')
   // Registration-time text (the nav label thunk) and the inject faces share
   // one bound translate; copy freshness rides the locale revision.
   const t = ctx.locale.bind(NS) as ModelsSectionInjected['t']
@@ -107,7 +108,10 @@ export function apply(ctx: ClientContext): void {
     const refreshModels = (): void => { refreshIfLoaded(controller) }
     const disposers = [
       ctx.remote.$on('settings/document-updated', () => { refreshModels() }),
-      ctx.remote.$on('credentials/reference-updated', refreshModels),
+      ctx.remote.$on('credentials/reference-updated', (ref) => {
+        controller.invalidateCredential(ref)
+        refreshModels()
+      }),
       ctx.remote.$on('llm/adapters-updated', refreshModels),
       ctx.on('connection/reset', refreshModels),
     ]

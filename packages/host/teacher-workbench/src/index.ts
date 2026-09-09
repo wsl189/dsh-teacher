@@ -11,6 +11,13 @@ import type { DomainGlobal } from '@deepseek-ai/dsh-storage-domain'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from '@deepseek-ai/schemastery'
 import { randomUUID } from 'node:crypto'
+import { TeacherExampleCollection } from './example-collection.ts'
+import { correctExampleWithAgent, identifyExampleHeadingWithAgent, type TeacherExampleCorrectionConfig, type TeacherExampleCorrectionSource, type TeacherExampleHeadingSource } from './example-correction-agent.ts'
+import type {
+  TeacherExample, TeacherExampleCatalog, TeacherExampleDocumentRequest,
+  TeacherExampleExportRequest, TeacherExampleFile, TeacherExampleFileRequest,
+  TeacherExampleId, TeacherExampleRequest, TeacherExampleResult, TeacherExampleUpdateRequest, TeacherExampleUploadRequest,
+} from './example-types.ts'
 import { relative } from 'node:path'
 import {
   teacherWorkbenchDomainSpec,
@@ -126,6 +133,7 @@ const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbenc
 const DEFAULT_QUESTION_IMAGE_BYTES = 25 * 1024 * 1024
 const DEFAULT_QUESTION_BATCH_BYTES = 96 * 1024 * 1024
 const DEFAULT_TIMETABLE_SOURCE_CHARACTERS = 500_000
+const DEFAULT_TIMETABLE_SOURCE_PAGE_BYTES = 12_000
 const DEFAULT_TIMETABLE_ENTRIES = 1_000
 const DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS = 60 * 60 * 1000
 const DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS = 60 * 60 * 1000
@@ -153,6 +161,10 @@ const DEFAULT_QUESTION_SEGMENTATION_REASONING_ENABLED = false
 const DEFAULT_QUESTION_SEGMENTATION_AGENT_TIMEOUT_MS = 5 * 60 * 1000
 const DEFAULT_SOURCE_DOCUMENT_BYTES = 100 * 1024 * 1024
 const DEFAULT_REMINDER_RETRY_MS = 60_000
+const DEFAULT_EXAMPLE_CORRECTION_CHARACTERS = 50_000
+const DEFAULT_EXAMPLE_CORRECTION_PAGES = 20
+const DEFAULT_EXAMPLE_CORRECTION_PDF_SCALE = 2
+const DEFAULT_EXAMPLE_CORRECTION_TIMEOUT_MS = 300_000
 
 export type * from './types.ts'
 export { registerTeacherWorkbenchTools } from './agent-tools.ts'
@@ -189,7 +201,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Host persistence, document-source, question-media, and provider configuration. */
-export interface Config {
+export interface Config extends TeacherExampleCorrectionConfig {
   /** Delay before retrying a mobile reminder after an unavailable or rejected delivery. */
   reminderRetryMs?: number
   /** Nominatim-compatible endpoint used to resolve districts, counties, and cities. */
@@ -210,8 +222,10 @@ export interface Config {
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one automatically saved part. */
   maxQuestionBatchBytes: number
-  /** Maximum MinerU characters admitted to one timetable-agent prompt. */
+  /** Maximum OCR characters admitted from one complete timetable upload. */
   maxTimetableSourceCharacters: number
+  /** Maximum UTF-8 source bytes per timetable tool page; keep below the tool-result inline budget. */
+  timetableSourcePageBytes: number
   /** Maximum structured rows accepted from one timetable-agent run. */
   maxTimetableEntries: number
   /** Wall-clock deadline for one timetable-agent run. */
@@ -268,6 +282,10 @@ export interface Config {
 export class TeacherWorkbenchService extends TypertRemoteService {
   static inject = ['storageDomain']
   static Config: z<Config> = z.object({
+    maxExampleCorrectionCharacters: z.natural().min(1_000).max(1_000_000).default(DEFAULT_EXAMPLE_CORRECTION_CHARACTERS),
+    maxExampleCorrectionPages: z.natural().min(1).max(100).default(DEFAULT_EXAMPLE_CORRECTION_PAGES),
+    exampleCorrectionPdfScale: z.number().min(0.5).max(4).default(DEFAULT_EXAMPLE_CORRECTION_PDF_SCALE),
+    exampleCorrectionTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_EXAMPLE_CORRECTION_TIMEOUT_MS),
     geocodingEndpoint: z.string().pattern(/^https?:\/\/.+/u).default(DEFAULT_WEATHER_GEOCODING_ENDPOINT),
     geocodingCacheEntries: z.natural().min(1).max(4_096).default(DEFAULT_WEATHER_GEOCODING_CACHE_ENTRIES),
     segmentsRoot: z.string().default(''),
@@ -278,6 +296,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxQuestionImageBytes: z.natural().min(1_024).max(200 * 1024 * 1024).default(DEFAULT_QUESTION_IMAGE_BYTES),
     maxQuestionBatchBytes: z.natural().min(1_024).max(2 * 1024 * 1024 * 1024).default(DEFAULT_QUESTION_BATCH_BYTES),
     maxTimetableSourceCharacters: z.natural().min(1_000).max(1_000_000).default(DEFAULT_TIMETABLE_SOURCE_CHARACTERS),
+    timetableSourcePageBytes: z.natural().min(1_000).max(40_000).default(DEFAULT_TIMETABLE_SOURCE_PAGE_BYTES),
     maxTimetableEntries: z.natural().min(1).max(10_000).default(DEFAULT_TIMETABLE_ENTRIES),
     timetableAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS),
     timetableVisionAgentTimeoutMs: z.natural().min(1_000).max(3_600_000).default(DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS),
@@ -321,10 +340,13 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   })
 
   private global?: DomainGlobal<TeacherWorkbenchDocument>
+  private readonly examples: TeacherExampleCollection
   private operationTail: Promise<void> = Promise.resolve()
   private acceptingWrites = true
   private acceptingQuestionWork = true
   private questionAgentParent: Promise<AgentHandle> | undefined
+  private readonly timetableAbort = new AbortController()
+  private readonly timetableRuns = new Set<Promise<TeacherTimetableNormalizeResult>>()
   private readonly weatherProvider: TeacherWeatherProvider
   private readonly reminderRuntime: TeacherReminderRuntime
   private configSource: () => Config
@@ -337,6 +359,10 @@ export class TeacherWorkbenchService extends TypertRemoteService {
    * @param config - geocoding endpoint and cache policy.
    */
   constructor(ctx: Context, config: Config = {
+    maxExampleCorrectionCharacters: DEFAULT_EXAMPLE_CORRECTION_CHARACTERS,
+    maxExampleCorrectionPages: DEFAULT_EXAMPLE_CORRECTION_PAGES,
+    exampleCorrectionPdfScale: DEFAULT_EXAMPLE_CORRECTION_PDF_SCALE,
+    exampleCorrectionTimeoutMs: DEFAULT_EXAMPLE_CORRECTION_TIMEOUT_MS,
     geocodingEndpoint: DEFAULT_WEATHER_GEOCODING_ENDPOINT,
     geocodingCacheEntries: DEFAULT_WEATHER_GEOCODING_CACHE_ENTRIES,
     segmentsRoot: '',
@@ -347,6 +373,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     maxQuestionImageBytes: DEFAULT_QUESTION_IMAGE_BYTES,
     maxQuestionBatchBytes: DEFAULT_QUESTION_BATCH_BYTES,
     maxTimetableSourceCharacters: DEFAULT_TIMETABLE_SOURCE_CHARACTERS,
+    timetableSourcePageBytes: DEFAULT_TIMETABLE_SOURCE_PAGE_BYTES,
     maxTimetableEntries: DEFAULT_TIMETABLE_ENTRIES,
     timetableAgentTimeoutMs: DEFAULT_TIMETABLE_AGENT_TIMEOUT_MS,
     timetableVisionAgentTimeoutMs: DEFAULT_TIMETABLE_VISION_AGENT_TIMEOUT_MS,
@@ -375,6 +402,32 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     reminderRetryMs: DEFAULT_REMINDER_RETRY_MS,
   }) {
     super(ctx, 'teacherWorkbench')
+    const exampleAgent = async (
+      request: TeacherExampleCorrectionSource | TeacherExampleHeadingSource,
+      signal: AbortSignal,
+    ): Promise<TeacherExampleResult<string>> => {
+      let parentSessionId: SessionId
+      try {
+        parentSessionId = await this.questionAgentParentSessionId()
+      } catch {
+        return { ok: false, error: { code: 'correction-unavailable', message: 'The internal example-processing session is unavailable' } }
+      }
+      return 'markdown' in request
+        ? correctExampleWithAgent(ctx, { ...request, parentSessionId }, this.configSource(), signal)
+        : identifyExampleHeadingWithAgent(ctx, { ...request, parentSessionId }, this.configSource(), signal)
+    }
+    this.examples = new TeacherExampleCollection(
+      ctx.storageDomain,
+      () => this.configSource().maxSourceDocumentBytes,
+      (request, signal) => {
+        const ocr = ctx.get('ocr')
+        return ocr === undefined
+          ? Promise.resolve({ ok: false, error: { code: 'provider-unavailable', message: 'OCR is unavailable' } })
+          : ocr.extractAbortable(request, signal)
+      },
+      exampleAgent,
+      exampleAgent,
+    )
     this.weatherProvider = new TeacherWeatherProvider(config)
     this.configSource = () => config
     this.reminderRuntime = new TeacherReminderRuntime(
@@ -398,6 +451,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   protected async [Service.init](): Promise<void> {
     const domain = await this.ctx.storageDomain.open(teacherWorkbenchDomainSpec)
     this.ctx.effect(() => async () => {
+      this.timetableAbort.abort(new Error('teacher-workbench: service is disposing'))
+      await Promise.allSettled([...this.timetableRuns])
+      await this.examples.dispose()
       await this.reminderRuntime.dispose()
       this.acceptingQuestionWork = false
       const questionAgentParent = await this.questionAgentParent?.catch(() => undefined)
@@ -421,6 +477,96 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('read')
   read(_request: TeacherWorkbenchReadRequest): Promise<TeacherWorkbenchReadResult> {
     return Promise.resolve(success(snapshotDocument(this.requireGlobal().get())))
+  }
+
+  /**
+   * List collected question metadata and tags.
+   * @param _request - empty directory-list request.
+   * @returns saved questions and reusable tags without file bytes.
+   */
+  @Remote('listExamples')
+  listExamples(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExampleCatalog>> {
+    return this.examples.list()
+  }
+
+  /**
+   * Create one numeric question directory.
+   * @param _request - empty creation request.
+   * @returns a new numeric directory with empty question and explanation documents, tags, and description.
+   */
+  @Remote('createExample')
+  createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.create()
+  }
+
+  /**
+   * Save collected question metadata.
+   * @param request - question identity and changed metadata fields.
+   * @returns the saved question; concurrent OCR preserves these edits.
+   */
+  @Remote('updateExample')
+  updateExample(request: TeacherExampleUpdateRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.update(request)
+  }
+
+  /**
+   * Add a reusable collection tag.
+   * @param request - reusable tag name.
+   * @returns its normalized name after persistence.
+   */
+  @Remote('addExampleTag')
+  addExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>> {
+    return this.examples.addTag(request.name)
+  }
+
+  /**
+   * Delete one collected question and its files.
+   * @param request - question to delete with both documents’ originals and Word files.
+   * @returns the deleted identity.
+   */
+  @Remote('deleteExample')
+  deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>> {
+    return this.examples.delete(request)
+  }
+
+  /**
+   * Retain a collected question source before OCR.
+   * @param request - original image or PDF, owning question, and question or explanation selection.
+   * @returns the saved source metadata, ready for OCR.
+   */
+  @Remote('uploadExample')
+  uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.upload(request)
+  }
+
+  /**
+   * Run MinerU OCR, proofread it against the original through the tool model, and generate Word.
+   * @param request - question or explanation whose current original needs recognition.
+   * @returns the saved Word status; failures retain the original and any existing Word for retry.
+   */
+  @Remote('recognizeExample')
+  recognizeExample(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.recognize(request)
+  }
+
+  /**
+   * Read a collected file, restoring missing Word illustrations from its source and retaining uniform typography.
+   * @param request - selected question or explanation and its original or Word file.
+   * @returns the saved file for preview or download.
+   */
+  @Remote('readExampleFile')
+  readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>> {
+    return this.examples.readFile(request)
+  }
+
+  /**
+   * Export selected questions and explanations as one editable Word document.
+   * @param request - ordered question identities and paired or grouped explanation placement; no headings, tags, or descriptions are added.
+   * @returns the compiled Word file; unfinished uploaded documents prevent export.
+   */
+  @Remote('exportExamplesWord')
+  exportExamplesWord(request: TeacherExampleExportRequest): Promise<TeacherExampleResult<TeacherExampleFile>> {
+    return this.examples.exportWord(request)
   }
 
   /**
@@ -532,20 +678,26 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Reconstruct MinerU timetable text through the configured tool model.
-   * @param request - live parent session, OCR source, and current timetable defaults.
+   * Recognize an upload with an independent child using the configured tool model.
+   * @param request - Original image or OCR evidence and the selected timetable destination.
    * @returns structured rows for browser review or a stable failure.
    */
   @Remote('normalizeTimetable')
   normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult> {
-    return normalizeTimetableWithAgent(this.ctx, request, this.configSource())
+    const run = normalizeTimetableWithAgent(this.ctx, request, this.configSource(), this.timetableAbort.signal)
+    this.timetableRuns.add(run)
+    void run.then(
+      () => { this.timetableRuns.delete(run) },
+      () => { this.timetableRuns.delete(run) },
+    )
+    return run
   }
 
   /**
    * Return the service-owned hidden parent used by question-processing children.
    *
    * The parent belongs to the workbench rather than the selected conversation,
-   * so navigating, deleting, or cold-loading a user session cannot cancel a cut.
+   * so navigating, deleting, or cold-loading a user session cannot cancel question cutting or OCR proofreading.
    * Its subagent origin keeps it out of root-session navigation.
    * @returns a live internal parent identity.
    */

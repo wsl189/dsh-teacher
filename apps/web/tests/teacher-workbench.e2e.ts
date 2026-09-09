@@ -1,11 +1,14 @@
-import { mkdir, readFile, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, utimes, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
+import { unzipSync, strFromU8 } from 'fflate'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
+import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
+import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-host-teacher-workbench'
 import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import {
@@ -17,6 +20,8 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { ExampleCorrectionAdapter } from './example-correction-fixture.ts'
+import { TimetableAgentAdapter, smallGradeEntries, studyEntries } from './timetable-agent-fixture.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/teacher-workbench', import.meta.url))
 const OVERLAY = fileURLToPath(new URL('./teacher-workbench.overlay.yml', import.meta.url))
@@ -41,6 +46,7 @@ const STUDY_IMPORT_EXPECTED = join(SNAPSHOT_DIR, 'study-import.expected.md')
 const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.md')
 const QUESTION_SAVE_DIRECTORY_EXPECTED = join(SNAPSHOT_DIR, 'question-save-directory.expected.md')
 const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
+const QUESTION_DIRECTORY_NAMES_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-directory-names.expected.md', import.meta.url))
 const QUESTION_CUTTING_PROGRESS_EXPECTED = join(SNAPSHOT_DIR, 'question-cutting-progress.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
@@ -78,6 +84,7 @@ describe('web e2e: durable teacher workbench', () => {
   let tripwire: ReturnType<typeof watchConsole>
   let minerUServer: Server
   let minerUMarkdown = ''
+  let minerUImages: Record<string, string> = {}
   let minerUMiddleJson = ''
   let minerUResponseGate: Promise<void> | null = null
 
@@ -111,6 +118,7 @@ describe('web e2e: durable teacher workbench', () => {
           }
           const responseGate = minerUResponseGate
           const responseMarkdown = minerUMarkdown
+          const responseImages = /name="return_images"\r\n\r\ntrue/u.test(upload) ? minerUImages : undefined
           const responseMiddleJson = minerUMiddleJson
           if (responseGate !== null) await responseGate
           response.setHeader('content-type', 'application/json')
@@ -118,6 +126,7 @@ describe('web e2e: durable teacher workbench', () => {
             results: {
               document: {
                 md_content: responseMarkdown,
+                images: responseImages,
                 ...(responseMiddleJson === '' ? {} : { middle_json: responseMiddleJson }),
               },
             },
@@ -319,6 +328,383 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('persists collected examples, Word previews, annotations, and tag search in SQLite', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-example-collection'))
+    const proofreader = new ExampleCorrectionAdapter()
+    const modelSelection = scaffold.ctx.agentDefaultModel.currentSelection()
+    const disposeAdapter = scaffold.ctx.effect(
+      () => scaffold.ctx.llm.registerAdapter(['example-proofreading-test'], proofreader), 'Example proofreading fixture',
+    )
+    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      ...modelSelection, toolProvider: 'example-proofreading-test', toolModel: 'proofreader',
+    })
+    const recordedInputs: SessionEvent<'user/message'>[] = []
+    const recordedHeadings: SessionEvent<'user/message'>[] = []
+    const disposeEvents = scaffold.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"mineruMarkdown":'))) {
+        recordedInputs.push(event)
+      }
+      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"documentText":'))) {
+        recordedHeadings.push(event)
+      }
+    })
+    onTestFinished(async () => {
+      disposeEvents()
+      await disposeAdapter()
+      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, modelSelection)
+    })
+    const captureCollection = async (selector: string): Promise<string> => (
+      await captureStableAria(page, selector, scaffold.workspaceCwd)
+    ).replaceAll(`blob:${scaffold.baseUrl}/`, 'blob:{{webOrigin}}/')
+    const expectWordTypography = async (preview: Locator): Promise<void> => {
+      const typography = await preview.locator('section.example-word').evaluateAll(sections => sections.flatMap(section =>
+        Array.from(section.querySelectorAll('p span, math')).map((element) => {
+          const style = getComputedStyle(element)
+          return { math: element.localName === 'math', family: style.fontFamily, size: style.fontSize, weight: style.fontWeight }
+        }),
+      ))
+      expect(typography.length).toBeGreaterThan(0)
+      for (const style of typography) {
+        expect(style.family).toContain(style.math ? 'Cambria Math' : 'Times New Roman')
+        expect(style.size).toBe('16px')
+        expect(style.weight).toBe('400')
+      }
+    }
+    const savedTags = async (index: number): Promise<readonly string[] | undefined> => {
+      const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
+      if (!catalog.ok) throw new Error(catalog.error.code)
+      return catalog.value.questions[index]?.tags
+    }
+    const expectSubquestionIndents = async (xml: string): Promise<void> => {
+      const indents = await page.evaluate((source) => {
+        const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        const document = new DOMParser().parseFromString(source, 'application/xml')
+        return Array.from(document.getElementsByTagNameNS(ns, 'p'))
+          .filter(paragraph => paragraph.textContent?.startsWith('（i）') || paragraph.textContent?.startsWith('（ii）'))
+          .map((paragraph) => {
+            const indent = paragraph.getElementsByTagNameNS(ns, 'ind').item(0)
+            const keepLines = paragraph.getElementsByTagNameNS(ns, 'keepLines').item(0)
+            return [indent?.getAttributeNS(ns, 'left'), indent?.getAttributeNS(ns, 'firstLine'), keepLines?.getAttributeNS(ns, 'val')]
+          })
+      }, xml)
+      expect(indents).toEqual([['480', '0', 'true'], ['480', '0', 'true']])
+    }
+    minerUMarkdown = '![题目示意图](images/figure.svg)\n【题 4】（2019 人教 $A$ 版必修第二册 P33 探究变式）\n已知 x² − 3x + 2 = 0，求 x。\n提示：尝试因式分解。\n向量与分数：$\\overrightarrow{PA}\\cdot(\\overrightarrow{PB}+\\overrightarrow{PC})=-\\frac{3}{2}$。\n上下标：$x_1^2$。\n校对：点0，$a\\cdot b:c$。\nA.\t$\\mathbf{a}$ B.\t$b$ C.\t$1$ D.\t$2$'
+    minerUImages = { 'figure.svg': `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 400 200"><rect width="400" height="200" fill="white"/><path d="M40 170L200 20L360 170Z" fill="none" stroke="black" stroke-width="2"/><path d="M200 20L200 170" stroke="black" stroke-dasharray="5 5"/></svg>').toString('base64')}` }
+    const screenshotRoot = fileURLToPath(new URL('../../../.playwright-mcp/example-collection', import.meta.url))
+    await mkdir(screenshotRoot, { recursive: true })
+    await openModule('点例收集')
+    const surface = page.getByRole('region', { name: '工作台', exact: true })
+    await surface.getByRole('button', { name: '添加新题', exact: true }).first().click()
+    const directory = surface.getByRole('complementary', { name: '题目目录', exact: true })
+    const first = directory.getByRole('button', { name: '1', exact: true })
+    await first.waitFor()
+    await first.dblclick()
+    await surface.getByRole('textbox', { name: '重命名题目', exact: true }).fill('方程例题')
+    await surface.getByRole('textbox', { name: '重命名题目', exact: true }).press('Enter')
+    await directory.getByRole('button', { name: '方程例题', exact: true }).waitFor()
+    await surface.getByLabel('添加图片或 PDF', { exact: true }).filter({ visible: false }).setInputFiles({
+      name: 'equation.pdf', mimeType: 'application/pdf', buffer: onePagePdfFixture(),
+    })
+    await surface.getByRole('link', { name: '下载 Word 文件', exact: true }).waitFor({ timeout: 30_000 })
+    await surface.getByText('已知 x² − 3x + 2 = 0，求 x。', { exact: true }).waitFor()
+    await surface.locator('math mover').first().waitFor()
+    const questionIllustration = surface.getByRole('region', { name: 'Word 预览', exact: true }).locator('section.example-word img')
+    await questionIllustration.waitFor()
+    await expect.poll(() => questionIllustration.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    expect(await questionIllustration.evaluate(image => image.getBoundingClientRect().width <= (image.closest('section')?.clientWidth ?? 0))).toBe(true)
+    expect(await surface.locator('math mover').count()).toBe(3)
+    expect(await surface.locator('math mfrac').count()).toBe(1)
+    expect(await surface.locator('math msubsup').count()).toBe(1)
+    expect(await surface.getByRole('region', { name: 'Word 预览', exact: true }).innerText()).not.toContain('\\overrightarrow')
+    const questionWord = surface.getByRole('region', { name: 'Word 预览', exact: true })
+    expect(await questionWord.innerText()).toContain('点 O')
+    expect(await questionWord.innerText()).not.toContain('点0')
+    expect(await questionWord.locator('math').allTextContents()).toContain('a:b:c')
+    expect(await questionWord.locator('.example-choice-cell').allTextContents()).toEqual(['A. a', 'B. b', 'C. 1', 'D. 2'])
+    expect(await questionWord.locator('.example-choice-cell math').count()).toBe(4)
+    const boldVariable = questionWord.locator('math mi[mathvariant="bold-italic"]')
+    expect(await boldVariable.textContent()).toBe('a')
+    expect(await boldVariable.evaluate(letter => getComputedStyle(letter).fontWeight)).toBe('700')
+    const expectNativeVariable = async (xml: string): Promise<void> => {
+      const letters = await page.evaluate((source) => {
+        const namespace = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+        const doc = new DOMParser().parseFromString(source, 'application/xml')
+        return Array.from(doc.getElementsByTagNameNS(namespace, 'r')).filter(run =>
+          run.getElementsByTagNameNS(namespace, 'sty').item(0)?.getAttributeNS(namespace, 'val') === 'bi',
+        ).map(letter => ({ text: letter.textContent, normalText: letter.getElementsByTagNameNS(namespace, 'nor').length > 0 }))
+      }, xml)
+      expect(letters).toEqual([{ text: 'a', normalText: false }])
+    }
+    const [questionDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      questionWord.getByRole('link', { name: '下载 Word 文件', exact: true }).click(),
+    ])
+    const questionPath = join(screenshotRoot, 'question.docx')
+    await questionDownload.saveAs(questionPath)
+    await expectNativeVariable(strFromU8(unzipSync(await readFile(questionPath))['word/document.xml']!))
+    expect(await questionIllustration.evaluate((image) => {
+      const paragraph = image.closest('p')
+      return paragraph !== null && paragraph === paragraph.parentElement?.lastElementChild && getComputedStyle(paragraph).textAlign === 'center'
+    })).toBe(true)
+    expect(proofreader.requests).toHaveLength(2)
+    expect(recordedInputs).toHaveLength(1)
+    expect(recordedHeadings).toHaveLength(1)
+    expect(await questionWord.innerText()).not.toContain('【题 4】')
+    expect(await questionWord.innerText()).not.toContain('人教')
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-proofreading.expected.json'), JSON.stringify({
+      input: recordedInputs[0]!.data.content.map(block => block.type === 'image'
+        ? { type: 'image', mediaType: block.attachment.mediaType, name: block.attachment.name }
+        : block),
+      tools: proofreader.requests[0]!.tools,
+    }, null, 2), MODE)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-heading.expected.json'), JSON.stringify({
+      input: recordedHeadings[0]!.data.content.map(block => block.type === 'image'
+        ? { type: 'image', mediaType: block.attachment.mediaType, name: block.attachment.name }
+        : block),
+      tools: proofreader.requests[1]!.tools,
+    }, null, 2), MODE)
+    await questionWord.getByRole('button', { name: 'AI 校对', exact: true }).click()
+    await questionWord.getByRole('link', { name: '下载 Word 文件', exact: true }).waitFor({ timeout: 30_000 })
+    expect(proofreader.requests).toHaveLength(4)
+    minerUMarkdown = '# 题目解析\n（1）因式分解得 $(x-1)(x-2)=0$，所以 $x_1=1$，$x_2=2$。\n（2）检验：$\\frac{1+2}{3}=1$。\n（i）结合函数图像讨论两个根的位置，并说明它们与横坐标轴交点之间的对应关系，写出完整的推理过程。\n（ii）将所得结果代入原方程，验证两个根。\n![解析示意图](images/figure.svg)'
+    minerUImages = { 'figure.svg': `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 400 200"><rect width="400" height="200" fill="white"/><path d="M20 150H380M100 180V20" stroke="black"/><path d="M50 30Q200 270 350 30" fill="none" stroke="blue" stroke-width="2"/></svg>').toString('base64')}` }
+    const explanationSource = surface.getByRole('region', { name: '题目解析', exact: true })
+    const explanationWord = surface.getByRole('region', { name: '解析 Word 预览', exact: true })
+    await surface.getByLabel('添加解析图片或 PDF', { exact: true }).filter({ visible: false }).setInputFiles({
+      name: 'solution.pdf', mimeType: 'application/pdf', buffer: onePagePdfFixture(),
+    })
+    await explanationWord.getByRole('link', { name: '下载解析 Word 文件', exact: true }).waitFor({ timeout: 30_000 })
+    const subquestions = explanationWord.locator('p').filter({ hasText: /^（i{1,2}）/u })
+    await expect.poll(() => subquestions.count()).toBe(2)
+    expect(await subquestions.evaluateAll(paragraphs => paragraphs.map(paragraph => ({
+      left: getComputedStyle(paragraph).marginLeft,
+      firstLine: getComputedStyle(paragraph).textIndent,
+    })))).toEqual([{ left: '32px', firstLine: '0px' }, { left: '32px', firstLine: '0px' }])
+    expect(await subquestions.first().evaluate(paragraph =>
+      paragraph.getBoundingClientRect().height > Number.parseFloat(getComputedStyle(paragraph).lineHeight),
+    )).toBe(true)
+    expect(await explanationWord.locator('p').filter({ hasText: /^（2）/u }).evaluate(paragraph =>
+      getComputedStyle(paragraph).marginLeft,
+    )).toBe('0px')
+    await subquestions.first().scrollIntoViewIfNeeded()
+    await explanationWord.screenshot({ path: join(screenshotRoot, 'explanation-indent.png'), animations: 'disabled' })
+    const [explanationDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      explanationWord.getByRole('link', { name: '下载解析 Word 文件', exact: true }).click(),
+    ])
+    expect(explanationDownload.suggestedFilename()).toBe('方程例题-解析.docx')
+    const explanationPath = join(screenshotRoot, 'explanation.docx')
+    await explanationDownload.saveAs(explanationPath)
+    await expectSubquestionIndents(strFromU8(unzipSync(await readFile(explanationPath))['word/document.xml']!))
+    await explanationWord.getByText('题目解析', { exact: true }).waitFor()
+    await explanationWord.locator('math mfrac').waitFor()
+    await expect.poll(() => explanationWord.locator('section.example-word img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    await expectWordTypography(surface.getByRole('region', { name: 'Word 预览', exact: true }))
+    await expectWordTypography(explanationWord)
+    expect(await explanationWord.innerText()).not.toContain('\\frac')
+    expect(await surface.getByRole('region', { name: 'Word 预览', exact: true }).innerText()).not.toContain('因式分解得')
+    await explanationSource.getByRole('link', { name: '下载解析原件', exact: true }).waitFor()
+    await explanationSource.scrollIntoViewIfNeeded()
+    await page.screenshot({ path: join(screenshotRoot, 'explanation.png'), animations: 'disabled' })
+    const tagPanel = surface.getByRole('region', { name: '题目标签', exact: true })
+    const presetPicker = tagPanel.getByRole('button', { name: '选择预设标签', exact: true })
+    const presetDialog = page.getByRole('dialog', { name: '添加预设标签', exact: true })
+    for (const name of ['二次方程', '几何']) {
+      await surface.getByRole('button', { name: '添加标签', exact: true }).click()
+      await presetDialog.getByRole('textbox', { name: '预设标签名称', exact: true }).fill(name)
+      await presetDialog.getByRole('textbox', { name: '预设标签名称', exact: true }).press('Enter')
+      await presetDialog.waitFor({ state: 'detached' })
+    }
+    await presetPicker.click()
+    expect(await tagPanel.getByRole('checkbox').count()).toBe(0)
+    expect(await tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('false')
+    expect(await savedTags(0)).toEqual([])
+    await tagPanel.getByRole('button', { name: '二次方程', exact: true }).click()
+    await expect.poll(() => savedTags(0)).toEqual(['二次方程'])
+    await expect.poll(() => tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('true')
+    await tagPanel.getByRole('button', { name: '几何', exact: true }).click()
+    await expect.poll(() => savedTags(0)).toEqual(['二次方程', '几何'])
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('true')
+    const selectedChips = tagPanel.getByLabel('已选标签', { exact: true }).locator(':scope > span')
+    await expect.poll(() => selectedChips.count()).toBe(2)
+    const originalTagColors = await selectedChips.evaluateAll(chips => chips.map(chip => getComputedStyle(chip).backgroundColor))
+    expect(new Set(originalTagColors).size).toBe(2)
+    const selectedPreset = tagPanel.getByRole('button', { name: '二次方程', exact: true })
+    const selectedAppearance = await selectedPreset.evaluate((row) => {
+      const check = row.querySelector('svg')!
+      return {
+        background: getComputedStyle(row).backgroundColor,
+        checkRightInset: row.getBoundingClientRect().right - check.getBoundingClientRect().right,
+      }
+    })
+    expect(selectedAppearance.background).toBe('rgba(0, 0, 0, 0)')
+    expect(selectedAppearance.checkRightInset).toBeLessThan(16)
+    const removeGeometry = tagPanel.getByRole('button', { name: '取消标签“几何”', exact: true })
+    expect(await removeGeometry.evaluate(button => getComputedStyle(button).opacity)).toBe('0')
+    await selectedChips.filter({ hasText: '几何' }).hover()
+    expect(await removeGeometry.evaluate(button => getComputedStyle(button).opacity)).toBe('1')
+    await page.screenshot({ path: join(screenshotRoot, 'tag-remove.png'), animations: 'disabled' })
+    await removeGeometry.click()
+    await expect.poll(() => savedTags(0)).toEqual(['二次方程'])
+    await presetPicker.click()
+    const geometryPreset = tagPanel.getByRole('button', { name: '几何', exact: true })
+    expect(await geometryPreset.getAttribute('aria-pressed')).toBe('false')
+    expect(await geometryPreset.locator('svg').count()).toBe(0)
+    await geometryPreset.click()
+    await expect.poll(() => savedTags(0)).toEqual(['二次方程', '几何'])
+    await expect.poll(() => selectedChips.count()).toBe(2)
+    expect(await selectedChips.evaluateAll(chips => chips.map(chip => getComputedStyle(chip).backgroundColor))).toEqual(originalTagColors)
+    await tagPanel.getByRole('button', { name: '几何', exact: true }).click()
+    await expect.poll(() => savedTags(0)).toEqual(['二次方程'])
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('true')
+    await tagPanel.getByRole('heading', { name: '题目标签', exact: true }).click()
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('false')
+    await presetPicker.click()
+    await tagPanel.getByRole('button', { name: '二次方程', exact: true }).press('Escape')
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('false')
+    await surface.getByRole('textbox', { name: '题目描述', exact: true }).fill('适合讲解因式分解，关注学生的符号错误。')
+    expect(await surface.getByRole('region', { name: '题目描述', exact: true }).getByRole('button', { name: '保存', exact: true }).count()).toBe(0)
+    expect(await surface.getByRole('button', { name: '手写', exact: true }).count()).toBe(0)
+    await expect.poll(async () => {
+      const result = await scaffold.ctx.teacherWorkbench.listExamples({})
+      return result.ok ? result.value.questions[0]?.description : ''
+    }).toBe('适合讲解因式分解，关注学生的符号错误。')
+    const saved = await scaffold.ctx.teacherWorkbench.listExamples({})
+    expect(saved).toMatchObject({ ok: true, value: { tags: ['二次方程', '几何'], questions: [{ name: '方程例题', description: '适合讲解因式分解，关注学生的符号错误。', documents: { question: { status: 'ready' }, explanation: { status: 'ready' } } }] } })
+    if (!saved.ok) throw new Error('collected examples are unavailable')
+    const handwriting = [{ points: [{ x: 0.1, y: 0.2 }, { x: 0.2, y: 0.6 }, { x: 0.4, y: 0.1 }] }]
+    expect(await scaffold.ctx.teacherWorkbench.updateExample({ id: saved.value.questions[0]!.id, handwriting }))
+      .toMatchObject({ ok: true })
+    expect((await readFile(join(scaffold.harnessHome, 'teacher-workbench/examples.sqlite'))).subarray(0, 16).toString()).toBe('SQLite format 3\0')
+    await directory.getByRole('button', { name: '添加新题', exact: true }).click()
+    await directory.getByRole('button', { name: '2', exact: true }).waitFor()
+    await explanationSource.getByRole('button', { name: '点击添加解析图片或 PDF', exact: false }).waitFor()
+    expect(await explanationWord.getByRole('link').count()).toBe(0)
+    expect(await surface.getByRole('textbox', { name: '题目描述', exact: true }).inputValue()).toBe('')
+    await presetPicker.click()
+    expect(await tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('false')
+    await tagPanel.getByRole('button', { name: '二次方程', exact: true }).click()
+    await expect.poll(() => savedTags(1)).toEqual(['二次方程'])
+    await expect.poll(() => tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await tagPanel.getByRole('button', { name: '二次方程', exact: true }).click()
+    await expect.poll(() => savedTags(1)).toEqual([])
+    await presetPicker.click()
+    await page.reload({ waitUntil: 'load' })
+    await openModule('点例收集')
+    await directory.getByRole('button', { name: '方程例题', exact: false }).first().click()
+    await surface.getByText('已知 x² − 3x + 2 = 0，求 x。', { exact: true }).waitFor()
+    await explanationWord.getByText('题目解析', { exact: true }).waitFor()
+    await explanationWord.locator('math mfrac').waitFor()
+    expect(await explanationSource.locator('iframe').getAttribute('title')).toBe('solution.pdf')
+    expect(await surface.getByRole('textbox', { name: '题目描述', exact: true }).inputValue()).toBe('适合讲解因式分解，关注学生的符号错误。')
+    expect(await surface.getByRole('img', { name: '题目描述手写区域', exact: true }).locator('polyline').count()).toBe(1)
+    await presetPicker.click()
+    expect(await tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-tag-presets.expected.md'), await captureCollection('[data-workbench-surface]'), MODE)
+    await page.screenshot({ path: join(screenshotRoot, 'tag-presets.png'), animations: 'disabled' })
+    await presetPicker.click()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'examples.expected.md'), await captureCollection('[data-workbench-surface]'), MODE)
+    await page.screenshot({ path: join(screenshotRoot, 'editor.png'), animations: 'disabled' })
+    await surface.getByRole('textbox', { name: '搜索题目', exact: true }).fill('二次方程 符号')
+    await surface.getByRole('button', { name: '搜索', exact: true }).click()
+    const drawer = page.getByRole('dialog', { name: '搜索结果', exact: true })
+    await drawer.getByText('已知 x² − 3x + 2 = 0，求 x。', { exact: true }).waitFor()
+    await drawer.locator('math mover').first().waitFor()
+    expect(await drawer.locator('math mover').count()).toBe(3)
+    expect(await drawer.getByRole('button', { name: '打开题目', exact: true }).count()).toBe(1)
+    expect(await drawer.getByRole('button', { name: '导出 Word', exact: true }).isDisabled()).toBe(true)
+    expect(await drawer.getByRole('checkbox', { name: '选择题目“方程例题”', exact: true }).isChecked()).toBe(false)
+    await expectWordTypography(drawer)
+    await expect.poll(() => drawer.locator('section.example-word img').evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    const resultDownload = drawer.getByRole('link', { name: '下载 Word 文件', exact: true })
+    expect(await resultDownload.evaluate(link => link.nextElementSibling?.textContent)).toBe('打开题目')
+    expect(await drawer.getByText('方程例题.docx', { exact: true }).count()).toBe(0)
+    const [searchDownload] = await Promise.all([
+      page.waitForEvent('download'),
+      resultDownload.click(),
+    ])
+    expect(searchDownload.suggestedFilename()).toBe('方程例题.docx')
+    const searchWordPath = join(screenshotRoot, 'search-question.docx')
+    await searchDownload.saveAs(searchWordPath)
+    await expectNativeVariable(strFromU8(unzipSync(await readFile(searchWordPath))['word/document.xml']!))
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'examples-search.expected.md'), await captureCollection('dialog'), MODE)
+    await page.screenshot({ path: join(screenshotRoot, 'search.png'), animations: 'disabled' })
+    await page.keyboard.press('Escape')
+    await directory.getByRole('button', { name: '2', exact: true }).click()
+    minerUMarkdown = '# 第二道题\n计算平方和 $1^2+2^2$。'
+    minerUImages = {}
+    await surface.getByLabel('添加图片或 PDF', { exact: true }).filter({ visible: false }).setInputFiles(RASTER_FIXTURE)
+    await surface.getByRole('img', { name: 'red.png', exact: true }).waitFor()
+    await surface.getByRole('link', { name: '下载 Word 文件', exact: true }).waitFor({ timeout: 30_000 })
+    const image = surface.getByRole('img', { name: 'red.png', exact: true })
+    expect(await image.evaluate(element => (element as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
+    minerUMarkdown = '# 第二题解析\n代入计算得 $1+4=5$。'
+    await surface.getByLabel('添加解析图片或 PDF', { exact: true }).filter({ visible: false }).setInputFiles(RASTER_FIXTURE)
+    await explanationSource.getByRole('img', { name: 'red.png', exact: true }).waitFor()
+    await explanationWord.getByRole('link', { name: '下载解析 Word 文件', exact: true }).waitFor({ timeout: 30_000 })
+    await surface.getByRole('textbox', { name: '搜索题目', exact: true }).fill('')
+    await surface.getByRole('button', { name: '搜索', exact: true }).click()
+    await drawer.getByRole('checkbox', { name: '选择题目“2”', exact: true }).check()
+    await drawer.getByRole('checkbox', { name: '选择题目“方程例题”', exact: true }).check()
+    await drawer.getByRole('checkbox', { name: '选择题目“2”', exact: true }).uncheck()
+    await drawer.getByText('已选 1 题', { exact: true }).waitFor()
+    await drawer.getByRole('checkbox', { name: '选择题目“2”', exact: true }).check()
+    await drawer.getByText('已选 2 题', { exact: true }).waitFor()
+    await page.screenshot({ path: join(screenshotRoot, 'export-selection.png'), animations: 'disabled' })
+    for (const layout of ['paired', 'grouped'] as const) {
+      await drawer.getByRole('button', { name: '导出 Word', exact: true }).click()
+      const exporter = page.getByRole('dialog', { name: '导出 Word', exact: true })
+      if (layout === 'grouped') await exporter.getByRole('radio', { name: '所有题目在前，解析集中在后', exact: false }).check()
+      await compareOrRefreshGolden(
+        join(SNAPSHOT_DIR, `example-export-${layout}.expected.md`),
+        await captureCollection('dialog[aria-label="导出 Word"]'), MODE,
+      )
+      await page.screenshot({ path: join(screenshotRoot, `export-${layout}.png`), animations: 'disabled' })
+      const [download] = await Promise.all([
+        page.waitForEvent('download'),
+        exporter.getByRole('button', { name: '导出并下载', exact: true }).click(),
+      ])
+      expect(download.suggestedFilename()).toBe('点例收集.docx')
+      const path = join(screenshotRoot, `export-${layout}.docx`)
+      await download.saveAs(path)
+      const parts = unzipSync(await readFile(path))
+      const xml = strFromU8(parts['word/document.xml']!)
+      expect(xml).toContain('w:ascii="Times New Roman"')
+      expect(xml).toContain('w:eastAsia="宋体"')
+      expect(xml).toContain('w:ascii="Cambria Math"')
+      expect(xml).not.toMatch(/w:val="30"|m:val="undefined"/u)
+      await expectNativeVariable(xml)
+      await expectSubquestionIndents(xml)
+      const order = layout === 'paired'
+        ? ['已知', '因式分解得', '第二道题', '第二题解析']
+        : ['已知', '第二道题', '因式分解得', '第二题解析']
+      const positions = order.map(text => xml.indexOf(text))
+      expect(positions.every(position => position >= 0)).toBe(true)
+      expect(positions).toEqual([...positions].sort((a, b) => a - b))
+      expect(xml).toContain('<m:acc>')
+      expect(xml).toContain('<m:f>')
+      expect((xml.match(/<a:blip\b/gu) ?? []).length).toBe(2)
+      expect(Object.keys(parts).filter(name => /^word\/media\/.+\.png$/u.test(name))).toHaveLength(2)
+      expect(xml).not.toContain('![')
+      expect((xml.match(/<w:sectPr>/gu) ?? []).length).toBe(layout === 'grouped' ? 2 : 1)
+      expect(xml).not.toContain('题目与解析')
+      expect(xml).not.toContain('【题 4】')
+      expect(xml).not.toContain('人教')
+      expect(xml).not.toContain('题目 1')
+      expect(xml).not.toContain('解析 1')
+      expect(xml).not.toContain('适合讲解因式分解，关注学生的符号错误。')
+      await exporter.waitFor({ state: 'detached' })
+    }
+    await page.keyboard.press('Escape')
+    await directory.getByRole('button', { name: '2', exact: true }).click({ button: 'right' })
+    await page.getByRole('menuitem', { name: '删除题目', exact: true }).click()
+    await page.getByRole('dialog', { name: '删除题目', exact: true }).getByRole('button', { name: '删除', exact: true }).click()
+    await directory.getByRole('button', { name: '2', exact: true }).waitFor({ state: 'detached' })
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
+
   it('returns to the conversation when the current Session is reselected', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-conversation-return'))
     await openModule('日常管理')
@@ -332,7 +718,7 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   })
 
-  it('announces a denied microphone request from every voice command', async () => {
+  it('distinguishes microphone permission denial from device startup failure', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-voice-error'))
     await openModule('日常管理')
     await page.evaluate(() => {
@@ -345,9 +731,28 @@ describe('web e2e: durable teacher workbench', () => {
     await todoPanel.getByRole('button', { name: '开始语音输入' }).click()
     const alert = page.getByRole('alert')
     await alert.waitFor({ timeout: 10_000 })
-    expect(await todoPanel.getByRole('button', { name: '麦克风权限未开启' }).count()).toBe(1)
+    expect(await todoPanel.getByRole('button', { name: '麦克风访问被拒绝，请在地址栏的网站权限和系统隐私设置中允许麦克风访问' }).count()).toBe(1)
     await compareOrRefreshGolden(
       VOICE_ERROR_EXPECTED,
+      await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
+      MODE,
+    )
+    await openModule('点例收集')
+    const description = page.getByRole('region', { name: '题目描述', exact: true })
+    if (await description.count() === 0) {
+      await page.getByRole('complementary', { name: '题目目录', exact: true })
+        .getByRole('button', { name: '添加新题', exact: true }).click()
+    }
+    await page.evaluate(() => {
+      Object.defineProperty(window.navigator.mediaDevices, 'getUserMedia', {
+        configurable: true,
+        value: () => Promise.reject(new DOMException('device could not start', 'NotReadableError')),
+      })
+    })
+    await description.getByRole('button', { name: '开始语音输入' }).click()
+    await description.getByRole('button', { name: '麦克风无法启动，请检查是否被其他程序占用，并确认系统中的输入设备可用' }).waitFor()
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-voice-error.expected.md'),
       await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
       MODE,
     )
@@ -807,7 +1212,8 @@ describe('web e2e: durable teacher workbench', () => {
     if (!directSaved.ok || directSaved.value.batchId === undefined) throw new Error('direct-save batch failed')
     const directBatch = directSaved.value.document.state.questionBatches.find(item => item.id === directSaved.value.batchId)
     if (directBatch === undefined) throw new Error('direct-save batch is missing')
-    expect((await stat(join(directSaveDirectory, `${String(directBatch.images[0]!.id)}.png`))).isFile()).toBe(true)
+    expect(directBatch.images[0]!.fileName).toBe('第1题.png')
+    expect((await stat(join(directSaveDirectory, '第1题.png'))).isFile()).toBe(true)
     await expect(stat(join(directSaveDirectory, '目录直存验证'))).rejects.toMatchObject({ code: 'ENOENT' })
     await expect(stat(join(directSaveDirectory, String(directBatch.id)))).rejects.toMatchObject({ code: 'ENOENT' })
 
@@ -863,6 +1269,51 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await bankImages.getByRole('button', { name: '另存为' }).isDisabled()).toBe(true)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
+
+  it('preserves existing question-directory names when saving images and creating children', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-directory-names'))
+    const segmentsRoot = join(scaffold.harnessHome, 'question directory names')
+    const directoryName = '期中\u3000数学（卷）'
+    const directory = join(segmentsRoot, directoryName)
+    const raster = await readFile(RASTER_FIXTURE)
+    await mkdir(directory, { recursive: true })
+    await writeFile(join(directory, '第1题.png'), raster)
+    await scaffold.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot })
+    const discovered = await scaffold.ctx.teacherWorkbench.browseQuestionMedia({})
+    if (!discovered.ok) throw new Error(discovered.error.message)
+    const folder = discovered.value.questionLibraryFolders.find(item => item.name === directoryName)!
+    const saved = await scaffold.ctx.teacherWorkbench.saveQuestionBatch({
+      destination: { kind: 'library-folder', folderId: folder.id },
+      name: '继续切题', sourceName: '继续切题.pdf', pageRange: '1',
+      images: [{ questionNo: 2, fileName: '第2题.png', mediaType: 'image/png', width: 1, height: 1, contentBase64: raster.toString('base64') }],
+    })
+    if (!saved.ok) throw new Error(saved.error.message)
+    await page.reload({ waitUntil: 'load' })
+    await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
+    await openModule('试题切割')
+    await page.getByRole('region', { name: '工作台', exact: true }).getByRole('button', { name: '试题图片库', exact: true }).click()
+    const folders = page.getByRole('complementary', { name: '试题图片库' })
+    const folderButton = folders.locator(`button[aria-label="${directoryName}"]`)
+    await expect.poll(() => folderButton.count()).toBe(1)
+    await folderButton.click()
+    const images = page.getByRole('complementary', { name: '试题库图片' })
+    await images.getByRole('button', { name: '第 2 题', exact: true }).waitFor({ timeout: 10_000 })
+    await folderButton.click({ clickCount: 2 })
+    const dialog = page.getByRole('dialog', { name: '新建文件夹' })
+    await dialog.getByLabel('目录名').fill('新练习')
+    await dialog.getByRole('button', { name: '新建', exact: true }).click()
+    await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
+    await folders.getByRole('button', { name: '新练习', exact: true }).waitFor({ timeout: 10_000 })
+    expect(await folderButton.count()).toBe(1)
+    expect(await readdir(segmentsRoot)).toEqual([directoryName])
+    expect((await readdir(directory)).sort()).toEqual(['新练习', '第1题.png', '第2题.png'])
+    expect(await readFile(join(directory, '第1题.png'))).toEqual(raster)
+    await compareOrRefreshGolden(
+      QUESTION_DIRECTORY_NAMES_EXPECTED,
+      await captureStableAria(page, 'aside[aria-label="试题图片库"]', scaffold.workspaceCwd),
+      MODE,
+    )
+  })
 
   it('shows images discovered below newly configured question roots', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-question-roots'))
@@ -1139,6 +1590,17 @@ describe('web e2e: durable teacher workbench', () => {
   }, 60_000)
 
   it('links the normal timetable while isolating Grade OCR classes', async () => {
+    const selection = scaffold.ctx.agentDefaultModel.currentSelection()
+    const disposeModel = scaffold.ctx.effect(
+      () => scaffold.ctx.llm.registerAdapter(['timetable-test'], new TimetableAgentAdapter(() => smallGradeEntries)), 'Timetable model fixture',
+    )
+    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      ...selection, toolProvider: 'timetable-test', toolModel: 'timetable',
+    })
+    onTestFinished(async () => {
+      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, selection)
+      await disposeModel()
+    })
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-timetable'))
     await openModule('课程表')
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
@@ -1191,12 +1653,15 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await workbench.getByRole('button', { name: '删除', exact: true }).count()).toBe(0)
     expect(await weekCourse.locator('strong').evaluate(element => getComputedStyle(element).fontSize)).toBe('14px')
     expect(await weekCourse.locator('span').evaluate(element => getComputedStyle(element).fontSize)).toBe('13px')
-    expect(await weekCourse.locator('time').evaluate(element => getComputedStyle(element).fontSize)).toBe('12px')
-    expect(await weekCourse.locator('time').evaluate(element => getComputedStyle(element).fontWeight)).toBe('500')
+    expect(await weekCourse.locator('time').count()).toBe(0)
+    const periodHeading = workbench.getByRole('rowheader', { name: '第 1 节 11:50' })
+    expect(await periodHeading.locator('time').evaluate(element => getComputedStyle(element).fontSize)).toBe('12px')
     const subjectBox = await weekCourse.locator('strong').boundingBox()
-    const timeBox = await weekCourse.locator('time').boundingBox()
-    if (subjectBox === null || timeBox === null) throw new Error('Timetable subject and time must be visible')
-    expect(timeBox.x).toBeGreaterThan(subjectBox.x + subjectBox.width)
+    const labelBox = await periodHeading.locator('span').boundingBox()
+    const timeBox = await periodHeading.locator('time').boundingBox()
+    if (subjectBox === null || labelBox === null || timeBox === null) throw new Error('Timetable subject, period, and time must be visible')
+    expect(timeBox.y).toBeGreaterThanOrEqual(labelBox.y + labelBox.height)
+    expect(timeBox.x + timeBox.width).toBeLessThan(subjectBox.x)
     expect(await weekCourse.locator('..').evaluate(element => getComputedStyle(element).borderLeftWidth)).toBe('1px')
     await weekCourse.click()
     const linkedEditor = page.getByRole('dialog', { name: '编辑课程' })
@@ -1315,6 +1780,17 @@ describe('web e2e: durable teacher workbench', () => {
   }, 60_000)
 
   it('recognizes class-column morning and evening study arrangements', async () => {
+    const selection = scaffold.ctx.agentDefaultModel.currentSelection()
+    const disposeModel = scaffold.ctx.effect(
+      () => scaffold.ctx.llm.registerAdapter(['timetable-test'], new TimetableAgentAdapter(() => studyEntries)), 'Timetable model fixture',
+    )
+    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      ...selection, toolProvider: 'timetable-test', toolModel: 'timetable',
+    })
+    onTestFinished(async () => {
+      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, selection)
+      await disposeModel()
+    })
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-study-import'))
     await openModule('课程表')
     const workbench = page.getByRole('region', { name: '工作台', exact: true })

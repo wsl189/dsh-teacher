@@ -1,7 +1,8 @@
 // @vitest-environment jsdom
 
+import { useState, useSyncExternalStore } from 'react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import type {
   TeacherClassId,
   TeacherTimetableEntryId,
@@ -9,7 +10,8 @@ import type {
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../src/settings.ts'
-import { Timetable } from '../src/client/Timetable.tsx'
+import { Timetable as TimetableComponent, type TimetableProps } from '../src/client/Timetable.tsx'
+import { TimetableImportController } from '../src/client/timetable-import-controller.ts'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
 import { zh } from '../src/client/locales.ts'
 
@@ -49,6 +51,20 @@ function commands(): TeacherWorkbenchCommands {
     generateUploadedQuestionDocument: vi.fn(async () => ({ ok: false, error: { code: 'generation-failure', message: 'unavailable' } } as const)),
     generateStudentDocuments: vi.fn(async () => ({ ok: false, error: { code: 'generation-failure', message: 'unavailable' } } as const)),
   }
+}
+
+const importControllers: TimetableImportController[] = []
+
+function Timetable({ importController, ...props }: Omit<TimetableProps, 'importView' | 'importCommands'> & {
+  importController?: TimetableImportController
+}) {
+  const [controller] = useState(() => {
+    const value = importController ?? new TimetableImportController(props.commands)
+    importControllers.push(value)
+    return value
+  })
+  const importView = useSyncExternalStore(controller.subscribe, controller.getSnapshot)
+  return <TimetableComponent {...props} importView={importView} importCommands={controller.commands} />
 }
 
 function weekdayToday(): TeacherWeekday {
@@ -111,6 +127,7 @@ function state(): TeacherWorkbenchState {
 
 afterEach(() => {
   cleanup()
+  for (const controller of importControllers.splice(0)) controller.dispose()
   vi.restoreAllMocks()
 })
 
@@ -329,7 +346,7 @@ describe('Timetable', () => {
     expect(screen.getByLabelText<HTMLInputElement>('节次').value).toBe('1')
   })
 
-  it('extracts, reviews, and imports a course table through the shared OCR command', async () => {
+  it('sends even a regular worksheet to the agent before editable import', async () => {
     const c = commands()
     vi.mocked(c.extractDocument).mockResolvedValueOnce({
       ok: true,
@@ -338,6 +355,13 @@ describe('Timetable', () => {
         markdown: '| 节次 | 周一 | 周二 |\n| --- | --- | --- |\n| 第1节 | 数学 | 语文 |',
         provider: 'mineru', truncated: false,
       },
+    })
+    vi.mocked(c.normalizeTimetable).mockResolvedValueOnce({
+      ok: true,
+      value: { items: [1, 2].map(weekday => ({
+        className: '高一（1）班', grade: '高一', kind: 'lesson' as const, weekday: weekday as 1 | 2, period: 1,
+        startTime: '', endTime: '', subject: weekday === 1 ? '数学' : '语文', teacherName: '王老师', location: '',
+      })) },
     })
     const rendered = render(<Timetable
       state={state()}
@@ -358,7 +382,9 @@ describe('Timetable', () => {
       includeDiscardedText: true,
       enhanceImageDetail: false,
     })
-    expect(c.normalizeTimetable).not.toHaveBeenCalled()
+    expect(c.normalizeTimetable).toHaveBeenCalledWith(
+      '高一课表.xlsx', expect.stringContaining('| 节次 |'), expect.objectContaining({ target: 'class' }), undefined,
+    )
     fireEvent.change(screen.getAllByLabelText('课程')[0]!, { target: { value: '数学（确认）' } })
     fireEvent.click(screen.getByRole('button', { name: '导入 2 节' }))
     await waitFor(() => {
@@ -377,6 +403,13 @@ describe('Timetable', () => {
         name: '值班表.jpeg', mediaType: 'image/jpeg', provider: 'mineru', truncated: false,
         markdown: '| 星期 | 节次 | 班级 | 课程 | 教师 |\n| --- | --- | --- | --- | --- |\n| 周一 | 晚自习 | 高一（1）班 | 晚自习 | 李老师 |',
       },
+    })
+    vi.mocked(c.normalizeTimetable).mockResolvedValueOnce({
+      ok: true,
+      value: { items: [{
+        className: '高一（1）班', grade: '高一', kind: 'eveningStudy', weekday: 1, period: 1,
+        startTime: '', endTime: '', subject: '', teacherName: '李老师', location: '',
+      }] },
     })
     const rendered = render(<Timetable
       state={state()}
@@ -397,18 +430,20 @@ describe('Timetable', () => {
       includeDiscardedText: true,
       enhanceImageDetail: true,
     })
-    expect(c.normalizeTimetable).not.toHaveBeenCalled()
+    expect(c.normalizeTimetable).toHaveBeenCalledWith(
+      '值班表.jpeg', expect.stringContaining('| 星期 |'), expect.objectContaining({ target: 'study' }), expect.any(File),
+    )
     const kind = screen.getByLabelText<HTMLSelectElement>('类型')
     expect([...kind.options].map(option => option.value)).toEqual(['morningStudy', 'eveningStudy'])
     fireEvent.click(screen.getByRole('button', { name: '导入 1 节' }))
     await waitFor(() => {
       expect(c.importTimetableEntries).toHaveBeenCalledWith([
-        expect.objectContaining({ usage: 'timetable', kind: 'eveningStudy', subject: '晚自习' }),
+        expect.objectContaining({ usage: 'timetable', kind: 'eveningStudy', subject: '', teacherName: '李老师' }),
       ])
     })
   })
 
-  it('falls back to the timetable agent when MinerU rules find no rows', async () => {
+  it('supplies the grade destination and original image to the independent agent', async () => {
     const c = commands()
     vi.mocked(c.extractDocument).mockResolvedValueOnce({
       ok: true,
@@ -444,7 +479,76 @@ describe('Timetable', () => {
     })
     expect(c.normalizeTimetable).toHaveBeenCalledOnce()
     expect(c.normalizeTimetable).toHaveBeenCalledWith(
-      '密集年级表.jpeg', expect.stringContaining('高三年级课表'), expect.objectContaining({ target: 'grade' }),
+      '密集年级表.jpeg', expect.stringContaining('高三年级课表'), expect.objectContaining({ target: 'grade' }), expect.any(File),
     )
   })
+  it('keeps a closed recognition hidden through progress, navigation, and draft edits', async () => {
+    const c = commands()
+    const extracted = Promise.withResolvers<Awaited<ReturnType<TeacherWorkbenchCommands['extractDocument']>>>()
+    const normalized = Promise.withResolvers<Awaited<ReturnType<TeacherWorkbenchCommands['normalizeTimetable']>>>()
+    vi.mocked(c.extractDocument).mockReturnValueOnce(extracted.promise)
+    vi.mocked(c.normalizeTimetable).mockReturnValueOnce(normalized.promise)
+    const controller = new TimetableImportController(c)
+    const props = { state: state(), settings: DEFAULT_TEACHER_WORKBENCH_SETTINGS, commands: c,
+      importController: controller, setTeacherName: vi.fn(async () => {}), t }
+    const first = render(<Timetable {...props} />)
+    fireEvent.click(screen.getByRole('tab', { name: '年级课表' }))
+    fireEvent.change(first.container.querySelector('input[type="file"]')!, {
+      target: { files: [new File(['workbook'], '后台课程表.xlsx')] },
+    })
+    fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: '关闭工作台' }))
+    expect(screen.queryByRole('dialog')).toBeNull()
+    await act(async () => {
+      extracted.resolve({ ok: true, value: {
+        name: '后台课程表.xlsx', markdown: '课程表', provider: 'mineru', truncated: false,
+        mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      } })
+      await extracted.promise
+    })
+    expect(screen.queryByRole('dialog')).toBeNull()
+    fireEvent.click(screen.getByRole('button', { name: '查看识别进度' }))
+    expect(screen.getByText('正在识别课程表并整理课程安排')).toBeTruthy()
+    first.unmount()
+    await act(async () => {
+      normalized.resolve({ ok: true, value: { items: [{
+        className: '年级一班', grade: '高一', kind: 'lesson', weekday: 1, period: 1,
+        startTime: '', endTime: '', subject: '数学', teacherName: '王老师', location: '',
+      }] } })
+      await normalized.promise
+    })
+    render(<Timetable {...props} />)
+    expect(screen.queryByRole('dialog')).toBeNull()
+    expect(screen.getByText('识别完成，待确认 1 节课程')).toBeTruthy()
+    fireEvent.click(screen.getByRole('button', { name: '查看识别结果' }))
+    fireEvent.change(screen.getByLabelText('课程'), { target: { value: '数学（已确认）' } })
+    fireEvent.click(screen.getByRole('button', { name: '稍后处理' }))
+    fireEvent.click(screen.getByRole('button', { name: '查看识别结果' }))
+    expect(screen.getByLabelText<HTMLInputElement>('课程').value).toBe('数学（已确认）')
+    fireEvent.click(screen.getByRole('button', { name: '导入 1 节' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog')).toBeNull() })
+    expect(screen.queryByRole('status', { name: '课程表识别任务' })).toBeNull()
+    expect(c.extractDocument).toHaveBeenCalledOnce()
+    expect(c.normalizeTimetable).toHaveBeenCalledOnce()
+    expect(c.importTimetableEntries).toHaveBeenCalledExactlyOnceWith([
+      expect.objectContaining({ classId: 'grade-class-a', usage: 'gradeTimetable', subject: '数学（已确认）' }),
+    ])
+  })
+
+  it('uses the original image when OCR extraction fails', async () => {
+    const c = commands()
+    vi.mocked(c.extractDocument).mockResolvedValueOnce({ ok: false, error: { code: 'provider-failure', message: 'OCR is offline' } })
+    vi.mocked(c.normalizeTimetable).mockResolvedValueOnce({ ok: true, value: { items: [{
+      className: 'Grade 10 / A', grade: '', kind: 'lesson', weekday: 1, period: 1,
+      startTime: '', endTime: '', subject: '数学', teacherName: '', location: '',
+    }] } })
+    const rendered = render(<Timetable state={state()} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
+      commands={c} setTeacherName={vi.fn(async () => {})} t={t} />)
+    fireEvent.click(screen.getByRole('tab', { name: '本周课表' }))
+    const file = new File(['original pixels'], '课表.png', { type: 'image/png' })
+    fireEvent.change(rendered.container.querySelector('input[type="file"]')!, { target: { files: [file] } })
+    expect(await screen.findByText('识别到 1 节，请确认班级、星期和节次后导入')).toBeTruthy()
+    expect(c.normalizeTimetable).toHaveBeenCalledWith('课表.png', '', expect.objectContaining({ target: 'class' }), file)
+    expect(screen.getByRole('button', { name: '导入 1 节' })).toBeTruthy()
+  })
+
 })

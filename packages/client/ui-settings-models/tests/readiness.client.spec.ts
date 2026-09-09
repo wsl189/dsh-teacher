@@ -44,6 +44,7 @@ function otherRow(overrides: Partial<ProviderRow> = {}): ProviderRow {
 function state(overrides: Partial<ModelsSettingsState> = {}): ModelsSettingsState {
   return {
     status: 'ready',
+    checks: {},
     error: null,
     credentialError: null,
     modelCatalogError: null,

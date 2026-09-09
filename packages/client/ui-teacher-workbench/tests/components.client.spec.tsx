@@ -20,6 +20,7 @@ import { TeacherWorkbenchSettingsRow } from '../src/client/TeacherWorkbenchSetti
 import { WorkbenchSurface, type WorkbenchSurfaceProps } from '../src/client/WorkbenchSurface.tsx'
 import { formatMetric } from '../src/client/shared.tsx'
 import { EMPTY_QUESTION_CUTTING_VIEW } from '../src/client/question-cutting-controller.ts'
+import { EMPTY_TIMETABLE_IMPORT_VIEW } from '../src/client/timetable-import-controller.ts'
 
 vi.mock('pdfjs-dist', () => ({ getDocument: vi.fn() }))
 vi.mock('pdfjs-dist/build/pdf.worker.mjs', () => ({ WorkerMessageHandler: { setup: vi.fn() } }))
@@ -75,13 +76,13 @@ it('formats fractional metrics to one decimal place', () => {
 })
 
 describe('SidebarWorkbench', () => {
-  it('expands twelve functions inside one scroll region and opens the selected module', () => {
+  it('expands thirteen functions inside one scroll region and opens the selected module', () => {
     const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
     const state = { expanded: true, active: 'lesson' as const, open: true }
     const rendered = render(
       <SidebarWorkbench {...globalProps} wide useStore={selector => selector(state)} actions={actions} t={t} />,
     )
-    expect(screen.getAllByRole('button')).toHaveLength(13)
+    expect(screen.getAllByRole('button')).toHaveLength(14)
     expect(screen.getByLabelText('教学工作').className).toContain('sidebarModules')
     fireEvent.click(screen.getByRole('button', { name: '学生名册' }))
     expect(actions.openModule).toHaveBeenCalledWith('students')
@@ -406,6 +407,8 @@ describe('WorkbenchSurface', () => {
         base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
       }),
       useQuestionCutting: selector => selector(EMPTY_QUESTION_CUTTING_VIEW),
+      useTimetableImport: selector => selector(EMPTY_TIMETABLE_IMPORT_VIEW),
+      timetableImportCommands: { start: vi.fn(), updateItems: vi.fn(), discard: vi.fn(), importSelected: vi.fn() },
       ensure: vi.fn(async () => ({ ok: true })),
       subscribeSessionNavigation: vi.fn(() => () => {}),
       setWeatherLocation: vi.fn(async () => {}),

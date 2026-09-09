@@ -1,9 +1,6 @@
 /**
- * Models settings section. Use-case selectors consume live configured model
- * routes; service access groups product presets by supplier while each access
- * plan retains its own settings profile and credential. Other installed and
- * hand-declared providers remain available below the preset workspace. Every
- * mutation writes through the wire and provider removal requires confirmation.
+ * Models settings: independent saved connections, automatic connection verification,
+ * and direct use-case assignments over the shared Host settings snapshot.
  */
 
 import { useState } from 'react'
@@ -19,7 +16,9 @@ import type { ModelServiceProviderView } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
 import { ProviderEditor, type ProviderEditorProps } from './ProviderEditor.tsx'
 import { PRESET_PROVIDER_IDS, PROVIDER_SUPPLIERS } from './provider-presets.ts'
-import type { ProviderAccessPreset, ProviderSupplierPreset } from './provider-presets.ts'
+import type { ProviderAccessPreset } from './provider-presets.ts'
+import { ConnectionSummary } from './ConnectionSummary.tsx'
+import { ProviderLogo } from './ProviderLogo.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -371,8 +370,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const { controller, api, schema, t } = injected
   const state = injected.useSnapshot(snapshot => snapshot)
   const [activePanel, setActivePanel] = useState<'usage' | 'access'>('access')
-  const [selectedSupplierId, setSelectedSupplierId] = useState<ProviderSupplierPreset['id']>('deepseek')
-  const [selectedAccessProvider, setSelectedAccessProvider] = useState('deepseek-official')
+  const [choosingConnection, setChoosingConnection] = useState(false)
   const [editing, setEditing] = useState<EditorTarget | undefined>(undefined)
   const [adding, setAdding] = useState(false)
   const [deleteTarget, setDeleteTarget] = useState<EditorTarget | undefined>(undefined)
@@ -394,7 +392,10 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
     // Announced only once the refreshed directory is in the snapshot the
     // notice reads its name from: an apply can rename the route, and the
     // target captured when the card opened still carries the old name.
-    void controller.load().then(() => { setSavedTarget(target) })
+    void controller.load().then(() => {
+      setSavedTarget(target)
+      void controller.verifyConnection(target.provider)
+    })
   }
 
   const closeEditor = (changed: boolean, target: ProviderIdentity): void => {
@@ -470,35 +471,28 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const presetRows = new Map(state.rows
     .filter(row => PRESET_PROVIDER_IDS.has(row.entry.provider))
     .map(row => [row.entry.provider, row] as const))
-  const selectedSupplier = PROVIDER_SUPPLIERS.find(supplier => supplier.id === selectedSupplierId)
-    ?? PROVIDER_SUPPLIERS[0]
-  const selectedAccess = selectedSupplier.access.find(access => access.provider === selectedAccessProvider)
-    ?? selectedSupplier.access[0]
-  const selectedPresetRow = presetRows.get(selectedAccess.provider)
-  const selectedAccessConfigured = selectedPresetRow?.configured === true
-  const selectedAccessUsable = selectedPresetRow !== undefined && providerUsable(selectedPresetRow)
-  const selectedTarget = presetTargetOf(
-    selectedAccess,
-    selectedPresetRow,
-    `${t(selectedSupplier.nameKey)} · ${t(selectedAccess.labelKey)}`,
-  )
-  const selectedNamespace = state.namespaces.get(selectedAccess.settingsNs)
-  const selectedAccessOpen = !adding && editing?.provider === selectedAccess.provider
-  const selectedAccessSetup = selectedPresetRow !== undefined && selectedAccessConfigured
-    && needsSetup(selectedPresetRow, anyUsable) && !dismissedSetup.has(selectedAccess.provider)
-  const selectedEditorVisible = selectedAccessOpen || selectedAccessSetup
-  const selectedCredentialConfigured = selectedPresetRow?.credential?.configured === true
-  const selectedCredentialMissing = selectedPresetRow !== undefined && !selectedCredentialConfigured
-    && selectedPresetRow.apiKeyEnv !== undefined && selectedPresetRow.credential?.configured === false
-  const otherConfigured = configured.filter(row => !PRESET_PROVIDER_IDS.has(row.entry.provider))
+  const presets = PROVIDER_SUPPLIERS.flatMap(supplier => supplier.access.map(access => ({
+    access,
+    name: t(supplier.nameKey),
+    plan: t(access.labelKey),
+    target: presetTargetOf(access, presetRows.get(access.provider), `${t(supplier.nameKey)} · ${t(access.labelKey)}`),
+    label: `${t(supplier.nameKey)} · ${t(access.labelKey)}`,
+  })))
+  const presetOf = (provider: string) => presets.find(preset => preset.access.provider === provider)
+  const connectionTarget = (row: ProviderRow): EditorTarget => {
+    const preset = presetOf(row.entry.provider)
+    return preset === undefined ? targetOf(row) : { ...targetOf(row), displayName: preset.label }
+  }
   const llmProviderIds = new Set(state.rows.map(row => row.entry.provider))
   const serviceOnlyProviders = state.serviceProviders.filter(provider => (
-    provider.userOwned && !llmProviderIds.has(provider.provider)
+    !llmProviderIds.has(provider.provider) && (provider.userOwned || provider.credential?.configured === true)
   ))
-  const addable = state.rows.filter(row => (
-    !row.configured && row.entry.settingsNs !== '' && !PRESET_PROVIDER_IDS.has(row.entry.provider)
-  ))
+  const addable = [
+    ...presets.filter(preset => !presetRows.get(preset.access.provider)?.configured)
+      .map(preset => ({ ...preset, target: { ...preset.target, displayName: preset.label } })),
+  ]
   const addTarget = adding ? editing : undefined
+  const addPreset = addTarget === undefined ? undefined : presetOf(addTarget.provider)
   const addNamespace = addTarget === undefined ? undefined : state.namespaces.get(addTarget.settingsNs)
   // The draft's directory row, for the card extension seat. A refresh can drop
   // the row mid-draft (the route was adopted or withdrawn elsewhere); the
@@ -519,12 +513,10 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   const configuredModelGroups = state.modelGroups.filter(group => state.rows.some(row => (
     row.entry.provider === group.id && providerUsable(row)
   )))
-  const availableToolModels = configuredModelGroups.flatMap(group => group.models.map(model => ({
-    provider: group.id,
-    providerName: group.name,
-    model: model.id,
-    modelName: model.name,
-  })))
+  const toolModelGroups = configuredModelGroups.map(group => ({
+    ...group,
+    models: group.models.filter(model => model.inputModalities?.includes('image') === true),
+  })).filter(group => group.models.length > 0)
   const capabilityGroups = (capability: 'image' | 'speech'): UsageModelGroup[] =>
     state.serviceProviders.flatMap((provider) => {
       const route = provider.routes[capability]
@@ -543,17 +535,17 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
     })
   const imageModelGroups = capabilityGroups('image')
   const speechModelGroups = capabilityGroups('speech')
-  const mediaModelAvailable = (groups: readonly UsageModelGroup[], selection: ToolModelSelection | undefined): boolean =>
+  const modelAvailable = (groups: readonly UsageModelGroup[], selection: ToolModelSelection | undefined): boolean =>
     selection !== undefined && groups.some(group => group.id === selection.provider
       && group.models.some(model => model.id === selection.model))
   const selectedToolModel = toolModel === undefined ? '' : toolModelValue(toolModel)
-  const selectedToolModelAvailable = availableToolModels.some(item => toolModelValue(item) === selectedToolModel)
+  const selectedToolModelAvailable = modelAvailable(toolModelGroups, toolModel)
   const selectedDefaultModel = defaultModel === undefined ? '' : toolModelValue(defaultModel)
-  const selectedDefaultModelAvailable = availableToolModels.some(item => toolModelValue(item) === selectedDefaultModel)
+  const selectedDefaultModelAvailable = modelAvailable(configuredModelGroups, defaultModel)
   const selectedImageModel = imageModel === undefined ? '' : toolModelValue(imageModel)
-  const selectedImageModelAvailable = mediaModelAvailable(imageModelGroups, imageModel)
+  const selectedImageModelAvailable = modelAvailable(imageModelGroups, imageModel)
   const selectedSpeechModel = speechModel === undefined ? '' : toolModelValue(speechModel)
-  const selectedSpeechModelAvailable = mediaModelAvailable(speechModelGroups, speechModel)
+  const selectedSpeechModelAvailable = modelAvailable(speechModelGroups, speechModel)
   const saveDefaultModel = (value: string): void => {
     const selection = parseToolModelValue(value)
     if (selection === undefined || defaultModelNamespace === undefined) return
@@ -578,7 +570,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   }
   const saveToolModel = (value: string): void => {
     const selection = parseToolModelValue(value)
-    if (selection === undefined || defaultModelNamespace === undefined) return
+    if (selection === undefined || defaultModelNamespace === undefined || !modelAvailable(toolModelGroups, selection)) return
     setToolModelStatus('saving')
     setToolModelFailure(undefined)
     void api.settings.mutate(
@@ -623,6 +615,34 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
       setStatus('error')
     })
   }
+  const connectionSummary = (provider: string, ready: boolean): ReactNode => {
+    const llmModels = state.modelGroups.find(group => group.id === provider)?.models ?? []
+    const service = state.serviceProviders.find(item => item.provider === provider)
+    const models = [
+      ...llmModels.map(model => ({ ...model, type: model.inputModalities?.includes('image') ? 'vision' as const : 'chat' as const })),
+      ...(['image', 'speech'] as const).flatMap(type => (service?.routes[type]?.models ?? [])
+        .map(model => ({ ...model, type }))),
+    ]
+    const usages = [
+      [defaultModel, t('defaultModelTitle')], [toolModel, t('toolModelTitle')],
+      [imageModel, t('imageModelTitle')], [speechModel, t('speechModelTitle')],
+    ] as const
+    const capabilities = [
+      ...llmModels.length === 0 ? [] : [t('requestTypeChat')],
+      ...service?.routes.image === undefined ? [] : [t('requestTypeImageGeneration')],
+      ...service?.routes.speech === undefined ? [] : [t('requestTypeSpeechRecognition')],
+    ]
+    return <ConnectionSummary
+      ready={ready}
+      models={models}
+      check={state.checks[provider]}
+      capabilities={capabilities}
+      usages={usages.flatMap(([selection, label]) => selection?.provider === provider ? [label] : [])}
+      t={t}
+      onRetry={() => { void controller.verifyConnection(provider, true) }}
+      onUsage={() => { setActivePanel('usage') }}
+    />
+  }
   const usageSaving = defaultModelStatus === 'saving' || toolModelStatus === 'saving'
     || imageModelStatus === 'saving' || speechModelStatus === 'saving'
 
@@ -660,7 +680,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             title={t('defaultModelTitle')}
             description={t('defaultModelDescription')}
             selectCopy={t('defaultModelSelect')}
-            unavailableCopy={state.modelCatalogError === null ? t('toolModelUnavailable') : t('toolModelCatalogFailed')}
+            unavailableCopy={state.modelCatalogError === null ? t('defaultModelUnavailable') : t('toolModelCatalogFailed')}
             groups={configuredModelGroups}
             selected={selectedDefaultModel}
             selectedAvailable={selectedDefaultModelAvailable}
@@ -681,7 +701,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
             description={t('toolModelDescription')}
             selectCopy={t('toolModelSelect')}
             unavailableCopy={state.modelCatalogError === null ? t('toolModelUnavailable') : t('toolModelCatalogFailed')}
-            groups={configuredModelGroups}
+            groups={toolModelGroups}
             selected={selectedToolModel}
             selectedAvailable={selectedToolModelAvailable}
             status={toolModelStatus}
@@ -755,190 +775,54 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
         {savedIdentity === undefined
           ? null
           : (
-            <p className={styles['savedNotice']} role="status" aria-live="polite">
-              {providerCopy(t('savedProvider'), savedIdentity)}
-            </p>
+            <div className={styles['connectionsHeader']}>
+              <p className={styles['savedNotice']} role="status" aria-live="polite">{providerCopy(t('savedProvider'), savedIdentity)}</p>
+              <button type="button" className={styles['summaryLink']} onClick={() => { setActivePanel('usage') }}>{t('assignUsage')}</button>
+            </div>
           )}
-        <section className={styles['presetDirectory']} aria-label={t('providerPresetsTitle')}>
-          <div className={styles['accessWorkspace']}>
-            <aside className={styles['supplierRail']} aria-label={t('supplierListLabel')}>
-              <span className={styles['supplierRailTitle']}>{t('supplierListLabel')}</span>
-              <div className={styles['supplierList']}>
-                {PROVIDER_SUPPLIERS.map((supplier: ProviderSupplierPreset) => {
-                  const usableCount = supplier.access.filter((access) => {
-                    const row = presetRows.get(access.provider)
-                    return row !== undefined && providerUsable(row)
-                  }).length
-                  const selected = supplier.id === selectedSupplier.id
-                  return (
-                    <button
-                      key={supplier.id}
-                      type="button"
-                      aria-pressed={selected}
-                      className={selected ? styles['supplierButtonActive'] : styles['supplierButton']}
-                      onClick={() => {
-                        setSelectedSupplierId(supplier.id)
-                        setSelectedAccessProvider(supplier.access[0].provider)
-                        setSavedTarget(undefined)
-                        setEditing(undefined)
-                        setAdding(false)
-                        setDeclaring(false)
-                      }}
-                    >
-                      <span className={styles['supplierMark']} aria-hidden="true">{supplier.shortLabel}</span>
-                      <span className={styles['supplierIdentity']}>
-                        <span className={styles['supplierName']}>{t(supplier.nameKey)}</span>
-                        <span className={styles['supplierSummary']}>{t(supplier.summaryKey)}</span>
-                      </span>
-                      <span
-                        className={usableCount > 0 ? styles['supplierConfiguredDot'] : styles['supplierEmptyDot']}
-                        aria-hidden="true"
-                      />
-                    </button>
-                  )
-                })}
-              </div>
-            </aside>
-            <article className={styles['supplierWorkspace']}>
-              <header className={styles['supplierHead']}>
-                <span className={styles['supplierMark']} aria-hidden="true">{selectedSupplier.shortLabel}</span>
-                <span className={styles['supplierIdentity']}>
-                  <span className={styles['supplierName']}>{t(selectedSupplier.nameKey)}</span>
-                  <span className={styles['supplierSummary']}>{t(selectedSupplier.summaryKey)}</span>
+        <div className={styles['connectionsHeader']}>
+          <h3 className={styles['connectionsTitle']}>{t('connectionsTitle')}</h3>
+          <button type="button" className={styles['secondaryButton']} disabled={!state.writable}
+            aria-expanded={choosingConnection}
+            onClick={() => { setChoosingConnection(!choosingConnection) }}>
+            <IconPlusOutline16 size={14} />{t('add')}
+          </button>
+        </div>
+        {choosingConnection ? (
+          <div className={styles['connectionPicker']} aria-label={t('add')}>
+            {addable.map(candidate => (
+              <button key={candidate.target.provider} type="button" className={styles['connectionOption']}
+                aria-label={candidate.label}
+                disabled={!state.namespaces.has(candidate.target.settingsNs)}
+                onClick={() => {
+                  setSavedTarget(undefined)
+                  setDeclaring(false)
+                  setAdding(true)
+                  setEditing(candidate.target)
+                  setChoosingConnection(false)
+                }}>
+                <ProviderLogo provider={candidate.target.provider} displayName={candidate.name} />
+                <span className={styles['connectionOptionText']}>
+                  <span className={styles['rowName']}>{candidate.name}</span>
+                  <span className={styles['editorSectionHint']}>{candidate.plan}</span>
                 </span>
-                <span className={styles['officialTag']}>{t('officialPreset')}</span>
-              </header>
-              <ul className={styles['accessList']}>
-                <li className={styles['accessCard']}>
-                  <div className={styles['accessChooser']}>
-                    <label className={styles['field']}>
-                      <span className={styles['fieldLabel']}>{t('accessMethod')}</span>
-                      <select
-                        className={`${styles['input']} ${styles['selectInput']}`}
-                        aria-label={t('accessMethod')}
-                        value={selectedAccess.provider}
-                        onChange={(event) => {
-                          setSelectedAccessProvider(event.target.value)
-                          setSavedTarget(undefined)
-                          setEditing(undefined)
-                          setAdding(false)
-                          setDeclaring(false)
-                        }}
-                      >
-                        {selectedSupplier.access.map(access => (
-                          <option key={access.provider} value={access.provider}>{t(access.labelKey)}</option>
-                        ))}
-                      </select>
-                    </label>
-                    <div className={styles['accessHead']}>
-                      <span className={styles['accessIdentity']}>
-                        <span className={styles['hiddenLabel']}>{t(selectedSupplier.nameKey)}</span>
-                        <span className={selectedAccessUsable ? styles['accessConfigured'] : styles['accessMissing']}>
-                          {selectedAccessUsable ? t('accessReady') : t('accessNeedsSetup')}
-                        </span>
-                        {selectedAccessSetup
-                          ? null
-                          : selectedCredentialConfigured
-                            ? (
-                              <span
-                                className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
-                                role="img"
-                                aria-label={t('credentialConfigured')}
-                                title={t('credentialConfigured')}
-                              />
-                            )
-                            : selectedCredentialMissing
-                              ? (
-                                <span
-                                  className={`${styles['credentialDot']} ${styles['credentialDotMissing']}`}
-                                  role="img"
-                                  aria-label={t('credentialMissing')}
-                                  title={t('credentialMissing')}
-                                />
-                              )
-                              : null}
-                      </span>
-                      <span className={styles['rowActions']}>
-                        <button
-                          type="button"
-                          className={styles['secondaryButton']}
-                          aria-label={providerCopy(
-                            selectedAccessUsable ? t('editProvider') : t('configureAccess'),
-                            selectedTarget,
-                          )}
-                          disabled={selectedNamespace === undefined || !state.writable}
-                          onClick={() => {
-                            setSavedTarget(undefined)
-                            setDeclaring(false)
-                            setAdding(false)
-                            setEditing(selectedAccessOpen ? undefined : selectedTarget)
-                          }}
-                        >
-                          {selectedAccessUsable ? t('edit') : t('configure')}
-                        </button>
-                        {selectedPresetRow?.removable === true
-                          ? (
-                            <button
-                              type="button"
-                              className={styles['dangerButton']}
-                              aria-label={providerCopy(t('removeProvider'), selectedTarget)}
-                              disabled={!state.writable}
-                              onClick={() => {
-                                setSavedTarget(undefined)
-                                setDeleteFailure(undefined)
-                                setDeleteTarget(selectedTarget)
-                              }}
-                            >
-                              {t('remove')}
-                            </button>
-                          )
-                          : null}
-                      </span>
-                    </div>
-                  </div>
-                  {selectedAccess.noticeKey === undefined || !selectedEditorVisible
-                    ? null
-                    : <p className={styles['planNotice']}>{t(selectedAccess.noticeKey)}</p>}
-                  {selectedPresetRow === undefined || (!selectedAccessConfigured && !selectedEditorVisible)
-                    ? null
-                    : renderSlot(
-                      'settings.models.provider-card',
-                      {
-                        provider: selectedPresetRow.entry,
-                        configured: selectedPresetRow.configured,
-                        keyConfigured: keyConfiguredOf(selectedPresetRow),
-                      },
-                      { entryKey: selectedPresetRow.entry.settingsNs },
-                    )}
-                  {selectedEditorVisible && selectedNamespace !== undefined
-                    ? renderProviderEditor({
-                      target: selectedTarget,
-                      connectionPreset: selectedAccess,
-                      namespace: selectedNamespace,
-                      ...serviceNamespace === undefined ? {} : { serviceNamespace },
-                      schema,
-                      api,
-                      t,
-                      readOnly: !state.writable,
-                      onClose: (changed) => {
-                        if (selectedAccessSetup) {
-                          if (selectedAccessOpen) setEditing(undefined)
-                          closeSetup(changed, selectedTarget)
-                        } else closeEditor(changed, selectedTarget)
-                      },
-                    })
-                    : null}
-                </li>
-              </ul>
-            </article>
+              </button>
+            ))}
+            <button type="button" className={styles['connectionOption']}
+              disabled={protocols.length === 0}
+              onClick={() => {
+                setSavedTarget(undefined)
+                setAdding(false)
+                setEditing(undefined)
+                setDeclaring(true)
+                setChoosingConnection(false)
+              }}><span className={styles['providerLogoFallback']} aria-hidden="true"><IconPlusOutline16 /></span>{t('customAdd')}</button>
           </div>
-        </section>
-        {otherConfigured.length === 0 && serviceOnlyProviders.length === 0 ? null : (
-          <h3 className={styles['otherProvidersTitle']}>{t('otherProvidersTitle')}</h3>
-        )}
+        ) : null}
         <ul className={styles['rows']}>
-          {otherConfigured.map((row) => {
-            const target = targetOf(row)
+          {configured.map((row) => {
+            const target = connectionTarget(row)
+            const preset = presetOf(row.entry.provider)
             const namespace = state.namespaces.get(target.settingsNs)
             /* v8 ignore next -- the join marks a row configured only when its namespace resolved */
             if (namespace === undefined) return null
@@ -949,6 +833,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 <li key={row.entry.provider} className={styles['setupCard']}>
                   {renderProviderEditor({
                     target,
+                    ...preset === undefined ? {} : { connectionPreset: preset.access },
                     namespace,
                     ...serviceNamespace === undefined ? {} : { serviceNamespace },
                     schema,
@@ -957,6 +842,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     readOnly: !state.writable,
                     onClose: (changed) => { closeSetup(changed, target) },
                   })}
+                  {connectionSummary(row.entry.provider, providerUsable(row))}
                   {renderSlot(
                     'settings.models.provider-card',
                     { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
@@ -966,46 +852,23 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               )
             }
             const open = !adding && editing?.provider === row.entry.provider
-            const credentialConfigured = row.credential?.configured === true
-            const credentialMissing = !credentialConfigured
-            && row.apiKeyEnv !== undefined
-            && row.credential?.configured === false
             return (
               <li key={row.entry.provider} className={styles['rowCard']}>
                 <div className={styles['rowHead']}>
                   <span className={styles['rowIdentity']}>
-                    <span className={styles['rowName']}>{row.entry.displayName}</span>
-                    {/* Only the adapter can tell a hand-declared route from a
-                      shipped one it also has a stored profile for, so the tag
-                      follows its answer and stays off when it gives none. */}
-                    {row.entry.declared === true
-                      ? <span className={styles['rowTag']}>{t('customTag')}</span>
-                      : null}
-                    {credentialConfigured
-                      ? (
-                        <span
-                          className={`${styles['credentialDot']} ${styles['credentialDotConfigured']}`}
-                          role="img"
-                          aria-label={t('credentialConfigured')}
-                          title={t('credentialConfigured')}
-                        />
-                      )
-                      : credentialMissing
-                        ? (
-                          <span
-                            className={`${styles['credentialDot']} ${styles['credentialDotMissing']}`}
-                            role="img"
-                            aria-label={t('credentialMissing')}
-                            title={t('credentialMissing')}
-                          />
-                        )
+                    <ProviderLogo provider={row.entry.provider} displayName={target.displayName} />
+                    <span className={styles['rowName']}>{target.displayName}</span>
+                    {preset !== undefined
+                      ? <span className={styles['rowTag']}>{t('officialPreset')}</span>
+                      : row.entry.declared === true
+                        ? <span className={styles['rowTag']}>{t('customTag')}</span>
                         : null}
                   </span>
                   <span className={styles['rowActions']}>
                     <button
                       type="button"
                       className={styles['secondaryButton']}
-                      aria-label={providerCopy(t('editProvider'), target)}
+                      aria-label={providerCopy(t(providerUsable(row) ? 'editProvider' : 'configureAccess'), target)}
                       onClick={() => {
                         setSavedTarget(undefined)
                         // One card at a time: leaving `declaring` set would show
@@ -1016,7 +879,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                         setEditing(open ? undefined : target)
                       }}
                     >
-                      {t('edit')}
+                      {t(providerUsable(row) ? 'edit' : 'configure')}
                     </button>
                     {row.removable
                       ? (
@@ -1037,6 +900,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                       : null}
                   </span>
                 </div>
+                {connectionSummary(row.entry.provider, providerUsable(row))}
                 {renderSlot(
                   'settings.models.provider-card',
                   { provider: row.entry, configured: row.configured, keyConfigured: keyConfiguredOf(row) },
@@ -1045,6 +909,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 {open
                   ? renderProviderEditor({
                     target,
+                    ...preset === undefined ? {} : { connectionPreset: preset.access },
                     namespace,
                     ...serviceNamespace === undefined ? {} : { serviceNamespace },
                     schema,
@@ -1064,16 +929,10 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
               <li key={provider.provider} className={styles['rowCard']}>
                 <div className={styles['rowHead']}>
                   <span className={styles['rowIdentity']}>
+                    <ProviderLogo provider={provider.provider} displayName={provider.displayName} />
                     <span className={styles['rowName']}>{provider.displayName}</span>
                     <span className={styles['rowTag']}>{t('customTag')}</span>
-                    <span
-                      className={`${styles['credentialDot']} ${provider.credential?.configured === true
-                        ? styles['credentialDotConfigured']
-                        : styles['credentialDotMissing']}`}
-                      role="img"
-                      aria-label={t(provider.credential?.configured === true ? 'credentialConfigured' : 'credentialMissing')}
-                      title={t(provider.credential?.configured === true ? 'credentialConfigured' : 'credentialMissing')}
-                    />
+
                   </span>
                   <span className={styles['rowActions']}>
                     <button
@@ -1104,6 +963,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     </button>
                   </span>
                 </div>
+                {connectionSummary(provider.provider, provider.credential?.configured === true)}
                 {open
                   ? (
                     <CustomProviderCard
@@ -1127,29 +987,16 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
           {addTarget !== undefined && addNamespace !== undefined
             ? (
               <div className={styles['addCard']}>
-                <div className={styles['field']}>
-                  <span className={styles['fieldLabel']}>{t('provider')}</span>
-                  <select
-                    className={`${styles['input']} ${styles['selectInput']}`}
-                    value={addTarget.provider}
-                    aria-label={t('provider')}
-                    onChange={(event) => {
-                      const row = addable.find(candidate => candidate.entry.provider === event.target.value)
-                      /* v8 ignore next -- the select only lists addable rows */
-                      if (row === undefined) return
-                      setEditing(targetOf(row))
-                    }}
-                  >
-                    {addable.map(row => (
-                      <option key={row.entry.provider} value={row.entry.provider}>{row.entry.displayName}</option>
-                    ))}
-                  </select>
+                <div className={styles['rowIdentity']}>
+                  <ProviderLogo provider={addTarget.provider} displayName={addTarget.displayName} />
+                  <h3 className={styles['connectionsTitle']}>{addTarget.displayName}</h3>
                 </div>
                 <ProviderEditor
                   key={addTarget.provider}
                   provider={addTarget.provider}
                   displayName={addTarget.displayName}
                   hideTitle
+                  {...addPreset === undefined ? {} : { connectionPreset: addPreset.access }}
                   namespace={addNamespace}
                   {...serviceNamespace === undefined ? {} : { serviceNamespace }}
                   schema={schema}
@@ -1180,52 +1027,14 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                     api={api}
                     t={t}
                     readOnly={!state.writable}
-                    onClose={(changed) => {
+                    onClose={(changed, provider) => {
                       setDeclaring(false)
-                      if (changed) void controller.load()
+                      if (changed && provider !== undefined) announceSaved({ provider, displayName: provider })
                     }}
                   />
                 </div>
               )
-              : (
-              // One row for the two ways to gain a provider: adopt one the
-              // adapter already knows, or declare one it does not. Side by side
-              // and equal-width so they read as siblings and line up with the
-              // rows above, rather than two pills of different lengths.
-                <div className={styles['addActions']}>
-                  <button
-                    type="button"
-                    className={styles['addButton']}
-                    disabled={addable.length === 0 || !state.writable}
-                    onClick={() => {
-                      const first = addable[0]
-                      /* v8 ignore next -- the button is disabled while nothing is addable */
-                      if (first === undefined) return
-                      setSavedTarget(undefined)
-                      setDeclaring(false)
-                      setAdding(true)
-                      setEditing(targetOf(first))
-                    }}
-                  >
-                    <IconPlusOutline16 size={14} />
-                    {t('add')}
-                  </button>
-                  <button
-                    type="button"
-                    className={styles['addButton']}
-                    disabled={protocols.length === 0 || !state.writable}
-                    onClick={() => {
-                      setSavedTarget(undefined)
-                      setAdding(false)
-                      setEditing(undefined)
-                      setDeclaring(true)
-                    }}
-                  >
-                    <IconPlusOutline16 size={14} />
-                    {t('customAdd')}
-                  </button>
-                </div>
-              )}
+              : null}
         </div>
         <div className={styles['specializedAccess']}>
           {renderSlot('settings.models.specialized-model', {})}

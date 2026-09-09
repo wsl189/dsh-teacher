@@ -365,10 +365,25 @@ describe('TeacherWorkbenchController', () => {
     ])
     expect(state.timetableEntries.map(item => item.classId)).toEqual(['week-class', 'grade-class', 'week-class'])
     await expect(controller.importTimetableEntries([{
-      usage: 'gradeTimetable', className: '第一节', grade: '高一', kind: 'lesson', weekday: 2, period: 1,
+      usage: 'gradeTimetable', className: ' ', grade: '高一', kind: 'lesson', weekday: 2, period: 1,
       startTime: '', endTime: '', subject: '语文', teacherName: '', location: '',
-    }])).resolves.toEqual({ ok: false, error: { code: 'invalid-state', message: '课表班级名称必须以“班”结尾' } })
+    }])).resolves.toEqual({ ok: false, error: { code: 'invalid-state', message: '课表需要班级名称，以及课程或自习负责教师' } })
     expect(fake.write).toHaveBeenCalledTimes(4)
+  })
+
+  it('imports a teacher-only study duty with an unconstrained class label', async () => {
+    const fake = fakeRemote()
+    let nextId = 0
+    const controller = new TeacherWorkbenchController(fake.remote, { id: () => `duty-${String(++nextId)}`, now: () => 1 })
+    await controller.refresh()
+    await expect(controller.importTimetableEntries([{
+      usage: 'timetable', className: 'Grade 10 / A', grade: '', kind: 'eveningStudy', weekday: 1, period: 1,
+      startTime: '', endTime: '', subject: '', teacherName: '李老师', location: '',
+    }])).resolves.toMatchObject({ ok: true })
+    expect(controller.getSnapshot().document?.state.classes).toMatchObject([{ name: 'Grade 10 / A' }])
+    expect(controller.getSnapshot().document?.state.timetableEntries).toMatchObject([
+      { kind: 'eveningStudy', subject: '晚自习', teacherName: '李老师' },
+    ])
   })
 
   it('cascades student and class deletion through surviving exams', async () => {

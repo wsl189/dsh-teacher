@@ -25,6 +25,8 @@ export interface OcrExtractRequest {
   readonly includeDiscardedText?: boolean
   /** Re-read raster images at multiple scales and overlapping regions to retain small text and table headers. */
   readonly enhanceImageDetail?: boolean
+  /** Return embedded image assets referenced by the extracted Markdown. */
+  readonly includeImages?: boolean
 }
 
 /** Inclusive page window requested from a structured document parser. */
@@ -84,6 +86,16 @@ export interface OcrLayoutLimits {
   readonly maxPagesPerRequest: number
 }
 
+/** One extracted illustration, addressed by its document-relative Markdown image target. */
+export interface OcrExtractedImage {
+  /** Document-relative image target; not a Host filesystem path or a fetchable URL. */
+  readonly name: string
+  /** Image media type reported by the provider. */
+  readonly mediaType: string
+  /** Complete image bytes encoded as canonical base64. */
+  readonly contentBase64: string
+}
+
 /** Normalized machine-readable document content. */
 export interface OcrExtractedDocument {
   /** Original document display name. */
@@ -92,6 +104,8 @@ export interface OcrExtractedDocument {
   readonly mediaType: string
   /** Reading-order Markdown produced by the selected provider. */
   readonly markdown: string
+  /** Embedded illustrations when requested; Consumers must reject unresolved image references. */
+  readonly images?: readonly OcrExtractedImage[]
   /** Selected provider id. */
   readonly provider: string
   /** Whether the configured output limit removed trailing content. */

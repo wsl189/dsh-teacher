@@ -2,6 +2,8 @@
 
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
+import type { ExampleCollectionCommands, ExampleCollectionSnapshot } from './example-collection-controller.ts'
+import type { TimetableImportCommands, TimetableImportView } from './timetable-import-controller.ts'
 import type {
   OcrExtractResult,
   TeacherCalendarItemId,
@@ -211,7 +213,15 @@ export interface TeacherWorkbenchCommands {
 
 /** Registration-side inject face for the full workbench surface. */
 export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
+  /** Browser-held timetable recognition and review actions. */
+  timetableImportCommands: TimetableImportCommands
+  /** Saved-question commands, including original and Word file reads. */
+  exampleCommands: ExampleCollectionCommands
   hooks: {
+    /** Recognition progress and review drafts that survive workbench navigation. */
+    timetableImport: HostObservable<TimetableImportView>
+    /** Independent SQLite-backed example collection and unsaved description drafts. */
+    examples: HostObservable<ExampleCollectionSnapshot>
     /** Durable workbench object-layer snapshot. */
     workbench: HostObservable<TeacherWorkbenchSnapshot>
     /** Durable teacher identity and analysis settings. */

@@ -579,7 +579,9 @@ The backends that consume this contract are on [persistence.md](persistence.md).
 
 ## Remote catalog and workspace opening
 
-`ModelCatalog` is the Host-generation model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. It is not derived from one Session and remains separate from Session projections.
+`ModelCatalog` is the Host-generation model directory returned by `session/modelCatalog`: it carries the deployment default, routable provider ids, successful provider groups, and isolated provider failures. Each model preserves the adapter-resolved `inputModalities` when known. It is not derived from one Session and remains separate from Session projections.
+
+`ModelCheckRequest` names a saved `provider` and `model` for `session/checkModel`. The controller sends one bounded, tool-free request and returns `ModelCheckResult` with the private diagnostic `sessionId` only after a successful finish. The diagnostic log retains the exact input and response; errors and cancellation reject the operation without editing configuration.
 
 `SessionOpenWorkspacePathRequest` carries an absolute or workspace-resolved `path`. `SessionOpenWorkspacePathValue` confirms that the Host accepted the native handoff. A Session-aware Client resolves relative paths against its current Session cwd when known; the controller hands the path to the opener unchanged and reports invalid requests, cancellation, and opener failures through the Session Remote error vocabulary.
 
@@ -648,6 +650,15 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionH
  * @returns provider-grouped models, the deployment default, and isolated provider failures.
  */
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
+
+/**
+ * Verify a saved language model with a bounded, logged request.
+ * @param request - registered provider and model to check.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns the checked model and its private diagnostic session id.
+ * @throws TypertRemoteFailure when the model request cannot complete.
+ */
+@Remote async checkModel(request: ModelCheckRequest, signal: AbortSignal): Promise<ModelCheckResult>
 
 /**
  * Report whether this deployment can hand a Session workspace path to a native desktop.

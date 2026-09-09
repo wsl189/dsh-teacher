@@ -78,6 +78,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`@types/mdast`](https://github.com/DefinitelyTyped/DefinitelyTyped) | MIT |
 | [`@vscode/ripgrep`](https://github.com/microsoft/vscode-ripgrep) | MIT |
 | [`@xmanrui/dsh-im`](https://github.com/xmanrui/dsh-im) | MIT |
+| [`@xmldom/xmldom`](https://github.com/xmldom/xmldom) | MIT |
 | [`@xterm/headless`](https://github.com/xtermjs/xterm.js) | MIT |
 | [`@yarnpkg/parsers`](https://github.com/yarnpkg/berry) | BSD-2-Clause |
 | [`acorn`](https://github.com/acornjs/acorn) | MIT |
@@ -110,6 +111,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`koffi`](https://github.com/Koromix/koffi) | MIT |
 | [`lexical`](https://github.com/facebook/lexical) | MIT |
 | [`lucide-react`](https://github.com/lucide-icons/lucide) | ISC |
+| [`mathml2omml`](https://github.com/fiduswriter/mathml2omml) | LGPL-3.0-or-later |
 | [`mdast-util-from-markdown`](https://github.com/syntax-tree/mdast-util-from-markdown) | MIT |
 | [`mdast-util-gfm`](https://github.com/syntax-tree/mdast-util-gfm) | MIT |
 | [`mdast-util-math`](https://github.com/syntax-tree/mdast-util-math) | MIT |
@@ -142,6 +144,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`turndown`](https://github.com/mixmark-io/turndown) | MIT |
 | [`typescript`](https://github.com/microsoft/TypeScript) | Apache-2.0 |
 | [`undici`](https://github.com/nodejs/undici) | MIT |
+| [`unist-util-visit`](https://github.com/syntax-tree/unist-util-visit) | MIT |
 | [`use-sync-external-store`](https://github.com/facebook/react) | MIT |
 | [`ws`](https://github.com/websockets/ws) | MIT |
 | [`yaml`](https://github.com/eemeli/yaml) | ISC |
@@ -149,6 +152,13 @@ External packages that a workspace package resolves at runtime. The tier covers 
 | [`zustand`](https://github.com/pmndrs/zustand) | MIT |
 
 `@huanlin/dsh-plugin-better-sidebar-plugin-office` (AGPL-3.0) is distributed by the explicit identity-scoped decision in [Bundled extensions and shared speech input](.agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md). This authorization does not classify its terms as permissive; downstream distributions must preserve its notices and comply with that license.
+
+
+## Editable Word equations
+
+The teacher workbench uses [`mathml2omml`](https://github.com/fiduswriter/mathml2omml) 0.5.0 by Johannes Wilm under LGPL-3.0-or-later. The project owner explicitly authorizes this version's distribution under those terms in the [example-collection decision](.agents/notes/implemented/feature/2026-09-08-example-collection.md). The converter remains an external, replaceable runtime module. Users may modify it and reverse engineer the combined application to debug those modifications.
+
+Every teacher-workbench package includes [the notice and replacement instructions](packages/host/teacher-workbench/third-party/mathml2omml/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](packages/host/teacher-workbench/third-party/mathml2omml/mathml2omml-0.5.0-source.tar.gz) from upstream commit `0ddeb8b59ff1a97796b25d8f682dfb410febde1d`. The packet also contains the bundled `entities` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from `html-parse-stringify`. The Windows installer includes the same packet under `resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
 
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:

@@ -1,0 +1,172 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "技能"
+    - button "MCP"
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "IM机器人":
+      - img
+      - text: IM机器人
+    - button "侧边卡片"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每条连接独立配置。保存后自动选一个对话模型验证连接，语音和生图无需验证。
+  - heading "已添加的连接" [level=3]
+  - button "添加服务":
+    - img
+    - text: 添加服务
+  - list:
+    - listitem:
+      - text: DeepSeek · 标准 API 官方预设
+      - button "编辑 DeepSeek · 标准 API (deepseek-official)": 编辑
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 用于：默认对话模型 · 工具模型
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: Kimi / 月之暗面 · Kimi Code 官方预设
+      - button "编辑 Kimi / 月之暗面 · Kimi Code (kimi-coding)": 编辑
+      - button "删除 Kimi / 月之暗面 · Kimi Code (kimi-coding)": 删除
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: MiniMax · 标准 API 官方预设
+      - button "编辑 MiniMax · 标准 API (minimax-cn)": 编辑
+      - button "删除 MiniMax · 标准 API (minimax-cn)": 删除
+      - text: 已配置 · 未验证 2 个模型 对话 / 推理 · 图像生成 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: Kimi / 月之暗面 · Kimi 开放平台 官方预设
+      - button "编辑 Kimi / 月之暗面 · Kimi 开放平台 (moonshotai-cn)": 编辑
+      - button "删除 Kimi / 月之暗面 · Kimi 开放平台 (moonshotai-cn)": 删除
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: OpenCode Go · Go 订阅 官方预设
+      - button "编辑 OpenCode Go · Go 订阅 (opencode-go)": 编辑
+      - button "删除 OpenCode Go · Go 订阅 (opencode-go)": 删除
+      - text: 已配置 · 未验证 3 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: OpenRouter · 标准 API 官方预设
+      - button "编辑 OpenRouter · 标准 API (openrouter)": 编辑
+      - button "删除 OpenRouter · 标准 API (openrouter)": 删除
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: 阿里云百炼 / Qwen · 百炼 Token Plan 官方预设
+      - button "编辑 阿里云百炼 / Qwen · 百炼 Token Plan (qwen-token-plan-cn)": 编辑
+      - button "删除 阿里云百炼 / Qwen · 百炼 Token Plan (qwen-token-plan-cn)": 删除
+      - text: 已配置 · 未验证 3 个模型 对话 / 推理 · 图像生成 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: 智谱 GLM · GLM Coding Plan 官方预设
+      - button "编辑 智谱 GLM · GLM Coding Plan (zai-coding-cn)": 编辑
+      - button "删除 智谱 GLM · GLM Coding Plan (zai-coding-cn)": 删除
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: 智谱 GLM · 标准 API 官方预设
+      - button "编辑 智谱 GLM · 标准 API (zhipu-cn)": 编辑
+      - button "删除 智谱 GLM · 标准 API (zhipu-cn)": 删除
+      - text: 已配置 · 未验证 3 个模型 对话 / 推理 · 图像生成 · 语音识别 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+      - text: 智谱 GLM · 标准 API zhipu-cn 接入凭证 API 协议与密钥都属于当前接入方式。 API 协议
+      - combobox "API 协议":
+        - option "OpenAI Chat Completions"
+        - option "Anthropic Messages" [selected]
+      - text: API 密钥
+      - textbox "API 密钥":
+        - /placeholder: 已配置——输入新值可替换
+      - text: 请求路由 切换模型类型后会自动套用供应商的官方地址，也可以继续修改完整请求地址。 模型类型
+      - combobox "模型类型":
+        - option "对话 / 推理" [selected]
+        - option "视觉理解"
+        - option "图像生成"
+        - option "语音识别"
+      - text: API 地址
+      - textbox "API 地址":
+        - /placeholder: https://open.bigmodel.cn/api/anthropic
+        - text: https://open.bigmodel.cn/api/anthropic
+      - text: 完整请求地址
+      - textbox "完整请求地址": https://open.bigmodel.cn/api/anthropic/v1/messages
+      - paragraph: 对话与推理模型使用当前 LLM 请求端点。
+      - region "模型目录":
+        - text: 模型目录 已自定义模型目录
+        - button "恢复默认模型"
+        - button "获取可用模型"
+        - textbox "模型 ID 1":
+          - /placeholder: 模型 ID
+          - text: glm-5.2
+        - textbox "显示名称 1":
+          - /placeholder: 显示名称
+        - button "容量 1" [expanded]: 容量
+        - button "删除模型 1"
+        - text: 上下文窗口
+        - combobox "上下文窗口 1":
+          - option "使用模型默认值"
+          - option "32K"
+          - option "64K"
+          - option "128K"
+          - option "256K" [selected]
+          - option "512K"
+          - option "1M"
+        - text: 最大输出 token
+        - combobox "最大输出 token 1":
+          - option "使用模型默认值"
+          - option "8K"
+          - option "16K"
+          - option "32K" [selected]
+          - option "64K"
+        - text: 输入类型
+        - combobox "输入类型 1":
+          - option "仅文本" [selected]
+          - option "文本和图片"
+        - button "添加模型"
+      - button "取消"
+      - button "保存"
+    - listitem:
+      - text: 阿里云百炼 / Qwen · 百炼标准 API 官方预设
+      - button "编辑 阿里云百炼 / Qwen · 百炼标准 API (qwen-cn)": 编辑
+      - button "删除 阿里云百炼 / Qwen · 百炼标准 API (qwen-cn)": 删除
+      - text: 已配置 · 未验证 4 个模型 对话 / 推理 · 图像生成 · 语音识别 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: 阿里云百炼 / Qwen · 百炼 Coding Plan 官方预设
+      - button "编辑 阿里云百炼 / Qwen · 百炼 Coding Plan (qwen-coding-cn)": 编辑
+      - button "删除 阿里云百炼 / Qwen · 百炼 Coding Plan (qwen-coding-cn)": 删除
+      - text: 已配置 · 未验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: MiniMax · MiniMax Token Plan 官方预设
+      - button "编辑 MiniMax · MiniMax Token Plan (minimax-token-plan-cn)": 编辑
+      - button "删除 MiniMax · MiniMax Token Plan (minimax-token-plan-cn)": 删除
+      - text: 已配置 · 未验证 2 个模型 对话 / 推理 · 图像生成 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型

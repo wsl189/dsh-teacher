@@ -10,39 +10,25 @@ import type {
   TeacherTimetableEntry,
   TeacherTimetableClassUsage,
   TeacherTimetableEntryKind,
+  TeacherTimetableNormalizeDefaults,
   TeacherWeekday,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
+import type { TimetableImportDraft } from './timetable-import.ts'
 import {
-  isPlausibleClassName,
-  parseTimetable,
-  type TimetableImportDefaults,
-  type TimetableImportDraft,
-} from './timetable-import.ts'
+  selectedTimetableImportItems,
+  type TimetableImportCommands,
+  type TimetableImportState,
+  type TimetableImportView,
+} from './timetable-import-controller.ts'
 import { EditorModal, FormField, IconAction, type TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './TeacherWorkbench.module.css'
 
 type TimetableView = 'today' | 'week' | 'grade' | 'study'
 
 const CLASS_NAME_COLLATOR = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
-
-type TimetableImportState =
-  | { readonly kind: 'extracting'; readonly fileName: string; readonly context: TimetableImportContext }
-  | { readonly kind: 'normalizing'; readonly fileName: string; readonly context: TimetableImportContext }
-  | { readonly kind: 'review'; readonly fileName: string; readonly context: TimetableImportContext; readonly items: readonly TimetableImportDraft[]; readonly truncated: boolean }
-  | { readonly kind: 'error'; readonly fileName: string; readonly context: TimetableImportContext; readonly message: string }
-
-interface TimetableImportContext {
-  readonly classes: readonly TeacherClass[]
-  readonly defaults: TimetableRecognitionDefaults
-  readonly usage: TeacherTimetableClassUsage
-}
-
-type TimetableRecognitionDefaults = TimetableImportDefaults & {
-  readonly target: 'class' | 'grade' | 'study'
-}
 
 interface EditorRequest {
   readonly entry?: TeacherTimetableEntry
@@ -77,6 +63,10 @@ export interface TimetableProps {
   settings: TeacherWorkbenchSettings
   /** Durable workbench commands. */
   commands: TeacherWorkbenchCommands
+  /** Browser-held recognition progress and review. */
+  importView: TimetableImportView
+  /** Task actions independent of this component lifetime. */
+  importCommands: TimetableImportCommands
   /** Persist the editable teacher filter in dsh settings. */
   setTeacherName: (name: string) => Promise<void>
   /** Workbench translator. */
@@ -96,7 +86,8 @@ export function Timetable(props: TimetableProps) {
   const [teacherFilterName, setTeacherFilterName] = useState(props.settings.teacherName)
   const [editing, setEditing] = useState<EditorRequest | null>(null)
   const [classDraft, setClassDraft] = useState<ClassDraft | null>(null)
-  const [importState, setImportState] = useState<TimetableImportState | null>(null)
+  const [importOpen, setImportOpen] = useState(false)
+  const importState = props.importView.job
   const importInputRef = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     setTeacherFilterName(props.settings.teacherName)
@@ -148,7 +139,7 @@ export function Timetable(props: TimetableProps) {
       ...overrides,
     })
   }
-  const importDefaults = (): TimetableRecognitionDefaults => ({
+  const importDefaults = (): TeacherTimetableNormalizeDefaults => ({
     className: view === 'grade' || (onlyMine && (view === 'today' || view === 'week')) ? '' : selectedClass?.name ?? '',
     classNames: classes
       .filter(item => item.grade === (view === 'grade' ? activeGrade : selectedClass?.grade))
@@ -158,68 +149,9 @@ export function Timetable(props: TimetableProps) {
     target: view === 'grade' ? 'grade' : view === 'study' ? 'study' : 'class',
     teacherName: view === 'grade' || view === 'study' ? '' : props.settings.teacherName,
   })
-  const recognizeTimetable = async (file: File): Promise<void> => {
-    const context: TimetableImportContext = { classes, defaults: importDefaults(), usage }
-    const directImage = file.type === 'image/png'
-      || file.type === 'image/jpeg'
-      || file.type === 'image/webp'
-      || file.type === 'image/gif'
-    setImportState({ kind: 'extracting', fileName: file.name, context })
-    const result = await props.commands.extractDocument(file, {
-      includeDiscardedText: true,
-      enhanceImageDetail: directImage,
-    })
-    if (!result.ok) {
-      setImportState({
-        kind: 'error',
-        fileName: file.name,
-        context,
-        message: importFailureText(result.error.code, result.error.message, props.t),
-      })
-      return
-    }
-    const ruleItems = parseTimetable(result.value.markdown, context.defaults)
-    if (ruleItems.length > 0) {
-      setImportState({
-        kind: 'review',
-        fileName: file.name,
-        context,
-        items: ruleItems,
-        truncated: result.value.truncated,
-      })
-      return
-    }
-    setImportState({ kind: 'normalizing', fileName: file.name, context })
-    const normalized = await props.commands.normalizeTimetable(
-      file.name,
-      result.value.markdown,
-      context.defaults,
-    )
-    if (!normalized.ok) {
-      setImportState({
-        kind: 'error',
-        fileName: file.name,
-        context,
-        message: normalizeFailureText(normalized.error.code, normalized.error.message, props.t),
-      })
-      return
-    }
-    const items: TimetableImportDraft[] = normalized.value.items.map((item, index) => ({
-      ...item,
-      id: `agent-${String(index)}`,
-      selected: isPlausibleClassName(item.className) && item.subject.trim() !== '',
-    }))
-    if (items.length === 0) {
-      setImportState({ kind: 'error', fileName: file.name, context, message: props.t('timetable.importNoItems') })
-      return
-    }
-    setImportState({
-      kind: 'review',
-      fileName: file.name,
-      context,
-      items,
-      truncated: result.value.truncated,
-    })
+  const recognizeTimetable = (file: File): void => {
+    props.importCommands.start(file, { classes, defaults: importDefaults(), usage })
+    setImportOpen(true)
   }
   const deleteClass = (owner: TeacherClass): void => {
     if (!window.confirm(props.t('timetable.confirmDeleteClass', { name: owner.name }))) return
@@ -279,15 +211,16 @@ export function Timetable(props: TimetableProps) {
                 ref={importInputRef}
                 className={css.calendarImportInput}
                 type="file"
+                disabled={importState !== null}
                 accept="image/png,image/jpeg,image/webp,image/bmp,image/tiff,.pdf,.docx,.pptx,.xlsx"
                 onChange={(event) => {
                   const [file] = [...(event.target.files ?? [])]
                   event.target.value = ''
-                  if (file !== undefined) void recognizeTimetable(file)
+                  if (file !== undefined) recognizeTimetable(file)
                 }}
               />
               <div className={css.timetableCourseActions}>
-                <button type="button" className={css.buttonSecondary} onClick={() => { importInputRef.current?.click() }}>
+                <button type="button" className={css.buttonSecondary} disabled={importState !== null} onClick={() => { importInputRef.current?.click() }}>
                   <FileUp size={16} />
                   {props.t('timetable.import')}
                 </button>
@@ -296,6 +229,26 @@ export function Timetable(props: TimetableProps) {
           )}
         </div>
       </div>
+
+      {importState !== null && (
+        <div className={css.timetableImportNotice} role="status" aria-label={props.t('timetable.importTask')}>
+          <div>
+            <strong>{importState.fileName}</strong>
+            <span>{importState.kind === 'review'
+              ? props.t(importState.saving ? 'timetable.importSaving' : 'timetable.importReady', { count: importState.items.length })
+              : props.t(importState.kind === 'error' ? 'timetable.importFailed' : 'timetable.importBackground')}</span>
+          </div>
+          <button type="button" className={css.buttonSecondary} onClick={() => { setImportOpen(true) }}>
+            {props.t(importState.kind === 'extracting' || importState.kind === 'normalizing'
+              ? 'timetable.importViewProgress' : 'timetable.importViewResult')}
+          </button>
+          {(importState.kind === 'error' || (importState.kind === 'review' && !importState.saving)) && (
+            <button type="button" className={css.buttonSecondary} onClick={props.importCommands.discard}>
+              {props.t('timetable.importDiscard')}
+            </button>
+          )}
+        </div>
+      )}
 
       {view === 'today' && (
         <TodaySchedule
@@ -374,13 +327,12 @@ export function Timetable(props: TimetableProps) {
           </>
         </EditorModal>
       )}
-      {importState !== null && (
+      {importOpen && importState !== null && (
         <TimetableImportModal
           state={importState}
-          commands={props.commands}
+          commands={props.importCommands}
           t={props.t}
-          onChange={setImportState}
-          onClose={() => { setImportState(null) }}
+          onClose={() => { setImportOpen(false) }}
         />
       )}
     </section>
@@ -607,51 +559,52 @@ function GradeSchedule(props: {
           {WEEKDAYS.map(day => <th key={day}>{weekdayLabel(day, props.t)}</th>)}
         </tr></thead>
         <tbody>
-          {props.classes.flatMap(owner => periods.map((period, periodIndex) => (
-            <tr key={`${owner.id}-${String(period)}`}>
-              {periodIndex === 0 && (
-                <th rowSpan={periods.length}>
-                  <div className={css.timetableGradeClassHeading}>
-                    <span>{owner.name}</span>
-                    <IconAction
-                      label={props.t('timetable.deleteClassNamed', { name: owner.name })}
-                      danger
-                      onClick={() => { props.onDeleteClass(owner) }}
-                    >
-                      <IconTrashOutline16 />
-                    </IconAction>
-                  </div>
-                </th>
-              )}
-              <th>{props.t('timetable.periodValue', { period })}</th>
-              {WEEKDAYS.map((day) => {
-                const cellEntries = props.entries.filter(entry => (
-                  entry.classId === owner.id && entry.period === period && entry.weekday === day
-                ))
-                const slot = `${owner.name} · ${props.t('timetable.periodValue', { period })} · ${weekdayLabel(day, props.t)}`
-                return (
-                  <td key={day}>
-                    {cellEntries.map(entry => (
-                      <TimetableEntryCard
-                        key={entry.id}
-                        entry={entry}
-                        showClass={false}
-                        onEdit={props.onEdit}
-                      />
-                    ))}
-                    {cellEntries.length === 0 && (
-                      <TimetableEmptySlot
-                        label={props.t('timetable.addAt', { slot })}
-                        onClick={() => {
-                          props.onCreate({ className: owner.name, grade: owner.grade, kind: 'lesson', weekday: day, period })
-                        }}
-                      />
-                    )}
-                  </td>
-                )
-              })}
-            </tr>
-          )))}
+          {props.classes.flatMap(owner => periods.map((period, periodIndex) => {
+            const rowEntries = props.entries.filter(entry => entry.classId === owner.id && entry.period === period)
+            return (
+              <tr key={`${owner.id}-${String(period)}`}>
+                {periodIndex === 0 && (
+                  <th rowSpan={periods.length}>
+                    <div className={css.timetableGradeClassHeading}>
+                      <span>{owner.name}</span>
+                      <IconAction
+                        label={props.t('timetable.deleteClassNamed', { name: owner.name })}
+                        danger
+                        onClick={() => { props.onDeleteClass(owner) }}
+                      >
+                        <IconTrashOutline16 />
+                      </IconAction>
+                    </div>
+                  </th>
+                )}
+                <TimetablePeriodHeading label={props.t('timetable.periodValue', { period })} entries={rowEntries} />
+                {WEEKDAYS.map((day) => {
+                  const cellEntries = rowEntries.filter(entry => entry.weekday === day)
+                  const slot = `${owner.name} · ${props.t('timetable.periodValue', { period })} · ${weekdayLabel(day, props.t)}`
+                  return (
+                    <td key={day}>
+                      {cellEntries.map(entry => (
+                        <TimetableEntryCard
+                          key={entry.id}
+                          entry={entry}
+                          showClass={false}
+                          onEdit={props.onEdit}
+                        />
+                      ))}
+                      {cellEntries.length === 0 && (
+                        <TimetableEmptySlot
+                          label={props.t('timetable.addAt', { slot })}
+                          onClick={() => {
+                            props.onCreate({ className: owner.name, grade: owner.grade, kind: 'lesson', weekday: day, period })
+                          }}
+                        />
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            )
+          }))}
         </tbody>
       </table>
     </div>
@@ -709,7 +662,7 @@ function ScheduleGrid(props: {
         <tbody>
           {props.rowLabels.map((label, index) => (
             <tr key={`${label}-${String(index)}`}>
-              <th>{label}</th>
+              <TimetablePeriodHeading label={label} entries={props.rowEntries[index] ?? []} />
               {WEEKDAYS.map((day) => {
                 const cellEntries = props.rowEntries[index]?.filter(entry => entry.weekday === day) ?? []
                 const slot = `${label} · ${weekdayLabel(day, props.t)}`
@@ -742,6 +695,18 @@ function ScheduleGrid(props: {
   )
 }
 
+function TimetablePeriodHeading(props: { label: string; entries: readonly TeacherTimetableEntry[] }) {
+  const times = [...new Set(props.entries.map(formatTimeRange).filter(Boolean))].sort()
+  return (
+    <th scope="row">
+      <div className={css.timetablePeriodHeading}>
+        <span>{props.label}</span>
+        {times.map(time => <time key={time}>{time}</time>)}
+      </div>
+    </th>
+  )
+}
+
 function TimetableEmptySlot(props: { label: string; onClick: () => void }) {
   return (
     <button type="button" className={css.timetableEmptySlot} aria-label={props.label} title={props.label} onClick={props.onClick}>
@@ -759,10 +724,14 @@ function TimetableEntryCard(props: {
   const details = [props.showClass ? props.className : '', props.entry.teacherName, props.entry.location].filter(Boolean).join(' · ')
   return (
     <article className={css.timetableEntry}>
-      <button type="button" className={css.timetableEntryMain} onClick={() => { props.onEdit(props.entry) }}>
+      <button
+        type="button"
+        className={css.timetableEntryMain}
+        title={[props.entry.subject, details, formatTimeRange(props.entry)].filter(Boolean).join(' · ')}
+        onClick={() => { props.onEdit(props.entry) }}
+      >
         <strong>{props.entry.subject}</strong>
         {details !== '' && <span>{details}</span>}
-        {formatTimeRange(props.entry) !== '' && <time>{formatTimeRange(props.entry)}</time>}
       </button>
     </article>
   )
@@ -857,46 +826,18 @@ function TimetableEditor(props: {
 
 function TimetableImportModal(props: {
   state: TimetableImportState
-  commands: TeacherWorkbenchCommands
+  commands: TimetableImportCommands
   t: TeacherWorkbenchTranslate
-  onChange: (state: TimetableImportState) => void
   onClose: () => void
 }) {
   const review = props.state.kind === 'review' ? props.state : null
   const allowedKinds = props.state.context.defaults.target === 'study'
     ? ['morningStudy', 'eveningStudy'] as const
     : ['lesson'] as const
-  const selected = review?.items.filter(item => (
-    item.selected
-    && isPlausibleClassName(item.className)
-    && item.subject.trim() !== ''
-    && (allowedKinds as readonly TeacherTimetableEntryKind[]).includes(item.kind)
-  )) ?? []
+  const selected = review === null ? [] : selectedTimetableImportItems(review)
   const update = (id: string, change: Partial<TimetableImportDraft>): void => {
     if (review === null) return
-    props.onChange({ ...review, items: review.items.map(item => item.id === id ? { ...item, ...change } : item) })
-  }
-  const importItems = async (): Promise<void> => {
-    const result = await props.commands.importTimetableEntries(selected.map((item) => {
-      const classId = props.state.context.classes.find(owner => (
-        owner.name === item.className.trim() && owner.grade === item.grade.trim()
-      ))?.id
-      return {
-        ...(classId === undefined ? {} : { classId }),
-        usage: props.state.context.usage,
-        className: item.className,
-        grade: item.grade,
-        kind: item.kind,
-        weekday: item.weekday,
-        period: item.period,
-        startTime: item.startTime,
-        endTime: item.endTime,
-        subject: item.subject,
-        teacherName: item.teacherName,
-        location: item.location,
-      }
-    }))
-    if (result.ok) props.onClose()
+    props.commands.updateItems(review.items.map(item => item.id === id ? { ...item, ...change } : item))
   }
   return (
     <Modal
@@ -905,13 +846,11 @@ function TimetableImportModal(props: {
       closeLabel={props.t('close')}
       onClose={props.onClose}
       className={`${css.editorDialog} ${css.calendarImportDialog} ${css.timetableImportDialog}`}
-      footer={review === null ? (
-        <button type="button" className={css.buttonPrimary} onClick={props.onClose}>{props.t('close')}</button>
-      ) : (
+      footer={review === null ? undefined : (
         <>
-          <button type="button" className={css.buttonSecondary} onClick={props.onClose}>{props.t('cancel')}</button>
-          <button type="button" className={css.buttonPrimary} disabled={selected.length === 0} onClick={() => { void importItems() }}>
-            {props.t('timetable.importSelected', { count: selected.length })}
+          <button type="button" className={css.buttonSecondary} onClick={props.onClose}>{props.t('timetable.importLater')}</button>
+          <button type="button" className={css.buttonPrimary} disabled={review.saving || selected.length === 0} onClick={() => { void props.commands.importSelected() }}>
+            {props.t(review.saving ? 'timetable.importSaving' : 'timetable.importSelected', { count: selected.length })}
           </button>
         </>
       )}
@@ -919,23 +858,25 @@ function TimetableImportModal(props: {
       {props.state.kind === 'extracting' && (
         <div className={css.calendarImportStatus} role="status">
           <span className={css.calendarImportSpinner} aria-hidden />
-          <div><strong>{props.t('timetable.importExtracting')}</strong><span>{props.state.fileName}</span></div>
+          <div><strong>{props.t('timetable.importExtracting')}</strong><span>{props.state.fileName}</span><span>{props.t('timetable.importCloseHint')}</span></div>
         </div>
       )}
       {props.state.kind === 'normalizing' && (
         <div className={css.calendarImportStatus} role="status">
           <span className={css.calendarImportSpinner} aria-hidden />
-          <div><strong>{props.t('timetable.importNormalizing')}</strong><span>{props.state.fileName}</span></div>
+          <div><strong>{props.t('timetable.importNormalizing')}</strong><span>{props.state.fileName}</span><span>{props.t('timetable.importCloseHint')}</span></div>
         </div>
       )}
       {props.state.kind === 'error' && (
         <div className={css.calendarImportError} role="alert">
           <strong>{props.t('timetable.importFailed')}</strong>
-          <span>{props.state.message}</span>
+          <span>{props.state.stage === 'empty' ? props.t('timetable.importNoItems')
+            : (props.state.stage === 'extracting' ? importFailureText : normalizeFailureText)(props.state.code, props.state.message, props.t)}</span>
         </div>
       )}
       {review !== null && (
-        <div className={css.calendarImportBody}>
+        <fieldset disabled={review.saving} className={`${css.calendarImportBody} ${css.timetableImportReview}`}>
+          {review.saveError !== null && <div className={css.calendarImportError} role="alert">{props.t('timetable.importSaveFailed', { message: review.saveError })}</div>}
           <datalist id="timetable-import-class-options">
             {props.state.context.classes.map(item => <option key={item.id} value={item.name}>{item.grade}</option>)}
           </datalist>
@@ -946,7 +887,7 @@ function TimetableImportModal(props: {
                 type="checkbox"
                 checked={review.items.length > 0 && review.items.every(item => item.selected)}
                 onChange={(event) => {
-                  props.onChange({ ...review, items: review.items.map(item => ({ ...item, selected: event.target.checked })) })
+                  props.commands.updateItems(review.items.map(item => ({ ...item, selected: event.target.checked })))
                 }}
               />
               {props.t('timetable.importSelectAll')}
@@ -981,7 +922,7 @@ function TimetableImportModal(props: {
               </div>
             ))}
           </div>
-        </div>
+        </fieldset>
       )}
     </Modal>
   )
@@ -1002,8 +943,8 @@ function importFailureText(code: string, message: string, t: TeacherWorkbenchTra
 
 function normalizeFailureText(code: string, message: string, t: TeacherWorkbenchTranslate): string {
   switch (code) {
-    case 'session-unavailable': return t('timetable.importSessionUnavailable')
     case 'tool-model-unavailable': return t('timetable.importToolModelUnavailable')
+    case 'vision-unavailable': return t('timetable.importVisionUnavailable')
     case 'source-too-large': return t('timetable.importTooLarge')
     case 'timed-out': return t('timetable.importToolModelTimedOut')
     case 'invalid-output': return t('timetable.importToolModelInvalid')

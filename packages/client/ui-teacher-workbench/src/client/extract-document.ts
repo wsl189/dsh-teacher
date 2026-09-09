@@ -9,6 +9,7 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { RemoteResult } from '@deepseek-ai/dsh-typert-protocol'
 import { PDFDocument } from 'pdf-lib'
+import { bytesToBase64 } from './document-bytes.ts'
 import { openQuestionPdfRasterizer, renderPdfPageForOcr } from './question-segmentation.ts'
 
 /** OCR Remote subset consumed by teacher-workbench uploads. */
@@ -278,18 +279,4 @@ export async function extractWorkbenchDocument(
       },
     }
   }
-}
-
-/**
- * Encode browser bytes for JSON RPC media transport.
- * @param data - Browser-held bytes to encode.
- * @returns Canonical Base64 content.
- */
-export function bytesToBase64(data: Uint8Array): string {
-  let binary = ''
-  const chunk = 0x8000
-  for (let offset = 0; offset < data.length; offset += chunk) {
-    binary += String.fromCharCode(...data.subarray(offset, offset + chunk))
-  }
-  return btoa(binary)
 }

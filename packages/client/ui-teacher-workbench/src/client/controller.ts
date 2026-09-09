@@ -83,7 +83,7 @@ import type {
   TeacherWorkbenchWriteResult,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { StudentImportRow } from './import-data.ts'
-import { isPlausibleClassName } from './timetable-import.ts'
+import { isTimetableImportReady } from './timetable-import.ts'
 
 /** Remote methods consumed by the browser object layer. */
 export interface TeacherWorkbenchRemote {
@@ -809,8 +809,8 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
    * @returns the settled persistence result.
    */
   importTimetableEntries(inputs: readonly TeacherTimetableImportInput[]): Promise<TeacherWorkbenchActionResult> {
-    if (inputs.some(input => !isPlausibleClassName(input.className))) {
-      return Promise.resolve({ ok: false, error: { code: 'invalid-state', message: '课表班级名称必须以“班”结尾' } })
+    if (inputs.some(input => !isTimetableImportReady(input))) {
+      return Promise.resolve({ ok: false, error: { code: 'invalid-state', message: '课表需要班级名称，以及课程或自习负责教师' } })
     }
     return this.mutate((state) => {
       let classes = [...state.classes]
@@ -833,7 +833,7 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
           period: input.period,
           startTime: input.startTime,
           endTime: input.endTime,
-          subject: input.subject.trim(),
+          subject: input.subject.trim() || (input.kind === 'morningStudy' ? '早自习' : input.kind === 'eveningStudy' ? '晚自习' : ''),
           teacherName: input.teacherName.trim(),
           location: input.location.trim(),
           createdAt: occupied?.createdAt ?? now,

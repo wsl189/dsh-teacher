@@ -18,6 +18,7 @@ import {
   DeepSeekModelsEditor, modelDrafts, validateDeepSeekModels,
 } from './DeepSeekModelsEditor.tsx'
 import { apiKeyFailure } from './apiKey.ts'
+import { ProviderLogo } from './ProviderLogo.tsx'
 import { EditorFooter } from './EditorFooter.tsx'
 import { ModelListEditor } from './ModelListEditor.tsx'
 import {
@@ -318,9 +319,12 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
   const shownKeyFailure = credentialRequiredFailure ?? keyFailure
   // What the form currently shows, which is what an interrogation must ask:
   // an edited-but-unsaved endpoint, and a key typed but not yet stored.
-  const probeApi = stringAt(draft, 'api') ?? stringAt(fallback, 'api')
-  const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(fallback, 'baseURL')
+  const inheritedRoute = schema.getPath(namespace.base, settingsPath)
+  const probeApi = stringAt(draft, 'api') ?? stringAt(inheritedRoute, 'api')
+  const probeBaseURL = stringAt(draft, 'baseURL') ?? stringAt(inheritedRoute, 'baseURL')
   const presetProtocols = props.connectionPreset?.protocols ?? []
+  const automaticProtocol = props.connectionPreset?.automaticProtocol === true && probeApi === undefined
+    && probeBaseURL === undefined
   const requestTypes: readonly ProviderRequestTypePreset[] = props.connectionPreset?.requestTypes
     ?? GENERIC_REQUEST_TYPES
   const selectedRequestType: ProviderRequestTypePreset = requestTypes.find(
@@ -562,11 +566,15 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
     const protocolOptions: readonly ProviderProtocolPreset[] = presetProtocols
     const selectProtocol = (api: string): void => {
       setRequestURLDrafts(current => Object.fromEntries(
-        Object.entries(current).filter(([type]) => type !== selectedRequestType.id),
+        Object.entries(current).filter(([type]) => type === 'image' || type === 'speech'),
       ))
       const selected = protocolOptions.find(candidate => candidate.api === api)
       if (selected === undefined) {
-        setField('api', api.length === 0 ? undefined : api)
+        if (api.length === 0 && props.connectionPreset?.automaticProtocol === true) {
+          setDraft(current => schema.deletePath(schema.deletePath(current, ['api']), ['baseURL']))
+        } else {
+          setField('api', api.length === 0 ? undefined : api)
+        }
         return
       }
       setDraft((current) => {
@@ -639,7 +647,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   .map(choice => <option key={choice.id} value={choice.id}>{t(choice.labelKey)}</option>)}
               </select>
             </div>
-            {capabilityRoute
+            {capabilityRoute || automaticProtocol
               ? null
               : (
                 <div className={styles['field']}>
@@ -664,7 +672,14 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
               )}
             <div className={`${styles['field']} ${styles['routeFullWidth']}`}>
               <span className={styles['fieldLabel']}>{t('fullRequestUrl')}</span>
-              <input
+              {automaticProtocol && !capabilityRoute ? presetProtocols.map(protocol => (
+                <label key={protocol.api} className={styles['field']}>
+                  <span className={styles['editorSectionHint']}>{t(protocol.labelKey)}</span>
+                  <input className={styles['input']} type="text" readOnly
+                    aria-label={`${t('fullRequestUrl')} · ${t(protocol.labelKey)}`}
+                    value={joinRequestURL(protocol.baseURL, protocol.requestPath)} />
+                </label>
+              )) : <input
                 className={styles['input']}
                 type="text"
                 value={fullRequestURL}
@@ -675,7 +690,7 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   const value = event.target.value
                   setRequestURLDrafts(current => ({ ...current, [selectedRequestType.id]: value }))
                 }}
-              />
+              />}
               {requestURLInvalid ? <p className={styles['error']}>{t('fullRequestUrlInvalid')}</p> : null}
             </div>
           </div>
@@ -741,13 +756,13 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
                   <span className={styles['fieldLabel']}>{t('customApi')}</span>
                   <select
                     className={`${styles['input']} ${styles['selectInput']}`}
-                    value={props.connectionPreset === undefined ? probeApi ?? '' : effectiveApi ?? ''}
+                    value={automaticProtocol ? '' : props.connectionPreset === undefined ? probeApi ?? '' : effectiveApi ?? ''}
                     aria-label={t('customApi')}
                     disabled={disabled || family === 'deepseek'}
                     onChange={(event) => { selectProtocol(event.target.value) }}
                   >
-                    {props.connectionPreset === undefined
-                      ? <option value="">{t('protocolProviderDefault')}</option>
+                    {props.connectionPreset === undefined || props.connectionPreset.automaticProtocol === true
+                      ? <option value="">{t(props.connectionPreset?.automaticProtocol === true ? 'protocolAutomatic' : 'protocolProviderDefault')}</option>
                       : null}
                     {protocolOptions.length > 0
                       ? protocolOptions.map(choice => (
@@ -799,12 +814,16 @@ export function ProviderEditor(props: ProviderEditorProps): ReactNode {
         ? null
         : (
           <div className={styles['editorHeader']}>
+            <ProviderLogo provider={props.provider} displayName={props.displayName} />
             <span className={styles['editorTitle']}>{props.displayName}</span>
             {props.provider !== props.displayName
               ? <span className={styles['editorRoute']}>{props.provider}</span>
               : null}
           </div>
         )}
+      {props.credentialOnly !== true && props.connectionPreset?.noticeKey !== undefined
+        ? <p className={styles['routeExplanation']}>{t(props.connectionPreset.noticeKey)}</p>
+        : null}
       {layout === 'unknown'
         ? <p className={styles['advancedHint']}>{`${t('advancedHint')} (${namespace.ns})`}</p>
         : curatedFields(layout)}

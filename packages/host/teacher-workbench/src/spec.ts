@@ -330,10 +330,17 @@ export const teacherQuestionBatchSchema = z.object({
 export const teacherQuestionLibraryFolderSchema = z.object({
   id: identity<TeacherQuestionLibraryFolderId>(),
   parentId: identity<TeacherQuestionLibraryFolderId>().optional(),
-  name: text.trim().min(1).max(80).refine(value => !/[\\/\u0000-\u001f:*?"<>|]/u.test(value), 'folder name contains invalid characters'),
+  name: text.min(1).max(200).refine(value => !/[\\/\u0000-\u001f:*?"<>|]/u.test(value), 'folder name contains invalid characters'),
+  physicalName: text.min(1).max(255)
+    .refine(value => !value.startsWith('.') && !/[\\/\u0000-\u001f:*?"<>|]/u.test(value), 'physical folder name must be one visible directory segment')
+    .optional(),
   createdAt: epochMilliseconds,
   updatedAt: epochMilliseconds,
-})
+}).superRefine((folder, ctx) => {
+  if (folder.physicalName === undefined && (folder.name.trim().length === 0 || folder.name.trim().length > 80)) {
+    issue(ctx, ['name'], 'new folder name must contain 1 to 80 characters')
+  }
+}).transform(folder => folder.physicalName === undefined ? { ...folder, name: folder.name.trim() } : folder)
 
 /** Runtime schema for one nested directory below a roster student. */
 export const teacherQuestionFolderSchema = z.object({
@@ -416,7 +423,8 @@ export const teacherWorkbenchStateSchema = z.object({
     if (folder.parentId !== undefined && parent === undefined) {
       issue(ctx, ['questionLibraryFolders', index, 'parentId'], 'unknown parent library folder')
     }
-    const siblingKey = `${folder.parentId ?? ''}\u0000${folder.name.normalize('NFKC').toLocaleLowerCase()}`
+    const physicalName = folder.physicalName ?? folder.name.normalize('NFKC')
+    const siblingKey = `${folder.parentId ?? ''}\u0000${physicalName.toLocaleLowerCase()}`
     if (librarySiblingNames.has(siblingKey)) issue(ctx, ['questionLibraryFolders', index, 'name'], 'duplicate sibling library folder')
     librarySiblingNames.add(siblingKey)
     const ancestors = new Set<string>([folder.id])

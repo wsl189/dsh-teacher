@@ -121,7 +121,7 @@ describe('teacher-workbench browser wiring', () => {
       ok: true,
       value: { ok: false, error: { code: 'location-not-found', message: 'missing' } },
     }))
-    const normalizeTimetable = vi.fn(async () => ({
+    const normalizeTimetable = vi.fn(async (_request: unknown) => ({
       ok: true,
       value: { ok: true, value: { items: [] } },
     }))
@@ -254,12 +254,15 @@ describe('teacher-workbench browser wiring', () => {
     })
     await command('importTimetableEntries', [])
     await command('deleteTimetableEntry', 'timetable-a')
+    currentSession = undefined
     await command('normalizeTimetable', '课表.png', '| 周一 |', {
       className: '一班', classNames: ['一班'], grade: '高一', kind: 'lesson', target: 'class', teacherName: '王老师',
     })
     expect(normalizeTimetable).toHaveBeenCalledWith(expect.objectContaining({
-      parentSessionId: 'session-b', fileName: '课表.png', markdown: '| 周一 |',
+      fileName: '课表.png', markdown: '| 周一 |',
     }))
+    expect(normalizeTimetable.mock.calls[0]?.[0]).not.toHaveProperty('parentSessionId')
+    currentSession = 'session-b'
     await command('deleteClass', 'class-a')
     await command('saveStudent', {
       classId: 'class-a', name: '学生', studentNumber: '', gender: '', guardian: '', relation: '',

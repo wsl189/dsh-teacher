@@ -15,6 +15,9 @@
     - button "Agent 预设":
       - img
       - text: Agent 预设
+    - button "IM机器人":
+      - img
+      - text: IM机器人
     - button "侧边卡片"
   - button "关闭":
     - img
@@ -24,36 +27,32 @@
   - tablist "模型":
     - tab "使用场景"
     - tab "服务接入" [selected]
-  - paragraph: 每种接入方式独立保存 API 密钥、协议、地址和模型目录。
-  - region "国内供应商预设":
-    - complementary "供应商":
-      - text: 供应商
-      - button "智谱 GLM 标准 API 与 GLM Coding Plan"
-      - button "Kimi / 月之暗面 Kimi 开放平台与 Kimi Code"
-      - button "DeepSeek 官方直连接口"
-      - button "阿里云百炼 / Qwen 标准 API、Coding Plan 与 Token Plan"
-      - button "MiniMax 标准 API 与 Token Plan" [pressed]
-    - article:
-      - text: MiniMax 标准 API 与 Token Plan 官方预设
-      - list:
-        - listitem:
-          - text: 接入方式
-          - combobox "接入方式":
-            - option "标准 API" [selected]
-            - option "MiniMax Token Plan"
-          - text: MiniMax 可用
-          - img "API 密钥已配置"
-          - button "编辑 minimax-cn": 编辑
-          - button "删除 minimax-cn": 删除
-  - heading "其他供应商" [level=3]
+  - paragraph: 每条连接独立配置。保存后自动选一个对话模型验证连接，语音和生图无需验证。
+  - status: 已保存 Acme Gateway (acme-gateway)。
+  - button "分配使用场景"
+  - heading "已添加的连接" [level=3]
+  - button "添加服务":
+    - img
+    - text: 添加服务
   - list:
+    - listitem:
+      - text: MiniMax · 标准 API 官方预设
+      - button "编辑 MiniMax · 标准 API (minimax-cn)": 编辑
+      - button "删除 MiniMax · 标准 API (minimax-cn)": 删除
+      - text: 连接已验证 4 个模型 对话 / 推理 · 图像生成 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: 智谱 GLM · 标准 API 官方预设
+      - button "编辑 智谱 GLM · 标准 API (zhipu-cn)": 编辑
+      - button "删除 智谱 GLM · 标准 API (zhipu-cn)": 删除
+      - text: 连接已验证 5 个模型 对话 / 推理 · 图像生成 · 语音识别 用于：生图模型 · 语音识别模型
+      - button "分配使用场景"
+      - group: 查看模型
     - listitem:
       - text: Acme Gateway 自定义
       - button "编辑 Acme Gateway (acme-gateway)": 编辑
       - button "删除 Acme Gateway (acme-gateway)": 删除
-  - button "添加提供方":
-    - img
-    - text: 添加提供方
-  - button "添加自定义提供方":
-    - img
-    - text: 添加自定义提供方
+      - text: 连接已验证 1 个模型 对话 / 推理 尚未分配使用场景
+      - button "分配使用场景"
+      - group: 查看模型

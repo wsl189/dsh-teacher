@@ -14,6 +14,8 @@ The save-directory control starts unselected for every newly chosen PDF. Its exp
 
 The Web cutter sends an explicit source-folder destination when the control remains blank. The Host derives a safe root-level folder name from the source PDF filename without its `.pdf` suffix, then reuses a durable root folder with that physical name or creates the durable identity and physical directory in the same rollback-capable operation as the first image part. A selected destination must identify a current leaf, and images are stored directly in that leaf. Every continuation part repeats the first part's destination.
 
+An adopted leaf and its ancestors retain their exact disk segments in `physicalName`, separately from display text. Saves, reloads, child creation, renames, and deletion resolve those retained names under the current root. Unicode normalization and trimming apply when deriving names for new directories, not when resolving an adopted directory. Distinct existing spellings remain separate even when their normalized labels match. Scanned rows display current disk names, and filesystem-derived identities avoid ids already owned by durable folders at another path.
+
 The automatic directory remains consistent with the [physical-only question-library tree](../bug-fix/2026-08-24-physical-only-question-library-tree.md): it appears because a physical folder exists, while the paper-batch name and id remain metadata rather than hierarchy nodes.
 
 ## Alternatives considered
@@ -24,10 +26,12 @@ The automatic directory remains consistent with the [physical-only question-libr
 
 **Always add a PDF-named child below the selected directory.** This makes explicit selection indirect and prevents several PDFs from sharing one chosen leaf. Explicit selection therefore means direct storage in that leaf.
 
+**Recompute existing paths from display names.** Trimming or normalizing an existing segment can select another directory or create a sibling. Keeping the path only in a process-local scan also loses that identity after restart, so adopted names belong in the durable folder record.
+
 ## Consequences
 
-An untouched upload creates a visible, real PDF-named root directory instead of root-level images. Reprocessing the same PDF name shares that directory and relies on opaque image names to avoid file collisions. Teachers who want several papers together can select one existing leaf, while adding a child makes its former parent unavailable in future save-directory lists.
+An untouched upload creates a visible, real PDF-named root directory instead of root-level images. Reprocessing the same PDF name shares that directory and uses collision-safe image names. Teachers who want several papers together can select one existing leaf, while adding a child makes its former parent unavailable in future save-directory lists.
 
 ## Testing
 
-Client coverage fixes the blank default and leaf-only path list. Host integration coverage checks physical PDF-directory creation, durable identity reuse, continuation placement, selected-parent rejection, and direct leaf storage. The assembled Web snapshot opens the real page-range sheet and records the blank automatic option plus the nested leaf path without its parent.
+Client coverage fixes the blank default and leaf-only path list. Host integration coverage checks physical PDF-directory creation, durable identity reuse, continuation placement, selected-parent rejection, and direct leaf storage. Directory-name regressions cover whitespace, full-width parentheses, long existing names, restart reads, continuation saves, child creation, subtree renames and deletion, distinct normalized spellings, and rejection of unsafe physical segments before filesystem writes. The assembled Web snapshots record the page-range choices and one preserved directory row after saving an image and creating a child.

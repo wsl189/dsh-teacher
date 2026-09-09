@@ -1,0 +1,61 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "技能"
+    - button "MCP"
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "IM机器人":
+      - img
+      - text: IM机器人
+    - button "侧边卡片"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景"
+    - tab "服务接入" [selected]
+  - paragraph: 每条连接独立配置。保存后自动选一个对话模型验证连接，语音和生图无需验证。
+  - heading "已添加的连接" [level=3]
+  - button "添加服务" [expanded]:
+    - img
+    - text: 添加服务
+  - button "智谱 GLM · GLM Coding Plan": 智谱 GLM GLM Coding Plan
+  - button "Kimi / 月之暗面 · Kimi 开放平台": Kimi / 月之暗面 Kimi 开放平台
+  - button "Kimi / 月之暗面 · Kimi Code": Kimi / 月之暗面 Kimi Code
+  - button "DeepSeek · 标准 API" [disabled]: DeepSeek 标准 API
+  - button "阿里云百炼 / Qwen · 百炼标准 API": 阿里云百炼 / Qwen 百炼标准 API
+  - button "阿里云百炼 / Qwen · 百炼 Coding Plan": 阿里云百炼 / Qwen 百炼 Coding Plan
+  - button "阿里云百炼 / Qwen · 百炼 Token Plan": 阿里云百炼 / Qwen 百炼 Token Plan
+  - button "MiniMax · 标准 API": MiniMax 标准 API
+  - button "MiniMax · MiniMax Token Plan": MiniMax MiniMax Token Plan
+  - button "OpenRouter · 标准 API": OpenRouter 标准 API
+  - button "OpenCode Go · Go 订阅": OpenCode Go Go 订阅
+  - button "自定义连接"
+  - list:
+    - listitem:
+      - text: 智谱 GLM · 标准 API 官方预设
+      - button "编辑 智谱 GLM · 标准 API (zhipu-cn)": 编辑
+      - button "删除 智谱 GLM · 标准 API (zhipu-cn)": 删除
+      - text: 连接已验证 5 个模型 对话 / 推理 · 图像生成 · 语音识别 用于：语音识别模型
+      - button "分配使用场景"
+      - group: 查看模型
+    - listitem:
+      - text: Acme 网关 自定义
+      - button "编辑 Acme 网关 (acme-gateway)": 编辑
+      - button "删除 Acme 网关 (acme-gateway)": 删除
+      - text: 连接已验证 1 个模型 对话 / 推理 用于：工具模型
+      - button "分配使用场景"
+      - group: 查看模型

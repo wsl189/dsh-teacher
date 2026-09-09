@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-本插件向 `ctx.ocr` 注册 `mineru` 提供方 id，并把上传文件发送到由部署方控制的 MinerU 同步 `/file_parse` 端点。普通提取会启用公式与表格识别并请求 Markdown。设置 `includeDiscardedText` 时，同一次请求还会获取 `middle_json`，并把 Markdown 中没有的唯一丢弃文本行放在正文之前。消费方为栅格图片请求 `enhanceImageDetail` 时，提供方会依次提取一张增强后的完整图片与六个带坐标标签的重叠区域，再把所有轮次交给下游核对。结构化提取则请求 MinerU `middle_json`，再归一化页面尺寸、阅读顺序行、内容类别与边界框，供源文档裁切使用。
+本插件向 `ctx.ocr` 注册 `mineru` 提供方 id，并把上传文件发送到由部署方控制的 MinerU 同步 `/file_parse` 端点。普通提取会启用公式与表格识别并请求 Markdown。设置 `includeDiscardedText` 时，同一次请求还会获取 `middle_json`，并把 Markdown 中没有的唯一丢弃文本行放在正文之前。这条纯文本元数据路径接受不含 `page_size` 的 Office 工作表页面；只有结构化提取才要求 PDF 几何信息。消费方为栅格图片请求 `enhanceImageDetail` 时，提供方会依次提取增强整图与带坐标标签的细节区域，再把所有轮次交给下游核对。大型规则线框表的每块裁图都会保留列标题和完整的合并行标签；竖排标签字形会横向排列，不会用识别文字替换其像素。没有可靠网格的图片使用六个重叠区域。结构化提取则请求 MinerU `middle_json`，再归一化页面尺寸、阅读顺序行、内容类别与边界框，供源文档裁切使用。
 
 ## 目录
 
@@ -26,6 +26,8 @@ kind: "package-reference"
 ## 使用本包
 
 当 Host 能访问兼容的 MinerU 同步端点，且部署允许把每个完整请求文件发送到该服务时，将本提供方与 `dsh-ocr` 一同挂载。
+
+当 `includeImages` 为 true 时，Markdown 提取设置 `return_images=true`，将所选文档的图片 data URL 转成以 `images/<文件名>` 为键的规范 base64 资源。无效载荷、冲突目标，以及累计图片数据超出 `maxResponseBytes` 都会导致提取失败。其他请求保持关闭图片返回。
 
 ### 配置
 

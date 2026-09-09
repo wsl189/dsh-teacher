@@ -12,9 +12,13 @@ The service stores one schema-validated document through `ctx.storageDomain` and
 
 `segmentsRoot` and `studentsRoot` are the live authoritative roots for question-library and student media. Browsing projects every non-hidden directory and supported image currently under those roots, including items not created by DSH. Every projected item supports the same applicable create, rename, delete, edit, assignment, temporary-selection, and document-generation operations; the Host resolves its opaque id again and verifies that the target remains under the current configured root before changing the filesystem. Changing either setting switches the visible and mutable tree without copying content from the previous root.
 
+`TeacherQuestionLibraryFolder.physicalName` retains the exact disk name of a directory adopted from a current-root scan. Folder paths use those preserved segments through saves, reloads, and subtree operations; entries without that field derive a safe segment from their display name. Each stored physical name is validated as one non-hidden directory segment.
+
 Conversation-uploaded source documents are retained under the private content-addressed `sourcesRoot`. Source staging returns an opaque id, OCR layout drives reviewed question segmentation, and generated Word or PowerPoint files are written under `generatedRoot`; raw source bytes and server filesystem paths do not enter the Session log.
 
 ## Operations
+
+Example collection has an independent SQLite-routed domain and no roster references. `TeacherExample` carries directory order, tags, descriptions, pen strokes, and independent question/explanation `TeacherExampleDocument` metadata; `TeacherExampleCatalog` omits all file bytes. `TeacherExampleUpdateRequest` changes only submitted fields. `TeacherExampleDocumentRequest` explicitly selects a `TeacherExampleDocumentKind`; `TeacherExampleUploadRequest` replaces only that document’s original and clears its old Word file. `TeacherExampleFileRequest` selects an original or Word artifact, returned as `TeacherExampleFile`; each operation returns a discriminated `TeacherExampleResult`. `TeacherExampleExportRequest` supplies ordered question identities and a paired/grouped `TeacherExampleExportLayout` for one Word download containing only original questions and explanations. [The Host reference](../../packages/host/teacher-workbench/README.md#example-collection) owns persistence, retry, source replacement, and export guarantees.
 
 The Remote surface includes revisioned document reads and writes, weather lookup, timetable normalization, notification-target discovery, uploaded-source staging, OCR-backed question segmentation and crop review, question-media browsing and directory mutation, image persistence and assignment, temporary selections, and single or batch document generation. The model-facing companion package consumes these operations through semantic tools and owns their prompt, schema, tool-result, and Session-log effects.
 
@@ -39,6 +43,69 @@ Host service owning the revisioned workbench document.
  * @returns the current revision and state.
  */
 @Remote('read') read(_request: TeacherWorkbenchReadRequest): Promise<TeacherWorkbenchReadResult>
+
+/**
+ * List collected question metadata and tags.
+ * @param _request - empty directory-list request.
+ * @returns saved questions and reusable tags without file bytes.
+ */
+@Remote('listExamples') listExamples(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExampleCatalog>>
+
+/**
+ * Create one numeric question directory.
+ * @param _request - empty creation request.
+ * @returns a new numeric directory with empty question and explanation documents, tags, and description.
+ */
+@Remote('createExample') createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Save collected question metadata.
+ * @param request - question identity and changed metadata fields.
+ * @returns the saved question; concurrent OCR preserves these edits.
+ */
+@Remote('updateExample') updateExample(request: TeacherExampleUpdateRequest): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Add a reusable collection tag.
+ * @param request - reusable tag name.
+ * @returns its normalized name after persistence.
+ */
+@Remote('addExampleTag') addExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>
+
+/**
+ * Delete one collected question and its files.
+ * @param request - question to delete with both documents’ originals and Word files.
+ * @returns the deleted identity.
+ */
+@Remote('deleteExample') deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>>
+
+/**
+ * Retain a collected question source before OCR.
+ * @param request - original image or PDF, owning question, and question or explanation selection.
+ * @returns the saved source metadata, ready for OCR.
+ */
+@Remote('uploadExample') uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Run MinerU OCR, proofread it against the original through the tool model, and generate Word.
+ * @param request - question or explanation whose current original needs recognition.
+ * @returns the saved Word status; failures retain the original and any existing Word for retry.
+ */
+@Remote('recognizeExample') recognizeExample(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Read a collected file, restoring missing Word illustrations from its source and retaining uniform typography.
+ * @param request - selected question or explanation and its original or Word file.
+ * @returns the saved file for preview or download.
+ */
+@Remote('readExampleFile') readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>>
+
+/**
+ * Export selected questions and explanations as one editable Word document.
+ * @param request - ordered question identities and paired or grouped explanation placement; no headings, tags, or descriptions are added.
+ * @returns the compiled Word file; unfinished uploaded documents prevent export.
+ */
+@Remote('exportExamplesWord') exportExamplesWord(request: TeacherExampleExportRequest): Promise<TeacherExampleResult<TeacherExampleFile>>
 
 /**
  * List dsh-im bots that may receive reminder notifications.
@@ -75,8 +142,8 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('weather') weather(request: TeacherWeatherRequest): Promise<TeacherWeatherResult>
 
 /**
- * Reconstruct MinerU timetable text through the configured tool model.
- * @param request - live parent session, OCR source, and current timetable defaults.
+ * Recognize an upload with an independent child using the configured tool model.
+ * @param request - Original image or OCR evidence and the selected timetable destination.
  * @returns structured rows for browser review or a stable failure.
  */
 @Remote('normalizeTimetable') normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult>

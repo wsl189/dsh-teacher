@@ -5,12 +5,26 @@ import type {
 } from '@deepseek-ai/dsh-attachment'
 import type { Branded } from '@deepseek-ai/dsh-brand'
 import type { MessageId } from '@deepseek-ai/dsh-llm/brand'
-import type { ContentBlock } from '@deepseek-ai/dsh-llm/types'
+import type { ContentBlock, ModelModality } from '@deepseek-ai/dsh-llm/types'
 import type { ChunkRow } from '@deepseek-ai/dsh-session/chunk-rows'
 import type { JsonValue, SessionHeader, SessionId, SurfaceOp } from '@deepseek-ai/dsh-session/types'
 import type { SessionProjectionMap } from '@deepseek-ai/dsh-session-projection/types'
 import type { JobId } from '@deepseek-ai/dsh-jobs/brand'
 import type { WorkspaceId } from '@deepseek-ai/dsh-workspace/types'
+
+/** Saved LLM route exercised by an automatic configuration check. */
+export interface ModelCheckRequest {
+  /** Registered provider route id. */
+  provider: string
+  /** Model id served by that route. */
+  model: string
+}
+
+/** Successful provider request with its retained diagnostic log. */
+export interface ModelCheckResult extends ModelCheckRequest {
+  /** Private diagnostic session containing the request and response. */
+  sessionId: SessionId
+}
 
 declare module '@deepseek-ai/dsh-session-projection/types' {
   interface SessionProjectionStateMap {
@@ -132,6 +146,8 @@ export interface ModelCatalogModel {
   readonly id: string
   readonly name: string
   readonly description?: string
+  /** Adapter-resolved input capabilities; absence means unknown. */
+  readonly inputModalities?: readonly ModelModality[]
   readonly reasoning?: ModelReasoning
 }
 

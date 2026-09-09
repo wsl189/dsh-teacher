@@ -525,7 +525,7 @@ Source: [`packages/mcp/mcp-client/src/sampling.ts:69`](../packages/mcp/mcp-clien
 'model/selection': ModelSelection
 ```
 
-Source: [`packages/api/session-controller/src/types.ts:40`](../packages/api/session-controller/src/types.ts)
+Source: [`packages/api/session-controller/src/types.ts:54`](../packages/api/session-controller/src/types.ts)
 
 ### `permission/*`
 

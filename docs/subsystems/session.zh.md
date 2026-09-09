@@ -583,7 +583,9 @@ interface TurnEndReasonMap {
 
 ## Remote 目录与 workspace 打开
 
-`ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。它不由某个 Session 派生，因此与 Session projection 分开保存。
+`ModelCatalog` 是 `session/modelCatalog` 返回的 Host generation 模型目录：它携带部署默认值、可路由 provider id、成功的 provider 分组与相互隔离的 provider 失败。每个模型在已知时保留适配器解析后的 `inputModalities`。它不由某个 Session 派生，因此与 Session projection 分开保存。
+
+`ModelCheckRequest` 为 `session/checkModel` 指定已保存的 `provider` 和 `model`。controller 发送一次有界、无工具的请求，仅在成功结束后返回带有私有诊断 `sessionId` 的 `ModelCheckResult`。诊断日志保留确切的输入与响应；错误和取消会使操作失败，不会修改配置。
 
 `SessionOpenWorkspacePathRequest` 携带绝对路径或已按 workspace 解析的 `path`。`SessionOpenWorkspacePathValue` 确认 Host 已接受原生交接。Session-aware Client 会在已知当前 Session cwd 时据此解析相对路径；controller 将路径原样交给打开器，并通过 Session Remote 错误词汇表报告无效请求、取消与打开器失败。
 
@@ -652,6 +654,15 @@ inspect( sessionId: SessionId, signal?: AbortSignal, ): Promise<{ meta: SessionH
  * @returns provider-grouped models, the deployment default, and isolated provider failures.
  */
 @Remote('modelCatalog') modelCatalog(): Promise<ModelCatalog>
+
+/**
+ * Verify a saved language model with a bounded, logged request.
+ * @param request - registered provider and model to check.
+ * @param signal - caller cancellation supplied by the Remote carrier.
+ * @returns the checked model and its private diagnostic session id.
+ * @throws TypertRemoteFailure when the model request cannot complete.
+ */
+@Remote async checkModel(request: ModelCheckRequest, signal: AbortSignal): Promise<ModelCheckResult>
 
 /**
  * Report whether this deployment can hand a Session workspace path to a native desktop.

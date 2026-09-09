@@ -239,216 +239,6 @@
   font-weight: 500;
 }
 
-.officialTag,
-.accessConfigured,
-.accessMissing {
-  flex: none;
-  padding: 1px 7px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
-  font-size: 11px;
-  line-height: 17px;
-}
-
-.officialTag,
-.accessConfigured {
-  color: var(--dsw-alias-state-success-primary);
-}
-
-.accessMissing {
-  color: var(--dsw-alias-label-tertiary);
-}
-
-.supplierList {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.accessWorkspace {
-  display: grid;
-  min-height: 360px;
-  grid-template-columns: minmax(190px, 0.34fr) minmax(0, 1fr);
-  overflow: hidden;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 12px;
-  background: var(--dsw-alias-bg-layer-1);
-}
-
-.supplierRail {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 12px 8px;
-  border-right: 1px solid var(--dsw-alias-border-l2);
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.supplierRailTitle {
-  padding: 0 8px;
-  color: var(--dsw-alias-label-tertiary);
-  font-size: 11px;
-  line-height: 18px;
-}
-
-.supplierButton,
-.supplierButtonActive {
-  box-sizing: border-box;
-  display: flex;
-  width: 100%;
-  min-width: 0;
-  align-items: center;
-  gap: 9px;
-  padding: 9px 8px;
-  border: 1px solid transparent;
-  border-radius: 9px;
-  background: transparent;
-  color: inherit;
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.supplierButton:hover,
-.supplierButtonActive {
-  background: var(--dsw-alias-interactive-bg-hover-solid);
-}
-
-.supplierButtonActive {
-  border-color: var(--dsw-alias-border-l3);
-}
-
-.supplierButton:focus-visible,
-.supplierButtonActive:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px var(--dsw-alias-border-l3);
-}
-
-.supplierConfiguredDot,
-.supplierEmptyDot {
-  box-sizing: border-box;
-  width: 7px;
-  height: 7px;
-  margin-left: auto;
-  flex: none;
-  border-radius: 50%;
-}
-
-.supplierConfiguredDot {
-  background: var(--dsw-alias-state-success-primary);
-}
-
-.supplierEmptyDot {
-  border: 1px solid var(--dsw-alias-border-l3);
-}
-
-.supplierWorkspace {
-  min-width: 0;
-  padding: 14px;
-}
-
-.supplierHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  background: var(--dsw-alias-bg-module-platform);
-}
-
-.supplierWorkspace > .supplierHead {
-  margin: -14px -14px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-}
-
-.supplierWorkspace > .supplierHead .officialTag {
-  margin-left: auto;
-}
-
-.supplierMark {
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 34px;
-  height: 34px;
-  flex: none;
-  border: 1px solid var(--dsw-alias-border-l3);
-  border-radius: 9px;
-  color: var(--dsw-alias-brand-primary);
-  font-size: 11px;
-  line-height: 16px;
-  font-weight: 600;
-}
-
-.supplierIdentity {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-}
-
-.supplierName {
-  color: var(--dsw-alias-label-primary);
-  font-size: 14px;
-  line-height: 21px;
-  font-weight: 500;
-}
-
-.supplierSummary {
-  overflow: hidden;
-  color: var(--dsw-alias-label-tertiary);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 11px;
-  line-height: 17px;
-}
-
-.accessList {
-  display: flex;
-  flex-direction: column;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.accessCard {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  padding: 10px 14px;
-  border-top: 1px solid var(--dsw-alias-border-l2);
-}
-
-.accessChooser {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 12px;
-}
-
-.accessChooser select.input {
-  max-width: none;
-}
-
-.accessHead {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.accessIdentity {
-  display: inline-flex;
-  min-width: 0;
-  align-items: center;
-  gap: 7px;
-}
-
-.accessName {
-  color: var(--dsw-alias-label-primary);
-  font-size: 13px;
-  line-height: 20px;
-  font-weight: 500;
-}
-
 .planNotice {
   margin: 0;
   padding: 8px 10px;
@@ -537,7 +327,7 @@
 .rowIdentity {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 10px;
   min-width: 0;
 }
 
@@ -700,7 +490,6 @@
 /* Inline access editors have their own scroll window. Their model catalogs
    can grow without enlarging the Settings options scroller, and wheel input
    stays in the editor when it reaches either edge. */
-.accessCard > .editor,
 .rowCard > .editor,
 .setupCard > .editor,
 .addCard > .editor {
@@ -1232,21 +1021,6 @@ select.input {
 }
 
 @media (max-width: 720px) {
-  .accessWorkspace {
-    grid-template-columns: 1fr;
-  }
-
-  .supplierRail {
-    border-right: none;
-    border-bottom: 1px solid var(--dsw-alias-border-l2);
-  }
-
-  .supplierList {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .accessChooser,
   .connectionGrid,
   .routeGrid {
     grid-template-columns: 1fr;
@@ -1314,5 +1088,146 @@ select.input {
   flex: 1 1 auto;
   font-family: var(--ds-font-family-code);
   font-size: 13px;
+  overflow-wrap: anywhere;
+}
+
+.connectionsHeader,
+.connectionFacts {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+}
+
+.connectionsHeader {
+  justify-content: space-between;
+}
+
+.connectionsTitle {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.connectionPicker {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(230px, 1fr));
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 12px;
+}
+
+.connectionOption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.connectionOption:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
+
+.connectionOptionText {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.providerLogo,
+.providerLogoFallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  flex: 0 0 38px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.providerLogo {
+  background: var(--dsw-static-neutral-00);
+}
+
+.providerLogo img {
+  display: block;
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+}
+
+.providerLogoFallback {
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-secondary);
+  font-weight: 600;
+}
+
+.connectionOption:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.connectionSummary {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 0 16px 16px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 12px;
+  line-height: 20px;
+}
+
+.connectionStatus {
+  color: var(--dsw-alias-label-secondary);
+}
+
+.connectionStatus[data-state='connectionPassed'] {
+  color: var(--dsw-alias-state-success-primary);
+}
+
+.connectionStatus[data-state='connectionFailed'],
+.connectionStatus[data-state='connectionIncomplete'] {
+  color: var(--dsw-alias-state-warn-label);
+}
+
+.summaryLink {
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+
+.connectionModels > summary {
+  cursor: pointer;
+}
+
+.connectionModels ul {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px 0 0;
+  margin: 0;
+  list-style: none;
+}
+
+.connectionModels li {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
   overflow-wrap: anywhere;
 }

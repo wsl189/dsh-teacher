@@ -1,5 +1,5 @@
 /**
- * Product-owned presets for the domestic provider routes shown together on
+ * Product-owned presets for the curated provider routes shown together on
  * the Models settings page. An access plan is one real LLM provider route:
  * it therefore keeps its own credential reference, wire protocol, endpoint,
  * and model catalog while the client presents sibling routes under one
@@ -56,6 +56,8 @@ export interface ProviderAccessPreset {
   noticeKey?: ModelsKey
   /** Protocol choices and their coupled official endpoints. */
   protocols: readonly ProviderProtocolPreset[]
+  /** Preserve per-model catalog protocols when no route override is configured. */
+  automaticProtocol?: boolean
   /** LLM request categories whose models share this route. */
   requestTypes: readonly ProviderRequestTypePreset[]
   /**
@@ -70,7 +72,7 @@ export interface ProviderAccessPreset {
 
 /** One supplier containing one or more independently authenticated access plans. */
 export interface ProviderSupplierPreset {
-  id: 'zhipu' | 'kimi' | 'deepseek' | 'qwen' | 'minimax'
+  id: 'zhipu' | 'kimi' | 'deepseek' | 'qwen' | 'minimax' | 'openrouter' | 'opencode-go'
   nameKey: ModelsKey
   summaryKey: ModelsKey
   shortLabel: string
@@ -166,6 +168,32 @@ const MINIMAX_IMAGE: ProviderRequestTypePreset = {
   models: [capabilityModel('image-01', 'MiniMax Image-01')],
 }
 
+const OPENROUTER_IMAGE: ProviderRequestTypePreset = {
+  id: 'image',
+  labelKey: 'requestTypeImageGeneration',
+  explanationKey: 'requestTypeOpenRouterImageHint',
+  protocols: [capabilityProtocol(
+    'openai-images',
+    'https://openrouter.ai/api/v1',
+    '/images',
+    'protocolOpenRouterImage',
+  )],
+  models: [capabilityModel('openai/gpt-image-2', 'GPT Image 2')],
+}
+
+const OPENROUTER_SPEECH: ProviderRequestTypePreset = {
+  id: 'speech',
+  labelKey: 'requestTypeSpeechRecognition',
+  explanationKey: 'requestTypeSpeechRecognitionHint',
+  protocols: [capabilityProtocol(
+    'openai-audio-transcriptions',
+    'https://openrouter.ai/api/v1',
+    '/audio/transcriptions',
+    'protocolOpenRouterSpeech',
+  )],
+  models: [capabilityModel('openai/whisper-1', 'Whisper')],
+}
+
 const OPENAI = (baseURL: string, inherited = false): ProviderProtocolPreset => ({
   api: 'openai-completions',
   baseURL,
@@ -214,7 +242,7 @@ const MINIMAX_MODELS = [
   { id: 'MiniMax-M2.5', name: 'MiniMax-M2.5', contextWindow: 204_800, input: ['text'] },
 ] as const
 
-/** The five first-party domestic supplier presets in display order. */
+/** Curated supplier presets in display order. */
 export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSupplierPreset[]] = [
   {
     id: 'zhipu',
@@ -396,13 +424,47 @@ export const PROVIDER_SUPPLIERS: readonly [ProviderSupplierPreset, ...ProviderSu
       },
     ],
   },
+  {
+    id: 'openrouter',
+    nameKey: 'supplierOpenRouter',
+    summaryKey: 'supplierOpenRouterSummary',
+    shortLabel: 'OR',
+    access: [{
+      provider: 'openrouter',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'openrouter'],
+      labelKey: 'accessStandard',
+      protocols: [OPENAI('https://openrouter.ai/api/v1', true)],
+      requestTypes: [CHAT, VISION, OPENROUTER_IMAGE, OPENROUTER_SPEECH],
+    }],
+  },
+  {
+    id: 'opencode-go',
+    nameKey: 'supplierOpenCodeGo',
+    summaryKey: 'supplierOpenCodeGoSummary',
+    shortLabel: 'OC',
+    access: [{
+      provider: 'opencode-go',
+      settingsNs: 'llm-pi-ai',
+      settingsPath: ['providers', 'opencode-go'],
+      labelKey: 'accessSubscription',
+      noticeKey: 'noticeOpenCodeGo',
+      automaticProtocol: true,
+      protocols: [
+        OPENAI('https://opencode.ai/zen/go/v1'),
+        ANTHROPIC('https://opencode.ai/zen/go'),
+        RESPONSES('https://opencode.ai/zen/go/v1'),
+      ],
+      requestTypes: [CHAT, VISION],
+    }],
+  },
 ]
 
 const ACCESS_BY_PROVIDER = new Map(
   PROVIDER_SUPPLIERS.flatMap(supplier => supplier.access.map(access => [access.provider, access] as const)),
 )
 
-/** Every route owned by the domestic supplier workspace. */
+/** Every route owned by the curated supplier directory. */
 export const PRESET_PROVIDER_IDS: ReadonlySet<string> = new Set(ACCESS_BY_PROVIDER.keys())
 
 /**

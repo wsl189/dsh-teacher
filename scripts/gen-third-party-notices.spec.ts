@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
 import {
   CLAUDE_AGENT_SDK_PACKAGE,
+  MATHML_PACKAGE,
   OFFICE_VIEWER_PACKAGE,
   UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256,
   UNIVER_OFFICE_PACKAGE,
@@ -22,6 +23,7 @@ import {
   univerBundledReviewManifestHash,
   univerCommercialDistributionFromManifests,
   virtualManifest,
+  verifyMathmlDistribution,
 } from './gen-third-party-notices.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -43,6 +45,9 @@ describe('THIRD_PARTY_NOTICES.md', () => {
     expect(generated).toContain('[source snapshot](third-party/windows-mcp/windows-mcp-source.zip)')
     expect(generated).toContain('[sampling patch](third-party/windows-mcp/patches/correlated-sampling.patch)')
     expect(generated).toContain('The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded.')
+    expect(generated).toContain('## Editable Word equations')
+    expect(generated).toContain('mathml2omml-0.5.0-source.tar.gz')
+    expect(generated).toContain('Users may modify it and reverse engineer the combined application')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })
 })
@@ -319,6 +324,8 @@ describe('owner-authorized runtime distributions', () => {
   it('authorizes only recorded package identities without relabeling their licenses', () => {
     expect(isOwnerAuthorizedRuntime(CLAUDE_AGENT_SDK_PACKAGE)).toBe(true)
     expect(isOwnerAuthorizedRuntime(OFFICE_VIEWER_PACKAGE)).toBe(true)
+    expect(isOwnerAuthorizedRuntime(MATHML_PACKAGE)).toBe(true)
+    expect(isOwnerAuthorizedRuntime(`${MATHML_PACKAGE}-fork`)).toBe(false)
     expect(UNIVER_PRO_RUNTIME_PACKAGES.every(isOwnerAuthorizedRuntime)).toBe(true)
     expect(isOwnerAuthorizedRuntime(`${CLAUDE_AGENT_SDK_PACKAGE}-linux-x64`))
       .toBe(false)
@@ -327,6 +334,33 @@ describe('owner-authorized runtime distributions', () => {
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
     expect(isPermissive('AGPL-3.0')).toBe(false)
+    expect(isPermissive('LGPL-3.0-or-later')).toBe(false)
+  })
+
+  it('requires the reviewed equation converter version and complete source and license packet', () => {
+    const source = resolve(root, 'packages/host/teacher-workbench/third-party/mathml2omml')
+    const manifest: Manifest = { name: MATHML_PACKAGE, version: '0.5.0', license: 'LGPL-3.0-or-later' }
+    expect(() => { verifyMathmlDistribution(manifest, source) }).not.toThrow()
+    for (const changed of [{ name: 'mathml2omml-fork' }, { version: '0.6.0' }, { license: 'MIT' }]) {
+      expect(() => { verifyMathmlDistribution({ ...manifest, ...changed }, source) })
+        .toThrow('identity, version, or license changed')
+    }
+    const directory = mkdtempSync(join(tmpdir(), 'dsh-mathml-notices-'))
+    try {
+      cpSync(source, directory, { recursive: true })
+      for (const file of readdirSync(directory)) {
+        const target = join(directory, file)
+        const original = readFileSync(target)
+        rmSync(target)
+        expect(() => { verifyMathmlDistribution(manifest, directory) }).toThrow()
+        writeFileSync(target, '')
+        expect(() => { verifyMathmlDistribution(manifest, directory) }).toThrow()
+        writeFileSync(target, original)
+      }
+      expect(() => { verifyMathmlDistribution(manifest, directory) }).not.toThrow()
+    } finally {
+      rmSync(directory, { recursive: true, force: true })
+    }
   })
 
   it('derives version-independent platform payloads from the official SDK manifest', () => {

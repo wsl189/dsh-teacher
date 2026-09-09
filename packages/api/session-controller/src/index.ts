@@ -18,10 +18,13 @@ import { SessionHistoryController } from './history.ts'
 import { SessionFileReferences } from './file-references.ts'
 import { ApiSessionList, DEFAULT_COLD_BLANK_PROBE_MAX_BYTES } from './list.ts'
 import { buildModelCatalog } from './catalog.ts'
+import { checkModel, type ModelCheckPolicy } from './model-check.ts'
 import { installModelSelectionProjection } from './model-selection-projection.ts'
 import { SessionSkillCatalog } from './skill-catalog.ts'
 import type {
   ModelCatalog,
+  ModelCheckRequest,
+  ModelCheckResult,
   SessionAttachmentRequest,
   SessionAttachmentValue,
   SessionCancelRequest,
@@ -65,6 +68,10 @@ declare module '@deepseek-ai/cordis' {
 
 /** Session Controller deployment policy. */
 export interface Config {
+  /** Wall-clock limit for one automatic model connection check. */
+  readonly modelCheckTimeoutMs?: number
+  /** Generated-token ceiling for one model connection check. */
+  readonly modelCheckMaxTokens?: number
   /** Maximum cold Session artifact size eligible for one full projection observation. */
   readonly coldBlankProbeMaxBytes?: number
   /** Override platform desktop-opener detection. */
@@ -94,11 +101,14 @@ export class SessionController extends TypertRemoteService {
   ]
 
   static Config: z<Config> = z.object({
+    modelCheckTimeoutMs: z.number().min(1).step(1).default(20_000),
+    modelCheckMaxTokens: z.number().min(1).step(1).default(16),
     coldBlankProbeMaxBytes: z.natural().default(DEFAULT_COLD_BLANK_PROBE_MAX_BYTES),
     nativeOpen: z.boolean(),
   })
 
   private readonly agents: ApiSessionAgentController
+  private readonly modelCheckPolicy: ModelCheckPolicy
   private readonly commands: SessionCommandController
   private readonly controlState: SessionControlController
   private readonly history: SessionHistoryController
@@ -113,6 +123,10 @@ export class SessionController extends TypertRemoteService {
    */
   constructor(ctx: Context, config: Config, internals: SessionControllerInternals = {}) {
     super(ctx, 'sessionController', { namespace: 'session' })
+    this.modelCheckPolicy = {
+      timeoutMs: config.modelCheckTimeoutMs ?? 20_000,
+      maxTokens: config.modelCheckMaxTokens ?? 16,
+    }
     installModelSelectionProjection(ctx)
     this.agents = new ApiSessionAgentController(ctx)
     this.commands = new SessionCommandController(ctx, this.agents, process.cwd())
@@ -248,6 +262,26 @@ export class SessionController extends TypertRemoteService {
   @Remote('modelCatalog')
   modelCatalog(): Promise<ModelCatalog> {
     return buildModelCatalog(this.ctx)
+  }
+
+  /**
+   * Verify a saved language model with a bounded, logged request.
+   * @param request - registered provider and model to check.
+   * @param signal - caller cancellation supplied by the Remote carrier.
+   * @returns the checked model and its private diagnostic session id.
+   * @throws TypertRemoteFailure when the model request cannot complete.
+   */
+  @Remote
+  async checkModel(request: ModelCheckRequest, signal: AbortSignal): Promise<ModelCheckResult> {
+    try {
+      return await checkModel(this.ctx, request, this.modelCheckPolicy, signal)
+    } catch (error) {
+      throw new TypertRemoteFailure({
+        code: 'model-check-failed',
+        message: error instanceof Error ? error.message : String(error),
+        details: { provider: request.provider, model: request.model },
+      })
+    }
   }
 
   /**

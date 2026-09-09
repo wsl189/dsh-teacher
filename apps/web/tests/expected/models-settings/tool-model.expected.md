@@ -1,0 +1,40 @@
+- dialog "设置":
+  - navigation:
+    - text: 设置
+    - button "通用设置":
+      - img
+      - text: 通用设置
+    - button "模型":
+      - img
+      - text: 模型
+    - button "插件":
+      - img
+      - text: 插件
+    - button "技能"
+    - button "MCP"
+    - button "Agent 预设":
+      - img
+      - text: Agent 预设
+    - button "IM机器人":
+      - img
+      - text: IM机器人
+    - button "侧边卡片"
+  - button "关闭":
+    - img
+    - text: 关闭
+  - heading "模型" [level=2]
+  - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
+  - tablist "模型":
+    - tab "使用场景" [selected]
+    - tab "服务接入"
+  - paragraph: 这里的模型均从“服务接入”中已配置并可用的线路里选择。
+  - text: 默认对话模型 新对话没有单独选择模型时，默认使用这里配置的模型。
+  - combobox "默认对话模型"
+  - text: 工具模型 用于整理课程表等后台 AI 任务，只能选择服务接入中已添加的视觉理解模型。
+  - combobox "工具模型"
+  - status: 工具模型已保存。
+  - text: 生图模型 供生图工具和生图工作室使用，直接从已配置供应商的生图线路中选择。
+  - combobox "生图模型"
+  - status: 生图模型已保存。
+  - text: 语音识别模型 供对话语音输入、QQ 和日常管理共用，直接从已配置供应商的转写线路中选择。
+  - combobox "语音识别模型"

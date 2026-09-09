@@ -51,6 +51,8 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 
 The bundled sidebar's **Tasks** tab is disabled by default. Enable it under **Settings → Side card**. Saved tab choices override the default, including after an upgrade; this switch only controls the sidebar tab, not background subagent execution.
 
+Example collection uses the bundled SQLite backend at `$DSH_HOME/teacher-workbench/examples.sqlite`; only the `teacher_example_collection` domain selects that route. Other storage domains keep the base JSON backend. The [Host reference](../../host/teacher-workbench/README.md#example-collection) owns the saved question and file semantics.
+
 ### LAN access and trusted hosts
 
 By default the GUI accepts connections from this machine only. A deployment that binds all network interfaces also allows browsers from the LAN, and the printed URL then includes a LAN address; `--trusted-host` adds extra hosts in either case. Host and Origin checks control reachability, while the token exchange authenticates every Host API method and WebSocket stream. The LAN addresses are sampled once at startup, so a network change later is not picked up — restart the GUI to re-advertise.

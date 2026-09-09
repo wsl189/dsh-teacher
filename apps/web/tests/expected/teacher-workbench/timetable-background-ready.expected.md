@@ -1,0 +1,5 @@
+- status "课程表识别任务":
+  - strong: 年级总课表.png
+  - text: 识别完成，待确认 600 节课程
+  - button "查看识别结果"
+  - button "清除识别结果"

@@ -259,6 +259,7 @@ async function discoverBatches(
   const batches: TeacherQuestionBatch[] = []
   const visibleFolders: TeacherWorkbenchState['questionLibraryFolders'][number][] = []
   const folderIdsByPath = new Map<string, TeacherQuestionLibraryFolderId>()
+  const claimedFolderIds = new Set(state.questionLibraryFolders.map(folder => folder.id))
   const durableFoldersByPath = new Map<string, TeacherWorkbenchState['questionLibraryFolders'][number]>()
   for (const folder of state.questionLibraryFolders) {
     const path = normalizeRelative(questionLibraryDirectory(state, folder.id))
@@ -272,22 +273,29 @@ async function discoverBatches(
   for (const directory of tree.directories) {
     const durable = durableFoldersByPath.get(directory.relativePath)
     if (durable !== undefined) {
-      visibleFolders.push(durable)
+      visibleFolders.push({ ...durable, name: directory.name.slice(0, 200), physicalName: directory.name })
       discoveredDirectories.set(discoveredQuestionDirectoryTargetKey({ kind: 'library-folder', id: durable.id }), {
         root,
         path: directory.absolutePath,
       })
       continue
     }
-    const id = stableId(
+    let id = stableId(
       'library-folder',
       `${root}\0${directory.relativePath}`,
     ) as TeacherQuestionLibraryFolderId
+    let collision = 0
+    while (claimedFolderIds.has(id)) {
+      collision += 1
+      id = stableId('library-folder', `${root}\0${directory.relativePath}\0${String(collision)}`) as TeacherQuestionLibraryFolderId
+    }
+    claimedFolderIds.add(id)
     const parentId = folderIdsByPath.get(parentRelativePath(directory.relativePath))
     visibleFolders.push({
       id,
       ...(parentId === undefined ? {} : { parentId }),
       name: directory.name.slice(0, 200),
+      physicalName: directory.name,
       createdAt: directory.updatedAt,
       updatedAt: directory.updatedAt,
     })

@@ -122,6 +122,33 @@ describe('ModelSettingsSpeechProvider', () => {
     expect(services.credentials.resolve).toHaveBeenCalledWith('ZHIPU_KEY')
   })
 
+  it('transcribes through OpenRouter with its full endpoint and namespaced model id', async () => {
+    const services = harness({ provider: 'openrouter', model: 'openai/whisper-1' })
+    services.setServiceProfiles({
+      openrouter: {
+        apiKeyEnv: 'OPENROUTER_API_KEY',
+        routes: { speech: {
+          endpoint: 'https://openrouter.ai/api/v1/audio/transcriptions',
+          protocol: 'openai-audio-transcriptions',
+          models: [{ id: 'openai/whisper-1' }],
+        } },
+      },
+    })
+    const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+      expect(requestURL(input)).toBe('https://openrouter.ai/api/v1/audio/transcriptions')
+      expect(init?.headers).toMatchObject({ authorization: 'Bearer secret:OPENROUTER_API_KEY' })
+      expect(init?.body).toBeInstanceOf(FormData)
+      const form = init!.body as FormData
+      expect(form.get('model')).toBe('openai/whisper-1')
+      expect(await (form.get('file') as File).text()).toBe('voice bytes')
+      return Response.json({ text: '课堂口述', usage: { seconds: 1 } })
+    })
+    const provider = new ModelSettingsSpeechProvider(
+      config(), services.defaultModel, services.settings, services.credentials, fetch,
+    )
+    await expect(provider.transcribe(request())).resolves.toMatchObject({ text: '课堂口述' })
+  })
+
   it('posts Qwen input_audio JSON and reads the OpenAI-compatible response', async () => {
     const services = harness({ provider: 'qwen-cn', model: 'qwen3-asr-flash' })
     const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {

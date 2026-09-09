@@ -8,7 +8,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-`@deepseek-ai/dsh-api-session-controller` owns the Host `ctx.sessionController` service and the generated Client `session`, `skills`, and `fileReferences` Remote namespaces. It serves Session lifecycle and history, the Host-generation model catalog, workspace-path opening, user-invocable skill discovery, and the adapter for Agent-scoped file references. Use it through API Gateway when a Client needs operations addressed by a Session.
+`@deepseek-ai/dsh-api-session-controller` owns the Host `ctx.sessionController` service and the generated Client `session`, `skills`, and `fileReferences` Remote namespaces. It serves Session lifecycle and history, the Host-generation model catalog with adapter-resolved input capabilities, workspace-path opening, user-invocable skill discovery, and the adapter for Agent-scoped file references. Use it through API Gateway when a Client needs operations addressed by a Session.
 
 ## Table of Contents
 
@@ -35,6 +35,8 @@ The Session object also carries local submission echoes: `session.beginSubmissio
 
 The Client `sessions.open`, `sessions.openSubagent`, and `sessions.clear` methods emit `sessions/navigate` after each successful navigation request, including reselecting the current Session or clearing an already empty selection. Feature surfaces can therefore leave a temporary main-area view whenever the user explicitly returns to Conversation without inferring intent from a changed Session id.
 
+`session.checkModel` exercises one saved language-model route without tools or conversation history. It returns only after a successful provider finish and logs the complete request and response in a private diagnostic session. Provider errors, cancellation, and the configured deadline reject the check; configuration is never changed by verification.
+
 -----
 
 <a id="configuration"></a>
@@ -44,6 +46,8 @@ The Client `sessions.open`, `sessions.openSubagent`, and `sessions.clear` method
 |---|---:|---|
 | `coldBlankProbeMaxBytes` | `1,024` | Maximum physical size of a cold Session artifact eligible for blankness verification; `0` disables probes |
 | `nativeOpen` | platform-detected | Whether Session workspace paths can be handed to a native desktop opener |
+| `modelCheckTimeoutMs` | `20,000` | Maximum duration of each automatic model check |
+| `modelCheckMaxTokens` | `16` | Maximum generated tokens per model check |
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-api-session-controller) is the exhaustive source for accepted fields and their JSDoc.
 
@@ -52,11 +56,19 @@ The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-a
 <a id="model-experience"></a>
 ## Model Experience
 
-None, as invoked Agent commands own any model-visible effect.
+### Automatic model verification
+
+#### What the model sees
+
+One user message containing `Reply with OK.`, with no system prompt, tools, or existing conversation.
+
+#### Token effect
+
+Each verification sends one short input and caps generated output at `modelCheckMaxTokens` (default 16).
 
 #### KV Cache effect
 
-No direct effect; model requests remain owned by the Agent and LLM packages.
+Independent request; it does not append to or replace an existing conversation prefix.
 
 ## Known Limitations and Deferred Work
 

@@ -17,14 +17,16 @@ function hasModelSeed(value: unknown): boolean {
   ))
 }
 
-describe('domestic provider presets', () => {
-  it('groups unique access routes under the five product suppliers', () => {
+describe('curated provider presets', () => {
+  it('groups unique access routes under the product suppliers', () => {
     expect(PROVIDER_SUPPLIERS.map(supplier => supplier.id)).toEqual([
       'zhipu',
       'kimi',
       'deepseek',
       'qwen',
       'minimax',
+      'openrouter',
+      'opencode-go',
     ])
     const routes = PROVIDER_SUPPLIERS.flatMap(supplier => supplier.access)
     expect(new Set(routes.map(route => route.provider)).size).toBe(routes.length)
@@ -83,6 +85,15 @@ describe('domestic provider presets', () => {
       .toBe('https://token-plan.cn-beijing.maas.aliyuncs.com/compatible-mode/v1/responses')
     expect(endpoint('minimax-cn', 'anthropic-messages'))
       .toBe('https://api.minimaxi.com/anthropic/v1/messages')
+    expect(endpoint('openrouter', 'openai-completions'))
+      .toBe('https://openrouter.ai/api/v1/chat/completions')
+    expect(endpoint('opencode-go', 'openai-completions'))
+      .toBe('https://opencode.ai/zen/go/v1/chat/completions')
+    expect(endpoint('opencode-go', 'anthropic-messages'))
+      .toBe('https://opencode.ai/zen/go/v1/messages')
+    expect(endpoint('opencode-go', 'openai-responses'))
+      .toBe('https://opencode.ai/zen/go/v1/responses')
+    expect(providerAccessPreset('opencode-go')?.automaticProtocol).toBe(true)
   })
 
   it('publishes official capability routes for direct image and speech assignment', () => {
@@ -108,6 +119,14 @@ describe('domestic provider presets', () => {
     expect(requestType('minimax-cn', 'speech')).toBeUndefined()
     expect(requestType('moonshotai-cn', 'image')).toBeUndefined()
     expect(requestType('deepseek-official', 'speech')).toBeUndefined()
+    expect(requestType('openrouter', 'image')?.protocols?.map(protocol => (
+      joinRequestURL(protocol.baseURL, protocol.requestPath)
+    ))).toEqual(['https://openrouter.ai/api/v1/images'])
+    expect(requestType('openrouter', 'speech')?.protocols?.map(protocol => (
+      joinRequestURL(protocol.baseURL, protocol.requestPath)
+    ))).toEqual(['https://openrouter.ai/api/v1/audio/transcriptions'])
+    expect(requestType('opencode-go', 'image')).toBeUndefined()
+    expect(requestType('opencode-go', 'speech')).toBeUndefined()
   })
 
   it('seeds every product-declared route with a usable protocol, endpoint, and model directory', () => {

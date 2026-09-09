@@ -1432,6 +1432,13 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'provider-grouped models, the deployment default, and isolated provider failures.',
       },
       {
+        signature: '@Remote async checkModel(request: ModelCheckRequest, signal: AbortSignal): Promise<ModelCheckResult>',
+        description: 'Verify a saved language model with a bounded, logged request.',
+        parameters: [{ name: 'request', description: 'registered provider and model to check.' }, { name: 'signal', description: 'caller cancellation supplied by the Remote carrier.' }],
+        returns: 'the checked model and its private diagnostic session id.',
+        throws: ['TypertRemoteFailure when the model request cannot complete.'],
+      },
+      {
         signature: '@Remote canOpenWorkspacePath(): boolean',
         description: 'Report whether this deployment can hand a Session workspace path to a native desktop.',
         parameters: [],
@@ -2444,6 +2451,60 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'the current revision and state.',
       },
       {
+        signature: '@Remote(\'listExamples\') listExamples(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExampleCatalog>>',
+        description: 'List collected question metadata and tags.',
+        parameters: [{ name: '_request', description: 'empty directory-list request.' }],
+        returns: 'saved questions and reusable tags without file bytes.',
+      },
+      {
+        signature: '@Remote(\'createExample\') createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Create one numeric question directory.',
+        parameters: [{ name: '_request', description: 'empty creation request.' }],
+        returns: 'a new numeric directory with empty question and explanation documents, tags, and description.',
+      },
+      {
+        signature: '@Remote(\'updateExample\') updateExample(request: TeacherExampleUpdateRequest): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Save collected question metadata.',
+        parameters: [{ name: 'request', description: 'question identity and changed metadata fields.' }],
+        returns: 'the saved question; concurrent OCR preserves these edits.',
+      },
+      {
+        signature: '@Remote(\'addExampleTag\') addExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>',
+        description: 'Add a reusable collection tag.',
+        parameters: [{ name: 'request', description: 'reusable tag name.' }],
+        returns: 'its normalized name after persistence.',
+      },
+      {
+        signature: '@Remote(\'deleteExample\') deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>>',
+        description: 'Delete one collected question and its files.',
+        parameters: [{ name: 'request', description: 'question to delete with both documents’ originals and Word files.' }],
+        returns: 'the deleted identity.',
+      },
+      {
+        signature: '@Remote(\'uploadExample\') uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Retain a collected question source before OCR.',
+        parameters: [{ name: 'request', description: 'original image or PDF, owning question, and question or explanation selection.' }],
+        returns: 'the saved source metadata, ready for OCR.',
+      },
+      {
+        signature: '@Remote(\'recognizeExample\') recognizeExample(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Run MinerU OCR, proofread it against the original through the tool model, and generate Word.',
+        parameters: [{ name: 'request', description: 'question or explanation whose current original needs recognition.' }],
+        returns: 'the saved Word status; failures retain the original and any existing Word for retry.',
+      },
+      {
+        signature: '@Remote(\'readExampleFile\') readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>>',
+        description: 'Read a collected file, restoring missing Word illustrations from its source and retaining uniform typography.',
+        parameters: [{ name: 'request', description: 'selected question or explanation and its original or Word file.' }],
+        returns: 'the saved file for preview or download.',
+      },
+      {
+        signature: '@Remote(\'exportExamplesWord\') exportExamplesWord(request: TeacherExampleExportRequest): Promise<TeacherExampleResult<TeacherExampleFile>>',
+        description: 'Export selected questions and explanations as one editable Word document.',
+        parameters: [{ name: 'request', description: 'ordered question identities and paired or grouped explanation placement; no headings, tags, or descriptions are added.' }],
+        returns: 'the compiled Word file; unfinished uploaded documents prevent export.',
+      },
+      {
         signature: '@Remote(\'listNotificationTargets\') listNotificationTargets(_request: Record<never, never>): Promise<readonly TeacherNotificationTarget[]>',
         description: 'List dsh-im bots that may receive reminder notifications.',
         parameters: [{ name: '_request', description: 'Empty request object retained for a uniform Remote signature.' }],
@@ -2475,8 +2536,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'normalizeTimetable\') normalizeTimetable(request: TeacherTimetableNormalizeRequest): Promise<TeacherTimetableNormalizeResult>',
-        description: 'Reconstruct MinerU timetable text through the configured tool model.',
-        parameters: [{ name: 'request', description: 'live parent session, OCR source, and current timetable defaults.' }],
+        description: 'Recognize an upload with an independent child using the configured tool model.',
+        parameters: [{ name: 'request', description: 'Original image or OCR evidence and the selected timetable destination.' }],
         returns: 'structured rows for browser review or a stable failure.',
       },
       {
@@ -4693,7 +4754,15 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'ModelCatalogModel',
-    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly reasoning?: ModelReasoning;\n}',
+    declaration: 'export interface ModelCatalogModel {\n    readonly id: string;\n    readonly name: string;\n    readonly description?: string;\n    readonly inputModalities?: readonly ModelModality[];\n    readonly reasoning?: ModelReasoning;\n}',
+  },
+  {
+    name: 'ModelCheckRequest',
+    declaration: 'export interface ModelCheckRequest {\n    provider: string;\n    model: string;\n}',
+  },
+  {
+    name: 'ModelCheckResult',
+    declaration: 'export interface ModelCheckResult extends ModelCheckRequest {\n    sessionId: SessionId;\n}',
   },
   {
     name: 'ModelMessageSource',
@@ -4733,7 +4802,11 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OcrExtractedDocument',
-    declaration: 'export interface OcrExtractedDocument {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly markdown: string;\n    readonly provider: string;\n    readonly truncated: boolean;\n}',
+    declaration: 'export interface OcrExtractedDocument {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly markdown: string;\n    readonly images?: readonly OcrExtractedImage[];\n    readonly provider: string;\n    readonly truncated: boolean;\n}',
+  },
+  {
+    name: 'OcrExtractedImage',
+    declaration: 'export interface OcrExtractedImage {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
   },
   {
     name: 'OcrExtractRejected',
@@ -4741,7 +4814,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'OcrExtractRequest',
-    declaration: 'export interface OcrExtractRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n    readonly includeDiscardedText?: boolean;\n    readonly enhanceImageDetail?: boolean;\n}',
+    declaration: 'export interface OcrExtractRequest {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n    readonly includeDiscardedText?: boolean;\n    readonly enhanceImageDetail?: boolean;\n    readonly includeImages?: boolean;\n}',
   },
   {
     name: 'OcrExtractResult',
@@ -5932,6 +6005,78 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export type TeacherExamId = Branded<\'TeacherExamId\'>;',
   },
   {
+    name: 'TeacherExample',
+    declaration: 'export interface TeacherExample {\n    readonly id: TeacherExampleId;\n    readonly number: number;\n    readonly name: string;\n    readonly tags: readonly string[];\n    readonly description: string;\n    readonly handwriting: readonly TeacherExampleStroke[];\n    readonly documents: Readonly<Record<TeacherExampleDocumentKind, TeacherExampleDocument>>;\n    readonly revision: number;\n}',
+  },
+  {
+    name: 'TeacherExampleCatalog',
+    declaration: 'export interface TeacherExampleCatalog {\n    readonly questions: readonly TeacherExample[];\n    readonly tags: readonly string[];\n}',
+  },
+  {
+    name: 'TeacherExampleDocument',
+    declaration: 'export interface TeacherExampleDocument {\n    readonly source: TeacherExampleSource | null;\n    readonly status: \'empty\' | \'pending\' | \'ready\' | \'error\';\n    readonly ocrError: string | null;\n    readonly wordRevision: number;\n}',
+  },
+  {
+    name: 'TeacherExampleDocumentKind',
+    declaration: 'export type TeacherExampleDocumentKind = \'question\' | \'explanation\';',
+  },
+  {
+    name: 'TeacherExampleDocumentRequest',
+    declaration: 'export interface TeacherExampleDocumentRequest extends TeacherExampleRequest {\n    readonly document: TeacherExampleDocumentKind;\n}',
+  },
+  {
+    name: 'TeacherExampleErrorCode',
+    declaration: 'export type TeacherExampleErrorCode = \'invalid-request\' | \'not-found\' | \'file-too-large\' | \'ocr-unavailable\' | \'ocr-failed\' | \'ocr-truncated\' | \'correction-unavailable\' | \'correction-failed\' | \'correction-invalid\' | \'correction-too-large\' | \'source-changed\' | \'export-not-ready\' | \'storage-failure\' | \'disposed\';',
+  },
+  {
+    name: 'TeacherExampleExportLayout',
+    declaration: 'export type TeacherExampleExportLayout = \'paired\' | \'grouped\';',
+  },
+  {
+    name: 'TeacherExampleExportRequest',
+    declaration: 'export interface TeacherExampleExportRequest {\n    readonly ids: readonly TeacherExampleId[];\n    readonly layout: TeacherExampleExportLayout;\n}',
+  },
+  {
+    name: 'TeacherExampleFile',
+    declaration: 'export interface TeacherExampleFile {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherExampleFileRequest',
+    declaration: 'export interface TeacherExampleFileRequest extends TeacherExampleDocumentRequest {\n    readonly kind: \'source\' | \'word\';\n}',
+  },
+  {
+    name: 'TeacherExampleId',
+    declaration: 'export type TeacherExampleId = Branded<\'TeacherExampleId\'>;',
+  },
+  {
+    name: 'TeacherExampleRequest',
+    declaration: 'export interface TeacherExampleRequest {\n    readonly id: TeacherExampleId;\n}',
+  },
+  {
+    name: 'TeacherExampleResult',
+    declaration: 'export type TeacherExampleResult<T> = {\n    readonly ok: true;\n    readonly value: T;\n} | {\n    readonly ok: false;\n    readonly error: {\n        readonly code: TeacherExampleErrorCode;\n        readonly message: string;\n    };\n};',
+  },
+  {
+    name: 'TeacherExampleSource',
+    declaration: 'export interface TeacherExampleSource {\n    readonly id: TeacherExampleSourceId;\n    readonly name: string;\n    readonly mediaType: \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'application/pdf\';\n}',
+  },
+  {
+    name: 'TeacherExampleSourceId',
+    declaration: 'export type TeacherExampleSourceId = Branded<\'TeacherExampleSourceId\'>;',
+  },
+  {
+    name: 'TeacherExampleStroke',
+    declaration: 'export interface TeacherExampleStroke {\n    readonly points: readonly {\n        readonly x: number;\n        readonly y: number;\n    }[];\n}',
+  },
+  {
+    name: 'TeacherExampleUpdateRequest',
+    declaration: 'export interface TeacherExampleUpdateRequest extends TeacherExampleRequest {\n    readonly name?: string;\n    readonly tags?: readonly string[];\n    readonly description?: string;\n    readonly handwriting?: readonly TeacherExampleStroke[];\n}',
+  },
+  {
+    name: 'TeacherExampleUploadRequest',
+    declaration: 'export interface TeacherExampleUploadRequest extends TeacherExampleDocumentRequest {\n    readonly name: string;\n    readonly mediaType: TeacherExampleSource[\'mediaType\'];\n    readonly contentBase64: string;\n}',
+  },
+  {
     name: 'TeacherLedgerCategory',
     declaration: 'export interface TeacherLedgerCategory {\n    readonly id: TeacherLedgerCategoryId;\n    readonly name: string;\n    readonly createdAt: number;\n}',
   },
@@ -6137,7 +6282,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherQuestionLibraryFolder',
-    declaration: 'export interface TeacherQuestionLibraryFolder {\n    readonly id: TeacherQuestionLibraryFolderId;\n    readonly parentId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
+    declaration: 'export interface TeacherQuestionLibraryFolder {\n    readonly id: TeacherQuestionLibraryFolderId;\n    readonly parentId?: TeacherQuestionLibraryFolderId;\n    readonly name: string;\n    readonly physicalName?: string;\n    readonly createdAt: number;\n    readonly updatedAt: number;\n}',
   },
   {
     name: 'TeacherQuestionLibraryFolderId',
@@ -6341,7 +6486,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherTimetableNormalizeErrorCode',
-    declaration: 'export type TeacherTimetableNormalizeErrorCode = \'invalid-request\' | \'session-unavailable\' | \'tool-model-unavailable\' | \'vision-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
+    declaration: 'export type TeacherTimetableNormalizeErrorCode = \'invalid-request\' | \'tool-model-unavailable\' | \'vision-unavailable\' | \'source-too-large\' | \'timed-out\' | \'model-failed\' | \'invalid-output\';',
   },
   {
     name: 'TeacherTimetableNormalizeRejected',
@@ -6349,7 +6494,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherTimetableNormalizeRequest',
-    declaration: 'export interface TeacherTimetableNormalizeRequest {\n    readonly parentSessionId: SessionId;\n    readonly fileName: string;\n    readonly markdown: string;\n    readonly image?: {\n        readonly mediaType: \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';\n        readonly contentBase64: string;\n    };\n    readonly defaults: TeacherTimetableNormalizeDefaults;\n}',
+    declaration: 'export interface TeacherTimetableNormalizeRequest {\n    readonly fileName: string;\n    readonly markdown: string;\n    readonly image?: {\n        readonly mediaType: \'image/png\' | \'image/jpeg\' | \'image/webp\' | \'image/gif\';\n        readonly contentBase64: string;\n    };\n    readonly defaults: TeacherTimetableNormalizeDefaults;\n}',
   },
   {
     name: 'TeacherTimetableNormalizeResult',

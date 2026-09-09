@@ -1,0 +1,42 @@
+- dialog "搜索结果":
+  - heading "找到 1 道题目" [level=2]
+  - paragraph: 二次方程 符号
+  - text: 已选 0 题
+  - button "导出 Word" [disabled]
+  - button "关闭搜索结果"
+  - article:
+    - checkbox "选择题目“方程例题”"
+    - heading "方程例题" [level=3]
+    - link "下载 Word 文件":
+      - /url: blob:{{webOrigin}}/{{uuid}}
+      - text: 下载
+    - button "打开题目"
+    - article:
+      - paragraph: 已知 x² − 3x + 2 = 0，求 x。
+      - paragraph: 提示：尝试因式分解。
+      - paragraph:
+        - text: 向量与分数：
+        - math: P A → ⋅ ( P B → + P C → ) = − 3 2
+        - text: 。
+      - paragraph:
+        - text: 上下标：
+        - math: x 1 2
+        - text: 。
+      - paragraph:
+        - text: 校对：点 O，
+        - math: "a : b : c"
+        - text: 。
+      - paragraph:
+        - text: A.
+        - math: a
+        - text: B.
+        - math: b
+        - text: C.
+        - math: "1"
+        - text: D.
+        - math: "2"
+      - paragraph:
+        - img
+    - text: 二次方程
+    - paragraph: 适合讲解因式分解，关注学生的符号错误。
+    - img "题目描述手写区域"

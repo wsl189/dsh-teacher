@@ -61,6 +61,17 @@ const FIRST_PARTY = new Set([
 export const CLAUDE_AGENT_SDK_PACKAGE = '@anthropic-ai/claude-agent-sdk'
 /** Office viewer identity covered by the bundled-extension distribution decision. */
 export const OFFICE_VIEWER_PACKAGE = '@huanlin/dsh-plugin-better-sidebar-plugin-office'
+/** LGPL equation converter covered by the teacher-workbench distribution decision. */
+export const MATHML_PACKAGE = 'mathml2omml'
+const MATHML_DISTRIBUTION_ROOT = 'packages/host/teacher-workbench/third-party/mathml2omml'
+const MATHML_DISTRIBUTION_SHA256 = {
+  'COPYING.GPL-3': '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986',
+  'COPYING.LGPL-3': 'e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118',
+  'COPYING.entities': 'cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164',
+  'COPYING.html-parse-stringify': 'f51aa7a410f3d3ff9352a5422b76c072588ac76b63861f59447502caeacacc16',
+  'entities-6.0.1.tgz': 'a4de957ab0852f6c91eae59a6000ced5a25a04f0b6e1c3062fbad732a6b5479d',
+  'mathml2omml-0.5.0-source.tar.gz': '7c0578339e8af7ef06553a9cc0e5b7500b52905f36d2a8435e34c3c6f9f4b8e9',
+} as const
 /** Univer integration identity whose commercial dependency closure is disclosed separately. */
 export const UNIVER_OFFICE_PACKAGE = 'dsh-univer-office'
 /** Direct Univer Pro packages accepted by the bundled-extension distribution decision. */
@@ -80,6 +91,7 @@ const UNIVER_COMMERCIAL_TERMS = 'https://docs.univer.ai/guides/pro/license'
 const OWNER_AUTHORIZED_RUNTIME_PACKAGES = new Set([
   CLAUDE_AGENT_SDK_PACKAGE,
   OFFICE_VIEWER_PACKAGE,
+  MATHML_PACKAGE,
   ...UNIVER_PRO_RUNTIME_PACKAGES,
 ])
 
@@ -1068,6 +1080,42 @@ function renderOfficeDistribution(deps: ExternalDep[]): string {
 `
 }
 
+/**
+ * Verify the approved converter version and its shipped source and license resources.
+ * @param manifest - installed converter manifest.
+ * @param distributionRoot - directory containing corresponding source, terms, and replacement instructions.
+ * @returns nothing; throws when package identity, version, license, or distribution resources differ from the reviewed release.
+ */
+export function verifyMathmlDistribution(manifest: Manifest, distributionRoot: string): void {
+  if (manifest.name !== MATHML_PACKAGE || manifest.version !== '0.5.0' || manifest.license !== 'LGPL-3.0-or-later') {
+    throw new Error('gen-third-party-notices: mathml2omml identity, version, or license changed; review its distribution and corresponding source.')
+  }
+  for (const [file, expected] of Object.entries(MATHML_DISTRIBUTION_SHA256)) {
+    const digest = createHash('sha256').update(readFileSync(resolve(distributionRoot, file))).digest('hex')
+    if (digest !== expected) {
+      throw new Error(`gen-third-party-notices: mathml2omml ${file} differs from the reviewed distribution.`)
+    }
+  }
+  if (readFileSync(resolve(distributionRoot, 'NOTICE.txt'), 'utf8').trim().length === 0) {
+    throw new Error('gen-third-party-notices: mathml2omml replacement instructions are empty.')
+  }
+}
+
+/** Render the pinned LGPL distribution and its corresponding-source location. */
+function renderMathmlDistribution(deps: ExternalDep[]): string {
+  if (!deps.some(dep => dep.name === MATHML_PACKAGE)) return ''
+  const manifest = installedManifest(MATHML_PACKAGE)
+  if (manifest === undefined) throw new Error('gen-third-party-notices: cannot resolve mathml2omml; run `pnpm install`.')
+  verifyMathmlDistribution(manifest, resolve(root, MATHML_DISTRIBUTION_ROOT))
+  return `
+## Editable Word equations
+
+The teacher workbench uses [\`mathml2omml\`](https://github.com/fiduswriter/mathml2omml) 0.5.0 by Johannes Wilm under LGPL-3.0-or-later. The project owner explicitly authorizes this version's distribution under those terms in the [example-collection decision](.agents/notes/implemented/feature/2026-09-08-example-collection.md). The converter remains an external, replaceable runtime module. Users may modify it and reverse engineer the combined application to debug those modifications.
+
+Every teacher-workbench package includes [the notice and replacement instructions](${MATHML_DISTRIBUTION_ROOT}/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](${MATHML_DISTRIBUTION_ROOT}/mathml2omml-0.5.0-source.tar.gz) from upstream commit \`0ddeb8b59ff1a97796b25d8f682dfb410febde1d\`. The packet also contains the bundled \`entities\` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from \`html-parse-stringify\`. The Windows installer includes the same packet under \`resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml\`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
+`
+}
+
 /** Render third-party Skill resources distributed inside first-party packages. */
 function renderBundledSkillDistributions(
   distribution: BundledSkillDistribution,
@@ -1175,6 +1223,7 @@ External packages that a workspace package resolves at runtime. The tier covers 
 
 ${renderNpmTable(runtimeDeps)}
 ${renderOfficeDistribution(runtimeDeps)}
+${renderMathmlDistribution(runtimeDeps)}
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 

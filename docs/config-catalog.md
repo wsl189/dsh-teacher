@@ -299,6 +299,10 @@ Requires: `agentDefaultModel` · `agents` · `attachments` · `llm` · `sessions
 ```ts config-catalog
 /** Session Controller deployment policy. */
 export interface Config {
+  /** Wall-clock limit for one automatic model connection check. */
+  readonly modelCheckTimeoutMs?: number
+  /** Generated-token ceiling for one model connection check. */
+  readonly modelCheckMaxTokens?: number
   /** Maximum cold Session artifact size eligible for one full projection observation. */
   readonly coldBlankProbeMaxBytes?: number
   /** Override platform desktop-opener detection. */
@@ -306,7 +310,7 @@ export interface Config {
 }
 ```
 
-Source: [`packages/api/session-controller/src/index.ts:67`](../packages/api/session-controller/src/index.ts)
+Source: [`packages/api/session-controller/src/index.ts:70`](../packages/api/session-controller/src/index.ts)
 
 <a id="deepseek-aidsh-api-settings-controller"></a>
 
@@ -908,7 +912,7 @@ Requires: `storageDomain`
 
 ```ts config-catalog
 /** Host persistence, document-source, question-media, and provider configuration. */
-export interface Config {
+export interface Config extends TeacherExampleCorrectionConfig {
   /** Delay before retrying a mobile reminder after an unavailable or rejected delivery. */
   reminderRetryMs?: number
   /** Nominatim-compatible endpoint used to resolve districts, counties, and cities. */
@@ -929,8 +933,10 @@ export interface Config {
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one automatically saved part. */
   maxQuestionBatchBytes: number
-  /** Maximum MinerU characters admitted to one timetable-agent prompt. */
+  /** Maximum OCR characters admitted from one complete timetable upload. */
   maxTimetableSourceCharacters: number
+  /** Maximum UTF-8 source bytes per timetable tool page; keep below the tool-result inline budget. */
+  timetableSourcePageBytes: number
   /** Maximum structured rows accepted from one timetable-agent run. */
   maxTimetableEntries: number
   /** Wall-clock deadline for one timetable-agent run. */
@@ -982,9 +988,21 @@ export interface Config {
   /** Wall-clock deadline for one question-segmentation agent run, or zero to disable it. */
   questionSegmentationAgentTimeoutMs: number
 }
+
+/** Deployment limits for one complete visual proofreading pass. */
+export interface TeacherExampleCorrectionConfig {
+  /** Maximum characters in either the complete OCR text or corrected text. */
+  maxExampleCorrectionCharacters: number
+  /** Maximum PDF pages attached to one proofreading pass. */
+  maxExampleCorrectionPages: number
+  /** PDF raster scale relative to 72 DPI, capped by attachment admission limits. */
+  exampleCorrectionPdfScale: number
+  /** Wall-clock deadline for source preparation and the proofreading child. */
+  exampleCorrectionTimeoutMs: number
+}
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:192`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:204`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 
@@ -1694,7 +1712,7 @@ export interface OcrRuntimeConfig {
 }
 ```
 
-Source: [`packages/ocr/ocr/src/index.ts:53`](../packages/ocr/ocr/src/index.ts)
+Source: [`packages/ocr/ocr/src/index.ts:54`](../packages/ocr/ocr/src/index.ts)
 
 <a id="deepseek-aidsh-ocr-mineru"></a>
 
@@ -1732,7 +1750,7 @@ type MinerUEffort = typeof EFFORT_VALUES[number]
 type MinerULanguage = typeof LANGUAGE_VALUES[number]
 ```
 
-Source: [`packages/ocr/ocr-mineru/src/index.ts:88`](../packages/ocr/ocr-mineru/src/index.ts)
+Source: [`packages/ocr/ocr-mineru/src/index.ts:97`](../packages/ocr/ocr-mineru/src/index.ts)
 
 <a id="deepseek-aidsh-permission-presets"></a>
 

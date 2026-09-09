@@ -242,7 +242,7 @@ export async function prepareQuestionStateDirectories(
       label: '试题切割目录',
       relativePath: currentParentDirectory === undefined
         ? questionLibraryDirectory(state, folder.id)
-        : join(currentParentDirectory, questionMediaPathSegment(folder.name)),
+        : join(currentParentDirectory, folder.physicalName ?? questionMediaPathSegment(folder.name)),
     })
   }
 
@@ -484,7 +484,7 @@ async function prepareDurableLibraryDirectoryRename(
   const renamedState: TeacherWorkbenchState = {
     ...state,
     questionLibraryFolders: state.questionLibraryFolders.map(item => item.id === folder.id
-      ? { ...item, name, updatedAt: now }
+      ? { ...item, name, physicalName: questionMediaPathSegment(name), updatedAt: now }
       : item),
   }
   const newDirectory = physicalDirectory === undefined
@@ -1779,7 +1779,7 @@ export function questionLibraryDirectory(
       throw new TeacherQuestionMediaError('invalid-request', '试题库目录层级无效')
     }
     visited.add(current.id)
-    segments.unshift(questionMediaPathSegment(current.name))
+    segments.unshift(current.physicalName ?? questionMediaPathSegment(current.name))
     current = current.parentId === undefined ? undefined : folders.get(current.parentId)
   }
   if (!visited.has(folderId)) throw new TeacherQuestionMediaError('not-found', '目标试题库目录不存在')

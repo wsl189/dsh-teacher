@@ -1,0 +1,4 @@
+- status "课程表识别任务":
+  - strong: 年级总课表.png
+  - text: 正在后台识别课程表
+  - button "查看识别进度"

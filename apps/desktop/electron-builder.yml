@@ -9,6 +9,12 @@ files:
   - '!**/*.map'
   - '!**/*.tsbuildinfo'
 extraResources:
+  - from: ../../THIRD_PARTY_NOTICES.md
+    to: THIRD_PARTY_NOTICES.md
+  - from: ../../packages/host/teacher-workbench/third-party/mathml2omml
+    to: licenses/mathml2omml
+    filter:
+      - '**/*'
   - from: build/icon.ico
     to: icon.ico
   - from: runtime/windows-mcp

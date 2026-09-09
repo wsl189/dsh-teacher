@@ -8,11 +8,14 @@ import {
   VoiceMicrophoneIcon,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
+import { useVoiceSpaceHold, type VoiceKeyboardInput } from './useVoiceSpaceHold.ts'
 import css from './TeacherWorkbench.module.css'
 
 type VoiceErrorTranslationKey =
   | 'voice.permissionDenied'
   | 'voice.noMicrophone'
+  | 'voice.microphoneUnavailable'
+  | 'voice.microphoneConstraints'
   | 'voice.noSpeech'
   | 'voice.networkError'
   | 'voice.requestFailed'
@@ -23,12 +26,14 @@ const VOICE_ERROR_KEYS: Readonly<Record<string, VoiceErrorTranslationKey>> = Obj
   'not-allowed': 'voice.permissionDenied',
   NotAllowedError: 'voice.permissionDenied',
   SecurityError: 'voice.permissionDenied',
-  'audio-capture': 'voice.noMicrophone',
+  'audio-capture': 'voice.microphoneUnavailable',
   NotFoundError: 'voice.noMicrophone',
   DevicesNotFoundError: 'voice.noMicrophone',
-  NotReadableError: 'voice.noMicrophone',
-  TrackStartError: 'voice.noMicrophone',
-  OverconstrainedError: 'voice.noMicrophone',
+  NotReadableError: 'voice.microphoneUnavailable',
+  TrackStartError: 'voice.microphoneUnavailable',
+  AbortError: 'voice.microphoneUnavailable',
+  OverconstrainedError: 'voice.microphoneConstraints',
+  ConstraintNotSatisfiedError: 'voice.microphoneConstraints',
   'no-speech': 'voice.noSpeech',
   'empty-result': 'voice.noSpeech',
   network: 'voice.networkError',
@@ -44,6 +49,8 @@ export interface VoiceInputButtonProps {
   transcribe: (audio: Blob) => Promise<string>
   /** Receive one final normalized transcript. */
   onTranscript: (transcript: string) => void
+  /** Focused field supporting hold-Space dictation with this button's recorder. */
+  keyboardInput?: VoiceKeyboardInput
   /** Workbench translator. */
   t: TeacherWorkbenchTranslate
 }
@@ -53,7 +60,7 @@ export interface VoiceInputButtonProps {
  * @param props - transcription callback, transcript callback, and localized copy.
  * @returns an icon command disabled while recording startup or transcription is pending.
  */
-export function VoiceInputButton({ transcribe, onTranscript, t }: VoiceInputButtonProps) {
+export function VoiceInputButton({ transcribe, onTranscript, keyboardInput, t }: VoiceInputButtonProps) {
   const [error, setError] = useState('')
   const [toast, setToast] = useState<{ readonly sequence: number; readonly text: string } | null>(null)
   const toastSequence = useRef(0)
@@ -67,6 +74,7 @@ export function VoiceInputButton({ transcribe, onTranscript, t }: VoiceInputButt
     onTranscript,
     onError: announceError,
   })
+  useVoiceSpaceHold({ ...voice, start: () => { setError(''); return voice.start() } }, keyboardInput)
   const errorLabel = error === '' ? t('voice.start') : voiceErrorLabel(error, t)
   const label = !voice.supported
     ? t('voice.unsupported')
@@ -85,7 +93,7 @@ export function VoiceInputButton({ transcribe, onTranscript, t }: VoiceInputButt
         className={css.voiceButton}
         aria-label={label}
         aria-pressed={voice.listening}
-        title={label}
+        title={keyboardInput === undefined ? label : `${label} · ${t('voice.holdSpace')}`}
         disabled={!voice.supported || voice.starting || voice.transcribing}
         onClick={() => { setError(''); voice.toggle() }}
       >

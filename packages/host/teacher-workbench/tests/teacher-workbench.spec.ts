@@ -116,7 +116,7 @@ async function harness(
   return { ctx, fiber, pool, service: ctx.teacherWorkbench }
 }
 
-function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbenchService>[1] {
+function testConfig(root: string): NonNullable<ConstructorParameters<typeof TeacherWorkbenchService>[1]> {
   return {
     geocodingEndpoint: 'https://nominatim.openstreetmap.org/search',
     geocodingCacheEntries: 16,
@@ -127,7 +127,12 @@ function testConfig(root: string): ConstructorParameters<typeof TeacherWorkbench
     maxSourceDocumentBytes: 8 * 1024 * 1024,
     maxQuestionImageBytes: 1024 * 1024,
     maxQuestionBatchBytes: 4 * 1024 * 1024,
+    maxExampleCorrectionCharacters: 50_000,
+    maxExampleCorrectionPages: 20,
+    exampleCorrectionPdfScale: 2,
+    exampleCorrectionTimeoutMs: 120_000,
     maxTimetableSourceCharacters: 120_000,
+    timetableSourcePageBytes: 12_000,
     maxTimetableEntries: 1_000,
     timetableAgentTimeoutMs: 120_000,
     timetableVisionAgentTimeoutMs: 45_000,
@@ -574,7 +579,12 @@ describe('TeacherWorkbenchService', () => {
       maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxExampleCorrectionCharacters: 50_000,
+      maxExampleCorrectionPages: 20,
+      exampleCorrectionPdfScale: 2,
+      exampleCorrectionTimeoutMs: 120_000,
       maxTimetableSourceCharacters: 120_000,
+      timetableSourcePageBytes: 12_000,
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,
@@ -627,7 +637,12 @@ describe('TeacherWorkbenchService', () => {
       maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 8 * 1024 * 1024,
       maxQuestionBatchBytes: 16 * 1024 * 1024,
+      maxExampleCorrectionCharacters: 50_000,
+      maxExampleCorrectionPages: 20,
+      exampleCorrectionPdfScale: 2,
+      exampleCorrectionTimeoutMs: 120_000,
       maxTimetableSourceCharacters: 120_000,
+      timetableSourcePageBytes: 12_000,
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,
@@ -950,7 +965,12 @@ describe('TeacherWorkbenchService', () => {
       maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxExampleCorrectionCharacters: 50_000,
+      maxExampleCorrectionPages: 20,
+      exampleCorrectionPdfScale: 2,
+      exampleCorrectionTimeoutMs: 120_000,
       maxTimetableSourceCharacters: 120_000,
+      timetableSourcePageBytes: 12_000,
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,
@@ -1447,7 +1467,12 @@ describe('TeacherWorkbenchService', () => {
       maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxExampleCorrectionCharacters: 50_000,
+      maxExampleCorrectionPages: 20,
+      exampleCorrectionPdfScale: 2,
+      exampleCorrectionTimeoutMs: 120_000,
       maxTimetableSourceCharacters: 120_000,
+      timetableSourcePageBytes: 12_000,
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,
@@ -1863,6 +1888,168 @@ describe('TeacherWorkbenchService', () => {
     })
   })
 
+  it.each([
+    '期中 数学',
+    '期中  数学',
+    ' 期中数学',
+    // Windows removes trailing ASCII spaces from directory names at creation.
+    ...(process.platform === 'win32' ? [] : ['期中数学 ']),
+    '期中\u3000数学',
+    '期中\u00a0数学',
+    '期中（数学）',
+    `试题-${'a'.repeat(90)}`,
+  ])('preserves the physical library directory through saves and reloads: %s', async (name) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-directory-name-'))
+    temporaryRoots.push(root)
+    const pool = new MemoryMediaPool()
+    const b = await harness(pool, testConfig(root), true)
+    contexts.push(b.ctx)
+    const segmentsRoot = join(root, 'new image root')
+    const parentName = '资料\u3000汇总'
+    const selectedDirectory = join(segmentsRoot, parentName, name)
+    await mkdir(selectedDirectory, { recursive: true })
+    const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#336699' } }).png().toBuffer()
+    await writeFile(join(selectedDirectory, '第1题.png'), bytes)
+    await b.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot })
+    const browsed = await b.service.browseQuestionMedia({})
+    if (!browsed.ok) throw new Error(browsed.error.message)
+    const folder = browsed.value.questionLibraryFolders.find(item => item.name === name)!
+    const request = {
+      destination: { kind: 'library-folder' as const, folderId: folder.id },
+      name: '继续切题',
+      sourceName: '继续切题.pdf',
+      pageRange: '1',
+      images: [{ questionNo: 2, fileName: '第2题.png', mediaType: 'image/png' as const, width: 12, height: 8, contentBase64: bytes.toString('base64') }],
+    }
+    const saved = await b.service.saveQuestionBatch(request)
+    if (!saved.ok) throw new Error(saved.error.message)
+    const batch = saved.value.document.state.questionBatches.at(-1)!
+    expect(await readdir(segmentsRoot)).toEqual([parentName])
+    expect(await readdir(join(segmentsRoot, parentName))).toEqual([name])
+    expect((await readdir(selectedDirectory)).sort()).toEqual(['第1题.png', '第2题.png'])
+
+    const reopened = await harness(pool, { ...testConfig(root), segmentsRoot }, true)
+    contexts.push(reopened.ctx)
+    await expect(reopened.service.readQuestionImage({ target: { kind: 'batch', id: batch.images[0]!.id } }))
+      .resolves.toMatchObject({ ok: true, value: { contentBase64: bytes.toString('base64') } })
+    const appended = await reopened.service.saveQuestionBatch({
+      ...request,
+      appendToBatchId: batch.id,
+      images: [{ ...request.images[0]!, questionNo: 3, fileName: '第3题.png' }],
+    })
+    if (!appended.ok) throw new Error(appended.error.message)
+    const afterSave = await reopened.service.browseQuestionMedia({})
+    if (!afterSave.ok) throw new Error(afterSave.error.message)
+    expect(afterSave.value.questionLibraryFolders.map(item => item.name)).toEqual([parentName, name])
+    expect(new Set(afterSave.value.questionLibraryFolders.map(item => item.id)).size).toBe(2)
+    expect(afterSave.value.questionBatches.flatMap(item => item.images)).toHaveLength(3)
+
+    const document = appended.value.document
+    const childId = 'preserved-directory-child' as TeacherQuestionLibraryFolderId
+    expect(await reopened.service.write({
+      expectedRevision: document.revision,
+      state: { ...document.state, questionLibraryFolders: [
+        ...document.state.questionLibraryFolders,
+        { id: childId, parentId: folder.id, name: '新练习', createdAt: 1, updatedAt: 1 },
+      ] },
+    })).toMatchObject({ ok: true })
+    expect((await readdir(selectedDirectory)).sort()).toEqual(['新练习', '第1题.png', '第2题.png', '第3题.png'])
+    expect(await readdir(join(segmentsRoot, parentName))).toEqual([name])
+
+    const renamed = await reopened.service.renameQuestionMediaDirectory({
+      target: { kind: 'library-folder', id: folder.id }, name: '订正（完成）',
+    })
+    if (!renamed.ok) throw new Error(renamed.error.message)
+    const renamedDirectory = join(segmentsRoot, parentName, '订正(完成)')
+    expect(await readdir(join(segmentsRoot, parentName))).toEqual(['订正(完成)'])
+    expect((await readdir(renamedDirectory)).sort()).toEqual(['新练习', '第1题.png', '第2题.png', '第3题.png'])
+    const renamedMedia = await reopened.service.browseQuestionMedia({})
+    if (!renamedMedia.ok) throw new Error(renamedMedia.error.message)
+    expect(renamedMedia.value.questionLibraryFolders.filter(item => item.id === folder.id)).toHaveLength(1)
+    expect(await reopened.service.deleteQuestionMediaDirectory({ target: { kind: 'library-folder', id: folder.id } }))
+      .toMatchObject({ ok: true })
+    expect(await readdir(join(segmentsRoot, parentName))).toEqual([])
+  })
+
+  it('keeps distinct existing spellings separate when both directories receive new images', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-distinct-directories-'))
+    temporaryRoots.push(root)
+    const b = await harness(new MemoryMediaPool(), testConfig(root))
+    contexts.push(b.ctx)
+    const names = ['期中（数学）', '期中(数学)', '期中\u3000数学', '期中 数学']
+    const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#336699' } }).png().toBuffer()
+    for (const name of names) await mkdir(join(root, 'segments', name), { recursive: true })
+    for (const name of names) {
+      const browsed = await b.service.browseQuestionMedia({})
+      if (!browsed.ok) throw new Error(browsed.error.message)
+      const folder = browsed.value.questionLibraryFolders.find(item => item.name === name)!
+      expect(await b.service.saveQuestionBatch({
+        destination: { kind: 'library-folder', folderId: folder.id },
+        name: '期中试卷', sourceName: '期中.pdf', pageRange: '1',
+        images: [{ questionNo: 1, fileName: '第1题.png', mediaType: 'image/png', width: 12, height: 8, contentBase64: bytes.toString('base64') }],
+      })).toMatchObject({ ok: true })
+    }
+    expect((await readdir(join(root, 'segments'))).sort()).toEqual(names.toSorted())
+    for (const name of names) expect(await readdir(join(root, 'segments', name))).toEqual(['第1题.png'])
+    const browsed = await b.service.browseQuestionMedia({})
+    if (!browsed.ok) throw new Error(browsed.error.message)
+    expect(browsed.value.questionLibraryFolders.map(item => item.name).sort()).toEqual(names.toSorted())
+    expect(new Set(browsed.value.questionLibraryFolders.map(item => item.id)).size).toBe(names.length)
+  })
+
+  it('keeps an existing normalized sibling and its original directory independently writable', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-directory-alias-'))
+    temporaryRoots.push(root)
+    const b = await harness(new MemoryMediaPool(), testConfig(root))
+    contexts.push(b.ctx)
+    const originalName = '期中（数学）'
+    const normalizedName = '期中(数学)'
+    const original = join(root, 'segments', originalName)
+    const normalized = join(root, 'segments', normalizedName)
+    const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#336699' } }).png().toBuffer()
+    await mkdir(original, { recursive: true })
+    await writeFile(join(original, '第1题.png'), bytes)
+    const firstScan = await b.service.browseQuestionMedia({})
+    if (!firstScan.ok) throw new Error(firstScan.error.message)
+    const identity = firstScan.value.questionLibraryFolders[0]!.id
+    // A normalized sibling can already own the identity first assigned to the original spelling.
+    expect(await b.service.write({ expectedRevision: 0, state: {
+      ...INITIAL_TEACHER_WORKBENCH_STATE,
+      questionLibraryFolders: [{ id: identity, name: originalName, createdAt: 1, updatedAt: 1 }],
+    } })).toMatchObject({ ok: true })
+    await writeFile(join(normalized, '第2题.png'), bytes)
+    const scanned = await b.service.browseQuestionMedia({})
+    if (!scanned.ok) throw new Error(scanned.error.message)
+    expect(scanned.value.questionLibraryFolders.map(folder => folder.name).sort()).toEqual([normalizedName, originalName])
+    expect(new Set(scanned.value.questionLibraryFolders.map(folder => folder.id)).size).toBe(2)
+    const destination = scanned.value.questionLibraryFolders.find(folder => folder.name === originalName)!
+    expect(destination.id).not.toBe(identity)
+    const rescanned = await b.service.browseQuestionMedia({})
+    if (!rescanned.ok) throw new Error(rescanned.error.message)
+    expect(rescanned.value.questionLibraryFolders.find(folder => folder.name === originalName)?.id).toBe(destination.id)
+    expect(await b.service.saveQuestionBatch({
+      destination: { kind: 'library-folder', folderId: destination.id },
+      name: '继续切题', sourceName: '继续切题.pdf', pageRange: '1',
+      images: [{ questionNo: 3, fileName: '第3题.png', mediaType: 'image/png', width: 12, height: 8, contentBase64: bytes.toString('base64') }],
+    })).toMatchObject({ ok: true })
+    expect((await readdir(original)).sort()).toEqual(['第1题.png', '第3题.png'])
+    expect(await readdir(normalized)).toEqual(['第2题.png'])
+    expect(await readFile(join(normalized, '第2题.png'))).toEqual(bytes)
+  })
+
+  it.each(['', '.', '..', '../outside', 'a/b', 'a\\b', '.hidden', 'a\u0000b'])('rejects unsafe physical library names before creating directories: %j', async (physicalName) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-unsafe-directory-'))
+    temporaryRoots.push(root)
+    const b = await harness(new MemoryMediaPool(), testConfig(root))
+    contexts.push(b.ctx)
+    expect(await b.service.write({ expectedRevision: 0, state: {
+      ...INITIAL_TEACHER_WORKBENCH_STATE,
+      questionLibraryFolders: [{ id: 'invalid-physical-name' as TeacherQuestionLibraryFolderId, name: '练习', physicalName, createdAt: 1, updatedAt: 1 }],
+    } })).toMatchObject({ ok: false, error: { code: 'invalid-state' } })
+    expect(await b.service.read({})).toMatchObject({ ok: true, value: { revision: 0, state: { questionLibraryFolders: [] } } })
+    await expect(stat(join(root, 'segments'))).rejects.toMatchObject({ code: 'ENOENT' })
+  })
+
   it('browses images from the newly configured batch and student roots', async () => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-question-root-change-'))
     temporaryRoots.push(root)
@@ -1880,7 +2067,12 @@ describe('TeacherWorkbenchService', () => {
       maxSourceDocumentBytes: 8 * 1024 * 1024,
       maxQuestionImageBytes: 1024 * 1024,
       maxQuestionBatchBytes: 4 * 1024 * 1024,
+      maxExampleCorrectionCharacters: 50_000,
+      maxExampleCorrectionPages: 20,
+      exampleCorrectionPdfScale: 2,
+      exampleCorrectionTimeoutMs: 120_000,
       maxTimetableSourceCharacters: 120_000,
+      timetableSourcePageBytes: 12_000,
       maxTimetableEntries: 1_000,
       timetableAgentTimeoutMs: 120_000,
       timetableVisionAgentTimeoutMs: 45_000,

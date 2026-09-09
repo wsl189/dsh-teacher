@@ -153,4 +153,16 @@ describe('desktop payload gate', () => {
       ])
     }
   })
+
+  it('requires the replaceable equation module with its corresponding source and license packet', async () => {
+    const requiredFiles = REQUIRED_WINDOWS_RUNTIME_FILES.filter(path => path.includes('/mathml2omml/'))
+    expect(requiredFiles).toHaveLength(17)
+    expect((await inspectDesktopPayload(createPayload(requiredFiles), { requiredFiles })).failures).toEqual([])
+    for (const missing of requiredFiles) {
+      const root = createPayload(requiredFiles.filter(path => path !== missing))
+      expect((await inspectDesktopPayload(root, { requiredFiles })).failures).toEqual([
+        `${missing}: required product runtime file is absent from payload`,
+      ])
+    }
+  })
 })

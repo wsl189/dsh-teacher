@@ -10,6 +10,7 @@ import type { ReactNode } from 'react'
 import {
   IconChevronDownOutline14, IconChevronRightOutline14, IconPlusOutline16, IconTrashOutline16,
 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { CapacitySelect } from './CapacitySelect.tsx'
 import type { en } from './locales.ts'
 import styles from './ModelsSection.module.css'
 
@@ -19,54 +20,8 @@ export type DeepSeekModelDraft = Record<string, unknown>
 /** The catalog fields this editor writes. */
 type CatalogField = 'id' | 'name' | 'contextWindow' | 'maxTokens'
 
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
+/** The two token budgets behind a row's disclosure. */
 type CapacityField = 'contextWindow' | 'maxTokens'
-
-/** Row index encoded in an editing-buffer key. */
-function rowOf(key: string): number {
-  return Number(key.slice(0, key.indexOf(':')))
-}
-
-/** Accepted capacity spellings: a decimal count with an optional K/M suffix. */
-const CAPACITY_PATTERN = /^(\d+(?:\.\d+)?)([km])?$/i
-
-/** Decimal suffix scales — `1M` is 1000K, matching how model capacities are quoted. */
-const CAPACITY_SCALE = { k: 1_000, m: 1_000_000 } as const
-
-/**
- * Read a typed capacity, so a user can write `256K` or `1M` instead of counting
- * zeroes. The stored value stays a plain token count.
- * @param text - raw field text.
- * @returns the count; `undefined` when blank (inherit), `NaN` when unreadable
- * (rejected by {@link validateDeepSeekModels} before any write).
- */
-export function parseCapacity(text: string): number | undefined {
-  const trimmed = text.trim()
-  if (trimmed.length === 0) return undefined
-  const match = CAPACITY_PATTERN.exec(trimmed)
-  if (match === null) return Number.NaN
-  const suffix = match[2]?.toLowerCase()
-  const scale = suffix === 'k' || suffix === 'm' ? CAPACITY_SCALE[suffix] : 1
-  const scaled = Number(match[1]) * scale
-  // A decimal multiple is exact in intent but not in binary floating point
-  // (2.3 * 1e6 lands a few ULPs high), so an integral intent snaps back.
-  const rounded = Math.round(scaled)
-  return Math.abs(scaled - rounded) < 1e-6 ? rounded : scaled
-}
-
-/**
- * Spell a stored count back in the shortest form that survives a round trip
- * through {@link parseCapacity}; a count that is not a whole number of
- * thousands stays written out.
- * @param value - stored capacity.
- * @returns the field text.
- */
-export function formatCapacity(value: number): string {
-  if (!Number.isInteger(value) || value <= 0) return String(value)
-  if (value % CAPACITY_SCALE.m === 0) return `${String(value / CAPACITY_SCALE.m)}M`
-  if (value % CAPACITY_SCALE.k === 0) return `${String(value / CAPACITY_SCALE.k)}K`
-  return String(value)
-}
 
 /** A localized validation failure for one user-owned model array. */
 export interface DeepSeekModelsValidationFailure {
@@ -149,18 +104,6 @@ export interface DeepSeekModelsEditorProps {
  * @returns the catalog editor.
  */
 export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNode {
-  // Capacities are edited as text, so a field's keystrokes are held here
-  // rather than re-derived from the parsed count on every change, which would
-  // rewrite `1000` to `1K` mid-word. Unreadable text is kept past blur so the
-  // save-time rejection names a row the user can still see — which is why
-  // this is one entry PER FIELD: a single active buffer would be displaced by
-  // editing any other field, and the abandoned one would fall back to
-  // rendering its stored NaN as the literal `NaN`.
-  //
-  // Keys carry the row index, so the two operations that move indexes maintain
-  // them: `remove` re-keys around the dropped row, and reset clears them all
-  // because the rows they annotated are gone.
-  const [editing, setEditing] = useState<ReadonlyMap<string, string>>(() => new Map())
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(() => new Set())
 
   const update = (index: number, key: CatalogField, value: unknown): void => {
@@ -175,16 +118,6 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   const remove = (index: number): void => {
-    setEditing((current) => {
-      const next = new Map<string, string>()
-      for (const [key, text] of current) {
-        const at = rowOf(key)
-        if (at === index) continue
-        // Only the row number moves; the field half of the key is untouched.
-        next.set(at > index ? key.replace(/^\d+/, String(at - 1)) : key, text)
-      }
-      return next
-    })
     setExpanded((current) => {
       const next = new Set<number>()
       for (const at of current) {
@@ -197,7 +130,6 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   }
 
   const reset = (): void => {
-    setEditing(new Map())
     setExpanded(new Set())
     props.onReset()
   }
@@ -206,29 +138,6 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
     setExpanded((current) => {
       const next = new Set(current)
       if (!next.delete(index)) next.add(index)
-      return next
-    })
-  }
-
-  /** The field's text: its live keystrokes, else the stored count spelled short. */
-  const capacityText = (model: DeepSeekModelDraft, index: number, field: CapacityField): string => {
-    const typed = editing.get(`${String(index)}:${field}`)
-    if (typed !== undefined) return typed
-    const value = model[field]
-    return typeof value === 'number' ? formatCapacity(value) : ''
-  }
-
-  const settleCapacity = (index: number, field: CapacityField): void => {
-    const key = `${String(index)}:${field}`
-    const typed = editing.get(key)
-    if (typed === undefined) return
-    // Unreadable text stays on screen: the save-time rejection names a row the
-    // user can still see and correct.
-    const parsed = parseCapacity(typed)
-    if (parsed !== undefined && Number.isNaN(parsed)) return
-    setEditing((current) => {
-      const next = new Map(current)
-      next.delete(key)
       return next
     })
   }
@@ -242,22 +151,14 @@ export function DeepSeekModelsEditor(props: DeepSeekModelsEditorProps): ReactNod
   ): ReactNode => (
     <label className={styles['modelField']}>
       <span className={styles['modelFieldLabel']}>{props.t(field === 'contextWindow' ? 'contextWindow' : 'maxTokens')}</span>
-      <input
-        className={styles['input']}
-        type="text"
-        inputMode="numeric"
-        value={capacityText(model, index, field)}
-        placeholder={fallback === undefined
-          ? props.t(field === 'contextWindow' ? 'contextWindowPlaceholder' : 'maxTokensPlaceholder')
-          : formatCapacity(fallback)}
-        aria-label={`${props.t(field === 'contextWindow' ? 'contextWindow' : 'maxTokens')} ${String(index + 1)}`}
+      <CapacitySelect
+        field={field}
+        value={typeof model[field] === 'number' ? model[field] : undefined}
+        defaultValue={fallback}
+        label={`${props.t(field === 'contextWindow' ? 'contextWindow' : 'maxTokens')} ${String(index + 1)}`}
         disabled={props.disabled}
-        onChange={(event) => {
-          const text = event.target.value
-          setEditing(current => new Map(current).set(`${String(index)}:${field}`, text))
-          update(index, field, parseCapacity(text))
-        }}
-        onBlur={() => { settleCapacity(index, field) }}
+        t={props.t}
+        onChange={(value) => { update(index, field, value) }}
       />
     </label>
   )

@@ -18,7 +18,7 @@ import { useState } from 'react'
 import type { ReactNode } from 'react'
 import type { LlmDiscoveredModel } from '@deepseek-ai/dsh-api-remotes/client'
 import { Button, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
-import { formatCapacity, parseCapacity } from './DeepSeekModelsEditor.tsx'
+import { CapacitySelect } from './CapacitySelect.tsx'
 import type { DeepSeekModelDraft } from './DeepSeekModelsEditor.tsx'
 import { messageOf, type ModelsWire } from './store.ts'
 import type { en } from './locales.ts'
@@ -121,36 +121,6 @@ function IconTrash(): ReactNode {
   )
 }
 
-/** The two token counts edited as K/M-suffixed text behind a row's disclosure. */
-type CapacityField = 'contextWindow' | 'maxTokens'
-
-/**
- * What an empty capacity field is worth, shown as its placeholder so a row left
- * blank does not read as a model with no capacity at all.
- *
- * The magnitudes are the adapter's own route-level fallbacks (`llm-pi-ai`'s
- * `defaultContextWindow` and `defaultMaxTokens`), spelled the way a person
- * would say them. They are a hint, not a mirror: this page counts `K` as 1000,
- * so typing `256K` stores 256000 while leaving the field blank keeps the
- * adapter's 262144. A deployment that overrides those defaults is not
- * reflected here — nothing on this page can read them.
- */
-const CAPACITY_HINT: Readonly<Record<CapacityField, string>> = {
-  contextWindow: '256K',
-  maxTokens: '32K',
-}
-
-/**
- * Spell a stored count for a field that may be unset. The spelling itself is
- * {@link formatCapacity}, shared with the DeepSeek catalog editor so both
- * surfaces read and write one K/M vocabulary.
- * @param value - stored capacity, or `undefined` for an unset field.
- * @returns the field text, empty when unset.
- */
-function capacitySpelling(value: number | undefined): string {
-  return value === undefined ? '' : formatCapacity(value)
-}
-
 /** Adopt a candidate, keeping whatever capacities the provider disclosed. */
 function adopt(candidate: LlmDiscoveredModel): ModelDraft {
   return {
@@ -175,41 +145,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
   // Rows carry an id and a name; capacities are the exception, so they stay
   // folded until asked for rather than crowding every row with four inputs.
   const [expanded, setExpanded] = useState<ReadonlySet<number>>(new Set())
-  // Capacities are edited as text, so a field's keystrokes are held here rather
-  // than re-derived from the parsed count on every change — that would rewrite
-  // `1000` to `1K` mid-word. Unreadable text is kept past blur so the refusal
-  // names a row the user can still see, which is why this is one entry PER
-  // FIELD: a single buffer would be displaced by editing any other field, and
-  // the abandoned one would render its stored NaN as the literal `NaN`.
-  const [editing, setEditing] = useState<ReadonlyMap<string, string>>(new Map())
-
-  /** Buffer key for one capacity field; the row half moves when rows do. */
-  const bufferKey = (index: number, field: CapacityField): string => `${String(index)}:${field}`
-
-  const editCapacity = (index: number, field: CapacityField, text: string): void => {
-    setEditing(current => new Map(current).set(bufferKey(index, field), text))
-    patch(index, { [field]: parseCapacity(text) })
-  }
-
-  /** What a capacity field shows: the buffer while typing, else the stored count. */
-  const capacityText = (model: ModelDraft, index: number, field: CapacityField): string =>
-    editing.get(bufferKey(index, field)) ?? capacitySpelling(numberOf(model, field))
-
-  /** Drop one row's entries and shift the rows after it down, in one pass. */
-  const reindexOnRemove = (
-    current: ReadonlyMap<string, string>,
-    index: number,
-  ): Map<string, string> => {
-    const next = new Map<string, string>()
-    for (const [key, value] of current) {
-      const at = Number(key.slice(0, key.indexOf(':')))
-      if (at === index) continue
-      // Only the row number moves; the field half of the key is untouched.
-      next.set(at > index ? key.replace(/^\d+/, String(at - 1)) : key, value)
-    }
-    return next
-  }
-
   const toggleExpanded = (index: number): void => {
     setExpanded((current) => {
       const next = new Set(current)
@@ -390,10 +325,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               disabled={disabled}
               onClick={() => {
                 onChange(models.filter((_model, at) => at !== index))
-                // Both stores are keyed by position, so every row after this
-                // one shifts down and would otherwise inherit its neighbour's
-                // state — a different row's capacities popping open, or its
-                // half-typed text appearing in another row's field.
                 setExpanded((current) => {
                   const next = new Set<number>()
                   for (const at of current) {
@@ -402,7 +333,6 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
                   }
                   return next
                 })
-                setEditing(current => reindexOnRemove(current, index))
               }}
             >
               <IconTrash />
@@ -413,28 +343,24 @@ export function ModelListEditor(props: ModelListEditorProps): ReactNode {
               <div className={styles['modelAdvanced']}>
                 <label className={styles['modelField']}>
                   <span className={styles['modelFieldLabel']}>{t('modelContextWindow')}</span>
-                  <input
-                    className={styles['input']}
-                    type="text"
-                    inputMode="numeric"
-                    value={capacityText(model, index, 'contextWindow')}
-                    placeholder={CAPACITY_HINT.contextWindow}
-                    aria-label={`${t('modelContextWindow')} ${index + 1}`}
+                  <CapacitySelect
+                    field="contextWindow"
+                    value={numberOf(model, 'contextWindow')}
+                    label={`${t('modelContextWindow')} ${index + 1}`}
                     disabled={disabled}
-                    onChange={(event) => { editCapacity(index, 'contextWindow', event.target.value) }}
+                    t={t}
+                    onChange={(value) => { patch(index, { contextWindow: value }) }}
                   />
                 </label>
                 <label className={styles['modelField']}>
                   <span className={styles['modelFieldLabel']}>{t('modelMaxTokens')}</span>
-                  <input
-                    className={styles['input']}
-                    type="text"
-                    inputMode="numeric"
-                    value={capacityText(model, index, 'maxTokens')}
-                    placeholder={CAPACITY_HINT.maxTokens}
-                    aria-label={`${t('modelMaxTokens')} ${index + 1}`}
+                  <CapacitySelect
+                    field="maxTokens"
+                    value={numberOf(model, 'maxTokens')}
+                    label={`${t('modelMaxTokens')} ${index + 1}`}
                     disabled={disabled}
-                    onChange={(event) => { editCapacity(index, 'maxTokens', event.target.value) }}
+                    t={t}
+                    onChange={(value) => { patch(index, { maxTokens: value }) }}
                   />
                 </label>
                 <label className={styles['modelField']}>

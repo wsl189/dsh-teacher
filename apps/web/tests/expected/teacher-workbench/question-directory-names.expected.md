@@ -1,0 +1,9 @@
+- complementary "试题图片库":
+  - heading "试题图片库" [level=2]
+  - button "新建文件夹"
+  - button "关闭工作台"
+  - button "收起目录“期中 数学（卷）”" [expanded]
+  - button "期中 数学（卷）": 期中 数学（卷… 2
+  - button "删除目录“期中 数学（卷）”"
+  - button "新练习": 新练习 0
+  - button "删除目录“新练习”"

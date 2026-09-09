@@ -1,0 +1,4 @@
+- strong: 年级总课表.png
+- text: 识别到 600 节，请确认班级、星期和节次后导入
+- checkbox "全选" [checked]
+- text: 全选

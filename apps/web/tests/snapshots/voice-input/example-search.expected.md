@@ -1,0 +1,6 @@
+- search:
+  - textbox "搜索题目":
+    - /placeholder: 按标签或描述关键词搜索…
+    - text: 空间向量
+  - button "开始语音输入"
+  - button "搜索"

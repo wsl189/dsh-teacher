@@ -61,8 +61,20 @@ export type ModelsLlm = Pick<
   'discoverModels' | 'listConfigurableProviders' | 'listProviders'
 >
 
-/** Session Remote method used to load the configured model catalog. */
-export type ModelsSession = Pick<ClientRemote['session'], 'modelCatalog'>
+/** Session Remote methods for the configured model catalog and automatic verification. */
+export type ModelsSession = Pick<ClientRemote['session'], 'modelCatalog' | 'checkModel'>
+
+/** One connection check using a representative language model during this page lifetime. */
+export interface ConnectionCheck {
+  /** Model used to exercise the saved connection; other models are not tested. */
+  model: string
+  /** Saved request fields and credential revision tested by this result. */
+  signature: string
+  /** Unique attempt identity; late replies cannot replace a newer attempt. */
+  attempt: number
+  status: 'checking' | 'passed' | 'failed'
+  error?: string
+}
 
 /** One provider row after joining the configurable directory with live routes. */
 export interface ProviderDirectoryEntry {
@@ -144,6 +156,8 @@ export interface ProviderRow {
 
 /** Page snapshot. */
 export interface ModelsSettingsState {
+  /** One automatic verification result per independent provider connection. */
+  checks: Readonly<Record<string, ConnectionCheck>>
   status: 'idle' | 'loading' | 'ready' | 'error'
   /** Whole-load failure text; row-level write failures stay in the editor. */
   error: string | null
@@ -278,12 +292,17 @@ function apiKeyEnvOf(
 export class ModelsSettingsStore {
   /** The snapshot the section renders from (uSES-safe store). */
   readonly store: SnapshotStore<ModelsSettingsState> = createSnapshotStore<ModelsSettingsState>({
+    checks: {},
     status: 'idle', error: null, credentialError: null, modelCatalogError: null,
     writable: false, rows: [], namespaces: new Map(), modelGroups: [], modelFailures: [], serviceProviders: [],
   })
 
   /** Latest load wins; an older response never overwrites a newer one. */
   private generation = 0
+  private attempt = 0
+  private disposed = false
+  private readonly credentialRevisions = new Map<string, number>()
+  private readonly checking = new Map<string, AbortController>()
 
   /**
    * @param api - the page's credentials Remote and LLM wire faces.
@@ -294,6 +313,91 @@ export class ModelsSettingsStore {
     private readonly schema: SettingsSchemaOperations,
     private readonly describeFace: SettingsDescribeFace,
   ) {}
+
+  /**
+   * Invalidate only connections using a changed credential, including a same-state key replacement.
+   * @param ref - credential reference from the committed Host notification.
+   */
+  invalidateCredential(ref: string): void {
+    this.credentialRevisions.set(ref, (this.credentialRevisions.get(ref) ?? 0) + 1)
+    this.reconcileChecks()
+  }
+
+  /** Cancel outstanding requests when the owning UI plugin unloads. */
+  dispose(): void {
+    this.disposed = true
+    for (const controller of this.checking.values()) controller.abort()
+    this.checking.clear()
+  }
+
+  /**
+   * Verify one saved connection with a single language-model request.
+   * @param provider - saved route id.
+   * @param retry - whether to repeat a failed check whose connection is unchanged.
+   * @returns after the request settles; failure remains visible beside the saved connection.
+   */
+  async verifyConnection(provider: string, retry = false): Promise<void> {
+    const target = this.checkTarget(provider)
+    if (target === undefined) return
+    const { model, signature } = target
+    const previous = this.store.getSnapshot().checks[provider]
+    if (previous?.signature === signature && !(retry && previous.status === 'failed')) return
+    const attempt = ++this.attempt
+    this.checking.get(provider)?.abort()
+    const controller = new AbortController()
+    this.checking.set(provider, controller)
+    const check: ConnectionCheck = { model, signature, attempt, status: 'checking' }
+    this.store.update((s) => { s.checks = { ...s.checks, [provider]: check } })
+    let outcome: ConnectionCheck
+    try {
+      const result = await this.api.session.checkModel({ provider, model }, controller.signal)
+      outcome = result.ok
+        ? { ...check, status: 'passed' }
+        : { ...check, status: 'failed', error: result.error.message }
+    } catch (error) {
+      outcome = { ...check, status: 'failed', error: messageOf(error) }
+    }
+    if (this.checking.get(provider) === controller) this.checking.delete(provider)
+    if (controller.signal.aborted || this.store.getSnapshot().checks[provider]?.attempt !== attempt
+      || this.checkTarget(provider)?.signature !== signature) return
+    this.store.update((s) => { s.checks = { ...s.checks, [provider]: outcome } })
+  }
+
+  private checkTarget(provider: string): { model: string; signature: string } | undefined {
+    if (this.disposed) return undefined
+    const state = this.store.getSnapshot()
+    const row = state.rows.find(candidate => candidate.entry.provider === provider)
+    if (row === undefined || !providerUsable(row)) return undefined
+    const catalog = state.modelGroups.find(group => group.id === provider)?.models ?? []
+    const previous = state.checks[provider]
+    const model = catalog.find(candidate => candidate.id === previous?.model) ?? catalog[0]
+    if (model === undefined) return undefined
+    const namespace = state.namespaces.get(row.entry.settingsNs)
+    const raw = this.schema.getPath(namespace?.value, row.entry.settingsPath)
+    const profile = typeof raw === 'object' && raw !== null && !Array.isArray(raw)
+      ? raw as Record<string, unknown> : {}
+    // Model budgets and catalog edits do not change connection authentication.
+    const connection = Object.fromEntries(Object.entries(profile)
+      .filter(([key]) => !['models', 'modelOverrides', 'displayName'].includes(key)))
+    return { model: model.id, signature: JSON.stringify({
+      connection,
+      model: model.id,
+      credential: this.credentialRevisions.get(row.apiKeyEnv ?? deriveKeyRef(provider)) ?? 0,
+    }) }
+  }
+
+  private reconcileChecks(): void {
+    const next: Record<string, ConnectionCheck> = {}
+    for (const [provider, check] of Object.entries(this.store.getSnapshot().checks)) {
+      if (this.checkTarget(provider)?.signature === check.signature) {
+        next[provider] = check
+      } else {
+        this.checking.get(provider)?.abort()
+        this.checking.delete(provider)
+      }
+    }
+    this.store.update((s) => { s.checks = next })
+  }
 
   /**
    * Refresh the whole page snapshot: the provider directory and the mirror's
@@ -410,6 +514,7 @@ export class ModelsSettingsStore {
           : { credential: credentials[provider.apiKeyEnv] },
       }))
     })
+    this.reconcileChecks()
   }
 }
 

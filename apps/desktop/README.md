@@ -22,6 +22,8 @@ The installer also contains a private, pinned Python runtime for the built-in Wi
 
 AnySearch is built in for web search and page extraction. Configure its optional key, endpoint, and per-search result cap under **Settings → Plugins → Plugin configuration → Web search**; without a key it uses anonymous access. [Web search configuration](../../packages/bundle/web-app/README.md#built-in-web-search) describes the accepted result range, remote-service limits, and outbound data. Its compiled plugin and MIT license are required by the desktop payload gate.
 
+Third-party notices are installed at `resources/THIRD_PARTY_NOTICES.md`. The [editable-equation library packet](../../packages/host/teacher-workbench/third-party/mathml2omml/NOTICE.txt), including the complete GPL/LGPL texts, corresponding source, and replacement instructions, is available at `resources/licenses/mathml2omml`. Its external Node module remains replaceable after installation.
+
 ## Build locally
 
 Run these commands from a native Windows PowerShell session:

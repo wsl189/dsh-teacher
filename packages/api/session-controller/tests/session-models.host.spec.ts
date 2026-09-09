@@ -377,6 +377,30 @@ describe('Web session model selection', () => {
     await ctx.fiber.dispose()
   })
 
+  it('projects exact input capabilities without inferring them from model names', async () => {
+    const { ctx } = await harness()
+    ctx.llm.registerAdapter(['modalities'], new class extends CatalogAdapter {
+      override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+        return Promise.resolve({
+          provider, id: model, name: model,
+          ...model === 'vision' ? { inputModalities: ['text', 'image'] as const }
+            : model === 'text-only' ? { inputModalities: ['text'] as const } : {},
+        })
+      }
+    }('Modalities', [
+      { provider: 'modalities', id: 'vision', name: 'Image reader' },
+      { provider: 'modalities', id: 'text-only', name: 'Text model' },
+      { provider: 'modalities', id: 'unknown', name: 'Vision in the name only' },
+    ]))
+    const catalog = await buildModelCatalog(ctx, { provider: 'modalities', model: 'vision' })
+    expect(catalog.groups.find(group => group.id === 'modalities')?.models).toEqual([
+      { id: 'vision', name: 'Image reader', inputModalities: ['text', 'image'] },
+      { id: 'text-only', name: 'Text model', inputModalities: ['text'] },
+      { id: 'unknown', name: 'Vision in the name only' },
+    ])
+    await ctx.fiber.dispose()
+  })
+
   it('preserves optional catalog metadata and string provider failures', async () => {
     const { ctx } = await harness()
     ctx.llm.registerAdapter(['plain'], new CatalogAdapter('Plain', [

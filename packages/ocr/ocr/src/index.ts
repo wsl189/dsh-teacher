@@ -27,6 +27,7 @@ export type {
   OcrExtractResult,
   OcrExtractSuccess,
   OcrExtractedDocument,
+  OcrExtractedImage,
   OcrFailure,
   OcrBoundingBox,
   OcrLayoutDocument,

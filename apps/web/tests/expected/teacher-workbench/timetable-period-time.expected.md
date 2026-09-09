@@ -1,0 +1,37 @@
+- row "高一1班 删除班级“高一1班” 第 1 节 {{clock}}–{{clock}} 添加课程：高一1班 · 第 1 节 · 周六 添加课程：高一1班 · 第 1 节 · 周日":
+  - columnheader "高一1班 删除班级“高一1班”":
+    - text: 高一1班
+    - button "删除班级“高一1班”":
+      - img
+  - rowheader "第 1 节 {{clock}}–{{clock}}":
+    - text: 第 1 节
+    - time: {{clock}}–{{clock}}
+  - cell:
+    - article:
+      - button "语文 陈静":
+        - strong: 语文
+        - text: 陈静
+  - cell:
+    - article:
+      - button "数学 陈静":
+        - strong: 数学
+        - text: 陈静
+  - cell:
+    - article:
+      - button "英语 陈静":
+        - strong: 英语
+        - text: 陈静
+  - cell:
+    - article:
+      - button "体育与健康 陈静":
+        - strong: 体育与健康
+        - text: 陈静
+  - cell:
+    - article:
+      - button "综合实践活动 陈静":
+        - strong: 综合实践活动
+        - text: 陈静
+  - cell "添加课程：高一1班 · 第 1 节 · 周六":
+    - button "添加课程：高一1班 · 第 1 节 · 周六"
+  - cell "添加课程：高一1班 · 第 1 节 · 周日":
+    - button "添加课程：高一1班 · 第 1 节 · 周日"

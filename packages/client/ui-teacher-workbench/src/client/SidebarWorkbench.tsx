@@ -51,6 +51,7 @@ const MODULES: readonly {
   { id: 'daily', label: 'module.daily', Icon: DailyIcon },
   { id: 'timetable', label: 'module.timetable', Icon: TimetableIcon },
   { id: 'questions', label: 'module.questions', Icon: QuestionsIcon },
+  { id: 'examples', label: 'module.examples', Icon: ClassSummaryIcon },
   { id: 'lesson', label: 'module.lesson', Icon: IconFolderOpenOutline16 },
   { id: 'students', label: 'module.students', Icon: IconUserOutline16 },
   { id: 'scores', label: 'module.scores', Icon: IconDataOutline16 },

@@ -1,16 +1,12 @@
 // Web e2e scenario: the Models settings page end to end through the real
-// wire. It keeps use-case selectors separate from provider access, configures
-// the MiniMax standard route from the domestic-supplier workspace, and stores
-// a typed key write-only under the derived `MINIMAX_CN_API_KEY` reference.
-// The scenario also covers provider-native authentication, request-route
-// edits, model discovery, a hand-declared provider, and both deletion states.
-// Configuration uses settings/credentials/llm-domain traffic only, so a stray
-// model stream fails loud because the adapter registry is empty.
+// wire. Provider replies for automatic checks are the only model substitute;
+// saved settings, credentials, diagnostic logs, and browser rendering stay real.
 import { readFile } from 'node:fs/promises'
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
+import { settingsNamespace } from '@deepseek-ai/dsh-settings'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -25,6 +21,7 @@ const CONFIGURED_EXPECTED = join(SNAPSHOT_DIR, 'configured.expected.md')
 const DECLARED_EXPECTED = join(SNAPSHOT_DIR, 'declared.expected.md')
 const DECLARED_EDIT_EXPECTED = join(SNAPSHOT_DIR, 'declared-edit.expected.md')
 const MODEL_PICKER_EXPECTED = join(SNAPSHOT_DIR, 'model-picker.expected.md')
+const TOOL_MODEL_EXPECTED = join(SNAPSHOT_DIR, 'tool-model.expected.md')
 const NATIVE_DELETE_EXPECTED = join(SNAPSHOT_DIR, 'native-delete.expected.md')
 const DELETE_EXPECTED = join(SNAPSHOT_DIR, 'delete.expected.md')
 const MODE = webSnapshotMode()
@@ -34,9 +31,24 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   let browser: Browser
   let page: Page
   let tripwire: ReturnType<typeof watchConsole>
+  const checkedModels: string[] = []
 
   beforeAll(async () => {
     scaffold = await launchWebScaffold({})
+    scaffold.ctx.on('llm/stream', async function* (options, next) {
+      const input = options.messages[0]
+      if (input?.source.kind !== 'plugin' || input.source.plugin !== 'dsh-api-session-controller') {
+        yield* next()
+        return
+      }
+      checkedModels.push(`${options.provider}/${options.model}`)
+      if (options.model === 'unavailable-model') {
+        yield { type: 'finish', reason: { kind: 'error', failure: { code: 'MODEL_NOT_FOUND', message: 'Unknown model: unavailable-model' } } }
+        return
+      }
+      yield { type: 'text-delta', index: 0, text: 'OK' }
+      yield { type: 'finish', reason: { kind: 'stop' } }
+    })
     browser = await chromium.launch()
     // The scenario asserts the shipped Chinese copy, so the browser asks for it.
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
@@ -55,11 +67,6 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: '插件', exact: true }).click()
-    await dialog.getByRole('tab', { name: '连接平台', exact: true }).click()
-    await dialog.getByRole('tab', { name: 'QQ', exact: true }).click()
-    await dialog.getByRole('region', { name: 'QQ 设置' }).waitFor({ timeout: 10_000 })
-    expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     await dialog.getByRole('button', { name: '模型' }).click()
     await dialog.getByText('先配置供应商接入，再为不同使用场景选择已接入的模型。').waitFor({ timeout: 10_000 })
     await dialog.getByRole('tab', { name: '使用场景', exact: true }).click()
@@ -83,23 +90,36 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(voiceBox!.y).toBe(imageBox!.y)
     expect(await imageAssignment.isDisabled()).toBe(true)
     expect(await speechAssignment.isDisabled()).toBe(true)
-    expect(await dialog.getByRole('button', { name: '添加提供方', exact: true }).count()).toBe(0)
+    expect(await toolModel.isDisabled()).toBe(true)
+    expect(await toolModel.locator('option').allTextContents()).toEqual(['请先在服务接入中添加视觉理解模型。'])
+    expect(await dialog.getByRole('button', { name: '添加服务', exact: true }).count()).toBe(0)
     expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
     expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     expect(await dialog.locator('summary:visible').filter({ hasText: '更多设置' }).count()).toBe(0)
 
     await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
-    await dialog.getByRole('button', { name: '添加提供方', exact: true }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('button', { name: '展开: 生图模型' }).count()).toBe(0)
     expect(await dialog.getByRole('button', { name: '展开设置: 语音模型' }).count()).toBe(0)
     expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
 
-    await dialog.getByRole('button', { name: /智谱 GLM 标准 API 与 GLM Coding Plan/u }).click()
-    await dialog.getByRole('button', { name: /配置 .*zhipu-cn/u }).click()
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    await dialog.getByRole('button', { name: '智谱 GLM · 标准 API', exact: true }).click()
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('zhipu-speech-e2e-key')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByRole('button', { name: /编辑 .*zhipu-cn/u }).waitFor({ timeout: 10_000 })
+    const connectionSelector = '[role="dialog"] li:has(button[aria-label="编辑 智谱 GLM · 标准 API (zhipu-cn)"])'
+    const connection = page.locator(connectionSelector)
+    await connection.getByText('连接已验证', { exact: true }).waitFor()
+    expect(checkedModels.filter(model => model.startsWith('zhipu-cn/'))).toHaveLength(1)
+    await connection.getByText('查看模型', { exact: true }).click()
+    const verified = await captureStableAria(page, connectionSelector, scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'verified-connection.expected.md'), verified, MODE)
+    if (MODE !== 'replay') {
+      await connection.screenshot({ path: fileURLToPath(new URL('../../../.artifacts/model-connection-verification.png', import.meta.url)) })
+    }
+    await connection.getByText('查看模型', { exact: true }).click()
 
     await dialog.getByRole('tab', { name: '使用场景', exact: true }).click()
     await expect.poll(async () => imageAssignment.locator('option').allTextContents(), { timeout: 10_000 })
@@ -129,18 +149,16 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('opens the MiniMax standard route from the supplier workspace', async () => {
+  it('adds the MiniMax standard route as an independent connection', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-empty'))
     await page.getByRole('button', { name: '设置', exact: true }).click()
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.waitFor({ timeout: 10_000 })
     await dialog.getByRole('button', { name: '模型' }).click()
     await dialog.getByText('先配置供应商接入，再为不同使用场景选择已接入的模型。').waitFor({ timeout: 10_000 })
-    await dialog.getByRole('button', { name: /MiniMax 标准 API 与 Token Plan/u }).click()
-    const access = dialog.getByLabel('接入方式')
-    await expect.poll(async () => access.locator('option').allTextContents(), { timeout: 10_000 })
-      .toEqual(['标准 API', 'MiniMax Token Plan'])
-    await dialog.getByRole('button', { name: /配置 .*minimax-cn/u }).click()
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    await dialog.getByRole('button', { name: 'MiniMax · 标准 API', exact: true }).click()
+    expect(await dialog.getByLabel('接入方式').count()).toBe(0)
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).waitFor({ timeout: 10_000 })
     const editor = dialog.locator('[data-scroll-region="provider-editor"]')
     const scroll = await editor.evaluate((node) => {
@@ -155,6 +173,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(scroll.overflowY).toBe('auto')
     expect(scroll.overscrollBehaviorY).toBe('contain')
     expect(scroll.scrollHeight).toBeGreaterThan(scroll.clientHeight)
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(EMPTY_EXPECTED, snapshot, MODE)
   }, 60_000)
@@ -171,6 +190,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await input.inputValue()).toBe('image')
     expect(await dialog.getByLabel('模型 ID 1').inputValue()).toBe('')
 
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(IMAGE_INPUT_DRAFT_EXPECTED, snapshot, MODE)
 
@@ -179,7 +199,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await dialog.getByLabel('输入类型 1').inputValue()).toBe('text')
 
     await dialog.getByRole('button', { name: '取消', exact: true }).click()
-    await dialog.getByRole('button', { name: /配置 .*minimax-cn/u }).click()
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    await dialog.getByRole('button', { name: 'MiniMax · 标准 API', exact: true }).click()
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).waitFor({ timeout: 10_000 })
   }, 60_000)
 
@@ -207,7 +228,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-native-auth'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
-    await dialog.getByRole('button', { name: '编辑 minimax-cn' }).waitFor({ timeout: 10_000 })
+    await dialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).waitFor({ timeout: 10_000 })
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('img', { name: 'API 密钥已配置' }).count()).toBe(0)
     expect(await dialog.getByRole('img', { name: 'API 密钥缺失' }).count()).toBe(0)
@@ -219,8 +240,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('describes reference-free deletion without claiming a credential exists', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-native-delete'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
-    await settingsDialog.getByRole('button', { name: '删除 minimax-cn', exact: true }).click()
-    const deleteDialog = page.getByRole('dialog', { name: '删除 minimax-cn？' })
+    await settingsDialog.getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
+    const deleteDialog = page.getByRole('dialog', { name: '删除 MiniMax · 标准 API (minimax-cn)？' })
     await deleteDialog.waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(
       page,
@@ -234,7 +255,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('stores the key under the derived reference and keeps the route live', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-add'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
+    await dialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).click()
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('sk-e2e-minimax')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     // The profile lands in settings.yaml with only the derived reference, the
@@ -244,7 +265,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
       async () => dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).count(),
       { timeout: 10_000 },
     ).toBe(0)
-    await dialog.getByRole('img', { name: 'API 密钥已配置' }).waitFor({ timeout: 10_000 })
+    await expect.poll(() => checkedModels.some(model => model.startsWith('minimax-cn/'))).toBe(true)
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('minimax-cn:')
@@ -261,7 +282,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('applies a customized-settings field as a merge patch', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-customized'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    await dialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
+    await dialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).click()
     const url = dialog.getByLabel('API 地址')
     await url.waitFor({ timeout: 10_000 })
     await url.fill('https://gateway.minimax.example/v1')
@@ -273,6 +294,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
     expect(document).toContain('baseURL: https://gateway.minimax.example/v1')
     expect(document).toContain('apiKeyEnv: MINIMAX_CN_API_KEY')
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(CONFIGURED_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
@@ -281,7 +303,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('selects and clears the discovered model catalog in one action', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-picker'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
-    await settingsDialog.getByRole('button', { name: '编辑 minimax-cn' }).click()
+    await settingsDialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).click()
     await settingsDialog.getByRole('button', { name: '获取可用模型' }).click()
 
     const picker = page.getByRole('dialog', { name: '选择要添加的模型' })
@@ -316,7 +338,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('declares a route the adapter does not ship', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-declare'))
     const dialog = page.getByRole('dialog', { name: '设置' })
-    const declare = dialog.getByRole('button', { name: '添加自定义提供方' })
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    const declare = dialog.getByRole('button', { name: '自定义连接' })
     await expect.poll(async () => declare.isEnabled(), { timeout: 10_000 }).toBe(true)
     await declare.click()
     await dialog.getByLabel('Provider ID').fill('acme-gateway')
@@ -345,12 +368,13 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     const rowCard = (name: string) => dialog.locator('li').filter({ hasText: name }).first()
     await expect.poll(async () => rowCard('Acme Gateway').getByText('自定义').count(), { timeout: 10_000 }).toBe(1)
 
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DECLARED_EXPECTED, snapshot, MODE)
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('selects tool and image models only from live configured routes', async () => {
+  it('selects only added vision models for tools while conversation retains text models', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-tool-model'))
     const dialog = page.getByRole('dialog', { name: '设置' })
     await dialog.getByRole('tab', { name: '使用场景', exact: true }).click()
@@ -358,6 +382,11 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await toolModel.waitFor({ timeout: 10_000 })
     await expect.poll(async () => toolModel.locator('option').allTextContents(), { timeout: 10_000 })
       .toContain('acme-large')
+    const choices = await toolModel.locator('option').evaluateAll(options => options.map(option => option.getAttribute('value')))
+    expect(choices).not.toContain(JSON.stringify(['minimax-cn', 'MiniMax-M2.7']))
+    const conversation = dialog.getByRole('combobox', { name: '默认对话模型' })
+    expect(await conversation.locator('option').evaluateAll(options => options.map(option => option.getAttribute('value'))))
+      .toContain(JSON.stringify(['minimax-cn', 'MiniMax-M2.7']))
     await toolModel.selectOption(JSON.stringify(['acme-gateway', 'acme-large']))
     await dialog.getByText('工具模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
 
@@ -372,7 +401,58 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(document).toContain('toolModel: acme-large')
     expect(document).toContain('imageProvider: minimax-cn')
     expect(document).toContain('imageModel: image-01')
+    await compareOrRefreshGolden(TOOL_MODEL_EXPECTED, await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd), MODE)
     expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('reuses a verified connection when another model is added', async () => {
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
+    const previousChecks = [...checkedModels]
+    await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
+    await dialog.getByText('模型目录与高级设置').click()
+    await dialog.getByLabel('模型类型').selectOption('chat')
+    await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
+    await dialog.getByLabel('模型 ID 1').fill('unavailable-model')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect.poll(() => dialog.getByLabel('模型类型').count()).toBe(0)
+    const connection = dialog.locator('li').filter({ hasText: 'Acme Gateway' }).first()
+    await connection.getByText('连接已验证', { exact: true }).waitFor()
+    await connection.getByText('查看模型', { exact: true }).click()
+    await connection.getByText('unavailable-model', { exact: true }).waitFor()
+    expect(await connection.getByText('测试模型：acme-large', { exact: true }).count()).toBe(1)
+    expect(checkedModels).toEqual(previousChecks)
+    expect(await connection.getByRole('alert').count()).toBe(0)
+    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('unavailable-model')
+    await connection.getByText('查看模型', { exact: true }).click()
+    await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
+    await dialog.getByText('模型目录与高级设置').click()
+    await dialog.getByLabel('模型类型').selectOption('chat')
+    await dialog.getByRole('button', { name: '删除模型 1', exact: true }).click()
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect.poll(() => dialog.getByLabel('模型类型').count()).toBe(0)
+    expect(checkedModels).toEqual(previousChecks)
+  }, 60_000)
+
+  it('rechecks a replacement test model and retains the saved connection on failure', async () => {
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
+    await dialog.getByText('模型目录与高级设置').click()
+    await dialog.getByLabel('模型类型').selectOption('vision')
+    await dialog.getByLabel('模型 ID 1').fill('unavailable-model')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByText('unavailable-model: Unknown model: unavailable-model', { exact: true }).waitFor()
+    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('unavailable-model')
+    await dialog.getByRole('button', { name: '重试验证', exact: true }).click()
+    await expect.poll(() => checkedModels.filter(model => model === 'acme-gateway/unavailable-model').length).toBe(2)
+    await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
+    await dialog.getByText('模型目录与高级设置').click()
+    await dialog.getByLabel('模型类型').selectOption('vision')
+    await dialog.getByLabel('模型 ID 1').fill('acme-large')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await expect.poll(() => dialog.getByText('Unknown model: unavailable-model', { exact: false }).count()).toBe(0)
+    const connection = dialog.locator('li').filter({ hasText: 'Acme Gateway' }).first()
+    await connection.getByText('连接已验证', { exact: true }).waitFor()
   }, 60_000)
 
   it('reopens the name and protocol a declared route was created with', async () => {
@@ -391,6 +471,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await name.inputValue()).toBe('Acme Gateway')
     await dialog.getByRole('button', { name: '容量 1' }).click()
     expect(await dialog.getByLabel('输入类型 1').inputValue()).toBe('image')
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(DECLARED_EDIT_EXPECTED, snapshot, MODE)
 
@@ -415,8 +496,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
   it('confirms an identified provider deletion before removing its profile and key', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-delete'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
-    await settingsDialog.getByRole('button', { name: '删除 minimax-cn', exact: true }).click()
-    const deleteDialog = page.getByRole('dialog', { name: '删除 minimax-cn？' })
+    await settingsDialog.getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
+    const deleteDialog = page.getByRole('dialog', { name: '删除 MiniMax · 标准 API (minimax-cn)？' })
     await deleteDialog.waitFor({ timeout: 10_000 })
     const snapshot = await captureStableAria(
       page,
@@ -427,9 +508,9 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
 
     await deleteDialog.getByRole('button', { name: '取消', exact: true }).click()
     expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('minimax-cn:')
-    await settingsDialog.getByRole('button', { name: '删除 minimax-cn', exact: true }).click()
-    await page.getByRole('dialog', { name: '删除 minimax-cn？' })
-      .getByRole('button', { name: '删除 minimax-cn', exact: true }).click()
+    await settingsDialog.getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
+    await page.getByRole('dialog', { name: '删除 MiniMax · 标准 API (minimax-cn)？' })
+      .getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
     await expect.poll(
       async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'),
       { timeout: 10_000 },
@@ -437,10 +518,75 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8'))
       .not.toContain('MINIMAX_CN_API_KEY')
     await expect.poll(
-      async () => page.getByRole('dialog', { name: '删除 minimax-cn？' }).count(),
+      async () => page.getByRole('dialog', { name: '删除 MiniMax · 标准 API (minimax-cn)？' }).count(),
       { timeout: 10_000 },
     ).toBe(0)
     await page.keyboard.press('Escape')
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('shows a curated add directory with bundled official marks', async () => {
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: '模型', exact: true }).click()
+    await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    for (const name of ['amazon-bedrock', 'anthropic', 'openai', 'opencode', 'google', 'openrouter', 'opencode-go']) {
+      expect(await dialog.getByRole('button', { name, exact: true }).count()).toBe(0)
+    }
+    expect(await dialog.getByRole('button', { name: 'OpenRouter · 标准 API', exact: true }).count()).toBe(1)
+    expect(await dialog.getByRole('button', { name: 'OpenCode Go · Go 订阅', exact: true }).count()).toBe(1)
+    const logos = dialog.locator('[class*="providerLogo"] img')
+    expect(await logos.count()).toBeGreaterThanOrEqual(7)
+    await expect.poll(() => logos.evaluateAll(nodes => nodes.every(node => node instanceof HTMLImageElement
+      && node.complete && node.naturalWidth > 0 && node.src.startsWith('data:')))).toBe(true)
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'add-directory.expected.md'), snapshot, MODE)
+  }, 60_000)
+
+  it('saves OpenCode Go without overriding its model-specific protocols', async () => {
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: 'OpenCode Go · Go 订阅', exact: true }).click()
+    expect(await dialog.getByLabel('API 协议').inputValue()).toBe('')
+    expect(await dialog.getByLabel('模型类型').locator('option').allTextContents()).toEqual(['对话 / 推理', '视觉理解'])
+    expect(await dialog.getByRole('textbox', { name: '完整请求地址 · Anthropic Messages', exact: true }).inputValue())
+      .toBe('https://opencode.ai/zen/go/v1/messages')
+    const snapshot = await captureStableAria(page, '[role="dialog"]', scaffold.workspaceCwd)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'opencode-go.expected.md'), snapshot, MODE)
+    await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
+    await dialog.getByLabel('模型 ID 1', { exact: true }).fill('glm-5.2')
+    await dialog.getByRole('button', { name: '添加模型', exact: true }).click()
+    await dialog.getByLabel('模型 ID 2', { exact: true }).fill('minimax-m3')
+    await dialog.getByRole('button', { name: '容量 2', exact: true }).click()
+    await dialog.getByLabel('输入类型 2', { exact: true }).selectOption('image')
+    await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('opencode-go-e2e-key')
+    await dialog.getByRole('button', { name: '保存', exact: true }).click()
+    await dialog.getByRole('button', { name: /编辑 OpenCode Go/u }).waitFor()
+    await expect.poll(() => checkedModels).toContain('opencode-go/glm-5.2')
+    await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
+    expect(checkedModels.filter(model => model.startsWith('opencode-go/'))).toEqual(['opencode-go/glm-5.2'])
+    const settings = scaffold.ctx.settings.get(settingsNamespace('llm-pi-ai'))
+    expect(settings).toMatchObject({ providers: { 'opencode-go': { models: [
+      { id: 'glm-5.2' }, { id: 'minimax-m3', input: ['text', 'image'] },
+    ] } } })
+    expect(settings).not.toHaveProperty(['providers', 'opencode-go', 'api'])
+    expect(settings).not.toHaveProperty(['providers', 'opencode-go', 'baseURL'])
+  }, 60_000)
+
+  it('fills all four OpenRouter request categories with the official complete endpoints', async () => {
+    const dialog = page.getByRole('dialog', { name: '设置' })
+    await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    await dialog.getByRole('button', { name: 'OpenRouter · 标准 API', exact: true }).click()
+    const requestType = dialog.getByLabel('模型类型')
+    for (const [type, endpoint] of [
+      ['chat', 'chat/completions'], ['vision', 'chat/completions'],
+      ['image', 'images'], ['speech', 'audio/transcriptions'],
+    ]) {
+      await requestType.selectOption(type!)
+      expect(await dialog.getByRole('textbox', { name: '完整请求地址', exact: true }).inputValue())
+        .toBe(`https://openrouter.ai/api/v1/${endpoint!}`)
+    }
+    await dialog.getByRole('button', { name: '取消', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
@@ -448,7 +594,8 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await assertFixtureInventory(SNAPSHOT_DIR, [
       'configured.expected.md', 'declared-edit.expected.md', 'declared.expected.md',
       'delete.expected.md', 'empty.expected.md', 'image-input-draft.expected.md', 'model-picker.expected.md',
-      'native-delete.expected.md',
+      'native-delete.expected.md', 'tool-model.expected.md', 'add-directory.expected.md', 'opencode-go.expected.md',
+      'verified-connection.expected.md',
     ])
   })
 })

@@ -38,6 +38,7 @@ describe('MinerUProvider', () => {
       expect(form.get('effort')).toBe('high')
       expect(form.get('lang_list')).toBe('ch')
       expect(form.get('return_md')).toBe('true')
+      expect(form.get('return_images')).toBe('false')
       const file = form.get('files') as File
       expect(file.name).toBe('calendar.png')
       expect(await file.text()).toBe('image bytes')
@@ -52,6 +53,32 @@ describe('MinerUProvider', () => {
       truncated: false,
     })
     expect(fetch).toHaveBeenCalledOnce()
+  })
+
+  it('returns requested illustration bytes with their Markdown targets from the same document result', async () => {
+    const contentBase64 = Buffer.from('illustration bytes').toString('base64')
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      expect((init?.body as FormData).get('return_images')).toBe('true')
+      return Response.json({ results: {
+        empty: { images: { 'unrelated.png': 'data:image/png;base64,YQ==' } },
+        question: { md_content: '题目\n![](images/figure.jpg)', images: { 'figure.jpg': `data:image/jpeg;base64,${contentBase64}` } },
+      } })
+    })
+    await expect(new MinerUProvider(config(), fetch).extract({ ...request(), includeImages: true })).resolves.toMatchObject({
+      markdown: '题目\n![](images/figure.jpg)',
+      images: [{ name: 'images/figure.jpg', mediaType: 'image/jpeg', contentBase64 }],
+    })
+  })
+
+  it.each([
+    { 'figure.png': 'https://example.invalid/figure.png' },
+    { 'figure.png': 'data:image/png;base64,not-base64' },
+    { '../figure.png': 'data:image/png;base64,YQ==' },
+    { 'figure.png': 'data:text/plain;base64,YQ==' },
+  ])('rejects malformed illustration payloads instead of returning unresolved media: %j', async (images) => {
+    const fetch = vi.fn(async () => Response.json({ results: { question: { md_content: '![](images/figure.png)', images } } }))
+    await expect(new MinerUProvider(config(), fetch).extract({ ...request(), includeImages: true }))
+      .rejects.toMatchObject({ code: 'invalid-response' })
   })
 
   it('prepends requested discarded text without duplicating Markdown content', async () => {
@@ -104,6 +131,46 @@ describe('MinerUProvider', () => {
     expect(result.markdown).toContain('## OCR pass: enhanced whole image')
     expect(result.truncated).toBe(false)
     expect(fetch).toHaveBeenCalledTimes(7)
+  })
+
+  it('retains Office worksheet text and discarded headings without PDF page geometry', async () => {
+    const markdown = '# 第一张表\n<table><tr><td>语文</td></tr></table>\n\n# 第二张表\n<table><tr><td>数学</td></tr></table>'
+    const fetch = vi.fn(async (_input: string | URL | Request, init?: RequestInit) => {
+      const form = init?.body as FormData
+      expect(form.get('return_middle_json')).toBe('true')
+      return Response.json({ results: { timetable: {
+        md_content: markdown,
+        middle_json: JSON.stringify({
+          _backend: 'office',
+          pdf_info: [
+            { page_idx: 0, para_blocks: [], discarded_blocks: [] },
+            { page_idx: 1, para_blocks: [], discarded_blocks: [
+              { type: 'text', lines: [{ spans: [{ type: 'text', content: '高一年级' }] }] },
+            ] },
+          ],
+        }),
+      } } })
+    })
+    const provider = new MinerUProvider(config(), fetch)
+    await expect(provider.extract(request({
+      name: '课表.xlsx', mediaType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      includeDiscardedText: true,
+    }))).resolves.toMatchObject({ markdown: `高一年级\n\n${markdown}`, truncated: false })
+    await expect(provider.extractLayout({
+      name: '课表.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from('pdf').toString('base64'),
+    })).rejects.toMatchObject({ code: 'invalid-response', message: 'MinerU middle JSON fields are invalid' })
+  })
+
+  it.each([
+    'invalid JSON',
+    JSON.stringify({ pdf_info: {} }),
+    JSON.stringify({ pdf_info: [{ discarded_blocks: 'invalid blocks' }] }),
+  ])('rejects malformed supplemental text metadata: %s', async (middleJson) => {
+    const provider = new MinerUProvider(config(), async () => Response.json({
+      results: { timetable: { md_content: '课程表', middle_json: middleJson } },
+    }))
+    await expect(provider.extract(request({ name: '课表.xlsx', includeDiscardedText: true })))
+      .rejects.toMatchObject({ code: 'invalid-response' })
   })
 
   it('requests middle JSON and normalizes line and image coordinates', async () => {

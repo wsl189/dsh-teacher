@@ -98,7 +98,7 @@ export interface CustomProviderCardProps {
   /** Disable writes (read-only settings provider). */
   readOnly: boolean
   /** Close the card; `changed` reports whether a provider was created. */
-  onClose: (changed: boolean) => void
+  onClose: (changed: boolean, provider?: string) => void
 }
 
 /**
@@ -280,7 +280,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         setFailure(outcome)
         return
       }
-      props.onClose(true)
+      props.onClose(true, route)
     } catch (error) {
       // A transport failure rejects rather than answering; without this the
       // card would stay busy with nothing shown.
@@ -449,7 +449,7 @@ export function CustomProviderCard(props: CustomProviderCardProps): ReactNode {
         submitDisabled={disabled || !ready}
         submitLabelKey={props.existing === undefined ? 'create' : 'apply'}
         submitBusyLabelKey={props.existing === undefined ? 'creating' : 'applying'}
-        onCancel={() => { props.onClose(committed || serviceCommitted) }}
+        onCancel={() => { props.onClose(committed || serviceCommitted, route) }}
         onSubmit={() => { void create() }}
       />
     </div>

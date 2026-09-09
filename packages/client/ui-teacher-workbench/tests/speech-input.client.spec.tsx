@@ -78,23 +78,31 @@ describe('VoiceInputButton', () => {
     expect(screen.getByRole('alert').textContent).toBe('语音识别请求失败，请检查服务地址、模型和 API Key')
   })
 
-  it('reports microphone permission and device failures', async () => {
-    vi.stubGlobal('MediaRecorder', MediaRecorderMock)
-    const missing = new Error('missing')
-    missing.name = 'NotFoundError'
-    const getUserMedia = vi.fn()
-      .mockRejectedValueOnce(new DOMException('denied', 'NotAllowedError'))
-      .mockRejectedValueOnce(missing)
-    Object.defineProperty(window.navigator, 'mediaDevices', {
-      configurable: true,
-      value: { getUserMedia },
-    })
-    render(<VoiceInputButton transcribe={vi.fn()} onTranscript={vi.fn()} t={t} />)
+  it.each([
+    ['NotAllowedError', 'voice.permissionDenied'],
+    ['SecurityError', 'voice.permissionDenied'],
+    ['NotFoundError', 'voice.noMicrophone'],
+    ['DevicesNotFoundError', 'voice.noMicrophone'],
+    ['NotReadableError', 'voice.microphoneUnavailable'],
+    ['TrackStartError', 'voice.microphoneUnavailable'],
+    ['AbortError', 'voice.microphoneUnavailable'],
+    ['OverconstrainedError', 'voice.microphoneConstraints'],
+    ['ConstraintNotSatisfiedError', 'voice.microphoneConstraints'],
+  ] as const)('explains %s and permits recording again after the device recovers', async (code, key) => {
+    const { getUserMedia, stopTrack } = installMediaRecorder()
+    getUserMedia.mockRejectedValueOnce(new DOMException('capture failed', code))
+    const transcribe = vi.fn(async () => '课堂记录')
+    const onTranscript = vi.fn()
+    render(<VoiceInputButton transcribe={transcribe} onTranscript={onTranscript} t={t} />)
 
     fireEvent.click(screen.getByRole('button', { name: '开始语音输入' }))
-    await screen.findByRole('button', { name: '麦克风权限未开启' })
-    fireEvent.click(screen.getByRole('button', { name: '麦克风权限未开启' }))
-    await screen.findByRole('button', { name: '未检测到可用麦克风' })
+    const retry = await screen.findByRole('button', { name: zh[key] })
+    expect(screen.getByRole('alert').textContent).toBe(zh[key])
+    expect(transcribe).not.toHaveBeenCalled()
+    fireEvent.click(retry)
+    fireEvent.click(await screen.findByRole('button', { name: '停止语音输入' }))
+    await waitFor(() => { expect(onTranscript).toHaveBeenCalledWith('课堂记录') })
+    expect(stopTrack).toHaveBeenCalledOnce()
   })
 
   it('releases an in-flight stream after unmount without transcribing', async () => {

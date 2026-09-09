@@ -179,6 +179,20 @@ describe('bundled image generation unified model settings', () => {
     }))
   })
 
+  it('uses the OpenRouter Images endpoint without appending a generations path', async () => {
+    const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
+      expect(jsonBody(init)).toEqual({
+        prompt: 'draw a classroom', model: 'openai/gpt-image-2', size: '1024x1024',
+      })
+      return Response.json({ data: [{ b64_json: PNG, media_type: 'image/png' }] })
+    })
+    vi.stubGlobal('fetch', fetch)
+    await expect(imagegen.generateImage({
+      apiUrl: 'https://openrouter.ai/api/v1/images', apiKey: 'test-key', protocol: 'openai-images',
+    }, request({ model: 'openai/gpt-image-2' }))).resolves.toMatchObject({ images: [{ b64: PNG, mime: 'image/png' }] })
+    expect(fetch).toHaveBeenCalledWith('https://openrouter.ai/api/v1/images', expect.any(Object))
+  })
+
   it('serializes and parses the synchronous DashScope image protocol', async () => {
     const fetch = vi.fn(async (_url: string, init?: RequestInit) => {
       expect(jsonBody(init)).toEqual({
