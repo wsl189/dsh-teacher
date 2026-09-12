@@ -1525,7 +1525,9 @@ describe('TeacherWorkbenchService', () => {
     const generatedFolderParts = unzipSync(await readFile(generatedFolderPath))
     expect(Object.keys(generatedFolderParts).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(2)
     const generatedFolderColors = await Promise.all([1, 2].map(async (slideNo) => {
-      const stats = await sharp(Buffer.from(generatedFolderParts[`ppt/media/image-${String(slideNo)}-1.png`]!)).stats()
+      const content = await sharp(Buffer.from(generatedFolderParts[`ppt/media/image-${String(slideNo)}-1.png`]!))
+        .extract({ left: 0, top: 0, width: 1, height: 1 }).toBuffer()
+      const stats = await sharp(content).stats()
       return stats.channels.slice(0, 3).map(channel => Math.round(channel.mean))
     }))
     expect(generatedFolderColors).toEqual([[0, 255, 0], [0, 0, 255]])
@@ -1793,7 +1795,9 @@ describe('TeacherWorkbenchService', () => {
     if (!orderedPpt.ok) throw new Error(orderedPpt.error.message)
     const orderedPptParts = unzipSync(Buffer.from(orderedPpt.value.artifacts[0]!.contentBase64, 'base64'))
     const orderedPptColors = await Promise.all([1, 2, 3].map(async (slideNo) => {
-      const stats = await sharp(Buffer.from(orderedPptParts[`ppt/media/image-${String(slideNo)}-1.png`]!)).stats()
+      const content = await sharp(Buffer.from(orderedPptParts[`ppt/media/image-${String(slideNo)}-1.png`]!))
+        .extract({ left: 0, top: 0, width: 1, height: 1 }).toBuffer()
+      const stats = await sharp(content).stats()
       return stats.channels.slice(0, 3).map(channel => Math.round(channel.mean))
     }))
     expect(orderedPptColors).toEqual([[255, 0, 0], [0, 255, 0], [0, 0, 255]])

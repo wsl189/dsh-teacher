@@ -3,6 +3,7 @@
 import { randomUUID } from 'node:crypto'
 import { constants, existsSync } from 'node:fs'
 import { copyFile, link, lstat, mkdir, readFile, realpath, rename, rm, rmdir, unlink, writeFile } from 'node:fs/promises'
+import { createRequire } from 'node:module'
 import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 import {
   AlignmentType,
@@ -12,7 +13,7 @@ import {
   Paragraph,
   TextRun,
 } from 'docx'
-import PptxGenJS from 'pptxgenjs'
+import type PptxGenJS from 'pptxgenjs'
 import sharp, { type Metadata } from 'sharp'
 import type {
   TeacherClass,
@@ -139,6 +140,8 @@ interface TemporaryQuestionManifest {
 const TEMPORARY_QUESTION_DIRECTORY = '.dsh-question-temp'
 const TEMPORARY_QUESTION_MANIFEST = 'manifest.json'
 const QUESTION_FILE_COLLATOR = new Intl.Collator('zh-CN', { numeric: true, sensitivity: 'base' })
+// The declared CommonJS entry avoids the untyped ESM .js entry's double default under tsx.
+const Pptx = createRequire(import.meta.url)('pptxgenjs') as typeof PptxGenJS
 
 /** Expected question-media failure safe to translate at the Remote method. */
 export class TeacherQuestionMediaError extends Error {
@@ -1676,11 +1679,12 @@ async function generateWord(
   }
 }
 
+/** Pad each picture to equal side margins while preserving its content scale and position. */
 async function generatePpt(
   fileStem: string,
   images: readonly RenderableImage[],
 ): Promise<TeacherQuestionDocumentPayload> {
-  const pptx = new PptxGenJS()
+  const pptx = new Pptx()
   pptx.defineLayout({ name: 'QUESTION_WIDE', width: 13.333, height: 7.5 })
   pptx.layout = 'QUESTION_WIDE'
   pptx.author = 'DeepSeek Harness 教师工作台'
@@ -1690,15 +1694,23 @@ async function generatePpt(
   const top = 1 / 2.54
   const maxWidth = 13.333 - left - (1 / 2.54)
   const maxHeight = 7.5 - top
+  const pictureWidth = 13.333 - 2 * left
   for (const image of images) {
     const slide = pptx.addSlide()
     const box = fitInchesAt96Dpi(image.width, image.height, maxWidth, maxHeight)
+    const paddedWidth = Math.ceil(pictureWidth * image.width / box.w)
+    const padded = await sharp(image.bytes)
+      .extend({ right: paddedWidth - image.width, background: '#ffffff' })
+      .png()
+      .toBuffer()
     slide.addImage({
-      data: `data:${image.mediaType};base64,${image.bytes.toString('base64')}`,
+      data: `data:image/png;base64,${padded.toString('base64')}`,
       x: left,
       y: top,
-      w: box.w,
+      w: box.w * paddedWidth / image.width,
       h: box.h,
+      // Crop only the fractional padding pixel beyond the right margin.
+      sizing: { type: 'crop', x: 0, y: 0, w: pictureWidth, h: box.h },
     })
   }
   const output = await pptx.write({ outputType: 'nodebuffer' })

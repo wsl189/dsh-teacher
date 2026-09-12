@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-host-teacher-workbench",
   "description": "Durable teacher-workbench document and Remote service",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "publishConfig": {
     "access": "public"
   },
@@ -40,13 +40,13 @@
   "files": [
     "lib/index.js",
     "lib/invariant.js",
+    "third-party/mathml2omml/**",
     "lib/types/**/*.js",
     "lib/types/**/*.d.ts",
     "lib/typert.host.js",
     "lib/typert.host.d.ts",
     "lib/typert.remote-client.js",
-    "lib/typert.remote-client.d.ts",
-    "third-party/mathml2omml/**"
+    "lib/typert.remote-client.d.ts"
   ],
   "license": "MIT",
   "dependencies": {

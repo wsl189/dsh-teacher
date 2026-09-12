@@ -1,10 +1,13 @@
-/** Experimental-package publication and dependency constraints. */
+/** Workspace package publication and dependency constraints. */
 
+import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 import {
   checkExperimentalDependencyIsolation,
   checkExperimentalManifest,
+  checkWorkspaceManifest,
   expectedDshPackageFiles,
+  type PackageManifest,
   type WorkspaceManifest,
 } from './check-workspace-constraints.ts'
 
@@ -77,6 +80,20 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
+  it('requires the teacher workbench converter packet and rejects a broader third-party payload', () => {
+    const manifest = JSON.parse(readFileSync(new URL('../packages/host/teacher-workbench/package.json', import.meta.url), 'utf8')) as PackageManifest
+    const workspace = { dir: 'packages/host/teacher-workbench', manifest }
+    expect(checkWorkspaceManifest(workspace)).toEqual([])
+    for (const files of [
+      manifest.files!.filter(file => file !== 'third-party/mathml2omml/**'),
+      manifest.files!.map(file => file === 'third-party/mathml2omml/**' ? 'third-party/**' : file),
+    ]) {
+      expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manifest, files } })).toEqual([
+        expect.stringContaining('package.json files must be'),
+      ])
+    }
+  })
+
   it('includes a declared profile patch without a package-name allowlist', () => {
     expect(expectedDshPackageFiles({
       name: '@deepseek-ai/dsh-private-profile',

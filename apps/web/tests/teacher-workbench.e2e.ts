@@ -47,6 +47,7 @@ const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.
 const QUESTION_SAVE_DIRECTORY_EXPECTED = join(SNAPSHOT_DIR, 'question-save-directory.expected.md')
 const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
 const QUESTION_DIRECTORY_NAMES_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-directory-names.expected.md', import.meta.url))
+const QUESTION_PPT_PADDING_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-ppt-padding.expected.json', import.meta.url))
 const QUESTION_CUTTING_PROGRESS_EXPECTED = join(SNAPSHOT_DIR, 'question-cutting-progress.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
@@ -1313,6 +1314,35 @@ describe('web e2e: durable teacher workbench', () => {
       await captureStableAria(page, 'aside[aria-label="试题图片库"]', scaffold.workspaceCwd),
       MODE,
     )
+  })
+
+  it('exports uploaded question pictures with white padding and equal side margins', async () => {
+    const original = await readFile(RASTER_FIXTURE)
+    const result = await scaffold.ctx.teacherWorkbench.generateUploadedQuestionDocument({
+      kind: 'ppt',
+      folderName: '补白验证',
+      images: [{ fileName: '第1题.png', relativePath: '第1题.png', contentBase64: original.toString('base64') }],
+    })
+    if (!result.ok) throw new Error(result.error.message)
+    const parts = unzipSync(Buffer.from(result.value.contentBase64, 'base64'))
+    const slide = strFromU8(parts['ppt/slides/slide1.xml']!)
+    const picture = slide.slice(slide.indexOf('<p:pic>'))
+    const image = Buffer.from(parts['ppt/media/image-1-1.png']!)
+    const presentation = strFromU8(parts['ppt/presentation.xml']!)
+    const offset = /<a:off x="(\d+)" y="(\d+)"\/>/u.exec(picture)!
+    const extent = /<a:ext cx="(\d+)" cy="(\d+)"\/>/u.exec(picture)!
+    const slideSize = /<p:sldSz cx="(\d+)" cy="(\d+)"/u.exec(presentation)!
+    const leftMargin = Number(offset[1])
+    const rightMargin = Number(slideSize[1]) - leftMargin - Number(extent[1])
+    expect(rightMargin).toBe(leftMargin)
+    await compareOrRefreshGolden(QUESTION_PPT_PADDING_EXPECTED, JSON.stringify({
+      fileName: result.value.fileName,
+      originalPixels: { width: original.readUInt32BE(16), height: original.readUInt32BE(20) },
+      embeddedPixels: { width: image.readUInt32BE(16), height: image.readUInt32BE(20) },
+      slideEmu: { width: Number(slideSize[1]), height: Number(slideSize[2]) },
+      pictureEmu: { x: Number(offset[1]), y: Number(offset[2]), width: Number(extent[1]), height: Number(extent[2]) },
+      crop: /<a:srcRect[^>]*\/>/u.exec(picture)?.[0],
+    }, null, 2), MODE)
   })
 
   it('shows images discovered below newly configured question roots', async () => {
