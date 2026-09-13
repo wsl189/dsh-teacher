@@ -37,9 +37,9 @@ export function ExampleTag(props: {
 }
 
 /**
- * Choose saved presets for one question or create a preset available to every question.
+ * Choose saved presets for one question or manage presets available to every question.
  * @param props - persisted presets and selection, independent save callbacks, pending state, and locale.
- * @returns a dropdown with persistent row toggles and a dialog that creates presets without selecting them.
+ * @returns a dropdown with selection and preset deletion actions, and a separate preset creation dialog.
  */
 export function ExampleTags(props: {
   presets: readonly string[]
@@ -47,6 +47,7 @@ export function ExampleTags(props: {
   pending: boolean
   onSelect: (tags: readonly string[]) => Promise<boolean>
   onAddPreset: (name: string) => Promise<string | null>
+  onDeletePreset: (name: string) => Promise<void>
   t: TeacherWorkbenchTranslate
 }) {
   const { t } = props
@@ -115,22 +116,39 @@ export function ExampleTags(props: {
               {props.presets.length === 0 ? (
                 <p className={css.muted}>{t('examples.noTags')}</p>
               ) : props.presets.map(tag => (
-                <button
-                  key={tag}
-                  type="button"
-                  className={css.tagOption}
-                  aria-pressed={props.selected.includes(tag)}
-                  aria-disabled={props.pending}
-                  onClick={() => {
-                    if (props.pending) return
-                    void props.onSelect(props.selected.includes(tag)
-                      ? props.selected.filter(selected => selected !== tag)
-                      : [...props.selected, tag])
-                  }}
-                >
-                  <span>{tag}</span>
-                  {props.selected.includes(tag) && <Check size={16} className={css.tagOptionCheck} aria-hidden="true" />}
-                </button>
+                <div key={tag} className={css.tagOptionRow}>
+                  <button
+                    type="button"
+                    className={css.tagOption}
+                    aria-pressed={props.selected.includes(tag)}
+                    aria-disabled={props.pending}
+                    onClick={() => {
+                      if (props.pending) return
+                      void props.onSelect(props.selected.includes(tag)
+                        ? props.selected.filter(selected => selected !== tag)
+                        : [...props.selected, tag])
+                    }}
+                  >
+                    <span>{tag}</span>
+                    {props.selected.includes(tag) && <Check size={16} className={css.tagOptionCheck} aria-hidden="true" />}
+                  </button>
+                  <button
+                    type="button"
+                    className={css.tagPresetRemove}
+                    aria-label={t('examples.deletePreset', { name: tag })}
+                    title={t('examples.deletePreset', { name: tag })}
+                    aria-disabled={props.pending}
+                    onClick={(event) => {
+                      if (props.pending) return
+                      const row = event.currentTarget.parentElement
+                      const neighbor = (row?.nextElementSibling ?? row?.previousElementSibling)?.querySelector('button')
+                      ;(neighbor ?? trigger.current)?.focus()
+                      void props.onDeletePreset(tag)
+                    }}
+                  >
+                    <X size={14} aria-hidden="true" />
+                  </button>
+                </div>
               ))}
             </div>
           )}

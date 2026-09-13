@@ -1679,7 +1679,7 @@ async function generateWord(
   }
 }
 
-/** Pad each picture to equal side margins while preserving its content scale and position. */
+/** Scale each picture proportionally to equal side margins; tall pictures can extend below the slide. */
 async function generatePpt(
   fileStem: string,
   images: readonly RenderableImage[],
@@ -1692,25 +1692,15 @@ async function generatePpt(
   pptx.title = fileStem.trim() || 'images'
   const left = 0.5 / 2.54
   const top = 1 / 2.54
-  const maxWidth = 13.333 - left - (1 / 2.54)
-  const maxHeight = 7.5 - top
   const pictureWidth = 13.333 - 2 * left
   for (const image of images) {
     const slide = pptx.addSlide()
-    const box = fitInchesAt96Dpi(image.width, image.height, maxWidth, maxHeight)
-    const paddedWidth = Math.ceil(pictureWidth * image.width / box.w)
-    const padded = await sharp(image.bytes)
-      .extend({ right: paddedWidth - image.width, background: '#ffffff' })
-      .png()
-      .toBuffer()
     slide.addImage({
-      data: `data:image/png;base64,${padded.toString('base64')}`,
+      data: `data:${image.mediaType};base64,${image.bytes.toString('base64')}`,
       x: left,
       y: top,
-      w: box.w * paddedWidth / image.width,
-      h: box.h,
-      // Crop only the fractional padding pixel beyond the right margin.
-      sizing: { type: 'crop', x: 0, y: 0, w: pictureWidth, h: box.h },
+      w: pictureWidth,
+      h: pictureWidth * image.height / image.width,
     })
   }
   const output = await pptx.write({ outputType: 'nodebuffer' })
@@ -1860,13 +1850,6 @@ function fitWordSize(width: number, height: number): { width: number; height: nu
     width: Math.max(1, centimetersToPixels(width * centimetersPerPixel)),
     height: Math.max(1, centimetersToPixels(height * centimetersPerPixel)),
   }
-}
-
-function fitInchesAt96Dpi(width: number, height: number, maxWidth: number, maxHeight: number): { w: number; h: number } {
-  const nativeWidth = width / 96
-  const nativeHeight = height / 96
-  const scale = Math.min(maxWidth / nativeWidth, maxHeight / nativeHeight, 1)
-  return { w: nativeWidth * scale, h: nativeHeight * scale }
 }
 
 function localDate(): string {

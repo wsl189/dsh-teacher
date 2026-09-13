@@ -28,7 +28,7 @@ export interface TeacherExampleDocument {
   readonly source: TeacherExampleSource | null
   readonly status: 'empty' | 'pending' | 'ready' | 'error'
   readonly ocrError: string | null
-  /** Increases when OCR or equation rebuilding replaces this document's Word artifact. */
+  /** Increases when OCR, normalization, or explicit editing replaces this document's Word artifact. */
   readonly wordRevision: number
 }
 
@@ -70,11 +70,14 @@ export interface TeacherExampleUpdateRequest extends TeacherExampleRequest {
   readonly handwriting?: readonly TeacherExampleStroke[]
 }
 
-/** Source upload; replacement clears only the selected document's previous Word file. */
+/** Ordered fragments of one question or explanation; replacement clears only that document's Word file. */
 export interface TeacherExampleUploadRequest extends TeacherExampleDocumentRequest {
-  readonly name: string
-  readonly mediaType: TeacherExampleSource['mediaType']
-  readonly contentBase64: string
+  /** Images and PDF pages continue from top to bottom in this order, forming one source document. */
+  readonly files: readonly {
+    readonly name: string
+    readonly mediaType: TeacherExampleSource['mediaType']
+    readonly contentBase64: string
+  }[]
 }
 
 /** Original document or generated Word file requested for preview/download. */
@@ -98,6 +101,62 @@ export interface TeacherExampleFile {
   readonly contentBase64: string
 }
 
+/** Formatting retained in Word runs, with separate Latin and Chinese font families. */
+export interface TeacherExampleTextFormat {
+  readonly font: string
+  readonly eastAsiaFont: string
+  readonly size: number
+  readonly bold: boolean
+  readonly italic: boolean
+  readonly underline: boolean
+}
+
+/** Ordered content in an editable paragraph; object indexes address the loaded Word revision. */
+export type TeacherExampleWordInline =
+  | { readonly kind: 'text'; readonly text: string; readonly format: TeacherExampleTextFormat }
+  | { readonly kind: 'equation'; readonly original: number | null; readonly latex: string; readonly size: number; readonly bold: boolean }
+  | { readonly kind: 'image'; readonly original: number }
+  | { readonly kind: 'break' }
+
+/** Editable paragraph formatting in points, with line spacing expressed as a multiplier. */
+export interface TeacherExampleWordParagraph {
+  readonly alignment: 'left' | 'center' | 'right' | 'both'
+  readonly lineSpacing: number
+  readonly indent: number
+  readonly firstLine: number
+  readonly spaceBefore: number
+  readonly spaceAfter: number
+  readonly tabs: readonly number[]
+  readonly content: readonly TeacherExampleWordInline[]
+}
+
+/** Saved Word content and immutable object previews belonging to a particular source/revision. */
+export interface TeacherExampleWordEditor {
+  readonly sourceId: TeacherExampleSourceId
+  readonly wordRevision: number
+  readonly paragraphs: readonly TeacherExampleWordParagraph[]
+  readonly equations: readonly { readonly latex: string; readonly mathml: string }[]
+  readonly images: readonly {
+    readonly mediaType: string
+    readonly contentBase64: string
+    readonly width: number
+    readonly height: number
+  }[]
+}
+
+/** Optimistic Word edit; stale source or Word revisions cannot overwrite newer work. */
+export interface TeacherExampleWordSaveRequest extends TeacherExampleDocumentRequest {
+  readonly sourceId: TeacherExampleSourceId
+  readonly wordRevision: number
+  readonly paragraphs: readonly TeacherExampleWordParagraph[]
+}
+
+/** Committed metadata and editable content from the same Word save transaction. */
+export interface TeacherExampleWordSaved {
+  readonly question: TeacherExample
+  readonly editor: TeacherExampleWordEditor
+}
+
 /** Stable failures for upload, OCR, persistence, and stale source selections. */
 export type TeacherExampleErrorCode =
   | 'invalid-request'
@@ -111,6 +170,7 @@ export type TeacherExampleErrorCode =
   | 'correction-invalid'
   | 'correction-too-large'
   | 'source-changed'
+  | 'word-changed'
   | 'export-not-ready'
   | 'storage-failure'
   | 'disposed'

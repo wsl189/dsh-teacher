@@ -23,7 +23,7 @@ describe('Word headings identified by a visual child', () => {
     expect(before.text).toContain('人教 ⟪math:0⟫ 版')
     expect(before.equations).toHaveLength(3)
     expect(exampleWordNeedsHeading(original)).toBe(true)
-    const reviewed = removeExampleHeading(original, before.text.slice(0, before.text.indexOf('已知')))
+    const reviewed = removeExampleHeading(original, before.paragraphs.slice(0, 2).map(({ index, text }) => ({ paragraph: index, prefix: text.includes('已知') ? text.slice(0, text.indexOf('已知')) : text })))
     const expectedEquations = Array.from(document(original).getElementsByTagNameNS(MATH_NS, 'oMath')).slice(1)
       .map(node => new XMLSerializer().serializeToString(node))
     expect(Array.from(document(reviewed).getElementsByTagNameNS(MATH_NS, 'oMath')).map(node => new XMLSerializer().serializeToString(node)))
@@ -47,7 +47,7 @@ describe('Word headings identified by a visual child', () => {
 
   it('records no-heading decisions without deleting conditions or subpart numbers', async () => {
     const original = await createExampleWord('（1）已知 $x>0$，某教材售价为2019元，求总价。\n（2）证明结论。')
-    const reviewed = removeExampleHeading(original, '')
+    const reviewed = removeExampleHeading(original, [])
     expect(document(reviewed).documentElement?.textContent).toBe(document(original).documentElement?.textContent)
     expect(exampleHeadingEvidence(reviewed)).toEqual(exampleHeadingEvidence(original))
     expect(exampleWordNeedsHeading(reviewed)).toBe(false)
@@ -58,12 +58,12 @@ describe('Word headings identified by a visual child', () => {
     const original = await createExampleWord('【题4】（人教 $A$ 版）已知 $x>0$，求解。')
     const evidence = exampleHeadingEvidence(original)
     for (const prefix of ['【题5】', evidence.text, evidence.text.slice(0, evidence.text.indexOf('math:0') + 3)]) {
-      expect(() => removeExampleHeading(original, prefix)).toThrow('exact prefix')
+      expect(() => removeExampleHeading(original, [{ paragraph: 0, prefix }])).toThrow('exact prefix')
     }
   })
 
   it('retains the package registration for reviewed plain-text Word files', async () => {
-    const reviewed = removeExampleHeading(await createExampleWord('【例题甲】题目正文。'), '【例题甲】')
+    const reviewed = removeExampleHeading(await createExampleWord('【例题甲】题目正文。'), [{ paragraph: 0, prefix: '【例题甲】' }])
     const entries = unzipSync(reviewed)
     expect(strFromU8(entries['[Content_Types].xml']!)).toContain('/docProps/custom.xml')
     expect(strFromU8(entries['_rels/.rels']!)).toContain('docProps/custom.xml')

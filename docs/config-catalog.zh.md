@@ -1004,7 +1004,7 @@ export interface TeacherExampleCorrectionConfig {
 }
 ```
 
-来源：[`packages/host/teacher-workbench/src/index.ts:203`](../packages/host/teacher-workbench/src/index.ts)
+来源：[`packages/host/teacher-workbench/src/index.ts:205`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

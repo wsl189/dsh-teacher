@@ -1,0 +1,69 @@
+.editor { --dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2); --dsh-scrollbar-thumb-hover: var(--dsw-alias-scrollbar-hover-l2); display: flex; flex: 1; min-height: 0; flex-direction: column; }
+.toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 5px; padding: 10px 16px; border-bottom: 1px solid var(--dsw-alias-border-l2); }
+.toolbar button, .toolbar select, .dialogActions button, .error button { height: 32px; padding: 0 9px; border: 1px solid transparent; border-radius: 6px; color: var(--dsw-alias-label-primary); background: transparent; font: inherit; font-size: 12px; cursor: pointer; }
+.toolbar button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
+.toolbar select { border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-base); max-width: 155px; }
+.toolbar button:hover, .toolbar button[aria-pressed="true"], .dialogActions button:hover { background: var(--dsw-alias-bg-module-platform); }
+.toolbar button:disabled, .toolbar select:disabled, .dialogActions button:disabled { opacity: 0.4; cursor: default; }
+.saveGroup { display: flex; flex-shrink: 0; align-items: center; gap: 10px; margin-left: auto; white-space: nowrap; }
+.toolbar .save { border-color: var(--dsw-alias-border-l2); }
+.separator { height: 20px; width: 1px; background: var(--dsw-alias-border-l2); margin: 0 3px; }
+.status { font-size: 11px; color: var(--dsw-alias-label-tertiary); }
+.error { padding: 8px 18px; color: var(--dsw-alias-label-primary); font-size: 12px; }
+.scroll { overflow: auto; flex: 1; min-height: 0; padding: 24px; background: var(--dsw-alias-bg-module-platform); }
+.paper { box-sizing: border-box; max-width: 794px; min-height: 100%; margin: 0 auto; padding: 48px 72px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); border: 1px solid var(--dsw-alias-border-l2); font-family: "Times New Roman", "SimSun", "宋体", "Noto Serif CJK SC", serif; font-size: 12pt; }
+.paper :global(.tiptap) { min-height: 50dvh; outline: none; white-space: pre-wrap; overflow-wrap: break-word; tab-size: 22; }
+.paper p { margin: 0 0 4pt; line-height: 1.25; }
+.paper img { max-width: 100%; height: auto; vertical-align: middle; }
+.paper math { font-family: "Cambria Math", "STIX Two Math", "Latin Modern Math", math; font-size: inherit; font-weight: inherit; }
+.paper :global(.ProseMirror-selectednode) { outline: 2px solid var(--dsw-alias-border-l2); outline-offset: 3px; }
+.equation { display: inline-block; vertical-align: baseline; cursor: text; border-radius: 3px; }
+.equation:hover { background: var(--dsw-alias-bg-module-platform); }
+.formulaDialog, .unsavedDialog { border: 1px solid var(--dsw-alias-border-l2); border-radius: 14px; color: var(--dsw-alias-label-primary); background: var(--dsw-alias-bg-base); padding: 20px; max-height: 88dvh; overflow: auto; }
+.formulaDialog { width: min(840px, 90vw); }
+.formulaDialog h3 { font-size: 16px; margin: 0 0 16px; }
+.formulaDialog p { font-size: 13px; line-height: 1.6; }
+.formulaDialog::backdrop, .unsavedDialog::backdrop { background: var(--dsw-alias-bg-mask-1); }
+.mathfield :global(math-field) {
+  --caret-color: var(--dsw-alias-state-business-primary);
+  --selection-color: var(--dsw-alias-label-primary);
+  --selection-background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-bg-base));
+  --contains-highlight-color: var(--dsw-alias-state-business-primary);
+  --contains-highlight-background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 7%, var(--dsw-alias-bg-base));
+  --smart-fence-color: var(--dsw-alias-label-secondary);
+  --highlight-text: var(--contains-highlight-background-color);
+  --text-highlight-background-color: var(--contains-highlight-background-color);
+  display: block;
+  min-height: 58px;
+  padding: 14px;
+  font-size: 22px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-base);
+  color: var(--dsw-alias-label-primary);
+}
+.mathfield :global(math-field):focus-within {
+  border-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 60%, var(--dsw-alias-border-l2));
+  outline: 2px solid color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, transparent);
+  outline-offset: 1px;
+}
+.mathfield :global(math-field)::part(virtual-keyboard-toggle) { display: none; }
+.symbolPalette { display: flex; flex-direction: column; gap: 12px; margin-top: 18px; }
+.symbolGroup { display: grid; grid-template-columns: 78px minmax(0, 1fr); gap: 12px; align-items: start; }
+.symbolHeading { padding-top: 13px; color: var(--dsw-alias-label-secondary); font-size: 12px; }
+.symbolKeys { display: grid; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 5px; }
+.symbolKeys button { display: flex; align-items: center; justify-content: center; height: 44px; padding: 3px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 6px; background: var(--dsw-alias-bg-base); color: var(--dsw-alias-label-primary); cursor: pointer; }
+.symbolKeys button:hover, .symbolKeys button:focus-visible { background: var(--dsw-alias-bg-module-platform); }
+.symbolKeys button:focus-visible { outline: 2px solid var(--dsw-alias-label-secondary); outline-offset: 2px; }
+.symbolKeys > button > span { font-size: 20px; }
+.dialogActions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
+.dialogActions .primary { border-color: var(--dsw-alias-border-l2); background: var(--dsw-alias-bg-module-platform); }
+.unsavedDialog { width: fit-content; max-width: min(420px, calc(100vw - 32px)); padding: 24px; }
+.unsavedDialog p { margin: 0; font-size: 16px; font-weight: 600; line-height: 1.6; }
+.unsavedDialog .dialogActions { flex-wrap: wrap; margin-top: 24px; }
+.unsavedDialog .dialogActions button { min-width: 68px; height: 36px; padding: 0 16px; border-color: var(--dsw-alias-border-l2); border-radius: 8px; background: var(--dsw-alias-bg-base); font-size: 13px; font-weight: 500; }
+.unsavedDialog .dialogActions button:hover { background: var(--dsw-alias-bg-module-platform); }
+.unsavedDialog .dialogActions .primary { border-color: var(--dsw-alias-button-primary-fill); background: var(--dsw-alias-button-primary-fill); color: var(--dsw-alias-label-primary-foreground); }
+.unsavedDialog .dialogActions .primary:hover { background: var(--dsw-alias-button-primary-hover); border-color: var(--dsw-alias-button-primary-hover); }
+@media (max-width: 720px) { .scroll { padding: 12px; } .paper { padding: 24px 18px; } .toolbar { gap: 3px; padding: 8px; } }
+@media (max-width: 520px) { .symbolGroup { grid-template-columns: minmax(0, 1fr); gap: 6px; } .symbolHeading { padding-top: 0; } }

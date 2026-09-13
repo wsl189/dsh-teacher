@@ -16,6 +16,7 @@ function props() {
     pending: false,
     onSelect: vi.fn<(tags: readonly string[]) => Promise<boolean>>().mockResolvedValue(true),
     onAddPreset: vi.fn<(name: string) => Promise<string | null>>().mockImplementation(async name => name),
+    onDeletePreset: vi.fn<(name: string) => Promise<void>>().mockResolvedValue(undefined),
     t,
   }
 }
@@ -23,6 +24,31 @@ function props() {
 afterEach(cleanup)
 
 describe('question tags and reusable presets', () => {
+  it('deletes presets independently of question selection and keeps focus in the open picker', () => {
+    const data = props()
+    const view = render(<ExampleTags {...data} />)
+    const trigger = screen.getByRole('button', { name: '选择预设标签' })
+    fireEvent.click(trigger)
+    const remove = screen.getByRole('button', { name: '删除预设标签“几何”' })
+    view.rerender(<ExampleTags {...data} pending />)
+    fireEvent.click(remove)
+    expect(data.onDeletePreset).not.toHaveBeenCalled()
+    view.rerender(<ExampleTags {...data} />)
+    fireEvent.click(remove)
+    expect(data.onDeletePreset).toHaveBeenLastCalledWith('几何')
+    view.rerender(<ExampleTags {...data} presets={['二次函数']} />)
+    expect(screen.queryByRole('button', { name: '几何' })).toBeNull()
+    expect(screen.getByRole('button', { name: '取消标签“几何”' })).toBeDefined()
+    expect(document.activeElement).toBe(screen.getByRole('button', { name: '二次函数' }))
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    fireEvent.click(screen.getByRole('button', { name: '删除预设标签“二次函数”' }))
+    view.rerender(<ExampleTags {...data} presets={[]} />)
+    expect(screen.getByText('暂无预设标签，请点击“添加标签”创建')).toBeDefined()
+    expect(document.activeElement).toBe(trigger)
+    expect(trigger.getAttribute('aria-expanded')).toBe('true')
+    expect(data.onSelect).not.toHaveBeenCalled()
+  })
+
   it('removes only the current question selection and leaves the preset available for reselection', () => {
     const data = { ...props(), selected: ['二次函数', '几何'] }
     const view = render(<ExampleTags {...data} />)

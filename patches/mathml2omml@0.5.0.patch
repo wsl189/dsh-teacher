@@ -1,0 +1,267 @@
+diff --git a/dist/index.cjs.js b/dist/index.cjs.js
+index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d3102edb6 100644
+--- a/dist/index.cjs.js
++++ b/dist/index.cjs.js
+@@ -1656,12 +1656,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+ 
+ function getStyle(element, ancestors, previousStyle = {}) {
+   const elAttributes = element.attribs || {}
+-  const color =
+-    elAttributes.mathcolor ||
+-    ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.color
+-    )?.attribs.color ||
+-    ''
++  const color = elAttributes.mathcolor || elAttributes.color || ancestors.find(element => element.attribs?.mathcolor || element.attribs?.color)?.attribs
++  const ink = typeof color === 'string' ? color : color?.mathcolor || color?.color || ''
+   // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
+   // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
+   const size =
+@@ -1679,7 +1675,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   const background =
+     elAttributes.mathbackground ||
+     ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.mathbackground
++      (element) => element.attribs && element.attribs.mathbackground
+     )?.attribs.mathbackground ||
+     ''
+   let variant =
+@@ -1751,7 +1747,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   }
+ 
+   return {
+-    color,
++    color: ink,
+     variant,
+     size,
+     scriptlevel,
+@@ -2272,6 +2268,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
+   text: text
+ })
+ 
++// DSH Teacher: preserve inherited colors on native runs and structural control characters.
++function applyMathColors(target, style) {
++  if (!style.color && !style.background) return
++  const tag = (name, attribs = {}, children = []) => ({ name, type: 'tag', attribs, children })
++  let parent
++  if (target.name === 'm:r') parent = target
++  else if (['acc', 'bar', 'box', 'borderBox', 'd', 'eqArr', 'f', 'func', 'groupChr', 'limLow', 'limUpp', 'm', 'nary', 'phant', 'rad', 'sPre', 'sSub', 'sSubSup', 'sSup'].some(name => target.name === `m:${name}`)) {
++    let properties = target.children.find(node => node.name === `${target.name}Pr`)
++    if (!properties) { properties = tag(`${target.name}Pr`); target.children.unshift(properties) }
++    parent = properties.children.find(node => node.name === 'm:ctrlPr')
++    if (!parent) { parent = tag('m:ctrlPr'); properties.children.push(parent) }
++  } else return
++  let run = parent.children.find(node => node.name === 'w:rPr')
++  if (!run) { run = tag('w:rPr'); parent.children.unshift(run) }
++  for (const [name, value, attribute] of [['w:color', style.color, 'w:val'], ['w:shd', style.background, 'w:fill']]) {
++    if (!value) continue
++    const properties = name === 'w:shd' ? { 'w:val': 'clear' } : {}
++    properties[attribute] = value.replace(/^#/, '').toUpperCase()
++    run.children.push(tag(name, properties))
++  }
++}
++
+ function walker(
+   element,
+   targetParent,
+@@ -2294,6 +2312,7 @@ function walker(
+     // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
+     addScriptlevel(targetParent, ancestors)
+   }
++  const previousTargetCount = targetParent.children?.length ?? 0
+   let targetElement
+   const nameOrType = element.name || element.type
+   if (mathmlHandlers[nameOrType]) {
+@@ -2312,6 +2331,9 @@ function walker(
+     targetElement = targetParent
+   }
+ 
++  const colorStyle = getStyle(element, ancestors)
++  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
++
+   if (!targetElement) {
+     // Target element hasn't been assigned, so don't handle children.
+     return
+@@ -2358,4 +2380,3 @@ const mml2omml = (mmlString, options) => {
+ }
+ 
+ exports.mml2omml = mml2omml
+-//# sourceMappingURL=index.cjs.js.map
+diff --git a/dist/index.esm.js b/dist/index.esm.js
+index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc8385554252d68ba2 100644
+--- a/dist/index.esm.js
++++ b/dist/index.esm.js
+@@ -1656,12 +1656,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+ 
+ function getStyle(element, ancestors, previousStyle = {}) {
+   const elAttributes = element.attribs || {}
+-  const color =
+-    elAttributes.mathcolor ||
+-    ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.color
+-    )?.attribs.color ||
+-    ''
++  const color = elAttributes.mathcolor || elAttributes.color || ancestors.find(element => element.attribs?.mathcolor || element.attribs?.color)?.attribs
++  const ink = typeof color === 'string' ? color : color?.mathcolor || color?.color || ''
+   // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
+   // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
+   const size =
+@@ -1679,7 +1675,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   const background =
+     elAttributes.mathbackground ||
+     ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.mathbackground
++      (element) => element.attribs && element.attribs.mathbackground
+     )?.attribs.mathbackground ||
+     ''
+   let variant =
+@@ -1751,7 +1747,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   }
+ 
+   return {
+-    color,
++    color: ink,
+     variant,
+     size,
+     scriptlevel,
+@@ -2272,6 +2268,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
+   text: text
+ })
+ 
++// DSH Teacher: preserve inherited colors on native runs and structural control characters.
++function applyMathColors(target, style) {
++  if (!style.color && !style.background) return
++  const tag = (name, attribs = {}, children = []) => ({ name, type: 'tag', attribs, children })
++  let parent
++  if (target.name === 'm:r') parent = target
++  else if (['acc', 'bar', 'box', 'borderBox', 'd', 'eqArr', 'f', 'func', 'groupChr', 'limLow', 'limUpp', 'm', 'nary', 'phant', 'rad', 'sPre', 'sSub', 'sSubSup', 'sSup'].some(name => target.name === `m:${name}`)) {
++    let properties = target.children.find(node => node.name === `${target.name}Pr`)
++    if (!properties) { properties = tag(`${target.name}Pr`); target.children.unshift(properties) }
++    parent = properties.children.find(node => node.name === 'm:ctrlPr')
++    if (!parent) { parent = tag('m:ctrlPr'); properties.children.push(parent) }
++  } else return
++  let run = parent.children.find(node => node.name === 'w:rPr')
++  if (!run) { run = tag('w:rPr'); parent.children.unshift(run) }
++  for (const [name, value, attribute] of [['w:color', style.color, 'w:val'], ['w:shd', style.background, 'w:fill']]) {
++    if (!value) continue
++    const properties = name === 'w:shd' ? { 'w:val': 'clear' } : {}
++    properties[attribute] = value.replace(/^#/, '').toUpperCase()
++    run.children.push(tag(name, properties))
++  }
++}
++
+ function walker(
+   element,
+   targetParent,
+@@ -2294,6 +2312,7 @@ function walker(
+     // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
+     addScriptlevel(targetParent, ancestors)
+   }
++  const previousTargetCount = targetParent.children?.length ?? 0
+   let targetElement
+   const nameOrType = element.name || element.type
+   if (mathmlHandlers[nameOrType]) {
+@@ -2312,6 +2331,9 @@ function walker(
+     targetElement = targetParent
+   }
+ 
++  const colorStyle = getStyle(element, ancestors)
++  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
++
+   if (!targetElement) {
+     // Target element hasn't been assigned, so don't handle children.
+     return
+@@ -2358,4 +2380,3 @@ const mml2omml = (mmlString, options) => {
+ }
+ 
+ export { mml2omml }
+-//# sourceMappingURL=index.esm.js.map
+diff --git a/dist/index.js b/dist/index.js
+index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebce63f65b5 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1639,12 +1639,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+ 
+ function getStyle(element, ancestors, previousStyle = {}) {
+   const elAttributes = element.attribs || {};
+-  const color =
+-    elAttributes.mathcolor ||
+-    ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.color
+-    )?.attribs.color ||
+-    '';
++  const color = elAttributes.mathcolor || elAttributes.color || ancestors.find(element => element.attribs?.mathcolor || element.attribs?.color)?.attribs
++  const ink = typeof color === 'string' ? color : color?.mathcolor || color?.color || ''
+   // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
+   // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
+   const size =
+@@ -1662,7 +1658,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   const background =
+     elAttributes.mathbackground ||
+     ancestors.find(
+-      (element) => element.name === 'mstyle' && element.attribs && element.attribs.mathbackground
++      (element) => element.attribs && element.attribs.mathbackground
+     )?.attribs.mathbackground ||
+     '';
+   let variant =
+@@ -1734,7 +1730,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+   }
+ 
+   return {
+-    color,
++    color: ink,
+     variant,
+     size,
+     scriptlevel,
+@@ -2255,6 +2251,28 @@ var mathmlHandlers = /*#__PURE__*/Object.freeze({
+     text: text
+ });
+ 
++// DSH Teacher: preserve inherited colors on native runs and structural control characters.
++function applyMathColors(target, style) {
++  if (!style.color && !style.background) return
++  const tag = (name, attribs = {}, children = []) => ({ name, type: 'tag', attribs, children })
++  let parent
++  if (target.name === 'm:r') parent = target
++  else if (['acc', 'bar', 'box', 'borderBox', 'd', 'eqArr', 'f', 'func', 'groupChr', 'limLow', 'limUpp', 'm', 'nary', 'phant', 'rad', 'sPre', 'sSub', 'sSubSup', 'sSup'].some(name => target.name === `m:${name}`)) {
++    let properties = target.children.find(node => node.name === `${target.name}Pr`)
++    if (!properties) { properties = tag(`${target.name}Pr`); target.children.unshift(properties) }
++    parent = properties.children.find(node => node.name === 'm:ctrlPr')
++    if (!parent) { parent = tag('m:ctrlPr'); properties.children.push(parent) }
++  } else return
++  let run = parent.children.find(node => node.name === 'w:rPr')
++  if (!run) { run = tag('w:rPr'); parent.children.unshift(run) }
++  for (const [name, value, attribute] of [['w:color', style.color, 'w:val'], ['w:shd', style.background, 'w:fill']]) {
++    if (!value) continue
++    const properties = name === 'w:shd' ? { 'w:val': 'clear' } : {}
++    properties[attribute] = value.replace(/^#/, '').toUpperCase()
++    run.children.push(tag(name, properties))
++  }
++}
++
+ function walker(
+   element,
+   targetParent,
+@@ -2277,6 +2295,7 @@ function walker(
+     // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
+     addScriptlevel(targetParent, ancestors);
+   }
++  const previousTargetCount = targetParent.children?.length ?? 0
+   let targetElement;
+   const nameOrType = element.name || element.type;
+   if (mathmlHandlers[nameOrType]) {
+@@ -2295,6 +2314,9 @@ function walker(
+     targetElement = targetParent;
+   }
+ 
++  const colorStyle = getStyle(element, ancestors)
++  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
++
+   if (!targetElement) {
+     // Target element hasn't been assigned, so don't handle children.
+     return
+@@ -2341,4 +2363,3 @@ const mml2omml = (mmlString, options) => {
+ };
+ 
+ export { mml2omml };
+-//# sourceMappingURL=index.js.map

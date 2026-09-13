@@ -2,7 +2,7 @@
 
 import { posix } from 'node:path'
 import type { OcrExtractedImage } from '@deepseek-ai/dsh-ocr'
-import { DOMParser, type Element as XmlElement } from '@xmldom/xmldom'
+import { DOMParser, type Document as XmlDocument, type Element as XmlElement } from '@xmldom/xmldom'
 import { ImageRun, TextRun } from 'docx'
 import { strFromU8 } from 'fflate'
 import { fromMarkdown } from 'mdast-util-from-markdown'
@@ -14,6 +14,38 @@ import { visit } from 'unist-util-visit'
 const DRAWING_NS = 'http://schemas.openxmlformats.org/drawingml/2006/main'
 const INLINE_NS = 'http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing'
 const RELATIONSHIP_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships'
+const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+const EMU_PER_PIXEL = 9525
+
+function illustrationSize(width: number, height: number): { width: number; height: number } {
+  // Figures occupy at most 3 × 2.25 inches beneath the question text.
+  const scale = Math.min(1, 288 / width, 216 / height)
+  return { width: width * scale, height: height * scale }
+}
+
+/**
+ * Fit saved illustrations within the collection's printed figure area without changing media or paragraph placement.
+ * @param document - collection Word XML, including paragraphs with user-edited text formatting.
+ */
+export function normalizeExampleImageSizes(document: XmlDocument): void {
+  for (const drawing of Array.from(document.getElementsByTagNameNS(WORD_NS, 'drawing'))) {
+    const extent = drawing.getElementsByTagNameNS(INLINE_NS, 'extent').item(0)
+    if (extent === null) throw new Error('Example Word image has no drawing dimensions')
+    const width = Number(extent.getAttribute('cx')) / EMU_PER_PIXEL
+    const height = Number(extent.getAttribute('cy')) / EMU_PER_PIXEL
+    if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
+      throw new Error('Example Word image data or dimensions are invalid')
+    }
+    const size = illustrationSize(width, height)
+    if (size.width === width && size.height === height) continue
+    const extents = [extent, ...Array.from(drawing.getElementsByTagNameNS(DRAWING_NS, 'xfrm'))
+      .flatMap(transform => Array.from(transform.getElementsByTagNameNS(DRAWING_NS, 'ext')))]
+    for (const target of extents) {
+      target.setAttribute('cx', String(Math.round(size.width * EMU_PER_PIXEL)))
+      target.setAttribute('cy', String(Math.round(size.height * EMU_PER_PIXEL)))
+    }
+  }
+}
 
 /** One direct Markdown illustration with offsets into its original text. */
 export interface ExampleImageReference {
@@ -52,12 +84,10 @@ export async function exampleImageRun(reference: ExampleImageReference, images: 
   if (image === undefined) throw new Error(`Example illustration is unavailable: ${reference.target}`)
   const normalized = await sharp(Buffer.from(image.contentBase64, 'base64'), { failOn: 'error' })
     .rotate().png().toBuffer({ resolveWithObject: true })
-  const { width, height } = normalized.info
-  const scale = Math.min(1, 600 / width, 800 / height)
   return new ImageRun({
     data: normalized.data,
     type: 'png',
-    transformation: { width: width * scale, height: height * scale },
+    transformation: illustrationSize(normalized.info.width, normalized.info.height),
     altText: { name: image.name, title: reference.alt, description: reference.alt },
   })
 }
@@ -107,8 +137,8 @@ export function importExampleImage(run: XmlElement, entries: Readonly<Record<str
   const path = posix.normalize(posix.join('word', target))
   const bytes = entries[path]
   const type = posix.extname(path).slice(1)
-  const width = Number(extent.getAttribute('cx')) / 9525
-  const height = Number(extent.getAttribute('cy')) / 9525
+  const width = Number(extent.getAttribute('cx')) / EMU_PER_PIXEL
+  const height = Number(extent.getAttribute('cy')) / EMU_PER_PIXEL
   if (!path.startsWith('word/media/') || bytes === undefined || !['png', 'jpg', 'gif', 'bmp'].includes(type) ||
     !Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) {
     throw new Error('Example Word image data or dimensions are invalid')

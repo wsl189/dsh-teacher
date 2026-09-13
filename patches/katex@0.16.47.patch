@@ -1,0 +1,75 @@
+diff --git a/dist/katex.js b/dist/katex.js
+index 2de2003251a8e5dda149c3b707eaf28f42b459f2..731b4548901175adda8f558ca818517686998c1f 100644
+--- a/dist/katex.js
++++ b/dist/katex.js
+@@ -11337,7 +11337,7 @@ defineFunction({
+   type: "font",
+   names: [
+   // styles, except \boldsymbol defined below
+-  "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit",
++  "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit", "\\mathbfit",
+   // families
+   "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
+   // aliases, except \bm defined below
+@@ -11359,7 +11359,7 @@ defineFunction({
+     return {
+       type: "font",
+       mode: parser.mode,
+-      font: func.slice(1),
++      font: func === "\\mathbfit" ? "boldsymbol" : func.slice(1),
+       body
+     };
+   },
+diff --git a/dist/katex.mjs b/dist/katex.mjs
+index b4a83b4b7b9b31064413fa7eb5447823110d7305..020ccebf351bbfa22e4e661523ef482c8f8939fc 100644
+--- a/dist/katex.mjs
++++ b/dist/katex.mjs
+@@ -10555,7 +10555,7 @@ defineFunction({
+   type: "font",
+   names: [
+   // styles, except \boldsymbol defined below
+-  "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit",
++  "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit", "\\mathbfit",
+   // families
+   "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
+   // aliases, except \bm defined below
+@@ -10577,7 +10577,7 @@ defineFunction({
+     return {
+       type: "font",
+       mode: parser.mode,
+-      font: func.slice(1),
++      font: func === "\\mathbfit" ? "boldsymbol" : func.slice(1),
+       body
+     };
+   },
+diff --git a/src/functions/font.ts b/src/functions/font.ts
+index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863743767fd 100644
+--- a/src/functions/font.ts
++++ b/src/functions/font.ts
+@@ -31,7 +31,7 @@ const fontAliases = {
+ 
+ type OldFontCommands = "\\rm" | "\\sf" | "\\tt" | "\\bf" | "\\it" | "\\cal";
+ type FontCommands =
+-    "\\mathrm" | "\\mathit" | "\\mathbf" | "\\mathnormal" | "\\mathsfit" |
++    "\\mathrm" | "\\mathit" | "\\mathbf" | "\\mathnormal" | "\\mathsfit" | "\\mathbfit" |
+     "\\mathbb" | "\\mathcal" | "\\mathfrak" | "\\mathscr" | "\\mathsf" |
+     "\\mathtt";
+ 
+@@ -39,7 +39,7 @@ defineFunction({
+     type: "font",
+     names: [
+         // styles, except \boldsymbol defined below
+-        "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit",
++        "\\mathrm", "\\mathit", "\\mathbf", "\\mathnormal", "\\mathsfit", "\\mathbfit",
+ 
+         // families
+         "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf",
+@@ -61,7 +61,7 @@ defineFunction({
+         return {
+             type: "font",
+             mode: parser.mode,
+-            font: func.slice(1) as Slice1<FontCommands>,
++            font: func === "\\mathbfit" ? "boldsymbol" : func.slice(1) as Slice1<Exclude<FontCommands, "\\mathbfit">>,
+             body,
+         };
+     },

@@ -1,0 +1,64 @@
+- dialog "解析 Word 预览大窗口":
+  - heading "解析 Word 预览 长题拼接" [level=2]
+  - button "关闭预览"
+  - toolbar "Word 编辑工具":
+    - combobox "字体":
+      - option "Times New Roman"
+      - option "宋体" [selected]
+      - option "仿宋"
+      - option "楷体"
+      - option "黑体"
+      - option "Arial"
+      - option "Cambria Math"
+    - combobox "字号":
+      - option "初号"
+      - option "小初"
+      - option "一号"
+      - option "小一"
+      - option "二号"
+      - option "小二"
+      - option "三号"
+      - option "小三"
+      - option "四号"
+      - option "小四" [selected]
+      - option "五号"
+      - option "小五"
+      - option "六号"
+      - option "小六"
+      - option "七号"
+      - option "八号"
+      - option "8"
+      - option "10"
+      - option "11"
+      - option "20"
+      - option "28"
+      - option "48"
+      - option "72"
+    - button "加粗"
+    - button "斜体"
+    - button "下划线"
+    - button "左对齐" [pressed]
+    - button "居中"
+    - button "右对齐"
+    - combobox "行间距":
+      - option "1 倍行距"
+      - option "1.25 倍行距" [selected]
+      - option "1.5 倍行距"
+      - option "1.75 倍行距"
+      - option "2 倍行距"
+      - option "2.5 倍行距"
+      - option "3 倍行距"
+    - button "减少缩进"
+    - button "增加缩进"
+    - button "公式编辑器"
+    - button "撤销" [disabled]
+    - button "重做" [disabled]
+    - status: 已保存
+    - button "保存" [disabled]
+  - textbox "编辑 Word 内容":
+    - paragraph: 解析开头：按原题条件计算。
+    - paragraph:
+      - text: 计算结果为
+      - math: b = ( 1 , − 3 ) + 1
+      - text: 。
+    - paragraph: 解析末尾：检验所有条件。

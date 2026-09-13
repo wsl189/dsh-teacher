@@ -34,7 +34,7 @@ describe('editable equations in collected Word documents', () => {
         if (indent === null) return null
         expect(paragraph.getElementsByTagNameNS(WORD_NS, 'keepLines').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('true')
         return [indent.getAttributeNS(WORD_NS, 'left'), indent.getAttributeNS(WORD_NS, 'firstLine')]
-      })).toEqual(Array.from({ length: copies }, () => [null, null, null, ['480', '0'], ['480', '0'], ['480', '0'], null]).flat())
+      })).toEqual(Array.from({ length: copies }, () => [null, ['240', '0'], ['240', '0'], ['480', '0'], ['480', '0'], ['480', '0'], ['240', '0']]).flat())
       expect(document.documentElement?.textContent).toBe(documentXml(original).document.documentElement?.textContent?.repeat(copies))
       expect(document.getElementsByTagNameNS(MATH_NS, 'oMath').length).toBe(2 * copies)
       expect(await normalizeExampleWord(bytes)).toBeUndefined()
@@ -157,7 +157,7 @@ describe('editable equations in collected Word documents', () => {
     expect(await normalizeExampleWord(repaired!)).toBeUndefined()
   })
 
-  it('places leading and inline illustrations below the complete question without changing text or media', async () => {
+  it('aligns leading and inline illustrations to the right below the complete question without changing text or media', async () => {
     const image = await sharp({ create: { width: 120, height: 80, channels: 3, background: 'white' } }).png().toBuffer()
     const bytes = await createExampleWord('![首图](images/figure.png)\n题干前文 ![插图](images/figure.png) 后文。\nA. 1 B. 2 C. 3 D. 4', [
       { name: 'images/figure.png', mediaType: 'image/png', contentBase64: image.toString('base64') },
@@ -167,9 +167,16 @@ describe('editable equations in collected Word documents', () => {
     expect(paragraphs.map(paragraph => paragraph.textContent)).toEqual(['题干前文  后文。', 'A. 1B. 2C. 3D. 4', '', ''])
     for (const figure of paragraphs.slice(-2)) {
       expect(figure.getElementsByTagNameNS(WORD_NS, 'drawing').length).toBe(1)
-      expect(figure.getElementsByTagNameNS(WORD_NS, 'jc').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('center')
+      expect(figure.getElementsByTagNameNS(WORD_NS, 'jc').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('right')
     }
     expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    for (const figure of paragraphs.slice(-2)) {
+      figure.getElementsByTagNameNS(WORD_NS, 'jc').item(0)!.setAttributeNS(WORD_NS, 'w:val', 'center')
+    }
+    const entries = unzipSync(bytes)
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const updated = await normalizeExampleWord(zipSync(entries))
+    expect(documentXml(updated!).text).toBe(documentXml(bytes).text)
   })
 
   it.each(['paired', 'grouped'])('embeds question and explanation images without relationship collisions in %s exports', async (layout) => {
@@ -200,9 +207,55 @@ describe('editable equations in collected Word documents', () => {
     expect(content).toEqual(['正文 x12', 'image', 'image', '正文 x12', 'image', 'image'])
     expect(document.getElementsByTagNameNS(MATH_NS, 'sSubSup').length).toBe(2)
     expect(document.documentElement?.textContent).not.toContain('![')
-    expect(text).toContain('cx="5715000" cy="2857500"')
+    expect(text).toContain('cx="2743200" cy="1371600"')
+    for (const figure of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p')).filter(paragraph =>
+      paragraph.getElementsByTagNameNS(WORD_NS, 'drawing').length > 0)) {
+      expect(figure.getElementsByTagNameNS(WORD_NS, 'jc').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('right')
+    }
     expect(await normalizeExampleWord(compiled)).toBeUndefined()
     expect(exampleWordNeedsImages(compiled)).toBe(false)
+  })
+
+  it('shrinks oversized saved drawings without changing pixels, text formatting, or aspect ratio', async () => {
+    const images = await Promise.all(([[900, 1200], [120, 80]] as const).map(async ([width, height], index) => ({
+      name: `images/${String(index)}.png`, mediaType: 'image/png' as const,
+      contentBase64: (await sharp({ create: { width, height, channels: 3, background: 'white' } }).png().toBuffer()).toString('base64'),
+    })))
+    const original = await createExampleWord('已知四边形 $ABCD$。\n![](images/0.png)\n![](images/1.png)', images)
+    const entries = unzipSync(original)
+    const doc = documentXml(original).document
+    const drawing = doc.getElementsByTagNameNS(WORD_NS, 'drawing').item(0)!
+    const inline = drawing.getElementsByTagName('wp:extent').item(0)!
+    const picture = drawing.getElementsByTagName('a:ext').item(0)!
+    for (const extent of [inline, picture]) {
+      extent.setAttribute('cx', '5715000')
+      extent.setAttribute('cy', '7620000')
+    }
+    const paragraph = doc.getElementsByTagNameNS(WORD_NS, 'p').item(1)!
+    paragraph.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)!.setAttributeNS(WORD_NS, 'w:val', 'DshExampleEdited')
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(doc))
+    const legacy = zipSync(entries)
+    const repaired = await normalizeExampleWord(legacy)
+    expect(repaired).toBeDefined()
+    const compiled = await compileExampleWord([{ bytes: legacy }, { bytes: original, blankLinesBefore: true }])
+    const expected = [[1543050, 2057400], [1143000, 762000]]
+    for (const [bytes, copies] of [[original, 1], [repaired!, 1], [compiled, 2]] as const) {
+      const document = documentXml(bytes).document
+      const extents = (tag: string) => Array.from(document.getElementsByTagName(tag))
+        .map(element => [Number(element.getAttribute('cx')), Number(element.getAttribute('cy'))])
+      expect(extents('wp:extent')).toEqual(Array.from({ length: copies }, () => expected).flat())
+      expect(extents('a:ext')).toEqual(extents('wp:extent'))
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+    const restored = documentXml(repaired!).document
+    expect(restored.documentElement?.textContent).toBe(doc.documentElement?.textContent)
+    expect(new XMLSerializer().serializeToString(restored.getElementsByTagNameNS(WORD_NS, 'p').item(1)!.firstChild!))
+      .toBe(new XMLSerializer().serializeToString(paragraph.firstChild!))
+    const media = (parts: Record<string, Uint8Array>) => Object.entries(parts).filter(([name]) => name.startsWith('word/media/'))
+    expect(media(unzipSync(repaired!))).toEqual(media(entries))
+    inline.setAttribute('cx', '0')
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(doc))
+    await expect(normalizeExampleWord(zipSync(entries))).rejects.toThrow('image data or dimensions are invalid')
   })
 
   it('restores saved Markdown illustrations while preserving neighboring native equations and original text', async () => {

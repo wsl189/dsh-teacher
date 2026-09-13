@@ -18,7 +18,7 @@
 
 ## 操作
 
-点例收集使用独立的 SQLite 路由域，没有名册引用。`TeacherExample` 包含目录顺序、标签、描述、笔迹，以及独立的题目与解析 `TeacherExampleDocument` 元数据；`TeacherExampleCatalog` 不包含文件字节。`TeacherExampleUpdateRequest` 仅修改提交的字段。`TeacherExampleDocumentRequest` 显式选择 `TeacherExampleDocumentKind`；`TeacherExampleUploadRequest` 仅替换该文档的原件并清除其旧 Word 文件。`TeacherExampleFileRequest` 选择原件或 Word 产物，以 `TeacherExampleFile` 返回；每项操作返回带判别字段的 `TeacherExampleResult`。`TeacherExampleExportRequest` 提供有序的题目标识和逐题或集中排列的 `TeacherExampleExportLayout`，用于下载仅包含题目与解析原文的 Word。[Host 参考](../../packages/host/teacher-workbench/README.zh.md#example-collection) 定义持久化、重试、原件替换和导出保证。
+典例收集使用独立的 SQLite 路由域，没有名册引用。`TeacherExample` 包含目录顺序、标签、描述、笔迹，以及独立的题目与解析 `TeacherExampleDocument` 元数据；`TeacherExampleCatalog` 不包含文件字节。`TeacherExampleUpdateRequest` 仅修改提交的字段。`TeacherExampleDocumentRequest` 显式选择 `TeacherExampleDocumentKind`；`TeacherExampleUploadRequest.files` 提供该文档的有序片段；上传仅替换其原件并清除旧 Word 文件。`TeacherExampleFileRequest` 选择原件或 Word 产物，以 `TeacherExampleFile` 返回；每项操作返回带判别字段的 `TeacherExampleResult`。`TeacherExampleExportRequest` 提供有序的题目标识和逐题或集中排列的 `TeacherExampleExportLayout`，用于下载仅包含题目与解析原文的 Word。[Host 参考](../../packages/host/teacher-workbench/README.zh.md#example-collection) 定义持久化、重试、原件替换和导出保证。
 
 Remote 表层包含带修订号的文档读写、天气查询、课程表整理、通知目标发现、上传来源暂存、基于 OCR 的试题分割与裁剪复核、试题媒体浏览与目录修改、图片持久化与分发、临时选集，以及单份或批量文档生成。面向模型的配套包通过语义工具消费这些操作，并负责相应提示词、schema、工具结果与 Session 日志效果。
 
@@ -73,6 +73,13 @@ Host service owning the revisioned workbench document.
 @Remote('addExampleTag') addExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>
 
 /**
+ * Remove a reusable preset without changing tags already assigned to questions.
+ * @param request - preset name; repeated deletion is idempotent.
+ * @returns its normalized name after persistence.
+ */
+@Remote('deleteExampleTag') deleteExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>
+
+/**
  * Delete one collected question and its files.
  * @param request - question to delete with both documents’ originals and Word files.
  * @returns the deleted identity.
@@ -80,8 +87,8 @@ Host service owning the revisioned workbench document.
 @Remote('deleteExample') deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>>
 
 /**
- * Retain a collected question source before OCR.
- * @param request - original image or PDF, owning question, and question or explanation selection.
+ * Retain ordered fragments as one collected question source before OCR.
+ * @param request - images/PDFs in reading order, owning question, and question or explanation selection.
  * @returns the saved source metadata, ready for OCR.
  */
 @Remote('uploadExample') uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>>
@@ -99,6 +106,20 @@ Host service owning the revisioned workbench document.
  * @returns the saved file for preview or download.
  */
 @Remote('readExampleFile') readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>>
+
+/**
+ * Load an editable Word document with immutable equation and image references.
+ * @param request - question or explanation to edit.
+ * @returns content and optimistic source/Word revision tokens.
+ */
+@Remote('readExampleWordEditor') readExampleWordEditor(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExampleWordEditor>>
+
+/**
+ * Save manual Word edits without overwriting a newer source or Word revision.
+ * @param request - edited paragraphs and the revisions from the editor load.
+ * @returns metadata and editor content from the committed Word revision.
+ */
+@Remote('saveExampleWordEditor') saveExampleWordEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>>
 
 /**
  * Export selected questions and explanations as one editable Word document.

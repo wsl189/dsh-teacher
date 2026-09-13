@@ -1,0 +1,10 @@
+- dialog "题目原件大窗口":
+  - heading "题目原件 长题拼接" [level=2]
+  - button "关闭预览"
+  - img "长题拼接-原件.pdf，第 1 页"
+  - img "长题拼接-原件.pdf，第 2 页"
+  - img "长题拼接-原件.pdf，第 3 页"
+  - text: 长题拼接-原件.pdf
+  - link "下载题目原件":
+    - /url: blob:{{webOrigin}}/{{uuid}}
+    - text: 下载

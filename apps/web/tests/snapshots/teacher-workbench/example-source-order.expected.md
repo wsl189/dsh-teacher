@@ -1,0 +1,23 @@
+- dialog "排列上传文件":
+  - heading "题目原件" [level=2]
+  - button "关闭文件排列"
+  - paragraph: 这些文件是同一道题或解析的连续内容。请按从上到下的顺序排列；PDF 内部按页码顺序衔接，最终生成一个 Word。
+  - list "文件顺序":
+    - listitem:
+      - text: 1 上半题.png
+      - button "上移上半题.png" [disabled]
+      - button "下移上半题.png"
+      - button "移除上半题.png"
+    - listitem:
+      - text: 2 中间页.pdf
+      - button "上移中间页.pdf"
+      - button "下移中间页.pdf"
+      - button "移除中间页.pdf"
+    - listitem:
+      - text: 3 下半题.png
+      - button "上移下半题.png"
+      - button "下移下半题.png" [disabled]
+      - button "移除下半题.png"
+  - button "继续添加"
+  - button "取消"
+  - button "上传并转换"

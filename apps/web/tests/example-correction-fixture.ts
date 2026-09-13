@@ -33,9 +33,9 @@ export class ExampleCorrectionAdapter extends LlmAdapter {
     if (options.tools?.length !== 1 || options.tools[0]?.name !== 'structured_output') {
       throw new Error('The proofreading child must expose only its structured result tool')
     }
-    const evidence = JSON.parse(input.text.slice(input.text.indexOf('\n') + 1)) as { mineruMarkdown: string } | { documentText: string }
+    const evidence = JSON.parse(input.text.slice(input.text.indexOf('\n') + 1)) as { mineruMarkdown: string } | { documentText: string; paragraphs: { index: number; text: string }[] }
     const result = 'documentText' in evidence
-      ? { headingPrefix: evidence.documentText.startsWith('【题 4】') ? evidence.documentText.slice(0, evidence.documentText.indexOf('已知')) : '' }
+      ? { headings: evidence.paragraphs.flatMap(({ index, text }) => text.startsWith('【题 4】') ? [{ paragraph: index, prefix: text.slice(0, text.indexOf('已知')) }] : []) }
       : { markdown: evidence.mineruMarkdown.replaceAll('点0', '点 O').replaceAll('$a\\cdot b:c$', '\\(a:b:c\\)') }
     const id = ToolCallId(`proofread-${String(this.requests.length)}`)
     const args = JSON.stringify(result)

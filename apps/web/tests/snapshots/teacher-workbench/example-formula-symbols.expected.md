@@ -1,0 +1,100 @@
+- dialog "公式编辑器":
+  - heading "公式编辑器" [level=3]
+  - textbox
+  - button "Menu 菜单":
+    - img "Menu"
+    - text: 菜单
+  - status
+  - group "常用字母":
+    - text: 常用字母
+    - button "阿尔法 α"
+    - button "贝塔 β"
+    - button "伽马 γ"
+    - button "德尔塔 δ"
+    - button "西塔 θ"
+    - button "兰姆达 λ"
+    - button "缪 μ"
+    - button "派 π"
+    - button "柔 ρ"
+    - button "西格玛 σ"
+    - button "斐 φ"
+    - button "欧米伽 ω"
+    - button "大写德尔塔 Δ"
+  - group "运算与结构":
+    - text: 运算与结构
+    - button "分数"
+    - button "平方根"
+    - button "n 次根式"
+    - button "乘方"
+    - button "平方"
+    - button "下标"
+    - button "绝对值"
+    - button "正负号 ±"
+    - button "乘号 ×"
+    - button "除号 ÷"
+    - button "点乘 ·"
+    - button "无穷大 ∞"
+    - button "阶乘"
+  - group "关系与集合":
+    - text: 关系与集合
+    - button "不等于 ≠"
+    - button "小于等于 ≤"
+    - button "大于等于 ≥"
+    - button "约等于 ≈"
+    - button "属于 ∈"
+    - button "不属于 ∉"
+    - button "真子集"
+    - button "子集"
+    - button "并集 ∪"
+    - button "交集 ∩"
+    - button "空集 ∅"
+    - button "自然数集 ℕ"
+    - button "整数集 ℤ"
+    - button "有理数集 ℚ"
+    - button "实数集 ℝ"
+    - button "复数集 ℂ"
+    - button "推出 ⇒"
+    - button "等价 ⇔"
+  - group "几何与向量":
+    - text: 几何与向量
+    - button "向量"
+    - button "有向线段"
+    - button "角 ∠"
+    - button "三角形 △"
+    - button "平行 ⫽"
+    - button "垂直 ⊥"
+    - button "角度 °"
+  - group "函数与计数":
+    - text: 函数与计数
+    - button "正弦 sin"
+    - button "余弦 cos"
+    - button "正切 tan"
+    - button "以 a 为底的对数"
+    - button "常用对数 lg"
+    - button "自然对数 ln"
+    - button "导数"
+    - button "求和"
+    - button "排列数"
+    - button "组合数"
+  - group "罗马数字":
+    - text: 罗马数字
+    - button "罗马数字 i"
+    - button "罗马数字 ii"
+    - button "罗马数字 iii"
+    - button "罗马数字 iv"
+    - button "罗马数字 v"
+    - button "罗马数字 vi"
+    - button "罗马数字 vii"
+    - button "罗马数字 viii"
+  - group "常用帽子":
+    - text: 常用帽子
+    - button "帽号"
+    - button "宽帽号"
+    - button "横线"
+    - button "长横线"
+    - button "波浪号"
+    - button "向量箭头"
+    - button "单点"
+    - button "双点"
+  - button "取消"
+  - button "应用公式"

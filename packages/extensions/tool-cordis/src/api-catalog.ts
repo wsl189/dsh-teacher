@@ -2475,6 +2475,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'its normalized name after persistence.',
       },
       {
+        signature: '@Remote(\'deleteExampleTag\') deleteExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>',
+        description: 'Remove a reusable preset without changing tags already assigned to questions.',
+        parameters: [{ name: 'request', description: 'preset name; repeated deletion is idempotent.' }],
+        returns: 'its normalized name after persistence.',
+      },
+      {
         signature: '@Remote(\'deleteExample\') deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>>',
         description: 'Delete one collected question and its files.',
         parameters: [{ name: 'request', description: 'question to delete with both documents’ originals and Word files.' }],
@@ -2482,8 +2488,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'uploadExample\') uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>>',
-        description: 'Retain a collected question source before OCR.',
-        parameters: [{ name: 'request', description: 'original image or PDF, owning question, and question or explanation selection.' }],
+        description: 'Retain ordered fragments as one collected question source before OCR.',
+        parameters: [{ name: 'request', description: 'images/PDFs in reading order, owning question, and question or explanation selection.' }],
         returns: 'the saved source metadata, ready for OCR.',
       },
       {
@@ -2497,6 +2503,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         description: 'Read a collected file, restoring missing Word illustrations from its source and retaining uniform typography.',
         parameters: [{ name: 'request', description: 'selected question or explanation and its original or Word file.' }],
         returns: 'the saved file for preview or download.',
+      },
+      {
+        signature: '@Remote(\'readExampleWordEditor\') readExampleWordEditor(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExampleWordEditor>>',
+        description: 'Load an editable Word document with immutable equation and image references.',
+        parameters: [{ name: 'request', description: 'question or explanation to edit.' }],
+        returns: 'content and optimistic source/Word revision tokens.',
+      },
+      {
+        signature: '@Remote(\'saveExampleWordEditor\') saveExampleWordEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>>',
+        description: 'Save manual Word edits without overwriting a newer source or Word revision.',
+        parameters: [{ name: 'request', description: 'edited paragraphs and the revisions from the editor load.' }],
+        returns: 'metadata and editor content from the committed Word revision.',
       },
       {
         signature: '@Remote(\'exportExamplesWord\') exportExamplesWord(request: TeacherExampleExportRequest): Promise<TeacherExampleResult<TeacherExampleFile>>',
@@ -6026,7 +6044,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherExampleErrorCode',
-    declaration: 'export type TeacherExampleErrorCode = \'invalid-request\' | \'not-found\' | \'file-too-large\' | \'ocr-unavailable\' | \'ocr-failed\' | \'ocr-truncated\' | \'correction-unavailable\' | \'correction-failed\' | \'correction-invalid\' | \'correction-too-large\' | \'source-changed\' | \'export-not-ready\' | \'storage-failure\' | \'disposed\';',
+    declaration: 'export type TeacherExampleErrorCode = \'invalid-request\' | \'not-found\' | \'file-too-large\' | \'ocr-unavailable\' | \'ocr-failed\' | \'ocr-truncated\' | \'correction-unavailable\' | \'correction-failed\' | \'correction-invalid\' | \'correction-too-large\' | \'source-changed\' | \'word-changed\' | \'export-not-ready\' | \'storage-failure\' | \'disposed\';',
   },
   {
     name: 'TeacherExampleExportLayout',
@@ -6069,12 +6087,36 @@ export const TYPE_API: readonly TypeApiEntry[] = [
     declaration: 'export interface TeacherExampleStroke {\n    readonly points: readonly {\n        readonly x: number;\n        readonly y: number;\n    }[];\n}',
   },
   {
+    name: 'TeacherExampleTextFormat',
+    declaration: 'export interface TeacherExampleTextFormat {\n    readonly font: string;\n    readonly eastAsiaFont: string;\n    readonly size: number;\n    readonly bold: boolean;\n    readonly italic: boolean;\n    readonly underline: boolean;\n}',
+  },
+  {
     name: 'TeacherExampleUpdateRequest',
     declaration: 'export interface TeacherExampleUpdateRequest extends TeacherExampleRequest {\n    readonly name?: string;\n    readonly tags?: readonly string[];\n    readonly description?: string;\n    readonly handwriting?: readonly TeacherExampleStroke[];\n}',
   },
   {
     name: 'TeacherExampleUploadRequest',
-    declaration: 'export interface TeacherExampleUploadRequest extends TeacherExampleDocumentRequest {\n    readonly name: string;\n    readonly mediaType: TeacherExampleSource[\'mediaType\'];\n    readonly contentBase64: string;\n}',
+    declaration: 'export interface TeacherExampleUploadRequest extends TeacherExampleDocumentRequest {\n    readonly files: readonly {\n        readonly name: string;\n        readonly mediaType: TeacherExampleSource[\'mediaType\'];\n        readonly contentBase64: string;\n    }[];\n}',
+  },
+  {
+    name: 'TeacherExampleWordEditor',
+    declaration: 'export interface TeacherExampleWordEditor {\n    readonly sourceId: TeacherExampleSourceId;\n    readonly wordRevision: number;\n    readonly paragraphs: readonly TeacherExampleWordParagraph[];\n    readonly equations: readonly {\n        readonly latex: string;\n        readonly mathml: string;\n    }[];\n    readonly images: readonly {\n        readonly mediaType: string;\n        readonly contentBase64: string;\n        readonly width: number;\n        readonly height: number;\n    }[];\n}',
+  },
+  {
+    name: 'TeacherExampleWordInline',
+    declaration: 'export type TeacherExampleWordInline = {\n    readonly kind: \'text\';\n    readonly text: string;\n    readonly format: TeacherExampleTextFormat;\n} | {\n    readonly kind: \'equation\';\n    readonly original: number | null;\n    readonly latex: string;\n    readonly size: number;\n    readonly bold: boolean;\n} | {\n    readonly kind: \'image\';\n    readonly original: number;\n} | {\n    readonly kind: \'break\';\n};',
+  },
+  {
+    name: 'TeacherExampleWordParagraph',
+    declaration: 'export interface TeacherExampleWordParagraph {\n    readonly alignment: \'left\' | \'center\' | \'right\' | \'both\';\n    readonly lineSpacing: number;\n    readonly indent: number;\n    readonly firstLine: number;\n    readonly spaceBefore: number;\n    readonly spaceAfter: number;\n    readonly tabs: readonly number[];\n    readonly content: readonly TeacherExampleWordInline[];\n}',
+  },
+  {
+    name: 'TeacherExampleWordSaved',
+    declaration: 'export interface TeacherExampleWordSaved {\n    readonly question: TeacherExample;\n    readonly editor: TeacherExampleWordEditor;\n}',
+  },
+  {
+    name: 'TeacherExampleWordSaveRequest',
+    declaration: 'export interface TeacherExampleWordSaveRequest extends TeacherExampleDocumentRequest {\n    readonly sourceId: TeacherExampleSourceId;\n    readonly wordRevision: number;\n    readonly paragraphs: readonly TeacherExampleWordParagraph[];\n}',
   },
   {
     name: 'TeacherLedgerCategory',

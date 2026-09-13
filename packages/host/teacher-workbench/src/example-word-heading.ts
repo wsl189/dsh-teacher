@@ -1,4 +1,4 @@
-/** Exact Word-prefix removal after visual heading identification; body XML and media remain intact. */
+/** Exact paragraph-prefix removal after visual heading identification; body XML and media remain intact. */
 
 import { DOMParser, XMLSerializer, type Element as XmlElement } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
@@ -14,8 +14,15 @@ const IMAGE = '⟪image⟫'
 /** Immutable Word projection supplied alongside the original image to the heading child. */
 export interface ExampleHeadingEvidence {
   readonly text: string
+  readonly paragraphs: readonly { readonly index: number; readonly text: string }[]
   /** Atomic markers preserve native equation boundaries in a copied heading prefix. */
   readonly equations: readonly { readonly marker: string; readonly text: string }[]
+}
+
+/** Exact metadata at the beginning of one zero-based Word paragraph. */
+export interface ExampleHeadingRemoval {
+  readonly paragraph: number
+  readonly prefix: string
 }
 
 interface Piece {
@@ -36,7 +43,7 @@ export function exampleWordNeedsHeading(bytes: Uint8Array): boolean {
   if (custom === undefined) return true
   const properties = new DOMParser().parseFromString(strFromU8(custom), 'application/xml')
   return !Array.from(properties.getElementsByTagNameNS(CUSTOM_NS, 'property'))
-    .some(property => property.getAttribute('name') === REVIEWED && property.textContent === '1')
+    .some(property => property.getAttribute('name') === REVIEWED && property.textContent === '2')
 }
 
 /**
@@ -49,27 +56,44 @@ export function exampleHeadingEvidence(bytes: Uint8Array): ExampleHeadingEvidenc
 }
 
 /**
- * Delete the exact leading prefix identified by the child and record completion in the Word file.
+ * Delete exact paragraph prefixes identified by the child and record completion in the Word file.
  * @param bytes - the same normalized DOCX used to build the child evidence.
- * @param prefix - exact leading text, or an empty string when no removable heading was identified.
+ * @param headings - paragraph positions and exact prefixes, or an empty list for a no-heading decision.
  * @returns reviewed DOCX; invalid prefixes throw before any bytes are replaced.
  */
-export function removeExampleHeading(bytes: Uint8Array, prefix: string): Buffer {
-  const { entries, document, pieces, evidence } = projectWord(bytes)
-  if (!evidence.text.startsWith(prefix) || prefix.includes(IMAGE) ||
-    (prefix.length > 0 && evidence.text.slice(prefix.length).replaceAll(IMAGE, '').trim() === '') ||
-    pieces.some(piece => !piece.plain && piece.start < prefix.length && piece.end > prefix.length)) {
-    throw new Error('The heading result must be an exact prefix that leaves the question body and native objects intact')
+export function removeExampleHeading(bytes: Uint8Array, headings: readonly ExampleHeadingRemoval[]): Buffer {
+  const { entries, document, pieces, evidence, ranges } = projectWord(bytes)
+  const seen = new Set<number>()
+  const deletions = headings.map(({ paragraph, prefix }) => {
+    const range = ranges[paragraph]
+    const text = evidence.paragraphs[paragraph]?.text
+    if (!Number.isInteger(paragraph) || seen.has(paragraph) || range === undefined || text === undefined ||
+      !prefix || !text.startsWith(prefix) || prefix.includes(IMAGE) || /^\s*[（(]\s*(?:\d+|[ivx]+)\s*[）)]/iu.test(prefix.normalize('NFKC')) ||
+      pieces.some(piece => !piece.plain && piece.start < range.start + prefix.length && piece.end > range.start + prefix.length)) {
+      throw new Error('The heading result must be an exact prefix that leaves native objects intact')
+    }
+    seen.add(paragraph)
+    return { start: range.start, end: range.start + text.length - text.slice(prefix.length).trimStart().length }
+  })
+  if (deletions.length > 0 && pieces.every(piece => piece.text.replaceAll(IMAGE, '').trim() === '' ||
+    deletions.some(range => piece.start >= range.start && piece.end <= range.end))) {
+    throw new Error('The heading result must be an exact prefix that leaves the question body intact')
   }
-  const end = prefix.length === 0 ? 0 : evidence.text.length - evidence.text.slice(prefix.length).trimStart().length
   const equations = Array.from(document.getElementsByTagNameNS(MATH_NS, 'oMath'))
   for (const piece of pieces) {
-    if (piece.start >= end) break
+    const deletion = deletions.find(range => piece.start >= range.start && piece.start < range.end)
+    if (deletion === undefined) continue
+    const end = deletion.end
     if (piece.end <= end) piece.node.parentNode?.removeChild(piece.node)
     else {
       piece.node.textContent = piece.text.slice(end - piece.start)
       piece.node.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve')
     }
+  }
+  for (const { paragraph } of headings) {
+    const range = ranges[paragraph]
+    const ending = pieces.find(piece => piece.text === '\n' && piece.start === range?.end)?.node
+    if (ending !== undefined && !ending.textContent?.trim() && ending.getElementsByTagNameNS(WORD_NS, 'drawing').length === 0) ending.parentNode?.removeChild(ending)
   }
   const retained = new Set(Array.from(document.getElementsByTagNameNS(MATH_NS, 'oMath')))
   const removed = equations.flatMap((equation, index) => retained.has(equation) ? [] : [index])
@@ -105,7 +129,7 @@ export function removeExampleHeading(bytes: Uint8Array, prefix: string): Buffer 
   }
   reviewed.textContent = ''
   const value = properties.createElementNS(VT_NS, 'vt:lpwstr')
-  value.textContent = '1'
+  value.textContent = '2'
   reviewed.appendChild(value)
   entries['word/document.xml'] = strToU8(serializer.serializeToString(document))
   entries['docProps/custom.xml'] = strToU8(serializer.serializeToString(properties))
@@ -123,6 +147,8 @@ function projectWord(bytes: Uint8Array) {
   if (body === null) throw new Error('Example Word file has no document body')
   const pieces: Piece[] = []
   const equations: { marker: string; text: string }[] = []
+  const paragraphs: { index: number; text: string }[] = []
+  const ranges: { start: number; end: number }[] = []
   let offset = 0
   const append = (node: XmlElement, text: string, plain = false): void => {
     pieces.push({ node, text, plain, start: offset, end: offset + text.length })
@@ -141,8 +167,12 @@ function projectWord(bytes: Uint8Array) {
   }
   for (const node of Array.from(body.childNodes)) {
     if (node.nodeType !== node.ELEMENT_NODE || node.localName === 'sectPr') continue
+    const start = offset
+    const pieceStart = pieces.length
     collect(node as XmlElement)
+    paragraphs.push({ index: paragraphs.length, text: pieces.slice(pieceStart).map(piece => piece.text).join('') })
+    ranges.push({ start, end: offset })
     append(node as XmlElement, '\n')
   }
-  return { entries, document, pieces, evidence: { text: pieces.map(piece => piece.text).join(''), equations } }
+  return { entries, document, pieces, ranges, evidence: { text: pieces.map(piece => piece.text).join(''), paragraphs, equations } }
 }

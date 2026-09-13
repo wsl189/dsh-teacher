@@ -7,6 +7,23 @@ const MATH_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 const XML_NS = 'http://www.w3.org/XML/1998/namespace'
 const FUNCTIONS = /^(?:arcsin|arccos|arctan|sin|cos|tan|cot|sec|csc|log|ln|exp|lim|max|min|det)([A-Za-z])$/u
 
+/**
+ * Recognize a paragraph whose formatting is owned by the user's Word editor.
+ * @param node - paragraph or descendant in collection Word XML.
+ * @returns whether automatic typography and layout must preserve this paragraph.
+ */
+export function exampleWordIsEdited(node: XmlElement): boolean {
+  let current: XmlElement | null = node
+  while (current !== null) {
+    if (current.namespaceURI === WORD_NS && current.localName === 'p') {
+      return current.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')?.startsWith('DshExampleEdited') === true
+    }
+    const parent: XmlElement['parentNode'] = current.parentNode
+    current = parent?.nodeType === 1 ? parent as XmlElement : null
+  }
+  return false
+}
+
 interface Piece {
   readonly node: XmlElement
   readonly text: string
@@ -27,6 +44,7 @@ export function normalizeExampleParagraphs(document: XmlDocument): void {
   const available = pageWidth - (Number(margins?.getAttributeNS(WORD_NS, 'left')) || 1440) -
     (Number(margins?.getAttributeNS(WORD_NS, 'right')) || 1440)
   for (const paragraph of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p'))) {
+    if (exampleWordIsEdited(paragraph)) continue
     if (choiceParagraph(paragraph)) {
       normalizeChoiceSpaces(paragraph)
       continue
@@ -96,6 +114,7 @@ export function normalizeExampleParagraphs(document: XmlDocument): void {
     parent.removeChild(paragraph)
   }
   for (const paragraph of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p'))) {
+    if (exampleWordIsEdited(paragraph)) continue
     if (!/^[（(]\s*[)）]$/u.test((paragraph.textContent ?? '').trim())) continue
     const parent = paragraph.parentNode
     if (parent === null || parent.nodeType !== parent.ELEMENT_NODE) continue
@@ -119,6 +138,7 @@ export function normalizeExampleFigures(document: XmlDocument): void {
   if (body === null) throw new Error('Example Word file has no document body')
   const figures: XmlElement[] = []
   for (const paragraph of elements(body).filter(node => node.localName === 'p')) {
+    if (exampleWordIsEdited(paragraph)) continue
     if (paragraph.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val') === 'DshExampleFigure') continue
     let extracted = false
     for (const run of elements(paragraph).filter(node => node.namespaceURI === WORD_NS && node.localName === 'r')) {
@@ -152,6 +172,7 @@ export function normalizeExampleFigures(document: XmlDocument): void {
  */
 export function normalizeExampleLetterRuns(document: XmlDocument): void {
   for (const paragraph of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p'))) {
+    if (exampleWordIsEdited(paragraph)) continue
     const mathematicalContext = /\p{Script=Han}/u.test(paragraph.textContent ?? '') ||
       paragraph.getElementsByTagNameNS(MATH_NS, 'oMath').length > 0 ||
       paragraph.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')?.startsWith('DshExampleChoices')

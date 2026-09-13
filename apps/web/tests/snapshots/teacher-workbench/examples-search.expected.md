@@ -12,6 +12,7 @@
       - text: 下载
     - button "打开题目"
     - article:
+      - paragraph: ）
       - paragraph: 已知 x² − 3x + 2 = 0，求 x。
       - paragraph: 提示：尝试因式分解。
       - paragraph:

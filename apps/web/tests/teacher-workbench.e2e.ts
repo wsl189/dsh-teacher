@@ -47,7 +47,7 @@ const QUESTION_DRAWERS_EXPECTED = join(SNAPSHOT_DIR, 'question-drawers.expected.
 const QUESTION_SAVE_DIRECTORY_EXPECTED = join(SNAPSHOT_DIR, 'question-save-directory.expected.md')
 const QUESTION_ROOT_REFRESH_EXPECTED = join(SNAPSHOT_DIR, 'question-root-refresh.expected.md')
 const QUESTION_DIRECTORY_NAMES_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-directory-names.expected.md', import.meta.url))
-const QUESTION_PPT_PADDING_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-ppt-padding.expected.json', import.meta.url))
+const QUESTION_PPT_SCALING_EXPECTED = fileURLToPath(new URL('./expected/teacher-workbench/question-ppt-scaling.expected.json', import.meta.url))
 const QUESTION_CUTTING_PROGRESS_EXPECTED = join(SNAPSHOT_DIR, 'question-cutting-progress.expected.md')
 const SETTINGS_EXPECTED = join(SNAPSHOT_DIR, 'settings.expected.md')
 const CONVERSATION_RETURN_EXPECTED = join(SNAPSHOT_DIR, 'conversation-return.expected.md')
@@ -104,6 +104,33 @@ describe('web e2e: durable teacher workbench', () => {
     await currentSession.waitFor({ timeout: 10_000 })
     await currentSession.click()
     await workbench.waitFor({ state: 'hidden', timeout: 10_000 })
+  }
+
+  async function installExampleProofreader() {
+    const proofreader = new ExampleCorrectionAdapter()
+    const modelSelection = scaffold.ctx.agentDefaultModel.currentSelection()
+    const disposeAdapter = scaffold.ctx.effect(
+      () => scaffold.ctx.llm.registerAdapter(['example-proofreading-test'], proofreader), 'Example proofreading fixture',
+    )
+    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      ...modelSelection, toolProvider: 'example-proofreading-test', toolModel: 'proofreader',
+    })
+    const recordedInputs: SessionEvent<'user/message'>[] = []
+    const recordedHeadings: SessionEvent<'user/message'>[] = []
+    const disposeEvents = scaffold.ctx.on('session/event', (_session, event) => {
+      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"mineruMarkdown":'))) {
+        recordedInputs.push(event)
+      }
+      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"documentText":'))) {
+        recordedHeadings.push(event)
+      }
+    })
+    onTestFinished(async () => {
+      disposeEvents()
+      await disposeAdapter()
+      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, modelSelection)
+    })
+    return { proofreader, recordedInputs, recordedHeadings }
   }
 
   beforeAll(async () => {
@@ -331,38 +358,18 @@ describe('web e2e: durable teacher workbench', () => {
 
   it('persists collected examples, Word previews, annotations, and tag search in SQLite', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-example-collection'))
-    const proofreader = new ExampleCorrectionAdapter()
-    const modelSelection = scaffold.ctx.agentDefaultModel.currentSelection()
-    const disposeAdapter = scaffold.ctx.effect(
-      () => scaffold.ctx.llm.registerAdapter(['example-proofreading-test'], proofreader), 'Example proofreading fixture',
-    )
-    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
-      ...modelSelection, toolProvider: 'example-proofreading-test', toolModel: 'proofreader',
-    })
-    const recordedInputs: SessionEvent<'user/message'>[] = []
-    const recordedHeadings: SessionEvent<'user/message'>[] = []
-    const disposeEvents = scaffold.ctx.on('session/event', (_session, event) => {
-      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"mineruMarkdown":'))) {
-        recordedInputs.push(event)
-      }
-      if (event.type === 'user/message' && event.data.content.some(block => block.type === 'text' && block.text.includes('"documentText":'))) {
-        recordedHeadings.push(event)
-      }
-    })
-    onTestFinished(async () => {
-      disposeEvents()
-      await disposeAdapter()
-      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, modelSelection)
-    })
+    const { proofreader, recordedInputs, recordedHeadings } = await installExampleProofreader()
     const captureCollection = async (selector: string): Promise<string> => (
       await captureStableAria(page, selector, scaffold.workspaceCwd)
     ).replaceAll(`blob:${scaffold.baseUrl}/`, 'blob:{{webOrigin}}/')
     const expectWordTypography = async (preview: Locator): Promise<void> => {
       const typography = await preview.locator('section.example-word').evaluateAll(sections => sections.flatMap(section =>
-        Array.from(section.querySelectorAll('p span, math')).map((element) => {
-          const style = getComputedStyle(element)
-          return { math: element.localName === 'math', family: style.fontFamily, size: style.fontSize, weight: style.fontWeight }
-        }),
+        Array.from(section.querySelectorAll('p span, math'))
+          .filter(element => element.localName === 'math' || element.closest('[data-word-equation]') === null)
+          .map((element) => {
+            const style = getComputedStyle(element)
+            return { math: element.localName === 'math', family: style.fontFamily, size: style.fontSize, weight: style.fontWeight }
+          }),
       ))
       expect(typography.length).toBeGreaterThan(0)
       for (const style of typography) {
@@ -394,8 +401,9 @@ describe('web e2e: durable teacher workbench', () => {
     minerUImages = { 'figure.svg': `data:image/svg+xml;base64,${Buffer.from('<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 400 200"><rect width="400" height="200" fill="white"/><path d="M40 170L200 20L360 170Z" fill="none" stroke="black" stroke-width="2"/><path d="M200 20L200 170" stroke="black" stroke-dasharray="5 5"/></svg>').toString('base64')}` }
     const screenshotRoot = fileURLToPath(new URL('../../../.playwright-mcp/example-collection', import.meta.url))
     await mkdir(screenshotRoot, { recursive: true })
-    await openModule('点例收集')
+    await openModule('典例收集')
     const surface = page.getByRole('region', { name: '工作台', exact: true })
+    expect(await surface.locator('header').first().getByText('已保存', { exact: true }).count()).toBe(0)
     await surface.getByRole('button', { name: '添加新题', exact: true }).first().click()
     const directory = surface.getByRole('complementary', { name: '题目目录', exact: true })
     const first = directory.getByRole('button', { name: '1', exact: true })
@@ -414,15 +422,26 @@ describe('web e2e: durable teacher workbench', () => {
     await questionIllustration.waitFor()
     await expect.poll(() => questionIllustration.evaluate(image => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0)
     expect(await questionIllustration.evaluate(image => image.getBoundingClientRect().width <= (image.closest('section')?.clientWidth ?? 0))).toBe(true)
+    const figureSize = await questionIllustration.evaluate((image) => {
+      const bounds = image.getBoundingClientRect()
+      return { width: bounds.width, height: bounds.height, alignment: getComputedStyle(image.closest('p')!).textAlign }
+    })
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-figure-size.expected.json'), JSON.stringify(figureSize, null, 2), MODE)
+    expect(figureSize).toEqual({ width: 288, height: 144, alignment: 'right' })
     expect(await surface.locator('math mover').count()).toBe(3)
     expect(await surface.locator('math mfrac').count()).toBe(1)
     expect(await surface.locator('math msubsup').count()).toBe(1)
     expect(await surface.getByRole('region', { name: 'Word 预览', exact: true }).innerText()).not.toContain('\\overrightarrow')
     const questionWord = surface.getByRole('region', { name: 'Word 预览', exact: true })
+    const choiceTexts = () => questionWord.locator('.example-choice-cell').evaluateAll(cells => cells.map((cell) => {
+      const accessible = cell.cloneNode(true) as HTMLElement
+      accessible.querySelectorAll('[aria-hidden="true"]').forEach((element) => { element.remove() })
+      return accessible.textContent
+    }))
     expect(await questionWord.innerText()).toContain('点 O')
     expect(await questionWord.innerText()).not.toContain('点0')
     expect(await questionWord.locator('math').allTextContents()).toContain('a:b:c')
-    expect(await questionWord.locator('.example-choice-cell').allTextContents()).toEqual(['A. a', 'B. b', 'C. 1', 'D. 2'])
+    expect(await choiceTexts()).toEqual(['A. a', 'B. b', 'C. 1', 'D. 2'])
     expect(await questionWord.locator('.example-choice-cell math').count()).toBe(4)
     const boldVariable = questionWord.locator('math mi[mathvariant="bold-italic"]')
     expect(await boldVariable.textContent()).toBe('a')
@@ -443,10 +462,11 @@ describe('web e2e: durable teacher workbench', () => {
     ])
     const questionPath = join(screenshotRoot, 'question.docx')
     await questionDownload.saveAs(questionPath)
+    expect(strFromU8(unzipSync(await readFile(questionPath))['word/document.xml']!)).toContain('cx="2743200" cy="1371600"')
     await expectNativeVariable(strFromU8(unzipSync(await readFile(questionPath))['word/document.xml']!))
     expect(await questionIllustration.evaluate((image) => {
       const paragraph = image.closest('p')
-      return paragraph !== null && paragraph === paragraph.parentElement?.lastElementChild && getComputedStyle(paragraph).textAlign === 'center'
+      return paragraph !== null && paragraph === paragraph.parentElement?.lastElementChild && getComputedStyle(paragraph).textAlign === 'right'
     })).toBe(true)
     expect(proofreader.requests).toHaveLength(2)
     expect(recordedInputs).toHaveLength(1)
@@ -487,7 +507,7 @@ describe('web e2e: durable teacher workbench', () => {
     )).toBe(true)
     expect(await explanationWord.locator('p').filter({ hasText: /^（2）/u }).evaluate(paragraph =>
       getComputedStyle(paragraph).marginLeft,
-    )).toBe('0px')
+    )).toBe('16px')
     await subquestions.first().scrollIntoViewIfNeeded()
     await explanationWord.screenshot({ path: join(screenshotRoot, 'explanation-indent.png'), animations: 'disabled' })
     const [explanationDownload] = await Promise.all([
@@ -591,18 +611,33 @@ describe('web e2e: durable teacher workbench', () => {
     await expect.poll(() => tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('true')
     await tagPanel.getByRole('button', { name: '二次方程', exact: true }).click()
     await expect.poll(() => savedTags(1)).toEqual([])
+    const deleteGeometryPreset = tagPanel.getByRole('button', { name: '删除预设标签“几何”', exact: true })
+    expect(await deleteGeometryPreset.evaluate(button => getComputedStyle(button).opacity)).toBe('0')
+    await geometryPreset.hover()
+    expect(await deleteGeometryPreset.evaluate(button => getComputedStyle(button).opacity)).toBe('1')
+    await page.screenshot({ path: join(screenshotRoot, 'tag-preset-remove.png'), animations: 'disabled' })
+    await deleteGeometryPreset.click()
+    await expect.poll(async () => {
+      const result = await scaffold.ctx.teacherWorkbench.listExamples({})
+      return result.ok ? result.value.tags : null
+    }).toEqual(['二次方程'])
+    await geometryPreset.waitFor({ state: 'detached' })
+    expect(await savedTags(1)).toEqual([])
+    expect(await presetPicker.getAttribute('aria-expanded')).toBe('true')
     await presetPicker.click()
     await page.reload({ waitUntil: 'load' })
-    await openModule('点例收集')
+    await openModule('典例收集')
     await directory.getByRole('button', { name: '方程例题', exact: false }).first().click()
     await surface.getByText('已知 x² − 3x + 2 = 0，求 x。', { exact: true }).waitFor()
     await explanationWord.getByText('题目解析', { exact: true }).waitFor()
     await explanationWord.locator('math mfrac').waitFor()
-    expect(await explanationSource.locator('iframe').getAttribute('title')).toBe('solution.pdf')
+    await expect.poll(() => explanationSource.getByRole('img', { name: 'solution.pdf，第 1 页', exact: true })
+      .evaluate(image => image instanceof HTMLImageElement && image.complete && image.naturalWidth > 0)).toBe(true)
     expect(await surface.getByRole('textbox', { name: '题目描述', exact: true }).inputValue()).toBe('适合讲解因式分解，关注学生的符号错误。')
     expect(await surface.getByRole('img', { name: '题目描述手写区域', exact: true }).locator('polyline').count()).toBe(1)
     await presetPicker.click()
     expect(await tagPanel.getByRole('button', { name: '二次方程', exact: true }).getAttribute('aria-pressed')).toBe('true')
+    expect(await tagPanel.getByRole('button', { name: '几何', exact: true }).count()).toBe(0)
     await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-tag-presets.expected.md'), await captureCollection('[data-workbench-surface]'), MODE)
     await page.screenshot({ path: join(screenshotRoot, 'tag-presets.png'), animations: 'disabled' })
     await presetPicker.click()
@@ -667,7 +702,7 @@ describe('web e2e: durable teacher workbench', () => {
         page.waitForEvent('download'),
         exporter.getByRole('button', { name: '导出并下载', exact: true }).click(),
       ])
-      expect(download.suggestedFilename()).toBe('点例收集.docx')
+      expect(download.suggestedFilename()).toBe('典例收集.docx')
       const path = join(screenshotRoot, `export-${layout}.docx`)
       await download.saveAs(path)
       const parts = unzipSync(await readFile(path))
@@ -703,6 +738,576 @@ describe('web e2e: durable teacher workbench', () => {
     await page.getByRole('menuitem', { name: '删除题目', exact: true }).click()
     await page.getByRole('dialog', { name: '删除题目', exact: true }).getByRole('button', { name: '删除', exact: true }).click()
     await directory.getByRole('button', { name: '2', exact: true }).waitFor({ state: 'detached' })
+    await directory.getByRole('button', { name: '方程例题', exact: false }).first().click()
+    await questionWord.getByRole('button', { name: '放大Word 预览', exact: true }).click()
+    const questionEditor = page.getByRole('dialog', { name: 'Word 预览大窗口', exact: true })
+    const content = questionEditor.getByRole('textbox', { name: '编辑 Word 内容', exact: true })
+    await content.waitFor()
+    expect(await content.getByRole('img', { name: '题目配图', exact: true }).evaluate((image) => {
+      const bounds = image.getBoundingClientRect()
+      return { width: bounds.width, height: bounds.height, alignment: getComputedStyle(image.closest('p')!).textAlign }
+    })).toEqual(figureSize)
+    await content.press('ControlOrMeta+a')
+    await questionEditor.getByRole('combobox', { name: '字体', exact: true }).selectOption('Arial')
+    await questionEditor.getByRole('button', { name: '保存', exact: true }).click()
+    await questionEditor.getByText('已保存', { exact: true }).waitFor()
+    await questionEditor.getByRole('button', { name: '关闭预览', exact: true }).click()
+    await expect.poll(choiceTexts).toEqual(['A. a', 'B. b', 'C. 1', 'D. 2'])
+    expect(await questionWord.locator('img').count()).toBe(1)
+    expect(await questionWord.getByText('预览加载失败，请重新打开此题。', { exact: true }).count()).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 90_000)
+
+  it('combines ordered question and explanation fragments and opens full document previews', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-example-fragments'))
+    await page.getByRole('button', { name: '设置', exact: true }).click()
+    await page.getByRole('dialog', { name: '设置', exact: true }).getByRole('button', { name: '浅色', exact: true }).click()
+    await page.keyboard.press('Escape')
+    onTestFinished(async () => { await page.emulateMedia({ colorScheme: 'light' }) })
+    const { recordedInputs } = await installExampleProofreader()
+    await openModule('典例收集')
+    const surface = page.getByRole('region', { name: '工作台', exact: true })
+    const directory = surface.getByRole('complementary', { name: '题目目录', exact: true })
+    const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
+    if (!catalog.ok) throw new Error(catalog.error.code)
+    const number = Math.max(0, ...catalog.value.questions.map(row => row.number)) + 1
+    await directory.getByRole('button', { name: '添加新题', exact: true }).click()
+    await directory.getByRole('button', { name: String(number), exact: true }).dblclick()
+    await surface.getByRole('textbox', { name: '重命名题目', exact: true }).fill('长题拼接')
+    await surface.getByRole('textbox', { name: '重命名题目', exact: true }).press('Enter')
+    await directory.getByRole('button', { name: '长题拼接', exact: true }).waitFor()
+    const saved = await scaffold.ctx.teacherWorkbench.listExamples({})
+    if (!saved.ok) throw new Error(saved.error.code)
+    const id = saved.value.questions.find(row => row.name === '长题拼接')!.id
+    onTestFinished(async () => { await scaffold.ctx.teacherWorkbench.deleteExample({ id }) })
+    const screenshotRoot = fileURLToPath(new URL('../../../.playwright-mcp/example-fragments', import.meta.url))
+    await mkdir(screenshotRoot, { recursive: true })
+    const pixels = await readFile(RASTER_FIXTURE)
+    const top = { name: '上半题.png', mimeType: 'image/png', buffer: pixels }
+    const bottom = { name: '下半题.png', mimeType: 'image/png', buffer: pixels }
+    const middle = { name: '中间页.pdf', mimeType: 'application/pdf', buffer: onePagePdfFixture() }
+    const upload = surface.getByLabel('添加图片或 PDF', { exact: true }).filter({ visible: false })
+    expect(await upload.getAttribute('multiple')).not.toBeNull()
+    await upload.setInputFiles([bottom, middle, top])
+    const order = page.getByRole('dialog', { name: '排列上传文件', exact: true })
+    await order.getByRole('button', { name: '取消', exact: true }).click()
+    expect(recordedInputs).toHaveLength(0)
+    await upload.setInputFiles([bottom, middle, top])
+    await order.getByRole('button', { name: '移除中间页.pdf', exact: true }).click()
+    await order.getByLabel('继续添加', { exact: true }).filter({ visible: false }).setInputFiles(middle)
+    await order.getByRole('button', { name: '上移上半题.png', exact: true }).click()
+    await order.getByRole('button', { name: '上移中间页.pdf', exact: true }).click()
+    const names = await order.getByRole('listitem').allTextContents()
+    expect(names).toEqual(['1上半题.png', '2中间页.pdf', '3下半题.png'])
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-source-order.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="排列上传文件"]', scaffold.workspaceCwd), MODE,
+    )
+    await page.screenshot({ path: join(screenshotRoot, 'upload-order.png'), animations: 'disabled' })
+    minerUImages = {}
+    minerUMarkdown = '已知点0，按顺序完成下面的小问。\n' + Array.from({ length: 40 }, (_, index) =>
+      `（${String(index + 1)}）求 $\\frac{${String(index + 1)}}{2}$ 的值，并写出推理过程。`,
+    ).join('\n') + '\n最后一小问：说明结论。'
+    await order.getByRole('button', { name: '上传并转换', exact: true }).click()
+    const word = surface.getByRole('region', { name: 'Word 预览', exact: true })
+    await word.getByText('最后一小问：说明结论。', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(recordedInputs).toHaveLength(1)
+    expect(recordedInputs[0]!.data.content.filter(block => block.type === 'image')).toHaveLength(3)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-continuation-input.expected.json'), JSON.stringify(
+      recordedInputs[0]!.data.content.map(block => block.type === 'image'
+        ? { type: 'image', mediaType: block.attachment.mediaType, name: block.attachment.name }
+        : block), null, 2,
+    ), MODE)
+    expect(await word.innerText()).toContain('点 O')
+    const source = await scaffold.ctx.teacherWorkbench.readExampleFile({ id, document: 'question', kind: 'source' })
+    if (!source.ok) throw new Error(source.error.code)
+    expect(source.value).toMatchObject({ name: '长题拼接-原件.pdf', mediaType: 'application/pdf' })
+    const sourcePanel = surface.getByRole('region', { name: '题目原件', exact: true })
+    await expect.poll(() => sourcePanel.getByRole('img').evaluateAll(images => images.map((image) => {
+      if (!(image instanceof HTMLImageElement) || !image.complete || image.naturalWidth === 0) return []
+      const canvas = document.createElement('canvas')
+      canvas.width = 1
+      canvas.height = 1
+      const context = canvas.getContext('2d')!
+      context.drawImage(image, 0, 0, 1, 1)
+      return [...context.getImageData(0, 0, 1, 1).data].slice(0, 3)
+    }))).toEqual([[255, 0, 0], [255, 255, 255], [255, 0, 0]])
+    expect(await sourcePanel.locator('iframe').count()).toBe(0)
+    const enlarge = word.getByRole('button', { name: '放大Word 预览', exact: true })
+    await enlarge.click()
+    const expanded = page.getByRole('dialog', { name: 'Word 预览大窗口', exact: true })
+    await expanded.getByText('最后一小问：说明结论。', { exact: true }).waitFor()
+    expect((await expanded.boundingBox())!.width).toBeGreaterThan(1000)
+    expect((await expanded.boundingBox())!.height).toBeGreaterThan(700)
+    expect(await expanded.locator('math mfrac').count()).toBe(40)
+    const scroll = expanded.getByLabel('编辑 Word 内容', { exact: true }).locator('..').locator('..')
+    expect(await scroll.evaluate(element => element.scrollHeight > element.clientHeight)).toBe(true)
+    await expanded.getByText('最后一小问：说明结论。', { exact: true }).scrollIntoViewIfNeeded()
+    await page.screenshot({ path: join(screenshotRoot, 'question-word-expanded.png'), animations: 'disabled' })
+    await page.keyboard.press('Escape')
+    await expanded.waitFor({ state: 'detached' })
+    await expect.poll(() => enlarge.evaluate(element => element === document.activeElement)).toBe(true)
+    const [download] = await Promise.all([
+      page.waitForEvent('download'), word.getByRole('link', { name: '下载 Word 文件', exact: true }).click(),
+    ])
+    const wordPath = join(screenshotRoot, 'question.docx')
+    await download.saveAs(wordPath)
+    const xml = strFromU8(unzipSync(await readFile(wordPath))['word/document.xml']!)
+    expect(xml).toContain('最后一小问：说明结论。')
+    expect((xml.match(/<m:f>/gu) ?? []).length).toBe(40)
+    await surface.getByRole('button', { name: '放大题目原件', exact: true }).click()
+    const original = page.getByRole('dialog', { name: '题目原件大窗口', exact: true })
+    await original.getByRole('img', { name: '长题拼接-原件.pdf，第 3 页', exact: true }).waitFor()
+    expect((await original.getByRole('img').first().boundingBox())!.width).toBeGreaterThan(1000)
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-expanded-pdf.expected.md'),
+      (await captureStableAria(page, 'dialog[aria-label="题目原件大窗口"]', scaffold.workspaceCwd))
+        .replaceAll(`blob:${scaffold.baseUrl}/`, 'blob:{{webOrigin}}/'), MODE,
+    )
+    await original.getByRole('button', { name: '关闭预览', exact: true }).click()
+    minerUMarkdown = '解析开头：按原题条件计算。\n计算结果为 $\\frac{3}{2}$。\n解析末尾：检验所有条件。'
+    const explanationUpload = surface.getByLabel('添加解析图片或 PDF', { exact: true }).filter({ visible: false })
+    await explanationUpload.setInputFiles([
+      { ...middle, name: '解析上.pdf' }, { ...middle, name: '解析下.pdf' },
+    ])
+    await order.getByRole('button', { name: '上传并转换', exact: true }).click()
+    const explanation = surface.getByRole('region', { name: '解析 Word 预览', exact: true })
+    await explanation.getByText('解析末尾：检验所有条件。', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(recordedInputs).toHaveLength(2)
+    expect(recordedInputs[1]!.data.content.filter(block => block.type === 'image')).toHaveLength(2)
+    const [explanationDownload] = await Promise.all([
+      page.waitForEvent('download'), explanation.getByRole('link', { name: '下载解析 Word 文件', exact: true }).click(),
+    ])
+    await explanationDownload.saveAs(join(screenshotRoot, 'explanation.docx'))
+    await explanation.getByRole('button', { name: '放大解析 Word 预览', exact: true }).click()
+    const expandedExplanation = page.getByRole('dialog', { name: '解析 Word 预览大窗口', exact: true })
+    await expandedExplanation.locator('math mfrac').waitFor()
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'example-expanded-word.expected.md'),
+      (await captureStableAria(page, 'dialog[aria-label="解析 Word 预览大窗口"]', scaffold.workspaceCwd))
+        .replaceAll(`blob:${scaffold.baseUrl}/`, 'blob:{{webOrigin}}/'), MODE,
+    )
+    await page.screenshot({ path: join(screenshotRoot, 'explanation-word-expanded.png'), animations: 'disabled' })
+    const editor = expandedExplanation.getByRole('textbox', { name: '编辑 Word 内容', exact: true })
+    const selectedFont = expandedExplanation.getByRole('combobox', { name: '字体', exact: true })
+    const initialChinese = await editor.locator('p').first().screenshot({
+      animations: 'disabled', caret: 'hide', style: '::selection { color: inherit; background: transparent; }',
+    })
+    const selectedTextBounds = await editor.locator('p').first().evaluate((paragraph) => {
+      const text = document.createTreeWalker(paragraph, NodeFilter.SHOW_TEXT).nextNode()
+      if (text === null || !text.textContent?.startsWith('解析开头')) throw new Error('Missing explanation text')
+      const range = document.createRange()
+      range.setStart(text, 0)
+      range.setEnd(text, 2)
+      const bounds = range.getBoundingClientRect()
+      return { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height }
+    })
+    await page.mouse.move(selectedTextBounds.x + 1, selectedTextBounds.y + selectedTextBounds.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(
+      selectedTextBounds.x + selectedTextBounds.width - 1, selectedTextBounds.y + selectedTextBounds.height / 2, { steps: 5 },
+    )
+    await page.mouse.up()
+    await expect.poll(() => page.evaluate(() => window.getSelection()?.toString())).toBe('解析')
+    await expect.poll(() => selectedFont.inputValue()).toBe('宋体')
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-initial-fonts.expected.json'), JSON.stringify({
+      selected: await selectedFont.inputValue(),
+      rendered: await editor.locator('[data-word-font]').first().evaluate((node) => {
+        const text = document.createTreeWalker(node, NodeFilter.SHOW_TEXT).nextNode()
+        if (text === null || text.parentElement === null) throw new Error('Missing rendered Chinese text')
+        return {
+          western: node.getAttribute('data-word-font'), eastAsian: node.getAttribute('data-word-east-asian-font'),
+          fontFamily: getComputedStyle(text.parentElement).fontFamily,
+        }
+      }),
+    }, null, 2), MODE)
+    await selectedFont.selectOption('宋体')
+    const reappliedChinese = await editor.locator('p').first().screenshot({
+      animations: 'disabled', caret: 'hide', style: '::selection { color: inherit; background: transparent; }',
+    })
+    await writeFile(join(screenshotRoot, 'initial-chinese-font.png'), initialChinese)
+    await writeFile(join(screenshotRoot, 'reapplied-chinese-font.png'), reappliedChinese)
+    expect(reappliedChinese.equals(initialChinese)).toBe(true)
+    await expandedExplanation.getByRole('button', { name: '撤销', exact: true }).click()
+    await selectedFont.selectOption('楷体')
+    await expect.poll(() => selectedFont.inputValue()).toBe('楷体')
+    await expandedExplanation.getByRole('button', { name: '撤销', exact: true }).click()
+    await expect.poll(() => selectedFont.inputValue()).toBe('宋体')
+    await editor.press('ControlOrMeta+a')
+    await expect.poll(() => selectedFont.inputValue()).toBe('')
+    expect(await selectedFont.locator('option:checked').textContent()).toBe('混合字体')
+    await selectedFont.selectOption('楷体')
+    await expandedExplanation.getByRole('combobox', { name: '字号', exact: true }).selectOption({ label: '三号' })
+    await expandedExplanation.getByRole('button', { name: '加粗', exact: true }).click()
+    await expandedExplanation.getByRole('combobox', { name: '行间距', exact: true }).selectOption('1.5')
+    await editor.locator('[data-equation]').first().dblclick()
+    const formulaEditor = page.getByRole('dialog', { name: '公式编辑器', exact: true })
+    expect(await formulaEditor.locator('math-field [part="virtual-keyboard-toggle"]').isVisible()).toBe(false)
+    await formulaEditor.locator('math-field [part="menu-toggle"]').click()
+    const formulaMenu = page.getByRole('menu').filter({ visible: true })
+    await formulaMenu.getByRole('menuitem', { name: '插入矩阵', exact: true }).waitFor()
+    expect(await formulaMenu.getByRole('menuitem', { name: /剪切|复制|粘贴|全选/ }).count()).toBe(0)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-menu.expected.md'),
+      await captureStableAria(page, '[role="menu"]', scaffold.workspaceCwd), MODE)
+    await formulaMenu.getByRole('menuitem', { name: '插入', exact: true }).hover()
+    await page.getByText('绝对值', { exact: true }).waitFor()
+    expect(await page.getByText('微积分', { exact: true }).isVisible()).toBe(true)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-insert.expected.md'),
+      await captureStableAria(page, '[role="menu"]:has-text("微积分")', scaffold.workspaceCwd), MODE)
+    await page.keyboard.press('Tab')
+    await expect.poll(() => formulaMenu.count()).toBe(0)
+    await formulaEditor.locator('math-field').press('ControlOrMeta+a')
+    await formulaEditor.locator('math-field').pressSequentially('-4/3')
+    await formulaEditor.locator('math-field').press('ControlOrMeta+a')
+    await formulaEditor.locator('math-field [part="menu-toggle"]').click()
+    await formulaMenu.getByRole('menuitem', { name: '颜色', exact: true }).hover()
+    await page.getByRole('menuitemcheckbox', { name: 'blue', exact: true }).click()
+    await expect.poll(() => formulaMenu.count()).toBe(0)
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    expect(await editor.locator('math mfrac').allTextContents()).toEqual(['43'])
+    await expandedExplanation.getByRole('button', { name: '撤销', exact: true }).click()
+    expect(await editor.locator('math mfrac').allTextContents()).toEqual(['32'])
+    await expandedExplanation.getByRole('button', { name: '重做', exact: true }).click()
+    expect(await editor.locator('math mfrac').allTextContents()).toEqual(['43'])
+    await editor.press('ControlOrMeta+End')
+    await editor.press('Enter')
+    expect(await editor.locator('p').count()).toBe(4)
+    await page.keyboard.insertText('手动补充：')
+    await expandedExplanation.getByRole('button', { name: '加粗', exact: true }).click()
+    await expandedExplanation.getByRole('button', { name: '公式编辑器', exact: true }).click()
+    expect(await formulaEditor.getByText('使用下方符号键盘输入，也可以直接输入 LaTeX。', { exact: true }).count()).toBe(0)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-symbols.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="公式编辑器"]', scaffold.workspaceCwd), MODE)
+    await page.screenshot({ path: join(screenshotRoot, 'formula-symbols.png'), animations: 'disabled' })
+    const mathfield = formulaEditor.locator('math-field')
+    const highlightTheme = async (colorScheme: 'light' | 'dark') => {
+      await page.emulateMedia({ colorScheme })
+      expect(await page.evaluate(() => document.documentElement.style.colorScheme)).toBe('light')
+      await mathfield.press('ControlOrMeta+a')
+      await mathfield.press('Backspace')
+      await formulaEditor.getByRole('button', { name: '平方根', exact: true }).click()
+      await mathfield.pressSequentially('x^2')
+      const context = mathfield.locator('.ML__contains-highlight')
+      await context.waitFor()
+      let contextBackground = ''
+      await expect.poll(async () => {
+        contextBackground = await context.evaluate(element => getComputedStyle(element).backgroundColor)
+        return contextBackground
+      }).not.toBe('')
+      await mathfield.screenshot({ path: join(screenshotRoot, `formula-context-${colorScheme}.png`), animations: 'disabled' })
+      await mathfield.press('ControlOrMeta+a')
+      const selection = mathfield.locator('.ML__selection').first()
+      await selection.waitFor()
+      const colors = {
+        field: await mathfield.evaluate(element => ({
+          background: getComputedStyle(element).backgroundColor, text: getComputedStyle(element).color,
+        })),
+        context: contextBackground,
+        selection: await selection.evaluate(element => getComputedStyle(element).backgroundColor),
+        selectedText: await mathfield.locator('.ML__selected').first().evaluate(element => getComputedStyle(element).color),
+      }
+      await mathfield.screenshot({ path: join(screenshotRoot, `formula-selection-${colorScheme}.png`), animations: 'disabled' })
+      return colors
+    }
+    const lightHighlights = await highlightTheme('light')
+    const darkSystemHighlights = await highlightTheme('dark')
+    expect(darkSystemHighlights).toEqual(lightHighlights)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-highlights.expected.json'),
+      JSON.stringify(darkSystemHighlights, null, 2), MODE)
+    await page.emulateMedia({ colorScheme: 'light' })
+    await mathfield.press('Backspace')
+    const accents = formulaEditor.getByRole('group', { name: '常用帽子', exact: true })
+    expect(await accents.getByRole('button').count()).toBe(8)
+    const enteredLatex = () => mathfield.evaluate(element => (element as HTMLElement & { value: string }).value)
+    for (const [label, command] of [['帽号', 'hat'], ['宽帽号', 'widehat'], ['横线', 'bar'], ['长横线', 'overline'], ['波浪号', 'tilde'], ['向量箭头', 'vec'], ['单点', 'dot'], ['双点', 'ddot']] as const) {
+      await mathfield.press('ControlOrMeta+a')
+      await mathfield.press('Backspace')
+      await accents.getByRole('button', { name: label, exact: true }).click()
+      await mathfield.pressSequentially('a')
+      expect((await enteredLatex()).replaceAll(' ', '')).toBe(`\\${command}{a}`)
+    }
+    await mathfield.press('ControlOrMeta+a')
+    await mathfield.pressSequentially('a')
+    const letterFont = await mathfield.locator('.ML__mathit').evaluate(element => getComputedStyle(element).fontFamily)
+    await mathfield.press('ControlOrMeta+a')
+    await mathfield.locator('[part="menu-toggle"]').click()
+    await formulaMenu.getByRole('menuitem', { name: '字体样式', exact: true }).hover()
+    await page.getByRole('menuitemcheckbox', { name: '加粗', exact: true }).click()
+    await expect.poll(() => formulaMenu.count()).toBe(0)
+    expect(await mathfield.locator('.ML__mathbfit').evaluate(element => ({ family: getComputedStyle(element).fontFamily, weight: getComputedStyle(element).fontWeight }))).toEqual({ family: letterFont, weight: '700' })
+    await mathfield.screenshot({ path: join(screenshotRoot, 'formula-letter-bold.png'), animations: 'disabled' })
+    await mathfield.locator('[part="menu-toggle"]').click()
+    await formulaMenu.getByRole('menuitem', { name: '字体样式', exact: true }).hover()
+    await page.getByRole('menuitemcheckbox', { name: '加粗', exact: true }).click()
+    await expect.poll(() => formulaMenu.count()).toBe(0)
+    expect(await mathfield.locator('.ML__mathit').evaluate(element => getComputedStyle(element).fontWeight)).toBe('400')
+    for (const enabled of [true, false]) {
+      await mathfield.locator('[part="menu-toggle"]').click()
+      await formulaMenu.getByRole('menuitem', { name: '颜色', exact: true }).hover()
+      await page.getByRole('menuitemcheckbox', { name: 'blue', exact: true }).click()
+      await expect.poll(() => formulaMenu.count()).toBe(0)
+      expect((await enteredLatex()).includes('blue')).toBe(enabled)
+    }
+    await mathfield.press('ControlOrMeta+a')
+    await accents.getByRole('button', { name: '帽号', exact: true }).click()
+    expect(await enteredLatex()).toContain('hat')
+    expect(await enteredLatex()).toContain('a')
+    await mathfield.press('ControlOrMeta+a')
+    await mathfield.press('Backspace')
+    const romanNumbers = formulaEditor.getByRole('group', { name: '罗马数字', exact: true })
+    expect(await romanNumbers.getByRole('button').count()).toBe(8)
+    await romanNumbers.getByRole('button', { name: '罗马数字 ii', exact: true }).click()
+    await mathfield.pressSequentially('+')
+    await formulaEditor.getByRole('button', { name: '平方根', exact: true }).click()
+    await mathfield.pressSequentially('x')
+    await mathfield.press('ArrowRight')
+    await mathfield.pressSequentially('+')
+    await formulaEditor.getByRole('button', { name: '分数', exact: true }).click()
+    await formulaEditor.getByRole('button', { name: '阿尔法 α', exact: true }).click()
+    await page.keyboard.press('Tab')
+    await formulaEditor.getByRole('button', { name: '西塔 θ', exact: true }).click()
+    await mathfield.press('End')
+    await mathfield.pressSequentially('+AB')
+    await mathfield.press('Shift+ArrowLeft')
+    await mathfield.press('Shift+ArrowLeft')
+    await formulaEditor.getByRole('button', { name: '有向线段', exact: true }).click()
+    await mathfield.press('End')
+    await mathfield.pressSequentially('+AB')
+    await formulaEditor.getByRole('button', { name: '平行 ⫽', exact: true }).click()
+    await mathfield.pressSequentially('CD+')
+    await formulaEditor.locator('math-field [part="menu-toggle"]').click()
+    await formulaMenu.getByRole('menuitem', { name: '大括号方程组', exact: true }).click()
+    await formulaMenu.waitFor({ state: 'hidden' })
+    await mathfield.pressSequentially('x+y=3')
+    await mathfield.press('Tab')
+    await mathfield.pressSequentially('x-y=1')
+    await mathfield.screenshot({ path: join(screenshotRoot, 'equation-system-input.png'), animations: 'disabled' })
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    expect(await editor.locator('[data-equation] math').count()).toBe(2)
+    expect(await editor.locator('[data-equation] math').last().locator('mfrac').textContent()).toBe('αθ')
+    expect(await editor.locator('[data-equation] math').last().locator('mover').textContent()).toBe('AB→')
+    const insertedEquation = editor.locator('[data-equation]').last()
+    expect(await insertedEquation.locator('math mtext').allTextContents()).toEqual(['ii', '\u00a0⫽\u00a0'])
+    expect((await insertedEquation.locator('math').textContent())?.replaceAll('\u00a0', '')).toContain('AB⫽CD')
+    expect(await insertedEquation.locator('math mtable mtr').allTextContents()).toEqual(['x+y=3', 'x−y=1'])
+    expect(await insertedEquation.locator('math mo').allTextContents()).toContain('{')
+    expect(await insertedEquation.locator('msqrt').textContent()).toBe('x')
+    await page.evaluate(async () => { await document.fonts.ready })
+    expect(await insertedEquation.locator('.katex-html .sqrt svg').count()).toBe(1)
+    const equationShot = { animations: 'disabled' as const, caret: 'hide' as const,
+      style: '.ProseMirror-selectednode { outline: none !important; } ::selection { background: transparent; color: inherit; }' }
+    const normalEquation = await insertedEquation.screenshot({ ...equationShot, path: join(screenshotRoot, 'equation-normal.png') })
+    await insertedEquation.screenshot({ ...equationShot, path: join(screenshotRoot, 'equation-large.png'),
+      style: `${equationShot.style} .katex { font-size: 32pt !important; }`,
+    })
+    await insertedEquation.click()
+    await expandedExplanation.getByRole('button', { name: '加粗', exact: true }).click()
+    expect(await insertedEquation.locator('math').evaluate(element => getComputedStyle(element).fontWeight)).toBe('700')
+    const boldEquation = await insertedEquation.screenshot({ ...equationShot, path: join(screenshotRoot, 'equation-bold.png') })
+    expect(boldEquation.equals(normalEquation)).toBe(false)
+    await expandedExplanation.getByRole('button', { name: '加粗', exact: true }).click()
+    expect((await insertedEquation.screenshot(equationShot)).equals(normalEquation)).toBe(true)
+    await expandedExplanation.getByRole('button', { name: '加粗', exact: true }).click()
+    await insertedEquation.dblclick()
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    expect(await insertedEquation.locator('math').evaluate(element => getComputedStyle(element).fontWeight)).toBe('700')
+    expect(await editor.locator('[data-equation]').evaluateAll(nodes => nodes.every((node) => {
+      const bounds = node.getBoundingClientRect()
+      return bounds.width > 0 && bounds.height > 0
+    }))).toBe(true)
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-applied.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="解析 Word 预览大窗口"]', scaffold.workspaceCwd), MODE)
+    await expandedExplanation.getByRole('button', { name: '保存', exact: true }).click()
+    await expandedExplanation.getByText('已保存', { exact: true }).waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-word-edited.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="解析 Word 预览大窗口"]', scaffold.workspaceCwd), MODE)
+    const edited = await scaffold.ctx.teacherWorkbench.readExampleWordEditor({ id, document: 'explanation' })
+    if (!edited.ok) throw new Error(edited.error.code)
+    expect(edited.value.paragraphs[0]).toMatchObject({ lineSpacing: 1.5, content: [
+      { kind: 'text', format: { eastAsiaFont: '楷体', size: 16, bold: true } },
+    ] })
+    expect(edited.value.equations).toHaveLength(2)
+    expect(edited.value.equations[0]!.latex.replaceAll(' ', '')).toContain(String.raw`\frac{4}{3}`)
+    expect(edited.value.equations[0]!.latex).toContain('\\textcolor{#0000ff}')
+    expect(edited.value.equations[1]!.latex.replaceAll(' ', '')).toBe(String.raw`\text{ii}+\sqrt{x}+\frac{\alpha}{\theta}+\overset{\rightarrow}{AB}+AB\textrm{}⫽\textrm{}CD+\begin{cases}x+y=3\\x-y=1\end{cases}`)
+    expect(edited.value.equations[1]!.mathml).toContain('<mtable')
+    expect(edited.value.paragraphs.at(-1)?.content.at(-1)).toMatchObject({ kind: 'equation', bold: true })
+    expect(await insertedEquation.locator('math').evaluate(element => getComputedStyle(element).fontWeight)).toBe('700')
+    const editedDownload = await scaffold.ctx.teacherWorkbench.readExampleFile({ id, document: 'explanation', kind: 'word' })
+    if (!editedDownload.ok) throw new Error(editedDownload.error.code)
+    expect(strFromU8(unzipSync(Buffer.from(editedDownload.value.contentBase64, 'base64'))['word/document.xml']!)).toContain('<w:color w:val="0000FF"')
+    await writeFile(join(screenshotRoot, 'edited.docx'), Buffer.from(editedDownload.value.contentBase64, 'base64'))
+    await page.screenshot({ path: join(screenshotRoot, 'edited-expanded.png'), animations: 'disabled' })
+    await expandedExplanation.getByRole('button', { name: '关闭预览', exact: true }).click()
+    await word.getByRole('button', { name: '放大Word 预览', exact: true }).click()
+    const formattedQuestion = page.getByRole('dialog', { name: 'Word 预览大窗口', exact: true })
+    await formattedQuestion.getByRole('textbox', { name: '编辑 Word 内容', exact: true }).press('ControlOrMeta+a')
+    await formattedQuestion.getByRole('combobox', { name: '字体', exact: true }).selectOption('Arial')
+    await formattedQuestion.getByRole('combobox', { name: '字号', exact: true }).selectOption({ label: '四号' })
+    await formattedQuestion.getByRole('button', { name: '斜体', exact: true }).click()
+    await formattedQuestion.getByRole('button', { name: '下划线', exact: true }).click()
+    await formattedQuestion.getByRole('button', { name: '右对齐', exact: true }).click()
+    await formattedQuestion.getByRole('button', { name: '增加缩进', exact: true }).click()
+    await formattedQuestion.getByRole('combobox', { name: '行间距', exact: true }).selectOption('2')
+    await formattedQuestion.getByRole('button', { name: '关闭预览', exact: true }).click()
+    const unsaved = page.getByRole('dialog', { name: '有未保存的修改', exact: true })
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-unsaved-word.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="有未保存的修改"]', scaffold.workspaceCwd), MODE)
+    await unsaved.screenshot({ path: join(screenshotRoot, 'unsaved-word-dialog.png'), animations: 'disabled' })
+    await unsaved.getByRole('button', { name: '继续', exact: true }).click()
+    await formattedQuestion.getByText('有未保存的修改', { exact: true }).waitFor()
+    await formattedQuestion.getByRole('button', { name: '关闭预览', exact: true }).click()
+    await unsaved.getByRole('button', { name: '保存并关闭', exact: true }).click()
+    await formattedQuestion.waitFor({ state: 'hidden' })
+    const savedQuestion = await scaffold.ctx.teacherWorkbench.readExampleWordEditor({ id, document: 'question' })
+    if (!savedQuestion.ok) throw new Error(savedQuestion.error.code)
+    expect(savedQuestion.value.paragraphs[0]).toMatchObject({ alignment: 'right', indent: 12, lineSpacing: 2 })
+    expect(savedQuestion.value.paragraphs[0]?.content[0]).toMatchObject({
+      kind: 'text', format: { font: 'Arial', size: 14, italic: true, underline: true },
+    })
+    const questionFile = await scaffold.ctx.teacherWorkbench.readExampleFile({ id, document: 'question', kind: 'word' })
+    if (!questionFile.ok) throw new Error(questionFile.error.code)
+    const editedParagraphs = async (bytes: Uint8Array) => page.evaluate((source) => {
+      const namespace = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+      const document = new DOMParser().parseFromString(source, 'application/xml')
+      return Array.from(document.getElementsByTagNameNS(namespace, 'p'))
+        .filter(paragraph => paragraph.getElementsByTagNameNS(namespace, 'pStyle').item(0)
+          ?.getAttributeNS(namespace, 'val')?.startsWith('DshExampleEdited'))
+        .map(paragraph => new XMLSerializer().serializeToString(paragraph))
+    }, strFromU8(unzipSync(bytes)['word/document.xml']!))
+    const questionParagraphs = await editedParagraphs(Buffer.from(questionFile.value.contentBase64, 'base64'))
+    const explanationParagraphs = await editedParagraphs(Buffer.from(editedDownload.value.contentBase64, 'base64'))
+    expect(questionParagraphs).not.toHaveLength(0)
+    expect(explanationParagraphs).not.toHaveLength(0)
+    await surface.getByRole('button', { name: '放大题目解析', exact: true }).click()
+    const explanationOriginal = page.getByRole('dialog', { name: '题目解析大窗口', exact: true })
+    await explanationOriginal.getByRole('img', { name: '长题拼接-解析原件.pdf，第 2 页', exact: true }).waitFor()
+    await page.keyboard.press('Escape')
+    await page.reload({ waitUntil: 'load' })
+    await openModule('典例收集')
+    await directory.getByRole('button', { name: '长题拼接', exact: false }).first().click()
+    await word.getByText('最后一小问：说明结论。', { exact: true }).waitFor()
+    await explanation.getByText('解析末尾：检验所有条件。', { exact: true }).waitFor()
+    expect(await explanation.locator('math mfrac').allTextContents()).toEqual(['43', 'αθ'])
+    expect(await explanation.locator('.katex-html').first().locator('[style]').evaluateAll(elements => elements.some(element => (element as HTMLElement).style.color === 'rgb(0, 0, 255)'))).toBe(true)
+    expect(await explanation.locator('math mtable mtr').allTextContents()).toEqual(['x+y=3', 'x−y=1'])
+    expect(await explanation.locator('math').last().locator('mtext').allTextContents()).toEqual(['ii', '\u00a0⫽\u00a0'])
+    expect((await explanation.locator('math').last().textContent())?.replaceAll('\u00a0', '')).toContain('AB⫽CD')
+    expect(await explanation.locator('math').last().evaluate(element => getComputedStyle(element).fontWeight)).toBe('700')
+    expect(await explanation.locator('.katex-html').last().locator('.boldsymbol').count()).toBeGreaterThan(0)
+    await sourcePanel.getByRole('img', { name: '长题拼接-原件.pdf，第 3 页', exact: true }).waitFor()
+    expect(recordedInputs).toHaveLength(2)
+    await surface.getByRole('textbox', { name: '搜索题目', exact: true }).fill('')
+    await surface.getByRole('button', { name: '搜索', exact: true }).click()
+    const searchResults = page.getByRole('dialog', { name: '搜索结果', exact: true })
+    await searchResults.getByRole('checkbox', { name: '选择题目“长题拼接”', exact: true }).check()
+    for (const layout of ['paired', 'grouped'] as const) {
+      await searchResults.getByRole('button', { name: '导出 Word', exact: true }).click()
+      const exporter = page.getByRole('dialog', { name: '导出 Word', exact: true })
+      if (layout === 'grouped') await exporter.getByRole('radio', { name: '所有题目在前，解析集中在后', exact: false }).check()
+      const [download] = await Promise.all([
+        page.waitForEvent('download'), exporter.getByRole('button', { name: '导出并下载', exact: true }).click(),
+      ])
+      const path = join(screenshotRoot, `search-edited-${layout}.docx`)
+      await download.saveAs(path)
+      expect(await editedParagraphs(await readFile(path))).toEqual([...questionParagraphs, ...explanationParagraphs])
+      await exporter.waitFor({ state: 'detached' })
+    }
+    await searchResults.getByRole('button', { name: '关闭搜索结果', exact: true }).click()
+    await surface.getByRole('button', { name: '放大解析 Word 预览', exact: true }).click()
+    await page.evaluate(async () => { await document.fonts.ready })
+    const formulaLayout = async (formula: Locator) => formula.evaluate(element => ({
+      font: getComputedStyle(element).fontFamily,
+      color: getComputedStyle(element).color,
+      bases: [...element.querySelectorAll('.base')].map((base) => {
+        const bounds = base.getBoundingClientRect()
+        return { width: bounds.width, height: bounds.height }
+      }),
+      radicalFills: [...element.querySelectorAll('.sqrt svg')].map(svg => getComputedStyle(svg).fill),
+      strutMinHeights: [...new Set([...element.querySelectorAll('.pstrut')].map(strut => getComputedStyle(strut).minHeight))],
+    }))
+    const cardFormula = await formulaLayout(explanation.locator('.katex').last())
+    const expandedFormula = await formulaLayout(editor.locator('.katex').last())
+    expect(cardFormula.font).toBe(expandedFormula.font)
+    expect(cardFormula.radicalFills).toEqual(expandedFormula.radicalFills.map(() => cardFormula.color))
+    expect(cardFormula.strutMinHeights).toEqual(expandedFormula.strutMinHeights)
+    expect(cardFormula.bases).toHaveLength(expandedFormula.bases.length)
+    for (const [index, base] of cardFormula.bases.entries()) {
+      expect(base.width).toBeCloseTo(expandedFormula.bases[index]!.width, 1)
+      expect(base.height).toBeCloseTo(expandedFormula.bases[index]!.height, 1)
+    }
+    await compareOrRefreshGolden(
+      fileURLToPath(new URL('./expected/teacher-workbench/example-formula-layout.expected.json', import.meta.url)),
+      JSON.stringify({ font: cardFormula.font, radicalFills: cardFormula.radicalFills,
+        strutMinHeights: cardFormula.strutMinHeights, baseCount: cardFormula.bases.length }, null, 2), MODE,
+    )
+    await editor.locator('[data-equation]').last().dblclick()
+    await mathfield.press('End')
+    await mathfield.pressSequentially('+1')
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    expect(await formulaEditor.count()).toBe(0)
+    expect(await editor.locator('[data-equation] math').last().textContent()).toContain('⫽')
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: '放弃', exact: true }).click()
+    await explanation.screenshot({ path: join(screenshotRoot, 'formula-card-layout.png'), animations: 'disabled' })
+    expect(recordedInputs).toHaveLength(2)
+    await explanation.getByRole('button', { name: 'AI 校对', exact: true }).click()
+    await explanation.getByText('解析末尾：检验所有条件。', { exact: true }).waitFor({ timeout: 30_000 })
+    expect(recordedInputs).toHaveLength(3)
+    expect(recordedInputs[2]!.data.content.filter(block => block.type === 'image')).toHaveLength(2)
+    for (const layout of ['paired', 'grouped'] as const) {
+      const exported = await scaffold.ctx.teacherWorkbench.exportExamplesWord({ ids: [id], layout })
+      if (!exported.ok) throw new Error(exported.error.code)
+      const bytes = Buffer.from(exported.value.contentBase64, 'base64')
+      await writeFile(join(screenshotRoot, `export-${layout}.docx`), bytes)
+      const xml = strFromU8(unzipSync(bytes)['word/document.xml']!)
+      expect(xml.indexOf('解析开头')).toBeGreaterThan(xml.indexOf('最后一小问'))
+      expect(xml).toContain('解析末尾：检验所有条件。')
+      expect((xml.match(/<m:f>/gu) ?? []).length).toBe(41)
+      expect(xml).not.toMatch(/上半题|下半题|中间页|解析上|解析下/u)
+    }
+    expect(recordedInputs).toHaveLength(3)
+    await surface.getByRole('button', { name: '放大解析 Word 预览', exact: true }).click()
+    await editor.locator('[data-equation]').last().dblclick()
+    await mathfield.press('ControlOrMeta+a')
+    await mathfield.press('Backspace')
+    await mathfield.pressSequentially('b=(1,-')
+    await formulaEditor.getByRole('button', { name: '平方根', exact: true }).click()
+    await mathfield.pressSequentially('3')
+    await mathfield.press('End')
+    await mathfield.press('ControlOrMeta+a')
+    await mathfield.locator('[part="menu-toggle"]').click()
+    await formulaMenu.getByRole('menuitem', { name: '字体样式', exact: true }).hover()
+    await page.getByRole('menuitemcheckbox', { name: '加粗', exact: true }).click()
+    await expect.poll(() => formulaMenu.count()).toBe(0)
+    expect(await enteredLatex()).toContain('\\mathbfit')
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    await formulaEditor.waitFor({ state: 'detached' })
+    await expandedExplanation.getByRole('button', { name: '保存', exact: true }).click()
+    await expandedExplanation.getByText('已保存', { exact: true }).waitFor()
+    await expandedExplanation.getByRole('button', { name: '关闭预览', exact: true }).click()
+    await surface.getByRole('button', { name: '放大解析 Word 预览', exact: true }).click()
+    expect(await editor.locator('math mi[mathvariant="bold-italic"]').first().textContent()).toBe('b')
+    await editor.locator('[data-equation]').last().dblclick()
+    await mathfield.press('End')
+    await mathfield.pressSequentially('+1')
+    await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
+    await formulaEditor.waitFor({ state: 'detached' })
+    await expandedExplanation.getByRole('button', { name: '保存', exact: true }).click()
+    await expandedExplanation.getByText('已保存', { exact: true }).waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'example-formula-bold-saved.expected.md'),
+      await captureStableAria(page, 'dialog[aria-label="解析 Word 预览大窗口"]', scaffold.workspaceCwd), MODE)
+    await page.screenshot({ path: join(screenshotRoot, 'formula-bold-saved.png'), animations: 'disabled' })
+    const boldDownload = await scaffold.ctx.teacherWorkbench.readExampleFile({ id, document: 'explanation', kind: 'word' })
+    if (!boldDownload.ok) throw new Error(boldDownload.error.code)
+    const boldParagraphs = await editedParagraphs(Buffer.from(boldDownload.value.contentBase64, 'base64'))
+    expect(boldParagraphs.join('')).toContain('m:val="bi"')
+    for (const layout of ['paired', 'grouped'] as const) {
+      const exported = await scaffold.ctx.teacherWorkbench.exportExamplesWord({ ids: [id], layout })
+      if (!exported.ok) throw new Error(exported.error.code)
+      expect(await editedParagraphs(Buffer.from(exported.value.contentBase64, 'base64'))).toEqual([...questionParagraphs, ...boldParagraphs])
+    }
+    await expandedExplanation.getByRole('button', { name: '关闭预览', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
@@ -738,7 +1343,7 @@ describe('web e2e: durable teacher workbench', () => {
       await captureStableAria(page, '[role="alert"]', scaffold.workspaceCwd),
       MODE,
     )
-    await openModule('点例收集')
+    await openModule('典例收集')
     const description = page.getByRole('region', { name: '题目描述', exact: true })
     if (await description.count() === 0) {
       await page.getByRole('complementary', { name: '题目目录', exact: true })
@@ -1316,11 +1921,11 @@ describe('web e2e: durable teacher workbench', () => {
     )
   })
 
-  it('exports uploaded question pictures with white padding and equal side margins', async () => {
+  it('exports uploaded question pictures with proportional scaling and equal side margins', async () => {
     const original = await readFile(RASTER_FIXTURE)
     const result = await scaffold.ctx.teacherWorkbench.generateUploadedQuestionDocument({
       kind: 'ppt',
-      folderName: '补白验证',
+      folderName: '等比例缩放验证',
       images: [{ fileName: '第1题.png', relativePath: '第1题.png', contentBase64: original.toString('base64') }],
     })
     if (!result.ok) throw new Error(result.error.message)
@@ -1335,13 +1940,17 @@ describe('web e2e: durable teacher workbench', () => {
     const leftMargin = Number(offset[1])
     const rightMargin = Number(slideSize[1]) - leftMargin - Number(extent[1])
     expect(rightMargin).toBe(leftMargin)
-    await compareOrRefreshGolden(QUESTION_PPT_PADDING_EXPECTED, JSON.stringify({
+    expect(image.readUInt32BE(16)).toBe(original.readUInt32BE(16))
+    expect(image.readUInt32BE(20)).toBe(original.readUInt32BE(20))
+    expect(Number(extent[2]) / Number(extent[1])).toBeCloseTo(original.readUInt32BE(20) / original.readUInt32BE(16), 6)
+    expect(picture).not.toContain('<a:srcRect')
+    await compareOrRefreshGolden(QUESTION_PPT_SCALING_EXPECTED, JSON.stringify({
       fileName: result.value.fileName,
       originalPixels: { width: original.readUInt32BE(16), height: original.readUInt32BE(20) },
       embeddedPixels: { width: image.readUInt32BE(16), height: image.readUInt32BE(20) },
       slideEmu: { width: Number(slideSize[1]), height: Number(slideSize[2]) },
       pictureEmu: { x: Number(offset[1]), y: Number(offset[2]), width: Number(extent[1]), height: Number(extent[2]) },
-      crop: /<a:srcRect[^>]*\/>/u.exec(picture)?.[0],
+      crop: /<a:srcRect[^>]*\/>/u.exec(picture)?.[0] ?? null,
     }, null, 2), MODE)
   })
 

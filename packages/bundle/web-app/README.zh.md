@@ -51,7 +51,7 @@ dsh --profile web --no-open --port 8080
 
 侧边卡片内置的**任务管理**标签页默认关闭，可在**设置 → 侧边卡片**中开启。已保存的标签页选择优先于默认值，升级后也会保留；此开关只控制侧边标签页，不影响后台子代理执行。
 
-点例收集使用随包提供的 SQLite 后端，数据库位于 `$DSH_HOME/teacher-workbench/examples.sqlite`；仅 `teacher_example_collection` 域选择此路由，其他存储域保留基础层的 JSON 后端。[Host 参考](../../host/teacher-workbench/README.zh.md#example-collection) 定义题目和文件的保存语义。
+典例收集使用随包提供的 SQLite 后端，数据库位于 `$DSH_HOME/teacher-workbench/examples.sqlite`；仅 `teacher_example_collection` 域选择此路由，其他存储域保留基础层的 JSON 后端。[Host 参考](../../host/teacher-workbench/README.zh.md#example-collection) 定义题目和文件的保存语义。
 
 ### LAN 访问与可信主机
 

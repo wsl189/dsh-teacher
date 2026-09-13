@@ -9,6 +9,7 @@ import { DOMParser } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { Document, Packer, Paragraph } from 'docx'
 import sharp from 'sharp'
+import { PDFDocument } from 'pdf-lib'
 import type { OcrExtractResult } from '@deepseek-ai/dsh-ocr'
 import { SqliteStorageBackend } from '../../../storage/storage-sqlite/src/index.ts'
 import { TeacherExampleCollection, teacherExampleDomainSpec } from '../src/example-collection.ts'
@@ -37,7 +38,7 @@ async function harness(
   correct = vi.fn<ConstructorParameters<typeof TeacherExampleCollection>[3]>()
     .mockImplementation(async request => ({ ok: true, value: request.markdown })),
   identifyHeading = vi.fn<ConstructorParameters<typeof TeacherExampleCollection>[4]>()
-    .mockResolvedValue({ ok: true, value: '' }),
+    .mockResolvedValue({ ok: true, value: [] }),
 ) {
   if (path === undefined) {
     const root = await mkdtemp(join(tmpdir(), 'dsh-example-'))
@@ -101,6 +102,92 @@ afterEach(async () => {
 })
 
 describe('example collection in SQLite', () => {
+
+  it('saves manual Word edits through metadata changes and rejects stale editors and late proofreading', async () => {
+    const owner = await harness()
+    const question = value(await owner.collection.create())
+    const request = { id: question.id, document: 'question' as const }
+    await owner.collection.upload({ ...request, files: [{ name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
+    await owner.collection.recognize(request)
+    const loaded = value(await owner.collection.readEditor(request))
+    const paragraphs = loaded.paragraphs.map(paragraph => ({ ...paragraph, lineSpacing: 2 }))
+    await owner.collection.update({ id: question.id, description: '保留描述' })
+    let finish!: (result: TeacherExampleResult<string>) => void
+    owner.correct.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+    const recognition = owner.collection.recognize(request)
+    await vi.waitFor(() => { expect(finish).toBeDefined() })
+    const saved = value(await owner.collection.saveEditor({
+      ...request, sourceId: loaded.sourceId, wordRevision: loaded.wordRevision, paragraphs,
+    }))
+    expect(saved.question.description).toBe('保留描述')
+    expect(value(await owner.collection.readEditor(request)).paragraphs).toEqual(paragraphs)
+    finish({ ok: true, value: '迟到的识别内容' })
+    expect(await recognition).toMatchObject({ ok: false, error: { code: 'source-changed' } })
+    expect(await owner.collection.saveEditor({ ...request, sourceId: loaded.sourceId, wordRevision: loaded.wordRevision, paragraphs }))
+      .toMatchObject({ ok: false, error: { code: 'word-changed' } })
+    await owner.close()
+    const restarted = await harness(owner.path)
+    expect(value(await restarted.collection.readEditor(request)).paragraphs).toEqual(paragraphs)
+  })
+  it.each(documentKinds)('joins ordered image and PDF fragments into one durable %s and one corrected Word', async (document) => {
+    const owner = await harness()
+    const question = value(await owner.collection.create())
+    const request = { id: question.id, document }
+    const middle = await PDFDocument.create()
+    middle.addPage([300, 160]).drawText('continuation one')
+    middle.addPage([300, 180]).drawText('continuation two')
+    const png = await sharp({ create: { width: 240, height: 100, channels: 3, background: 'white' } }).png().toBuffer()
+    const webp = await sharp({ create: { width: 240, height: 120, channels: 3, background: 'blue' } }).webp().toBuffer()
+    value(await owner.collection.upload({ ...request, files: [
+      { name: 'top.png', mediaType: 'image/png', contentBase64: png.toString('base64') },
+      { name: 'middle.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(await middle.save()).toString('base64') },
+      { name: 'bottom.webp', mediaType: 'image/webp', contentBase64: webp.toString('base64') },
+    ] }))
+    const source = value(await owner.collection.readFile({ ...request, kind: 'source' }))
+    expect(source.name).toBe(document === 'question' ? '1-原件.pdf' : '1-解析原件.pdf')
+    const merged = await PDFDocument.load(Buffer.from(source.contentBase64, 'base64'))
+    expect(merged.getPages().map(page => page.getSize())).toEqual([
+      { width: 240, height: 100 }, { width: 300, height: 160 }, { width: 300, height: 180 }, { width: 240, height: 120 },
+    ])
+    owner.extract.mockResolvedValue(ocrResult('已知点0，\n求 $\\frac{1}{2}$。\n（i）保留最后一小问。'))
+    owner.correct.mockResolvedValue({ ok: true, value: '已知点 $O$，求 $\\frac{1}{2}$。\n（i）保留最后一小问。' })
+    value(await owner.collection.recognize(request))
+    expect(owner.extract).toHaveBeenCalledExactlyOnceWith({ ...source, includeImages: true }, expect.any(AbortSignal))
+    expect(owner.correct).toHaveBeenCalledExactlyOnceWith({
+      source: { ...source, includeImages: true }, document, markdown: '已知点0，\n求 $\\frac{1}{2}$。\n（i）保留最后一小问。',
+    }, expect.any(AbortSignal))
+    expect(owner.identifyHeading).toHaveBeenCalledOnce()
+    const word = value(await owner.collection.readFile({ ...request, kind: 'word' }))
+    const xml = strFromU8(unzipSync(Buffer.from(word.contentBase64, 'base64'))['word/document.xml']!)
+    expect(xml).toContain('<m:f>')
+    expect(new DOMParser().parseFromString(xml, 'application/xml').documentElement?.textContent).toContain('（i）保留最后一小问。')
+    await owner.close()
+    const reopened = await harness(owner.path)
+    expect(value(await reopened.collection.readFile({ ...request, kind: 'source' }))).toEqual(source)
+    expect(value(await reopened.collection.readFile({ ...request, kind: 'word' }))).toEqual(word)
+    expect(reopened.extract).not.toHaveBeenCalled()
+  })
+
+  it('rejects an empty, oversized, or unreadable fragment set atomically', async () => {
+    const owner = await harness()
+    const question = value(await owner.collection.create())
+    const request = { id: question.id, document: 'question' as const }
+    const valid = { name: 'saved.pdf', mediaType: 'application/pdf' as const, contentBase64: pdf }
+    value(await owner.collection.upload({ ...request, files: [valid] }))
+    value(await owner.collection.recognize(request))
+    const before = value(await owner.collection.list())
+    const word = value(await owner.collection.readFile({ ...request, kind: 'word' }))
+    expect(await owner.collection.upload({ ...request, files: [] })).toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    expect(await owner.collection.upload({ ...request, files: [valid, valid] })).toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    const oversized = Buffer.alloc(700_000)
+    oversized.write('%PDF-1.4')
+    const fragment = { ...valid, contentBase64: oversized.toString('base64') }
+    expect(await owner.collection.upload({ ...request, files: [fragment, fragment] })).toMatchObject({ ok: false, error: { code: 'file-too-large' } })
+    expect(value(await owner.collection.list())).toEqual(before)
+    expect(value(await owner.collection.readFile({ ...request, kind: 'word' }))).toEqual(word)
+    expect(value(await owner.collection.readFile({ ...request, kind: 'source' }))).toEqual(valid)
+  })
+
   it('identifies a saved heading once across concurrent reads and exports without OCR, then reuses the result after restart', async () => {
     const owner = await harness()
     const question = { id: 'saved-heading' as TeacherExample['id'] }
@@ -119,13 +206,13 @@ describe('example collection in SQLite', () => {
     owner.extract.mockClear()
     owner.correct.mockClear()
     owner.identifyHeading.mockClear()
-    let finish!: (result: TeacherExampleResult<string>) => void
+    let finish!: (result: TeacherExampleResult<readonly { paragraph: number; prefix: string }[]>) => void
     owner.identifyHeading.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
     const reads = [owner.collection.readFile({ ...request, kind: 'word' }), owner.collection.readFile({ ...request, kind: 'word' })]
     const exporting = owner.collection.exportWord({ ids: [question.id], layout: 'paired' })
     await vi.waitFor(() => { expect(owner.identifyHeading).toHaveBeenCalledOnce() })
     await owner.collection.update({ id: question.id, name: '保留名称', description: '保留描述' })
-    finish({ ok: true, value: '【题4】（2019人教A版P33）' })
+    finish({ ok: true, value: [{ paragraph: 0, prefix: '【题4】（2019人教A版P33）' }] })
     for (const result of await Promise.all([...reads, exporting])) {
       const bytes = Buffer.from(value(result).contentBase64, 'base64')
       expect(exampleWordNeedsHeading(bytes)).toBe(false)
@@ -149,12 +236,12 @@ describe('example collection in SQLite', () => {
     const owner = await harness()
     const question = value(await owner.collection.create())
     const request = { id: question.id, document: 'question' as const }
-    await owner.collection.upload({ ...request, name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await owner.collection.upload({ ...request, files: [{ name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     await owner.collection.recognize(request)
     const before = value(await owner.collection.readFile({ ...request, kind: 'word' }))
     owner.identifyHeading.mockResolvedValue({ ok: false, error: { code: 'correction-failed', message: 'Unavailable' } })
     expect(await owner.collection.recognize(request)).toMatchObject({ ok: false, error: { code: 'correction-failed' } })
-    owner.identifyHeading.mockResolvedValue({ ok: true, value: '删除不存在的文字' })
+    owner.identifyHeading.mockResolvedValue({ ok: true, value: [{ paragraph: 0, prefix: '删除不存在的文字' }] })
     expect(await owner.collection.recognize(request)).toMatchObject({ ok: false, error: { code: 'correction-invalid' } })
     expect(value(await owner.collection.readFile({ ...request, kind: 'word' }))).toEqual(before)
   })
@@ -163,7 +250,7 @@ describe('example collection in SQLite', () => {
     const owner = await harness()
     const question = value(await owner.collection.create())
     const request = { id: question.id, document }
-    await owner.collection.upload({ ...request, name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await owner.collection.upload({ ...request, files: [{ name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     owner.extract.mockResolvedValue(ocrResult('A.点0；C. $a\\cdot b:c$'))
     owner.correct.mockResolvedValue({ ok: true, value: 'A.点 O；C. $a:b:c$' })
     expect(await owner.collection.recognize(request)).toMatchObject({ ok: true })
@@ -186,13 +273,13 @@ describe('example collection in SQLite', () => {
     const owner = await harness()
     const question = value(await owner.collection.create())
     const request = { id: question.id, document: 'question' as const }
-    await owner.collection.upload({ ...request, name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await owner.collection.upload({ ...request, files: [{ name: 'original.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     const completion = Promise.withResolvers<TeacherExampleResult<string>>()
     owner.correct.mockReturnValue(completion.promise)
     const pending = owner.collection.recognize(request)
     await vi.waitFor(() => { expect(owner.correct).toHaveBeenCalledOnce() })
     if (action === 'delete') await owner.collection.delete({ id: question.id })
-    else await owner.collection.upload({ ...request, name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    else await owner.collection.upload({ ...request, files: [{ name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     completion.resolve({ ok: true, value: 'late corrected text' })
     expect(await pending).toMatchObject({ ok: false, error: { code: action === 'delete' ? 'not-found' : 'source-changed' } })
   })
@@ -263,7 +350,7 @@ describe('example collection in SQLite', () => {
     const reading = owner.collection.readFile({ id: question.id, document: 'question', kind: 'word' })
     await vi.waitFor(() =>{  expect(owner.extract).toHaveBeenCalledOnce() })
     if (action === 'delete') await owner.collection.delete({ id: question.id })
-    else await owner.collection.upload({ id: question.id, document: 'question', name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    else await owner.collection.upload({ id: question.id, document: 'question', files: [{ name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     finish(recognized)
     expect(await reading).toMatchObject({ ok: false, error: { code: action === 'delete' ? 'not-found' : 'source-changed' } })
     const rows = value(await owner.collection.list()).questions
@@ -345,13 +432,13 @@ describe('example collection in SQLite', () => {
         },
       ],
     })
-    await collection.upload({ id: question.id, document: 'question', name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'question', files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     expect(value(await collection.recognize({ id: question.id, document: 'question' })).documents.question.status).toBe('ready')
     const word = value(await collection.readFile({ id: question.id, document: 'question', kind: 'word' }))
     const xml = unzipSync(Buffer.from(word.contentBase64, 'base64'))['word/document.xml']
     const document = new DOMParser().parseFromString(Buffer.from(xml ?? []).toString(), 'application/xml')
     expect(document.documentElement?.textContent).toContain('已知 x² − 3x + 2 = 0，求 x。')
-    await collection.upload({ id: question.id, document: 'explanation', name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'explanation', files: [{ name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     expect(value(await collection.recognize({ id: question.id, document: 'explanation' })).documents.explanation.status).toBe('ready')
     const explanationWord = value(await collection.readFile({ id: question.id, document: 'explanation', kind: 'word' }))
     expect(explanationWord.name).toBe('方程例题-解析.docx')
@@ -386,6 +473,28 @@ describe('example collection in SQLite', () => {
     expect(value(await reopened.collection.list()).tags).toEqual(['二次方程'])
   })
 
+  it('persists preset deletion while retaining existing question tags and rejecting new assignments', async () => {
+    const owner = await harness()
+    const first = value(await owner.collection.create())
+    const second = value(await owner.collection.create())
+    value(await owner.collection.addTag('几何'))
+    value(await owner.collection.addTag('向量'))
+    const tagged = value(await owner.collection.update({ id: first.id, tags: ['几何'] }))
+    expect(value(await owner.collection.deleteTag('  几何  '))).toBe('几何')
+    expect(value(await owner.collection.deleteTag('几何'))).toBe('几何')
+    expect(await owner.collection.deleteTag('   ')).toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    await owner.close()
+    const { collection } = await harness(owner.path)
+    expect(value(await collection.list())).toMatchObject({ tags: ['向量'], questions: [tagged, second] })
+    expect(value(await collection.update({ id: first.id, description: '仍可编辑' })).tags).toEqual(['几何'])
+    expect(value(await collection.update({ id: first.id, tags: ['几何', '向量'] })).tags).toEqual(['几何', '向量'])
+    expect(await collection.update({ id: second.id, tags: ['几何'] })).toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    value(await collection.update({ id: first.id, tags: [] }))
+    expect(await collection.update({ id: first.id, tags: ['几何'] })).toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    value(await collection.addTag('几何'))
+    expect(value(await collection.update({ id: first.id, tags: ['几何'] })).tags).toEqual(['几何'])
+  })
+
   it('keeps metadata edits made during OCR and collapses duplicate recognition requests', async () => {
     let finish!: (result: OcrExtractResult) => void
     const extract = vi.fn<ConstructorParameters<typeof TeacherExampleCollection>[2]>(
@@ -396,7 +505,7 @@ describe('example collection in SQLite', () => {
     )
     const { collection } = await harness(undefined, extract)
     const question = value(await collection.create())
-    await collection.upload({ id: question.id, document: 'question', name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'question', files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     const recognizing = collection.recognize({ id: question.id, document: 'question' })
     const duplicate = collection.recognize({ id: question.id, document: 'question' })
     await vi.waitFor(() => {
@@ -418,7 +527,7 @@ describe('example collection in SQLite', () => {
     const { collection } = await harness(undefined, extract)
     const question = value(await collection.create())
     for (const document of documentKinds) {
-      await collection.upload({ id: question.id, document, name: `${document}.pdf`, mediaType: 'application/pdf', contentBase64: pdf })
+      await collection.upload({ id: question.id, document, files: [{ name: `${document}.pdf`, mediaType: 'application/pdf', contentBase64: pdf }] })
     }
     const recognizing = {
       question: collection.recognize({ id: question.id, document: 'question' }),
@@ -438,7 +547,7 @@ describe('example collection in SQLite', () => {
       expect(xml).toContain(document === 'question' ? '题目：求方程的根。' : '解析：代入求解。')
     }
     const explanationWord = value(await collection.readFile({ id: question.id, document: 'explanation', kind: 'word' }))
-    await collection.upload({ id: question.id, document: 'question', name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'question', files: [{ name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     expect(value(await collection.readFile({ id: question.id, document: 'explanation', kind: 'word' }))).toEqual(explanationWord)
     expect(await collection.readFile({ id: question.id, document: 'question', kind: 'word' })).toMatchObject({ ok: false, error: { code: 'not-found' } })
   })
@@ -453,20 +562,14 @@ describe('example collection in SQLite', () => {
     )
     const { collection } = await harness(undefined, extract)
     const question = value(await collection.create())
-    await collection.upload({ id: question.id, document, name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document, files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     const recognizing = collection.recognize({ id: question.id, document })
     await vi.waitFor(() => {
       expect(extract).toHaveBeenCalledOnce()
     })
     if (operation === 'delete') await collection.delete({ id: question.id })
     else
-      await collection.upload({
-        id: question.id,
-        document,
-        name: 'replacement.pdf',
-        mediaType: 'application/pdf',
-        contentBase64: pdf,
-      })
+      await collection.upload({ id: question.id, document, files: [{ name: 'replacement.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     finish(ocrResult())
     expect(await recognizing).toMatchObject({
       ok: false,
@@ -492,7 +595,7 @@ describe('example collection in SQLite', () => {
       .mockResolvedValueOnce(ocrResult())
     const { collection } = await harness(undefined, extract)
     const question = value(await collection.create())
-    await collection.upload({ id: question.id, document, name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document, files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     expect(value(await collection.recognize({ id: question.id, document }))).toMatchObject({ documents: { [document]: { status: 'error', ocrError: 'ocr-unavailable' } } })
     expect(value(await collection.recognize({ id: question.id, document }))).toMatchObject({ documents: { [document]: { status: 'error', ocrError: 'ocr-truncated' } } })
     expect(value(await collection.readFile({ id: question.id, document, kind: 'source' })).contentBase64).toBe(pdf)
@@ -502,20 +605,20 @@ describe('example collection in SQLite', () => {
   it('rejects malformed uploads and unknown tag references without replacing a saved source', async () => {
     const { collection } = await harness()
     const question = value(await collection.create())
-    const upload = { id: question.id, document: 'question' as const, name: 'question.pdf', mediaType: 'application/pdf' as const, contentBase64: pdf }
+    const upload = { id: question.id, document: 'question' as const, files: [{ name: 'question.pdf', mediaType: 'application/pdf' as const, contentBase64: pdf }] }
     await collection.upload(upload)
     for (const patch of [
       { name: '../question.pdf' },
       { contentBase64: 'not base64' },
       { contentBase64: Buffer.from('not a pdf').toString('base64') },
     ]) {
-      expect(await collection.upload({ ...upload, ...patch })).toMatchObject({
+      expect(await collection.upload({ ...upload, files: [{ ...upload.files[0]!, ...patch }] })).toMatchObject({
         ok: false,
         error: { code: 'invalid-request' },
       })
     }
     expect(
-      await collection.upload({ ...upload, contentBase64: Buffer.alloc(1024 * 1024 + 1).toString('base64') }),
+      await collection.upload({ ...upload, files: [{ ...upload.files[0]!, contentBase64: Buffer.alloc(1024 * 1024 + 1).toString('base64') }] }),
     ).toMatchObject({ ok: false, error: { code: 'file-too-large' } })
     expect(await collection.update({ id: question.id, tags: ['missing'] })).toMatchObject({
       ok: false,
@@ -543,7 +646,7 @@ describe('example collection in SQLite', () => {
       for (const document of documentKinds) {
         if (index === 1 && document === 'explanation') continue
         extract.mockResolvedValueOnce(ocrResult(String.raw`${document} content ${index} $\frac{${index + 1}}{2}$`))
-        await collection.upload({ id: question.id, document, name: `${document}.pdf`, mediaType: 'application/pdf', contentBase64: pdf })
+        await collection.upload({ id: question.id, document, files: [{ name: `${document}.pdf`, mediaType: 'application/pdf', contentBase64: pdf }] })
         value(await collection.recognize({ id: question.id, document }))
       }
     }
@@ -594,10 +697,10 @@ describe('example collection in SQLite', () => {
       ok: false, error: { code: 'invalid-request' },
     })
     expect(await collection.exportWord(request)).toMatchObject({ ok: false, error: { code: 'export-not-ready' } })
-    await collection.upload({ id: question.id, document: 'question', name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'question', files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     value(await collection.recognize({ id: question.id, document: 'question' }))
     expect((await collection.exportWord(request)).ok).toBe(true)
-    await collection.upload({ id: question.id, document: 'explanation', name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'explanation', files: [{ name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     expect(await collection.exportWord(request)).toMatchObject({ ok: false, error: { code: 'export-not-ready' } })
     await collection.delete({ id: question.id })
     expect(await collection.exportWord(request)).toMatchObject({ ok: false, error: { code: 'not-found' } })
@@ -618,8 +721,8 @@ describe('example collection in SQLite', () => {
     )
     const { collection, close } = await harness(undefined, extract)
     const question = value(await collection.create())
-    await collection.upload({ id: question.id, document: 'question', name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf })
-    await collection.upload({ id: question.id, document: 'explanation', name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf })
+    await collection.upload({ id: question.id, document: 'question', files: [{ name: 'question.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
+    await collection.upload({ id: question.id, document: 'explanation', files: [{ name: 'explanation.pdf', mediaType: 'application/pdf', contentBase64: pdf }] })
     const recognizing = Promise.all(documentKinds.map(document => collection.recognize({ id: question.id, document })))
     await vi.waitFor(() => {
       expect(extract).toHaveBeenCalledTimes(2)

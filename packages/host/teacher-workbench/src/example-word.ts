@@ -5,12 +5,13 @@ import type { OcrExtractedImage } from '@deepseek-ai/dsh-ocr'
 import { Document, ImageRun, ImportedXmlComponent, Packer, Paragraph, TextRun, type ParagraphChild } from 'docx'
 import { strFromU8, unzipSync } from 'fflate'
 import katex from 'katex'
-import { mml2omml } from 'mathml2omml'
 import { fromMarkdown } from 'mdast-util-from-markdown'
 import { mathFromMarkdown } from 'mdast-util-math'
 import { math } from 'micromark-extension-math'
 import { visit } from 'unist-util-visit'
+import { exampleWordIsEdited } from './example-word-layout.ts'
 import { normalizeExampleWordTypography } from './example-word-typography.ts'
+import { exampleLatexToOffice } from './example-word-math.ts'
 import { exampleWordNeedsHeading, removeExampleHeading } from './example-word-heading.ts'
 import { exampleImageReferences, exampleImageRun, importExampleImage, restoreExampleImageText, type ExampleImageReference } from './example-word-images.ts'
 
@@ -66,7 +67,7 @@ export function exampleWordNeedsImages(bytes: Uint8Array): boolean {
 /**
  * Compile saved collection Word paragraphs without rerunning OCR or flattening native equations.
  * @param blocks - question/explanation documents in the requested order; no headings or metadata are added.
- * @returns one DOCX with uniform typography, native equations, and matching preview MathML.
+ * @returns one DOCX retaining saved user formatting, native equations, and matching preview MathML.
  */
 export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): Promise<Buffer> {
   const paragraphs: Paragraph[] = []
@@ -107,6 +108,11 @@ export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): P
         const node = child as XmlElement
         if (node.namespaceURI === WORD_NS && node.localName === 'r') {
           if (node.getElementsByTagNameNS(WORD_NS, 'drawing').length > 0) {
+            if (exampleWordIsEdited(element)) {
+              paragraph.addChildElement(importExampleImage(node, entries))
+              bodyContent = true
+              continue
+            }
             figures.push(new Paragraph({ style: 'DshExampleFigure', children: [importExampleImage(node, entries)] }))
             movedImage = true
             continue
@@ -146,7 +152,7 @@ export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): P
     }
   }
   const bytes = await packWord({ paragraphs, mathml }, sectionBreak)
-  return blocks.every(block => !exampleWordNeedsHeading(block.bytes)) ? removeExampleHeading(bytes, '') : bytes
+  return blocks.every(block => !exampleWordNeedsHeading(block.bytes)) ? removeExampleHeading(bytes, []) : bytes
 }
 
 /**
@@ -158,7 +164,8 @@ export async function normalizeExampleWord(bytes: Uint8Array): Promise<Buffer | 
   const xml = unzipSync(bytes)['word/document.xml']
   if (xml === undefined) throw new Error('Example Word file has no document XML')
   const document = new DOMParser().parseFromString(strFromU8(xml), 'application/xml')
-  if (document.getElementsByTagNameNS(MATH_NS, 'oMath').length > 0 ||
+  if (Array.from(document.getElementsByTagNameNS(WORD_NS, 'p')).some(exampleWordIsEdited) ||
+    document.getElementsByTagNameNS(MATH_NS, 'oMath').length > 0 ||
     document.getElementsByTagNameNS(WORD_NS, 'drawing').length > 0 || exampleWordNeedsImages(bytes)) {
     return normalizeExampleWordTypography(bytes)
   }
@@ -173,7 +180,7 @@ export async function normalizeExampleWord(bytes: Uint8Array): Promise<Buffer | 
   const content = await wordContent(markdown, [])
   if (content.mathml.length === 0) return normalizeExampleWordTypography(bytes)
   const rebuilt = await packWord(content)
-  return exampleWordNeedsHeading(bytes) ? rebuilt : removeExampleHeading(rebuilt, '')
+  return exampleWordNeedsHeading(bytes) ? rebuilt : removeExampleHeading(rebuilt, [])
 }
 
 async function packWord(content: WordContent, sectionBreak?: number): Promise<Buffer> {
@@ -244,29 +251,14 @@ async function wordContent(markdown: string, images: readonly OcrExtractedImage[
 }
 
 function nativeEquation(equation: Equation): { word: ImportedXmlComponent; mathml: string } | undefined {
-  let mathml: string
   try {
-    mathml = katex.renderToString(equation.value, {
-      output: 'mathml',
-      displayMode: equation.display,
-      throwOnError: true,
-      strict: 'ignore',
-      trust: false,
-    })
+    const { office, mathml } = exampleLatexToOffice(equation.value, equation.display)
+    return { word: importWordElement(office), mathml }
   } catch (error) {
     // Unsupported or malformed OCR TeX stays visible for correction in the exported document.
     if (error instanceof katex.ParseError) return undefined
     throw error
   }
-  const parser = new DOMParser()
-  const math = parser.parseFromString(mathml, 'application/xml')
-    .getElementsByTagNameNS('http://www.w3.org/1998/Math/MathML', 'math').item(0)
-  if (math === null) throw new Error('TeX conversion returned no MathML')
-  for (const annotation of Array.from(math.getElementsByTagName('annotation'))) annotation.parentNode?.removeChild(annotation)
-  mathml = new XMLSerializer().serializeToString(math)
-  const office = parser.parseFromString(mml2omml(mathml), 'application/xml').documentElement
-  if (office === null) throw new Error('MathML conversion returned no Office equation')
-  return { word: importWordElement(office), mathml }
 }
 
 // docx's XML-string factory retains a document wrapper; Word needs the equation directly inside its paragraph.

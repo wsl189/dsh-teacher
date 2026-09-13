@@ -1,11 +1,11 @@
 {
-  "fileName": "补白验证.pptx",
+  "fileName": "等比例缩放验证.pptx",
   "originalPixels": {
     "width": 1,
     "height": 1
   },
   "embeddedPixels": {
-    "width": 1243,
+    "width": 1,
     "height": 1
   },
   "slideEmu": {
@@ -16,7 +16,7 @@
     "x": 180000,
     "y": 360000,
     "width": 11831695,
-    "height": 9525
+    "height": 11831695
   },
-  "crop": "<a:srcRect l=\"0\" r=\"67\" t=\"0\" b=\"0\"/>"
+  "crop": null
 }

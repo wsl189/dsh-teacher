@@ -4,9 +4,12 @@ import { randomUUID } from 'node:crypto'
 import { defineDomain, domainTable, type Domain, type DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import type { OcrExtractRequest, OcrExtractResult } from '@deepseek-ai/dsh-ocr'
 import { z } from 'zod'
+import { PDFDocument } from 'pdf-lib'
+import sharp from 'sharp'
 import { compileExampleWord, createExampleWord, exampleWordNeedsImages, normalizeExampleWord, type ExampleWordBlock } from './example-word.ts'
 import type { TeacherExampleCorrectionSource, TeacherExampleHeadingSource } from './example-correction-agent.ts'
-import { exampleHeadingEvidence, exampleWordNeedsHeading, removeExampleHeading } from './example-word-heading.ts'
+import { exampleHeadingEvidence, exampleWordNeedsHeading, removeExampleHeading, type ExampleHeadingRemoval } from './example-word-heading.ts'
+import { exampleWordParagraphsSchema, readExampleWordEditor, saveExampleWordEditor } from './example-word-editor.ts'
 import type {
   TeacherExample,
   TeacherExampleCatalog,
@@ -23,6 +26,9 @@ import type {
   TeacherExampleSourceId,
   TeacherExampleUpdateRequest,
   TeacherExampleUploadRequest,
+  TeacherExampleWordEditor,
+  TeacherExampleWordSaveRequest,
+  TeacherExampleWordSaved,
 } from './example-types.ts'
 
 const identity = <T extends string>() =>
@@ -100,9 +106,7 @@ const documentRequestSchema = z.object({
 })
 const fileRequestSchema = documentRequestSchema.extend({ kind: z.enum(['source', 'word']) })
 const uploadSchema = documentRequestSchema.extend({
-  name: fileName,
-  mediaType,
-  contentBase64: z.string().min(1),
+  files: z.array(z.object({ name: fileName, mediaType, contentBase64: z.string().min(1) })),
 })
 const exportSchema = z.object({
   ids: z.array(identity<TeacherExampleId>()).min(1).refine(ids => new Set(ids).size === ids.length),
@@ -140,7 +144,9 @@ export class TeacherExampleCollection {
     private readonly maxFileBytes: () => number,
     private readonly extract: (request: OcrExtractRequest, signal: AbortSignal) => Promise<OcrExtractResult>,
     private readonly correct: (request: TeacherExampleCorrectionSource, signal: AbortSignal) => Promise<TeacherExampleResult<string>>,
-    private readonly identifyHeading: (request: TeacherExampleHeadingSource, signal: AbortSignal) => Promise<TeacherExampleResult<string>>,
+    private readonly identifyHeading: (
+      request: TeacherExampleHeadingSource, signal: AbortSignal,
+    ) => Promise<TeacherExampleResult<readonly ExampleHeadingRemoval[]>>,
   ) {}
 
   /**
@@ -184,7 +190,7 @@ export class TeacherExampleCollection {
 
   /**
    * Save only submitted fields against the current row.
-   * @param request - identity and edited fields; selected tags must exist in the catalog.
+   * @param request - identity and edited fields; newly selected tags must exist in the catalog.
    * @returns the committed question.
    */
   update(request: TeacherExampleUpdateRequest): Promise<TeacherExampleResult<TeacherExample>> {
@@ -193,7 +199,7 @@ export class TeacherExampleCollection {
       const domain = await this.open()
       const current = this.requireRecord(domain, parsed.id)
       const tags = parsed.tags === undefined ? current.tags : [...new Set(parsed.tags)]
-      if (tags.some(tag => domain.table('tags').get(tag) === undefined))
+      if (tags.some(tag => !current.tags.includes(tag) && domain.table('tags').get(tag) === undefined))
         throw new ExampleError('invalid-request', 'Unknown example tag')
       const next = recordSchema.parse({ ...current, ...parsed, tags, revision: current.revision + 1 })
       await domain.table('questions').put(next.id, next)
@@ -215,6 +221,19 @@ export class TeacherExampleCollection {
   }
 
   /**
+   * Remove a reusable preset while retaining tags already assigned to questions.
+   * @param name - preset name; repeated deletion is idempotent.
+   * @returns the normalized name after persistence.
+   */
+  deleteTag(name: string): Promise<TeacherExampleResult<string>> {
+    return this.enqueue(async () => {
+      const normalized = parse(tagName, name)
+      await (await this.open()).table('tags').delete(normalized)
+      return normalized
+    })
+  }
+
+  /**
    * Delete the question and its retained file payloads together.
    * @param request - question to delete, including its original and Word bytes.
    * @returns the deleted identity; repeat deletion is idempotent.
@@ -227,20 +246,30 @@ export class TeacherExampleCollection {
   }
 
   /**
-   * Persist the original before OCR. Invalid uploads leave the previous source intact.
-   * @param request - complete image or PDF bytes, owning question, and question or explanation selection.
+   * Persist one continuous original before OCR; invalid fragments leave the previous source intact.
+   * @param request - ordered images/PDFs belonging to one question or explanation; multiple files become one PDF.
    * @returns the committed question awaiting recognition.
    */
   upload(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>> {
     return this.enqueue(async () => {
       const parsed = parse(uploadSchema, request)
-      validateUpload(parsed, this.maxFileBytes())
+      const [first] = parsed.files
+      if (first === undefined) throw new ExampleError('invalid-request', 'Upload at least one source file')
+      const maxBytes = this.maxFileBytes()
+      let totalBytes = 0
+      for (const file of parsed.files) {
+        totalBytes += validateUpload(file, maxBytes)
+        if (totalBytes > maxBytes) throw new ExampleError('file-too-large', 'The complete source set exceeds the upload limit')
+      }
       const domain = await this.open()
       const current = this.requireRecord(domain, parsed.id)
+      const file = parsed.files.length === 1 ? first : await mergeSources(
+        parsed.files, `${current.name.replace(/[\\/\u0000-\u001f]/gu, '_')}-${parsed.document === 'question' ? '原件' : '解析原件'}.pdf`, maxBytes,
+      )
       const next = replaceDocument(current, parsed.document, {
         ...current.documents[parsed.document],
-        source: { id: randomUUID() as TeacherExampleSourceId, name: parsed.name, mediaType: parsed.mediaType },
-        sourceBase64: parsed.contentBase64,
+        source: { id: randomUUID() as TeacherExampleSourceId, name: file.name, mediaType: file.mediaType },
+        sourceBase64: file.contentBase64,
         word: null,
         status: 'pending',
         ocrError: null,
@@ -297,6 +326,56 @@ export class TeacherExampleCollection {
       })
       if (!result.ok) throw new ExampleError(result.error.code, result.error.message)
       return result.value
+    })
+  }
+
+  /**
+   * Load the saved Word revision for editing after its normal source repair and heading review.
+   * @param request - selected question or explanation.
+   * @returns editable paragraphs and object previews tied to the current source and Word revisions.
+   */
+  readEditor(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExampleWordEditor>> {
+    return this.run(async () => {
+      const file = await this.readFile({ ...request, kind: 'word' })
+      if (!file.ok) throw new ExampleError(file.error.code, file.error.message)
+      const result = await this.enqueue(async () => {
+        const domain = await this.open()
+        const selected = this.requireRecord(domain, request.id).documents[request.document]
+        if (selected.source === null || selected.word === null) throw new ExampleError('not-found', 'Example Word is unavailable')
+        return { ...readExampleWordEditor(Buffer.from(selected.word.contentBase64, 'base64')), sourceId: selected.source.id, wordRevision: selected.wordRevision }
+      })
+      if (!result.ok) throw new ExampleError(result.error.code, result.error.message)
+      return result.value
+    })
+  }
+
+  /**
+   * Commit explicit Word edits while preserving other document and metadata changes.
+   * @param request - structured paragraphs and the source/Word revisions loaded by the editor.
+   * @returns saved question metadata and the matching editor revision, or a conflict without changing the current Word.
+   */
+  saveEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>> {
+    return this.enqueue(async () => {
+      if (Buffer.byteLength(JSON.stringify(request)) > this.maxFileBytes()) throw new ExampleError('file-too-large', 'Word edits exceed the document byte limit')
+      const parsed = parse(z.object({ id: identity<TeacherExampleId>(), document: z.enum(['question', 'explanation']), sourceId: identity<TeacherExampleSourceId>(), wordRevision: z.number().int().nonnegative(), paragraphs: exampleWordParagraphsSchema }).strict(), request)
+      const domain = await this.open()
+      const record = this.requireRecord(domain, parsed.id)
+      const selected = record.documents[parsed.document]
+      if (selected.source?.id !== parsed.sourceId || selected.wordRevision !== parsed.wordRevision) throw new ExampleError('word-changed', 'The Word document changed after this editor was opened')
+      if (selected.word === null) throw new ExampleError('not-found', 'Example Word is unavailable')
+      let bytes: Buffer
+      try {
+        bytes = saveExampleWordEditor(Buffer.from(selected.word.contentBase64, 'base64'), parsed.paragraphs)
+      } catch {
+        throw new ExampleError('invalid-request', 'The Word edit contains unsupported content or an invalid formula')
+      }
+      if (bytes.length > this.maxFileBytes()) throw new ExampleError('file-too-large', 'Edited Word exceeds the document byte limit')
+      const next = replaceDocument(record, parsed.document, { ...selected, word: { ...selected.word, contentBase64: bytes.toString('base64') }, wordRevision: selected.wordRevision + 1 })
+      const editor = {
+        ...readExampleWordEditor(bytes), sourceId: parsed.sourceId, wordRevision: next.documents[parsed.document].wordRevision,
+      }
+      await domain.table('questions').put(record.id, next)
+      return { question: metadata(next), editor }
     })
   }
 
@@ -539,7 +618,7 @@ function parse<T>(schema: z.ZodType<T>, input: unknown): T {
   return parsed.data
 }
 
-function validateUpload(upload: TeacherExampleUploadRequest, maxBytes: number): void {
+function validateUpload(upload: TeacherExampleUploadRequest['files'][number], maxBytes: number): number {
   if (upload.contentBase64.length > Math.ceil(maxBytes / 3) * 4)
     throw new ExampleError('file-too-large', 'Example source exceeds the upload limit')
   const bytes = Buffer.from(upload.contentBase64, 'base64')
@@ -555,4 +634,34 @@ function validateUpload(upload: TeacherExampleUploadRequest, maxBytes: number): 
           ? bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255
           : bytes.subarray(0, 4).toString() === 'RIFF' && bytes.subarray(8, 12).toString() === 'WEBP'
   if (!valid) throw new ExampleError('invalid-request', 'Example source bytes do not match the declared file type')
+  return bytes.length
+}
+
+/** Copy PDF pages and embed complete image pixels in upload order without inserting headings or margins. */
+async function mergeSources(
+  files: TeacherExampleUploadRequest['files'],
+  name: string,
+  maxBytes: number,
+): Promise<TeacherExampleUploadRequest['files'][number]> {
+  let bytes: Uint8Array
+  try {
+    const merged = await PDFDocument.create()
+    for (const file of files) {
+      const original = Buffer.from(file.contentBase64, 'base64')
+      if (file.mediaType === 'application/pdf') {
+        const pdf = await PDFDocument.load(original)
+        if (pdf.getPageCount() === 0) throw new Error('Source PDF has no pages')
+        for (const page of await merged.copyPages(pdf, pdf.getPageIndices())) merged.addPage(page)
+      } else {
+        const image = await merged.embedPng(await sharp(original).rotate().png().toBuffer())
+        const page = merged.addPage([image.width, image.height])
+        page.drawImage(image, { x: 0, y: 0, width: image.width, height: image.height })
+      }
+    }
+    bytes = await merged.save()
+  } catch {
+    throw new ExampleError('invalid-request', 'A source image or PDF could not be combined')
+  }
+  if (bytes.length > maxBytes) throw new ExampleError('file-too-large', 'The combined original exceeds the upload limit')
+  return { name, mediaType: 'application/pdf', contentBase64: Buffer.from(bytes).toString('base64') }
 }

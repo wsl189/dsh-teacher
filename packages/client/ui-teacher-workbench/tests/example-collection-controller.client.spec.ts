@@ -33,6 +33,7 @@ function harness() {
       success({ ...row, ...request, revision: 1 }),
     ),
     addExampleTag: vi.fn<ExampleCollectionRemote['addExampleTag']>(async request => success(request.name)),
+    deleteExampleTag: vi.fn<ExampleCollectionRemote['deleteExampleTag']>(async request => success(request.name.trim())),
     deleteExample: vi.fn<ExampleCollectionRemote['deleteExample']>(async request => success(request.id)),
     uploadExample: vi.fn<ExampleCollectionRemote['uploadExample']>(async request =>
       success(withDocument(row, request.document, 'pending', 1)),
@@ -41,6 +42,8 @@ function harness() {
       success(withDocument(row, request.document, 'ready', 2)),
     ),
     exportExamplesWord: vi.fn<ExampleCollectionRemote['exportExamplesWord']>(),
+    readExampleWordEditor: vi.fn<ExampleCollectionRemote['readExampleWordEditor']>(),
+    saveExampleWordEditor: vi.fn<ExampleCollectionRemote['saveExampleWordEditor']>(),
     readExampleFile: vi.fn<ExampleCollectionRemote['readExampleFile']>(),
   } satisfies ExampleCollectionRemote
   return { row, remote, controller: new ExampleCollectionController(remote) }
@@ -51,6 +54,54 @@ afterEach(() => {
 })
 
 describe('example collection drafts and background recognition', () => {
+  it('retains a failed preset deletion for retry and preserves question tags and drafts after success', async () => {
+    const { row, remote, controller } = harness()
+    remote.listExamples.mockResolvedValue(success({ questions: [{ ...row, tags: ['几何'] }], tags: ['几何', '向量'] }))
+    await controller.commands.refresh()
+    controller.commands.editDraft(row.id, { description: '保留输入' })
+    const before = controller.getSnapshot()
+    remote.deleteExampleTag.mockRejectedValueOnce(new Error('offline'))
+    await controller.commands.deleteTag('几何')
+    expect(controller.getSnapshot()).toMatchObject({ error: 'transport', tags: before.tags })
+    await controller.commands.deleteTag('  几何  ')
+    expect(remote.deleteExampleTag).toHaveBeenLastCalledWith({ name: '  几何  ' })
+    expect(controller.getSnapshot()).toMatchObject({ error: null, tags: ['向量'], pending: 0 })
+    expect(controller.getSnapshot().questions).toBe(before.questions)
+    expect(controller.getSnapshot().drafts).toBe(before.drafts)
+    expect(remote.updateExample).not.toHaveBeenCalled()
+    await controller.dispose()
+  })
+
+  it('submits every fragment in the chosen order and recognizes the combined source once', async () => {
+    const { row, remote, controller } = harness()
+    await controller.commands.refresh()
+    await controller.commands.upload(row.id, 'explanation', [
+      new File(['first'], 'top.PNG'),
+      new File(['middle'], 'middle.pdf', { type: 'application/pdf' }),
+      new File(['last'], 'bottom.jpg', { type: 'image/jpeg' }),
+    ])
+    expect(remote.uploadExample).toHaveBeenCalledExactlyOnceWith({
+      id: row.id, document: 'explanation', files: [
+        { name: 'top.PNG', mediaType: 'image/png', contentBase64: btoa('first') },
+        { name: 'middle.pdf', mediaType: 'application/pdf', contentBase64: btoa('middle') },
+        { name: 'bottom.jpg', mediaType: 'image/jpeg', contentBase64: btoa('last') },
+      ],
+    })
+    expect(remote.recognizeExample).toHaveBeenCalledExactlyOnceWith({ id: row.id, document: 'explanation' })
+    await controller.dispose()
+  })
+
+  it('keeps the saved source when any fragment is unsupported and does not start OCR', async () => {
+    const { row, remote, controller } = harness()
+    await controller.commands.refresh()
+    await controller.commands.upload(row.id, 'question', [new File(['image'], 'top.png'), new File(['bad'], 'bottom.txt')])
+    expect(controller.getSnapshot().error).toBe('invalid-request')
+    expect(remote.uploadExample).not.toHaveBeenCalled()
+    expect(remote.recognizeExample).not.toHaveBeenCalled()
+    expect(controller.getSnapshot().busy.question).toEqual({})
+    await controller.dispose()
+  })
+
   it('automatically saves the latest description after typing settles', async () => {
     vi.useFakeTimers()
     const { row, remote, controller } = harness()
@@ -116,7 +167,7 @@ describe('example collection drafts and background recognition', () => {
     const upload = controller.commands.upload(
       row.id,
       'question',
-      new File(['%PDF-1.4'], 'question.pdf', { type: 'application/pdf' }),
+      [new File(['%PDF-1.4'], 'question.pdf', { type: 'application/pdf' })],
     )
     await vi.waitFor(() => {
       expect(remote.recognizeExample).toHaveBeenCalledOnce()
@@ -138,8 +189,8 @@ describe('example collection drafts and background recognition', () => {
     await controller.commands.refresh()
     const finishes = new Map<TeacherExampleDocumentKind, (result: Awaited<ReturnType<ExampleCollectionRemote['recognizeExample']>>) => void>()
     remote.recognizeExample.mockImplementation(request => new Promise((resolve) => { finishes.set(request.document, resolve) }))
-    const questionUpload = controller.commands.upload(row.id, 'question', new File(['%PDF-1.4'], 'question.pdf', { type: 'application/pdf' }))
-    const explanationUpload = controller.commands.upload(row.id, 'explanation', new File(['%PDF-1.4'], 'explanation.pdf', { type: 'application/pdf' }))
+    const questionUpload = controller.commands.upload(row.id, 'question', [new File(['%PDF-1.4'], 'question.pdf', { type: 'application/pdf' })])
+    const explanationUpload = controller.commands.upload(row.id, 'explanation', [new File(['%PDF-1.4'], 'explanation.pdf', { type: 'application/pdf' })])
     await vi.waitFor(() => { expect(remote.recognizeExample).toHaveBeenCalledTimes(2) })
     expect(remote.uploadExample.mock.calls.map(([request]) => request.document)).toEqual(['question', 'explanation'])
     expect(controller.getSnapshot().busy).toEqual({ question: { one: 'ocr' }, explanation: { one: 'ocr' } })

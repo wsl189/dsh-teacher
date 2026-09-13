@@ -18,7 +18,7 @@ Conversation-uploaded source documents are retained under the private content-ad
 
 ## Operations
 
-Example collection has an independent SQLite-routed domain and no roster references. `TeacherExample` carries directory order, tags, descriptions, pen strokes, and independent question/explanation `TeacherExampleDocument` metadata; `TeacherExampleCatalog` omits all file bytes. `TeacherExampleUpdateRequest` changes only submitted fields. `TeacherExampleDocumentRequest` explicitly selects a `TeacherExampleDocumentKind`; `TeacherExampleUploadRequest` replaces only that document’s original and clears its old Word file. `TeacherExampleFileRequest` selects an original or Word artifact, returned as `TeacherExampleFile`; each operation returns a discriminated `TeacherExampleResult`. `TeacherExampleExportRequest` supplies ordered question identities and a paired/grouped `TeacherExampleExportLayout` for one Word download containing only original questions and explanations. [The Host reference](../../packages/host/teacher-workbench/README.md#example-collection) owns persistence, retry, source replacement, and export guarantees.
+Example collection has an independent SQLite-routed domain and no roster references. `TeacherExample` carries directory order, tags, descriptions, pen strokes, and independent question/explanation `TeacherExampleDocument` metadata; `TeacherExampleCatalog` omits all file bytes. `TeacherExampleUpdateRequest` changes only submitted fields. `TeacherExampleDocumentRequest` explicitly selects a `TeacherExampleDocumentKind`; `TeacherExampleUploadRequest.files` supplies the ordered fragments of that document; the upload replaces its original and clears its old Word file. `TeacherExampleFileRequest` selects an original or Word artifact, returned as `TeacherExampleFile`; each operation returns a discriminated `TeacherExampleResult`. `TeacherExampleExportRequest` supplies ordered question identities and a paired/grouped `TeacherExampleExportLayout` for one Word download containing only original questions and explanations. [The Host reference](../../packages/host/teacher-workbench/README.md#example-collection) owns persistence, retry, source replacement, and export guarantees.
 
 The Remote surface includes revisioned document reads and writes, weather lookup, timetable normalization, notification-target discovery, uploaded-source staging, OCR-backed question segmentation and crop review, question-media browsing and directory mutation, image persistence and assignment, temporary selections, and single or batch document generation. The model-facing companion package consumes these operations through semantic tools and owns their prompt, schema, tool-result, and Session-log effects.
 
@@ -73,6 +73,13 @@ Host service owning the revisioned workbench document.
 @Remote('addExampleTag') addExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>
 
 /**
+ * Remove a reusable preset without changing tags already assigned to questions.
+ * @param request - preset name; repeated deletion is idempotent.
+ * @returns its normalized name after persistence.
+ */
+@Remote('deleteExampleTag') deleteExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>>
+
+/**
  * Delete one collected question and its files.
  * @param request - question to delete with both documents’ originals and Word files.
  * @returns the deleted identity.
@@ -80,8 +87,8 @@ Host service owning the revisioned workbench document.
 @Remote('deleteExample') deleteExample(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExampleId>>
 
 /**
- * Retain a collected question source before OCR.
- * @param request - original image or PDF, owning question, and question or explanation selection.
+ * Retain ordered fragments as one collected question source before OCR.
+ * @param request - images/PDFs in reading order, owning question, and question or explanation selection.
  * @returns the saved source metadata, ready for OCR.
  */
 @Remote('uploadExample') uploadExample(request: TeacherExampleUploadRequest): Promise<TeacherExampleResult<TeacherExample>>
@@ -99,6 +106,20 @@ Host service owning the revisioned workbench document.
  * @returns the saved file for preview or download.
  */
 @Remote('readExampleFile') readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>>
+
+/**
+ * Load an editable Word document with immutable equation and image references.
+ * @param request - question or explanation to edit.
+ * @returns content and optimistic source/Word revision tokens.
+ */
+@Remote('readExampleWordEditor') readExampleWordEditor(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExampleWordEditor>>
+
+/**
+ * Save manual Word edits without overwriting a newer source or Word revision.
+ * @param request - edited paragraphs and the revisions from the editor load.
+ * @returns metadata and editor content from the committed Word revision.
+ */
+@Remote('saveExampleWordEditor') saveExampleWordEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>>
 
 /**
  * Export selected questions and explanations as one editable Word document.

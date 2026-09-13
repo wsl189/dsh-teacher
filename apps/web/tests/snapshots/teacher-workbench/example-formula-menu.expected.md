@@ -1,0 +1,13 @@
+- menu:
+  - menuitem "大括号方程组"
+  - listitem
+  - menuitem "插入矩阵"
+  - listitem
+  - menuitem "插入"
+  - listitem
+  - menuitem "模式"
+  - listitem
+  - menuitem "字体样式"
+  - menuitem "颜色"
+  - menuitem "背景"
+  - listitem

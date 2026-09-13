@@ -17,15 +17,21 @@ import type {
   TeacherExampleStroke,
   TeacherExampleUpdateRequest,
   TeacherExampleUploadRequest,
+  TeacherExampleWordEditor,
+  TeacherExampleWordSaveRequest,
+  TeacherExampleWordSaved,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import { bytesToBase64 } from './document-bytes.ts'
 
 /** Generated Remote methods consumed by the collection. */
 export interface ExampleCollectionRemote {
+  readExampleWordEditor: (request: TeacherExampleDocumentRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleWordEditor>>>
+  saveExampleWordEditor: (request: TeacherExampleWordSaveRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleWordSaved>>>
   listExamples: (request: Record<never, never>) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleCatalog>>>
   createExample: (request: Record<never, never>) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
   updateExample: (request: TeacherExampleUpdateRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
   addExampleTag: (request: { name: string }) => Promise<RemoteResult<TeacherExampleResult<string>>>
+  deleteExampleTag: (request: { name: string }) => Promise<RemoteResult<TeacherExampleResult<string>>>
   deleteExample: (request: TeacherExampleRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleId>>>
   uploadExample: (request: TeacherExampleUploadRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
   recognizeExample: (request: TeacherExampleDocumentRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
@@ -55,13 +61,16 @@ export interface ExampleCollectionSnapshot {
 
 /** Plain callbacks injected into the collection's presentation. */
 export interface ExampleCollectionCommands {
+  readEditor: (request: TeacherExampleDocumentRequest) => Promise<TeacherExampleWordEditor>
+  saveEditor: (request: TeacherExampleWordSaveRequest) => Promise<TeacherExampleWordEditor>
   refresh: () => Promise<void>
   create: () => Promise<void>
   select: (id: TeacherExampleId) => void
   update: (request: TeacherExampleUpdateRequest) => Promise<boolean>
   addTag: (name: string) => Promise<string | null>
+  deleteTag: (name: string) => Promise<void>
   delete: (id: TeacherExampleId) => Promise<void>
-  upload: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, file: File) => Promise<void>
+  upload: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, files: readonly File[]) => Promise<void>
   recognize: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind) => Promise<void>
   exportWord: (request: TeacherExampleExportRequest) => Promise<TeacherExampleFile>
   readFile: (request: TeacherExampleFileRequest) => Promise<TeacherExampleFile>
@@ -141,6 +150,11 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
       })
       return tag ?? null
     },
+    deleteTag: name =>
+      this.enqueue(async () => {
+        const deleted = await unwrap(this.remote.deleteExampleTag({ name }))
+        this.publish({ tags: this.snapshot.tags.filter(tag => tag !== deleted) })
+      }),
     delete: id =>
       this.enqueue(async () => {
         await unwrap(this.remote.deleteExample({ id }))
@@ -154,19 +168,21 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
           selectedId: this.snapshot.selectedId === id ? (questions[0]?.id ?? null) : this.snapshot.selectedId,
         })
       }),
-    upload: async (id, documentKind, file) => {
+    upload: async (id, documentKind, files) => {
       if (this.snapshot.busy[documentKind][id] !== undefined) return
       this.setBusy(id, documentKind, 'upload')
       const saved = await this.enqueue(async () => {
-        const mediaType = file.type || mediaTypeFromName(file.name)
-        if (!isMediaType(mediaType)) throw new CollectionFailure('invalid-request')
+        if (files.length === 0) throw new CollectionFailure('invalid-request')
+        const sources = await Promise.all(files.map(async (file) => {
+          const mediaType = file.type || mediaTypeFromName(file.name)
+          if (!isMediaType(mediaType)) throw new CollectionFailure('invalid-request')
+          return { name: file.name, mediaType, contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())) }
+        }))
         const record = await unwrap(
           this.remote.uploadExample({
             id,
             document: documentKind,
-            name: file.name,
-            mediaType,
-            contentBase64: bytesToBase64(new Uint8Array(await file.arrayBuffer())),
+            files: sources,
           }),
         )
         this.accept(record)
@@ -188,6 +204,12 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
     },
     exportWord: request => unwrap(this.remote.exportExamplesWord(request)),
     readFile: request => unwrap(this.remote.readExampleFile(request)),
+    readEditor: request => unwrap(this.remote.readExampleWordEditor(request)),
+    saveEditor: async (request) => {
+      const record = await unwrap(this.remote.saveExampleWordEditor(request))
+      this.accept(record.question)
+      return record.editor
+    },
     editDraft: (id, patch) => {
       const question = this.snapshot.questions.find(row => row.id === id)
       if (question === undefined) return
@@ -292,7 +314,7 @@ function failureCode(error: unknown): string {
   return error instanceof CollectionFailure ? error.code : 'transport'
 }
 
-function isMediaType(value: string): value is TeacherExampleUploadRequest['mediaType'] {
+function isMediaType(value: string): value is TeacherExampleUploadRequest['files'][number]['mediaType'] {
   return ['image/png', 'image/jpeg', 'image/webp', 'application/pdf'].includes(value)
 }
 

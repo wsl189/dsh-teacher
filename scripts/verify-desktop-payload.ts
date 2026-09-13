@@ -29,6 +29,7 @@ const REQUIRED_PPT_MASTER_FILES = [
 export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   '../THIRD_PARTY_NOTICES.md',
   '../licenses/mathml2omml/NOTICE.txt',
+  '../licenses/mathml2omml/colors.patch',
   '../licenses/mathml2omml/COPYING.GPL-3',
   '../licenses/mathml2omml/COPYING.LGPL-3',
   '../licenses/mathml2omml/COPYING.entities',
@@ -45,6 +46,7 @@ export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   'node_modules/mathml2omml/LICENSE',
   'node_modules/mathml2omml/dist/index.js',
   'node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml/NOTICE.txt',
+  'node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml/colors.patch',
   'node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml/COPYING.GPL-3',
   'node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml/COPYING.LGPL-3',
   'node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml/COPYING.entities',

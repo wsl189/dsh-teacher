@@ -2,15 +2,16 @@
 
 import { DOMParser, XMLSerializer, type Document as XmlDocument, type Element as XmlElement } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
-import { mml2omml } from 'mathml2omml'
-import { normalizeExampleFigures, normalizeExampleLetterRuns, normalizeExampleParagraphs } from './example-word-layout.ts'
+import { exampleMathmlToOffice, formatExampleOfficeMath } from './example-word-math.ts'
+import { exampleWordIsEdited, normalizeExampleFigures, normalizeExampleLetterRuns, normalizeExampleParagraphs } from './example-word-layout.ts'
+import { normalizeExampleImageSizes } from './example-word-images.ts'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const MATH_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 
 /**
- * Apply textbook letter styles, subquestion indents, paragraph spacing, option rows, and centered illustrations beneath each source's text.
+ * Apply textbook typography, source-relative illustrations, and missing native equation colors.
  * @param bytes - generated collection document; lowercase bold identifiers gain mathematical italics without changing equation text.
  * @returns normalized bytes, or undefined when the saved typography and layout already match.
  */
@@ -26,23 +27,26 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
     if (root === null) throw new Error(`Example Word file has an empty ${path}`)
     if (path === 'word/document.xml') {
       if (normalizeMathLetters(document, entries)) changed = true
+      normalizeExampleImageSizes(document)
       normalizeExampleFigures(document)
       normalizeExampleParagraphs(document)
       normalizeExampleLetterRuns(document)
       for (const paragraph of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p'))) {
+        if (exampleWordIsEdited(paragraph)) continue
         if (!(paragraph.textContent ?? '').trim() && paragraph.getElementsByTagNameNS(WORD_NS, 'drawing').length === 0) continue
         const properties = child(paragraph, WORD_NS, 'w:pPr')
         if (paragraph.firstChild !== properties) paragraph.insertBefore(properties, paragraph.firstChild)
         const style = properties.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')
         const figure = style === 'DshExampleFigure'
         const subquestion = /^\s*\(\s*(?:i{1,3}|iv|vi{0,3}|ix|xi{0,2})\s*\)/iu.test((paragraph.textContent ?? '').normalize('NFKC'))
+        const firstLevel = /^\s*[（(]\s*\d+\s*[)）]/u.test(paragraph.textContent ?? '')
         property(properties, 'w:spacing', { before: figure ? '120' : '0', after: figure ? '120' : '80', line: '300', lineRule: 'auto' })
-        property(properties, 'w:jc', { val: figure ? 'center' : 'left' })
-        if (subquestion) {
-          property(properties, 'w:ind', { left: '480', firstLine: '0' })
+        property(properties, 'w:jc', { val: figure ? 'right' : 'left' })
+        if (subquestion || firstLevel) {
+          property(properties, 'w:ind', { left: subquestion ? '480' : '240', firstLine: '0' })
         }
         property(properties, 'w:widowControl', { val: 'true' })
-        if (figure || subquestion || style?.startsWith('DshExampleChoices')) property(properties, 'w:keepLines', { val: 'true' })
+        if (figure || subquestion || firstLevel || style?.startsWith('DshExampleChoices')) property(properties, 'w:keepLines', { val: 'true' })
         let next = paragraph.nextSibling
         while (next !== null && next.nodeType !== next.ELEMENT_NODE) next = next.nextSibling
         const nextStyle = (next as XmlElement | null)?.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')
@@ -70,10 +74,10 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
       }
     } else if (path === 'word/styles.xml') {
       child(child(child(root, WORD_NS, 'w:docDefaults'), WORD_NS, 'w:rPrDefault'), WORD_NS, 'w:rPr')
-      for (const id of ['DshExampleVariable', 'DshExampleVector', 'DshExampleChoices1', 'DshExampleChoices2', 'DshExampleChoices4', 'DshExampleFigure']) {
+      for (const id of ['DshExampleVariable', 'DshExampleVector', 'DshExampleChoices1', 'DshExampleChoices2', 'DshExampleChoices4', 'DshExampleFigure', 'DshExampleEdited', 'DshExampleEditedChoices1', 'DshExampleEditedChoices2', 'DshExampleEditedChoices4']) {
         if (Array.from(root.getElementsByTagNameNS(WORD_NS, 'style')).some(style => style.getAttributeNS(WORD_NS, 'styleId') === id)) continue
         const style = document.createElementNS(WORD_NS, 'w:style')
-        style.setAttributeNS(WORD_NS, 'w:type', id.startsWith('DshExampleChoices') || id === 'DshExampleFigure' ? 'paragraph' : 'character')
+        style.setAttributeNS(WORD_NS, 'w:type', id.startsWith('DshExampleChoices') || id.startsWith('DshExampleEdited') || id === 'DshExampleFigure' ? 'paragraph' : 'character')
         style.setAttributeNS(WORD_NS, 'w:styleId', id)
         property(style, 'w:name', { val: id })
         root.appendChild(style)
@@ -83,6 +87,7 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
       mathFont.setAttributeNS(MATH_NS, 'm:val', 'Cambria Math')
     }
     for (const properties of Array.from(document.getElementsByTagNameNS(WORD_NS, 'rPr'))) {
+      if (exampleWordIsEdited(properties)) continue
       const mathematical = insideEquation(properties)
       property(properties, 'w:rFonts', {
         ascii: mathematical ? 'Cambria Math' : 'Times New Roman',
@@ -124,17 +129,27 @@ function normalizeMathLetters(document: XmlDocument, entries: Record<string, Uin
   const serializer = new XMLSerializer()
   let changed = false
   for (const [index, equation] of equations.entries()) {
-    const letters = Array.from(equation.getElementsByTagNameNS(MATHML_NS, 'mi')).filter(
+    const native = nativeEquations[index]
+    const edited = native !== undefined && exampleWordIsEdited(native)
+    const letters = edited ? [] : Array.from(equation.getElementsByTagNameNS(MATHML_NS, 'mi')).filter(
       element => element.getAttribute('mathvariant') === 'bold' && /^[a-z\p{Script=Greek}]$/u.test(element.textContent ?? ''),
     )
-    if (letters.length === 0) continue
+    const colored = [equation, ...Array.from(equation.getElementsByTagNameNS(MATHML_NS, '*'))]
+    const missingColors = ([['mathcolor', 'color'], ['mathbackground', 'shd']] as const).some(([attribute, property]) =>
+      colored.some(element => element.hasAttribute(attribute)) && native?.getElementsByTagNameNS(WORD_NS, property).length === 0)
+    if (letters.length === 0 && !missingColors) continue
     for (const letter of letters) letter.setAttribute('mathvariant', 'bold-italic')
-    const replacement = parser.parseFromString(mml2omml(serializer.serializeToString(equation)), 'application/xml').documentElement
-    const native = nativeEquations[index]
-    if (replacement === null || native === undefined || native.parentNode === null) {
+    const replacement = exampleMathmlToOffice(serializer.serializeToString(equation))
+    if (native === undefined || native.parentNode === null) {
       throw new Error('Collected Word equation has no replaceable native content')
     }
     if (replacement.textContent !== native.textContent) throw new Error('Collected Word letter formatting would change equation text')
+    if (missingColors) {
+      const style = equation.getAttribute('style') ?? ''
+      const size = /font-size\s*:\s*([\d.]+)pt/u.exec(style)?.[1]
+      formatExampleOfficeMath(replacement, size === undefined ? Number(native.getElementsByTagNameNS(WORD_NS, 'sz').item(0)?.getAttributeNS(WORD_NS, 'val') ?? '24') / 2 : Number(size),
+        /font-weight\s*:\s*(?:bold|700)/u.test(style))
+    }
     native.parentNode.replaceChild(document.importNode(replacement, true), native)
     changed = true
   }

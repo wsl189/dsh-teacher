@@ -2,6 +2,7 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
+    "customConditions": ["browser"],
     "outDir": "lib/types"
   },
   "include": [

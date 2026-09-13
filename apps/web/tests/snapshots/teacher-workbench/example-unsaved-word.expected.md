@@ -1,0 +1,5 @@
+- dialog "有未保存的修改":
+  - paragraph: Word 有未保存的修改，关闭前是否保存？
+  - button "继续"
+  - button "放弃"
+  - button "保存并关闭"

@@ -1,0 +1,116 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b400047ebe5d73 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1,6 +1,7 @@
+ 'use strict';
+ 
+ var xmldom = require('@xmldom/xmldom');
++var colorString = require('color-string').default;
+ 
+ // During an iterative conversion (see tree-to-latex) every child is converted
+ // before its parent and its LaTeX is stored in this memo. While a memo is
+@@ -3606,7 +3607,7 @@ class MI {
+             case 'italic':
+                 return `\\mathit{${value}}`;
+             case 'bold-italic':
+-                return `\\mathbf{\\mathit{${value}}}`;
++                return `\\mathbfit{${value}}`;
+             case 'double-struck':
+                 return `\\mathbb{${value}}`;
+             case 'bold-fraktur':
+@@ -5106,6 +5107,24 @@ class TableAnnotator {
+  * @param root - the root element of the tree to convert.
+  * @returns the LaTeX string for the whole tree.
+  */
++
++// DSH Teacher: retain colors and mathematical bold italics when reopening saved math.
++const withMathColors = (node, latex) => {
++    if (['mn', 'mo'].includes(node.name) || (node.name === 'mi' && node.children.length > 0)) {
++        const command = { bold: 'mathbf', italic: 'mathit', 'bold-italic': 'mathbfit' }[node.attributes?.mathvariant];
++        if (command) latex = `\\${command}{${latex}}`;
++    }
++    for (const [attribute, command] of [['mathcolor', 'textcolor'], ['mathbackground', 'colorbox']]) {
++        const value = node.attributes?.[attribute] || (attribute === 'mathcolor' ? node.attributes?.color : undefined);
++        if (!value) continue;
++        const rgb = colorString.get.rgb(value);
++        if (!rgb || rgb[3] !== 1) throw new Error('Equation colors must be opaque RGB colors');
++        const color = '#' + rgb.slice(0, 3).map(channel => Math.round(channel).toString(16).padStart(2, '0')).join('');
++        latex = command === 'textcolor' ? `\\textcolor{${color}}{${latex}}` : `\\colorbox{${color}}{$${latex}$}`;
++    }
++    return latex;
++};
++
+ const convertTreeToLatex = (root) => {
+     var _a, _b;
+     for (const normalizer of makeTreeNormalizers(root))
+@@ -5124,7 +5143,11 @@ const convertTreeToLatex = (root) => {
+                 continue;
+             }
+             stack.pop();
+-            memo.set(frame.node, new MathMLElementToLatexConverterAdapter(frame.node).toLatexConverter().convert());
++            // Older KaTeX mclass output can wrap a row in a token element.
++            const rowInToken = ['mi', 'mo'].includes(frame.node.name) && frame.node.children.some(child => child.name === 'mrow');
++            const latex = rowInToken ? frame.node.children.map(child => memo.get(child) || '').join(' ')
++                : new MathMLElementToLatexConverterAdapter(frame.node).toLatexConverter().convert();
++            memo.set(frame.node, withMathColors(frame.node, latex));
+         }
+     }
+     finally {
+diff --git a/dist/index.mjs b/dist/index.mjs
+index 31258499447701b2a195da3bcb430ba59a4059a0..fbfc8522c71540bfabcc41217a641151307dd9ac 100644
+--- a/dist/index.mjs
++++ b/dist/index.mjs
+@@ -1,4 +1,5 @@
+ import { DOMParser } from '@xmldom/xmldom';
++import colorString from 'color-string';
+ 
+ // During an iterative conversion (see tree-to-latex) every child is converted
+ // before its parent and its LaTeX is stored in this memo. While a memo is
+@@ -3604,7 +3605,7 @@ class MI {
+             case 'italic':
+                 return `\\mathit{${value}}`;
+             case 'bold-italic':
+-                return `\\mathbf{\\mathit{${value}}}`;
++                return `\\mathbfit{${value}}`;
+             case 'double-struck':
+                 return `\\mathbb{${value}}`;
+             case 'bold-fraktur':
+@@ -5104,6 +5105,24 @@ class TableAnnotator {
+  * @param root - the root element of the tree to convert.
+  * @returns the LaTeX string for the whole tree.
+  */
++
++// DSH Teacher: retain colors and mathematical bold italics when reopening saved math.
++const withMathColors = (node, latex) => {
++    if (['mn', 'mo'].includes(node.name) || (node.name === 'mi' && node.children.length > 0)) {
++        const command = { bold: 'mathbf', italic: 'mathit', 'bold-italic': 'mathbfit' }[node.attributes?.mathvariant];
++        if (command) latex = `\\${command}{${latex}}`;
++    }
++    for (const [attribute, command] of [['mathcolor', 'textcolor'], ['mathbackground', 'colorbox']]) {
++        const value = node.attributes?.[attribute] || (attribute === 'mathcolor' ? node.attributes?.color : undefined);
++        if (!value) continue;
++        const rgb = colorString.get.rgb(value);
++        if (!rgb || rgb[3] !== 1) throw new Error('Equation colors must be opaque RGB colors');
++        const color = '#' + rgb.slice(0, 3).map(channel => Math.round(channel).toString(16).padStart(2, '0')).join('');
++        latex = command === 'textcolor' ? `\\textcolor{${color}}{${latex}}` : `\\colorbox{${color}}{$${latex}$}`;
++    }
++    return latex;
++};
++
+ const convertTreeToLatex = (root) => {
+     var _a, _b;
+     for (const normalizer of makeTreeNormalizers(root))
+@@ -5122,7 +5141,11 @@ const convertTreeToLatex = (root) => {
+                 continue;
+             }
+             stack.pop();
+-            memo.set(frame.node, new MathMLElementToLatexConverterAdapter(frame.node).toLatexConverter().convert());
++            // Older KaTeX mclass output can wrap a row in a token element.
++            const rowInToken = ['mi', 'mo'].includes(frame.node.name) && frame.node.children.some(child => child.name === 'mrow');
++            const latex = rowInToken ? frame.node.children.map(child => memo.get(child) || '').join(' ')
++                : new MathMLElementToLatexConverterAdapter(frame.node).toLatexConverter().convert();
++            memo.set(frame.node, withMathColors(frame.node, latex));
+         }
+     }
+     finally {

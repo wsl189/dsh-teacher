@@ -16,6 +16,7 @@ import { correctExampleWithAgent, identifyExampleHeadingWithAgent, type TeacherE
 import type {
   TeacherExample, TeacherExampleCatalog, TeacherExampleDocumentRequest,
   TeacherExampleExportRequest, TeacherExampleFile, TeacherExampleFileRequest,
+  TeacherExampleWordEditor, TeacherExampleWordSaveRequest, TeacherExampleWordSaved,
   TeacherExampleId, TeacherExampleRequest, TeacherExampleResult, TeacherExampleUpdateRequest, TeacherExampleUploadRequest,
 } from './example-types.ts'
 import { relative } from 'node:path'
@@ -402,19 +403,20 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     reminderRetryMs: DEFAULT_REMINDER_RETRY_MS,
   }) {
     super(ctx, 'teacherWorkbench')
-    const exampleAgent = async (
-      request: TeacherExampleCorrectionSource | TeacherExampleHeadingSource,
+    const exampleAgent = async <T, R>(
+      operation: (
+        request: T & { readonly parentSessionId: SessionId }, config: TeacherExampleCorrectionConfig, signal: AbortSignal,
+      ) => Promise<TeacherExampleResult<R>>,
+      request: T,
       signal: AbortSignal,
-    ): Promise<TeacherExampleResult<string>> => {
+    ): Promise<TeacherExampleResult<R>> => {
       let parentSessionId: SessionId
       try {
         parentSessionId = await this.questionAgentParentSessionId()
       } catch {
         return { ok: false, error: { code: 'correction-unavailable', message: 'The internal example-processing session is unavailable' } }
       }
-      return 'markdown' in request
-        ? correctExampleWithAgent(ctx, { ...request, parentSessionId }, this.configSource(), signal)
-        : identifyExampleHeadingWithAgent(ctx, { ...request, parentSessionId }, this.configSource(), signal)
+      return operation({ ...request, parentSessionId }, this.configSource(), signal)
     }
     this.examples = new TeacherExampleCollection(
       ctx.storageDomain,
@@ -425,8 +427,14 @@ export class TeacherWorkbenchService extends TypertRemoteService {
           ? Promise.resolve({ ok: false, error: { code: 'provider-unavailable', message: 'OCR is unavailable' } })
           : ocr.extractAbortable(request, signal)
       },
-      exampleAgent,
-      exampleAgent,
+      (request, signal) => exampleAgent(
+        (input: TeacherExampleCorrectionSource & { parentSessionId: SessionId }, config, abort) =>
+          correctExampleWithAgent(ctx, input, config, abort), request, signal,
+      ),
+      (request, signal) => exampleAgent(
+        (input: TeacherExampleHeadingSource & { parentSessionId: SessionId }, config, abort) =>
+          identifyExampleHeadingWithAgent(ctx, input, config, abort), request, signal,
+      ),
     )
     this.weatherProvider = new TeacherWeatherProvider(config)
     this.configSource = () => config
@@ -520,6 +528,16 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
+   * Remove a reusable preset without changing tags already assigned to questions.
+   * @param request - preset name; repeated deletion is idempotent.
+   * @returns its normalized name after persistence.
+   */
+  @Remote('deleteExampleTag')
+  deleteExampleTag(request: { readonly name: string }): Promise<TeacherExampleResult<string>> {
+    return this.examples.deleteTag(request.name)
+  }
+
+  /**
    * Delete one collected question and its files.
    * @param request - question to delete with both documents’ originals and Word files.
    * @returns the deleted identity.
@@ -530,8 +548,8 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Retain a collected question source before OCR.
-   * @param request - original image or PDF, owning question, and question or explanation selection.
+   * Retain ordered fragments as one collected question source before OCR.
+   * @param request - images/PDFs in reading order, owning question, and question or explanation selection.
    * @returns the saved source metadata, ready for OCR.
    */
   @Remote('uploadExample')
@@ -557,6 +575,26 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('readExampleFile')
   readExampleFile(request: TeacherExampleFileRequest): Promise<TeacherExampleResult<TeacherExampleFile>> {
     return this.examples.readFile(request)
+  }
+
+  /**
+   * Load an editable Word document with immutable equation and image references.
+   * @param request - question or explanation to edit.
+   * @returns content and optimistic source/Word revision tokens.
+   */
+  @Remote('readExampleWordEditor')
+  readExampleWordEditor(request: TeacherExampleDocumentRequest): Promise<TeacherExampleResult<TeacherExampleWordEditor>> {
+    return this.examples.readEditor(request)
+  }
+
+  /**
+   * Save manual Word edits without overwriting a newer source or Word revision.
+   * @param request - edited paragraphs and the revisions from the editor load.
+   * @returns metadata and editor content from the committed Word revision.
+   */
+  @Remote('saveExampleWordEditor')
+  saveExampleWordEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>> {
+    return this.examples.saveEditor(request)
   }
 
   /**

@@ -320,7 +320,7 @@ describe('web e2e: supplier-selected voice input', () => {
     })
     await nativePage.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
     await nativePage.getByRole('button', { name: '打开工作台' }).click()
-    await nativePage.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    await nativePage.getByRole('button', { name: '典例收集', exact: true }).first().click()
     await nativePage.getByRole('complementary', { name: '题目目录', exact: true })
       .getByRole('button', { name: '添加新题', exact: true }).click()
     const description = nativePage.getByRole('region', { name: '题目描述', exact: true })
@@ -357,7 +357,7 @@ describe('web e2e: supplier-selected voice input', () => {
     }).toBe('课堂讲评\n关注向量数量积的符号。')
     await nativePage.reload({ waitUntil: 'load' })
     await nativePage.getByRole('button', { name: '打开工作台' }).click()
-    await nativePage.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    await nativePage.getByRole('button', { name: '典例收集', exact: true }).first().click()
     await expect.poll(() => text.inputValue()).toBe('课堂讲评\n关注向量数量积的符号。')
     await compareOrRefreshGolden(
       join(SNAPSHOT_DIR, 'example-description.expected.md'),
@@ -373,7 +373,7 @@ describe('web e2e: supplier-selected voice input', () => {
     onTestFinished(() => { suppliedTranscript = undefined })
     await page.reload({ waitUntil: 'load' })
     await page.getByRole('button', { name: '打开工作台' }).click()
-    await page.getByRole('button', { name: '点例收集', exact: true }).first().click()
+    await page.getByRole('button', { name: '典例收集', exact: true }).first().click()
     const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
     if (!catalog.ok) throw new Error('Example catalog is unavailable')
     const nextName = String(Math.max(0, ...catalog.value.questions.map(question => question.number)) + 1)

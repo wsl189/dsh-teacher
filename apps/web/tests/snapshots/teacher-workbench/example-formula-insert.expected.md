@@ -1,0 +1,16 @@
+- menu:
+  - menuitem "∣x∣ 绝对值"
+  - menuitem "n √ x n 次根式"
+  - menuitem "log a (x) 以 a 为底的对数"
+  - menuitem "微积分" [disabled]
+  - menuitem "dx d f(x) ∣ ∣ x=a 导数"
+  - menuitem "dx n d n f(x) ∣ ∣ x=a n 阶导数"
+  - menuitem "∫ a b f(x) dx 定积分"
+  - menuitem "i=1 ∑ n x i 求和"
+  - menuitem "i=1 ∏ n x i 连乘"
+  - menuitem "复数" [disabled]
+  - menuitem "∣z∣ 模"
+  - menuitem "arg (z) 辐角"
+  - menuitem "ℜ (z) 实部"
+  - menuitem "ℑ (z) 虚部"
+  - menuitem "z 共轭"

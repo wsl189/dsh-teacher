@@ -1,14 +1,15 @@
 /** Collected-question directories, original/Word previews, annotation, and search drawer. */
 
+import { ExampleWordEditor } from './ExampleWordEditor.tsx'
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react'
 import {
   BookOpen,
-  Check,
   Download,
   FileText,
   FolderOpen,
   ImagePlus,
   LoaderCircle,
+  Maximize2,
   MoreHorizontal,
   PenLine,
   Plus,
@@ -31,6 +32,8 @@ import type { TeacherWorkbenchKey } from './locales.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { VoiceInputButton } from './SpeechInput.tsx'
 import { ExampleExportDialog } from './ExampleExportDialog.tsx'
+import { ExampleUploadDialog } from './ExampleUploadDialog.tsx'
+import { ExamplePdfPreview } from './ExamplePdfPreview.tsx'
 import { ExampleTag, ExampleTags } from './ExampleTags.tsx'
 import { renderExampleWordEquations, renderExampleWordOptionRows } from './example-word-preview.ts'
 import css from './ExampleCollection.module.css'
@@ -167,14 +170,12 @@ export function ExampleCollection({ snapshot, commands, transcribeVoice, t }: Ex
           />
           <button type="submit">{t('search')}</button>
         </form>
-        <span className={css.saveStatus} role="status">
-          {snapshot.pending > 0 ? <LoaderCircle size={14} className={css.spinner} /> : <Check size={14} />}
-          {snapshot.pending > 0
-            ? t('saving')
-            : Object.keys(snapshot.drafts).length > 0
-              ? t('examples.unsaved')
-              : t('examples.saved')}
-        </span>
+        {(snapshot.pending > 0 || Object.keys(snapshot.drafts).length > 0) && (
+          <span className={css.saveStatus} role="status">
+            {snapshot.pending > 0 && <LoaderCircle size={14} className={css.spinner} />}
+            {t(snapshot.pending > 0 ? 'saving' : 'examples.unsaved')}
+          </span>
+        )}
       </header>
       {snapshot.error !== null && (
         <div className={css.error} role="alert">
@@ -420,6 +421,7 @@ function ExampleEditor({
           pending={snapshot.pending > 0}
           onSelect={tags => commands.update({ id: question.id, tags })}
           onAddPreset={commands.addTag}
+          onDeletePreset={commands.deleteTag}
           t={t}
         />
       </section>
@@ -481,8 +483,26 @@ function ExampleDocumentPanels({
   t: TeacherWorkbenchTranslate
 }) {
   const input = useRef<HTMLInputElement>(null)
+  const [uploads, setUploads] = useState<readonly File[] | null>(null)
+  const [expanded, setExpanded] = useState<'source' | 'word' | null>(null)
   const selected = question.documents[documentKind]
   const labels = DOCUMENT_LABELS[documentKind]
+  const chooseFiles = (files: readonly File[]): void => {
+    if (busy !== undefined || files.length === 0) return
+    if (files.length === 1) void commands.upload(question.id, documentKind, files)
+    else setUploads(files)
+  }
+  const expand = (kind: 'source' | 'word', disabled: boolean) => (
+    <button
+      className={css.expandPreview}
+      aria-label={t('examples.expandPreview', { name: t(labels[kind]) })}
+      title={t('examples.expandPreview', { name: t(labels[kind]) })}
+      disabled={disabled}
+      onClick={() => { setExpanded(kind) }}
+    >
+      <Maximize2 size={16} />
+    </button>
+  )
   return (
     <>
       <section
@@ -493,8 +513,7 @@ function ExampleDocumentPanels({
         }}
         onDrop={(event) => {
           event.preventDefault()
-          const file = event.dataTransfer.files[0]
-          if (file !== undefined && busy === undefined) void commands.upload(question.id, documentKind, file)
+          chooseFiles(Array.from(event.dataTransfer.files))
         }}
       >
         <div className={css.panelHeading}>
@@ -502,26 +521,28 @@ function ExampleDocumentPanels({
             <ImagePlus size={16} />
             {t(labels.source)}
           </h3>
-          <button
-            className={css.textButton}
-            disabled={busy !== undefined}
-            onClick={() => {
-              input.current?.click()
-            }}
-          >
-            {t(selected.source === null ? labels.upload : labels.replace)}
-          </button>
+          <div className={css.wordActions}>
+            <button
+              className={css.textButton}
+              disabled={busy !== undefined}
+              onClick={() => { input.current?.click() }}
+            >
+              {t(selected.source === null ? labels.upload : labels.replace)}
+            </button>
+            {expand('source', selected.source === null)}
+          </div>
         </div>
         <input
           ref={input}
           type="file"
+          multiple
           hidden
           aria-label={t(labels.upload)}
           accept="image/png,image/jpeg,image/webp,application/pdf,.pdf,.png,.jpg,.jpeg,.webp"
           onChange={(event) => {
-            const file = event.target.files?.[0]
+            const files = Array.from(event.target.files ?? [])
             event.target.value = ''
-            if (file !== undefined) void commands.upload(question.id, documentKind, file)
+            chooseFiles(files)
           }}
         />
         {selected.source === null ? (
@@ -559,7 +580,7 @@ function ExampleDocumentPanels({
                 {t('examples.proofread')}
               </button>
             )}
-            <span className={css.badge}>{t('examples.mineru')}</span>
+            {expand('word', selected.status !== 'ready' || busy !== undefined)}
           </div>
         </div>
         {busy !== undefined ? (
@@ -594,7 +615,71 @@ function ExampleDocumentPanels({
           </div>
         )}
       </section>
+      {uploads !== null && (
+        <ExampleUploadDialog
+          files={uploads}
+          title={t(labels.source)}
+          onUpload={(files) => {
+            setUploads(null)
+            void commands.upload(question.id, documentKind, files)
+          }}
+          onClose={() => { setUploads(null) }}
+          t={t}
+        />
+      )}
+      {expanded !== null && (
+        <ExamplePreviewDialog
+          question={question}
+          documentKind={documentKind}
+          kind={expanded}
+          commands={commands}
+          onClose={() => { setExpanded(null) }}
+          t={t}
+        />
+      )}
     </>
+  )
+}
+
+function ExamplePreviewDialog({ question, documentKind, kind, commands, onClose, t }: {
+  question: TeacherExample
+  documentKind: TeacherExampleDocumentKind
+  kind: 'source' | 'word'
+  commands: ExampleCollectionCommands
+  onClose: () => void
+  t: TeacherWorkbenchTranslate
+}) {
+  const dialog = useRef<HTMLDialogElement>(null)
+  const closeRequest = useRef(onClose)
+  const title = t(DOCUMENT_LABELS[documentKind][kind])
+  useEffect(() => {
+    const element = dialog.current
+    const previousFocus = document.activeElement
+    element?.showModal()
+    return () => {
+      element?.close()
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus({ preventScroll: true })
+    }
+  }, [])
+  return (
+    <dialog
+      ref={dialog}
+      className={css.previewDialog}
+      aria-label={t('examples.expandedPreview', { name: title })}
+      onCancel={(event) => { event.preventDefault(); closeRequest.current() }}
+      onClick={(event) => { if (event.target === event.currentTarget) closeRequest.current() }}
+    >
+      <div className={css.previewWindow}>
+        <header className={css.previewHeading}>
+          <h2>{title}<span>{question.name}</span></h2>
+          <button className={css.closeDrawer} aria-label={t('examples.closePreview')} onClick={() => { closeRequest.current() }} autoFocus>
+            <X size={20} />
+          </button>
+        </header>
+        {kind === 'word' ? <ExampleWordEditor question={question} documentKind={documentKind} commands={commands} t={t} onClose={onClose} closeRequest={closeRequest} /> :
+          <ExampleFilePreview question={question} documentKind={documentKind} kind={kind} commands={commands} t={t} />}
+      </div>
+    </dialog>
   )
 }
 
@@ -630,7 +715,7 @@ function ExampleFilePreview({
   t: TeacherWorkbenchTranslate
   heading?: ExampleFileHeadingContent
 }) {
-  const [file, setFile] = useState<{ data: TeacherExampleFile; url: string } | null>(null)
+  const [file, setFile] = useState<{ data: TeacherExampleFile; url: string; blob: File } | null>(null)
   const [error, setError] = useState(false)
   const [rendered, setRendered] = useState(false)
   const [readAttempt, setReadAttempt] = useState(0)
@@ -655,9 +740,9 @@ function ExampleFilePreview({
       .then(async (data) => {
         if (!active) return
         const bytes = Uint8Array.from(atob(data.contentBase64), character => character.charCodeAt(0))
-        const blob = new Blob([bytes], { type: data.mediaType })
+        const blob = new File([bytes], data.name, { type: data.mediaType })
         url = URL.createObjectURL(blob)
-        setFile({ data, url })
+        setFile({ data, url, blob })
         if (kind === 'word') {
           await renderAsync(blob, container, container, {
             className: 'example-word',
@@ -712,13 +797,15 @@ function ExampleFilePreview({
           </div>
         )}
         {kind === 'word' && <div ref={body} className={css.wordPage} aria-label={t(labels.wordContent)} />}
-        {file !== null &&
-          kind === 'source' &&
-          (file.data.mediaType === 'application/pdf' ? (
-            <iframe src={file.url} title={file.data.name} className={css.pdf} />
-          ) : (
-            <img src={file.url} alt={file.data.name} className={css.sourceImage} />
-          ))}
+        {file !== null && kind === 'source' && (
+          <div className={css.sourceContent}>
+            {file.data.mediaType === 'application/pdf' ? (
+              <ExamplePdfPreview file={file.blob} t={t} />
+            ) : (
+              <img src={file.url} alt={file.data.name} className={css.sourceImage} />
+            )}
+          </div>
+        )}
         {file !== null && heading === undefined && (
           <div className={css.fileFooter}>
             <span title={file.data.name}>{file.data.name}</span>

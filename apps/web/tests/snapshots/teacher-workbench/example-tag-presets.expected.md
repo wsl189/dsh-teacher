@@ -1,13 +1,12 @@
 - region "工作台":
   - main:
-    - heading "点例收集" [level=1]
+    - heading "典例收集" [level=1]
     - paragraph: 题目、解析与教学笔记
     - search:
       - textbox "搜索题目":
         - /placeholder: 按标签或描述关键词搜索…
       - button "开始语音输入"
       - button "搜索"
-    - status: 已保存
     - complementary "题目目录":
       - text: 题目目录 2
       - paragraph: 双击名称修改 · 右键更多操作
@@ -20,7 +19,8 @@
       - region "题目原件":
         - heading "题目原件" [level=3]
         - button "更换原件"
-        - iframe
+        - button "放大题目原件"
+        - img "equation.pdf，第 1 页"
         - text: equation.pdf
         - link "下载题目原件":
           - /url: blob:{{webOrigin}}/{{uuid}}
@@ -28,8 +28,9 @@
       - region "Word 预览":
         - heading "Word 预览" [level=3]
         - button "AI 校对"
-        - text: MinerU OCR
+        - button "放大Word 预览"
         - article:
+          - paragraph: ）
           - paragraph: 已知 x² − 3x + 2 = 0，求 x。
           - paragraph: 提示：尝试因式分解。
           - paragraph:
@@ -62,7 +63,8 @@
       - region "题目解析":
         - heading "题目解析" [level=3]
         - button "更换解析"
-        - iframe
+        - button "放大题目解析"
+        - img "solution.pdf，第 1 页"
         - text: solution.pdf
         - link "下载解析原件":
           - /url: blob:{{webOrigin}}/{{uuid}}
@@ -70,7 +72,7 @@
       - region "解析 Word 预览":
         - heading "解析 Word 预览" [level=3]
         - button "AI 校对"
-        - text: MinerU OCR
+        - button "放大解析 Word 预览"
         - article:
           - paragraph: 题目解析
           - paragraph:
@@ -100,7 +102,7 @@
         - button "选择预设标签" [expanded]
         - group "预设标签":
           - button "二次方程" [pressed]
-          - button "几何"
+          - button "删除预设标签“二次方程”"
         - button "添加标签"
       - region "题目描述":
         - heading "题目描述" [level=3]

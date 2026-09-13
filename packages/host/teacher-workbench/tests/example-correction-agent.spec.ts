@@ -50,12 +50,13 @@ function fixture(structured: unknown = { markdown: 'A. 点 O；C. $a:b:c$\n![](i
 describe('example visual proofreading', () => {
   it('uses a fresh spawn child to identify only a copied Word heading against the original pixels', async () => {
     const prefix = '【题 4】（2019 人教 ⟪math:0⟫ 版 P33 探究变式）'
-    const f = fixture({ headingPrefix: prefix })
+    const f = fixture({ headings: [{ paragraph: 0, prefix }] })
     const result = await identifyExampleHeadingWithAgent(f.ctx, {
       ...f.request, text: `${prefix}已知 ⟪math:1⟫，求解。\n（1）求坐标。`,
+      paragraphs: [{ index: 0, text: `${prefix}已知 ⟪math:1⟫，求解。` }, { index: 1, text: '（1）求坐标。' }],
       equations: [{ marker: '⟪math:0⟫', text: 'A' }, { marker: '⟪math:1⟫', text: 'x>0' }],
     }, CONFIG, new AbortController().signal)
-    expect(result).toEqual({ ok: true, value: prefix })
+    expect(result).toEqual({ ok: true, value: [{ paragraph: 0, prefix }] })
     expect(f.start).toHaveBeenCalledOnce()
     const [provider, request] = f.start.mock.calls[0]!
     expect(provider).toBe('spawn')
@@ -67,18 +68,18 @@ describe('example visual proofreading', () => {
     expect(f.dispose).toHaveBeenCalledOnce()
   })
 
-  it.each([{ headingPrefix: '不是原文' }, { markdown: '改写题目' }, { headingPrefix: '', body: '改写题目' }])(
+  it.each([{ headings: [{ paragraph: 0, prefix: '不是原文' }] }, { markdown: '改写题目' }, { headings: [], body: '改写题目' }])(
     'rejects heading output that rewrites text or does not follow the structured result: %j', async (structured) => {
       const f = fixture(structured)
-      expect(await identifyExampleHeadingWithAgent(f.ctx, { ...f.request, text: '（1）已知x>0，求解。', equations: [] }, CONFIG, new AbortController().signal))
+      expect(await identifyExampleHeadingWithAgent(f.ctx, { ...f.request, text: '（1）已知x>0，求解。', paragraphs: [{ index: 0, text: '（1）已知x>0，求解。' }], equations: [] }, CONFIG, new AbortController().signal))
         .toMatchObject({ ok: false, error: { code: 'correction-invalid' } })
     },
   )
 
   it('accepts an empty heading when conditions and subpart numbers belong to the body', async () => {
-    const f = fixture({ headingPrefix: '' })
-    expect(await identifyExampleHeadingWithAgent(f.ctx, { ...f.request, text: '（1）已知x>0，求解。', equations: [] }, CONFIG, new AbortController().signal))
-      .toEqual({ ok: true, value: '' })
+    const f = fixture({ headings: [] })
+    expect(await identifyExampleHeadingWithAgent(f.ctx, { ...f.request, text: '（1）已知x>0，求解。', paragraphs: [{ index: 0, text: '（1）已知x>0，求解。' }], equations: [] }, CONFIG, new AbortController().signal))
+      .toEqual({ ok: true, value: [] })
   })
 
   it('supplies the original and full MinerU draft to the selected tool model and returns corrected text', async () => {
@@ -106,7 +107,13 @@ describe('example visual proofreading', () => {
     const source = { name: 'questions.pdf', mediaType: 'application/pdf', contentBase64: Buffer.from(await pdf.save()).toString('base64') }
     expect(await correctExampleWithAgent(f.ctx, { ...f.request, source }, CONFIG, new AbortController().signal)).toMatchObject({ ok: true })
     expect(f.saveImage.mock.calls.map(([image]) => image.name)).toEqual(['questions.pdf page 1.png', 'questions.pdf page 2.png'])
-    expect(f.start.mock.calls[0]![1].prompt.filter(block => block.type === 'image')).toHaveLength(2)
+    expect(f.start).toHaveBeenCalledOnce()
+    const child = f.start.mock.calls[0]![1]
+    expect(child.prompt.filter(block => block.type === 'image')).toHaveLength(2)
+    expect(child.prompt.filter(block => block.type === 'text').map(block => block.text).slice(1)).toEqual([
+      'Original page 1 of 2 — continuous question', 'Original page 2 of 2 — continuous question',
+    ])
+    expect(child.persona).toContain('All attached pages belong to ONE question or ONE explanation')
     f.start.mockClear()
     const pageLimit = { ...CONFIG, maxExampleCorrectionPages: 1 }
     expect(await correctExampleWithAgent(f.ctx, { ...f.request, source }, pageLimit, new AbortController().signal))
