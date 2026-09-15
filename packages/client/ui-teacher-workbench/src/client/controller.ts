@@ -1386,9 +1386,9 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
   }
 
   /**
-   * Snapshot selected student images for the legacy temporary-generation workflow.
-   * @param request - student identity and ordered assignment ids.
-   * @returns copied-image count or a stable failure.
+   * Accumulate student-image snapshots for Office generation; an empty selection clears them.
+   * @param request - student identity and assignment ids to add or refresh.
+   * @returns total staged-image count or a stable failure.
    */
   async saveTemporaryQuestionSelection(
     request: TeacherQuestionTemporarySaveRequest,

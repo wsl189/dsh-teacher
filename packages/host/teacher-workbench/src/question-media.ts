@@ -123,6 +123,7 @@ type ResolvedImage = TeacherQuestionImageFile
 type RenderableImage = Omit<ResolvedImage, 'path'> & { readonly bytes: Buffer }
 
 interface TemporaryQuestionImage {
+  readonly assignmentId: TeacherQuestionAssignmentId
   readonly storedName: string
   readonly fileName: string
   readonly questionNo?: number
@@ -132,7 +133,7 @@ interface TemporaryQuestionImage {
 }
 
 interface TemporaryQuestionManifest {
-  readonly version: 1
+  readonly version: 2
   readonly studentId: TeacherStudentId
   readonly images: readonly TemporaryQuestionImage[]
 }
@@ -944,18 +945,17 @@ export async function persistQuestionAssignments(
 }
 
 /**
- * Replace one student's temporary Office-generation selection with independent image snapshots.
+ * Add or update independent snapshots in one student's temporary Office selection; an empty list clears it.
  * @param config - current media roots and decoded-byte limits.
  * @param state - authoritative roster and assignment metadata.
  * @param request - student identity and ordered selected assignment ids.
- * @returns the prepared selection plus commit and rollback operations.
+ * @returns the accumulated selection plus commit and rollback operations; failures preserve the prior selection.
  */
 export async function saveTemporaryQuestionSelection(
   config: TeacherQuestionMediaConfig,
   state: TeacherWorkbenchState,
   request: TeacherQuestionTemporarySaveRequest,
 ): Promise<PersistedTemporaryQuestionSelection> {
-  if (request.assignmentIds.length === 0) throw new TeacherQuestionMediaError('invalid-request', '请至少选择一张学生图片')
   if (request.assignmentIds.length > 120) throw new TeacherQuestionMediaError('invalid-request', '一次最多临时保存 120 张图片')
   const student = state.students.find(item => item.id === request.studentId)
   if (student === undefined) throw new TeacherQuestionMediaError('not-found', '学生不存在')
@@ -968,10 +968,37 @@ export async function saveTemporaryQuestionSelection(
     return assignment
   })
   const questionNumbers = questionNumberIndex(state)
-  assignments.sort((left, right) => compareQuestionAssignments(left, right, questionNumbers))
 
   const root = temporaryQuestionRoot(config)
   const finalDirectory = within(root, String(student.id))
+  const retained = request.assignmentIds.length === 0
+    ? []
+    : (await readTemporaryQuestionManifest(config, student.id))?.images.filter(image => !requested.has(image.assignmentId)) ?? []
+  if (retained.length + assignments.length > 120) {
+    throw new TeacherQuestionMediaError('invalid-request', '每名学生最多暂存 120 张图片，请先清空暂存或生成文档')
+  }
+  const images = [
+    ...retained.map(({ storedName, ...image }) => ({
+      image, path: within(finalDirectory, storedName),
+    })),
+    ...assignments.map((assignment) => {
+      const resolved = resolveImage(config, state, { kind: 'assignment', id: assignment.id })
+      return {
+        path: resolved.path,
+        image: {
+          assignmentId: assignment.id,
+          fileName: resolved.fileName,
+          ...questionNoProperty(questionNumbers.get(assignment.sourceImageId), resolved.fileName),
+          mediaType: resolved.mediaType,
+          width: resolved.width,
+          height: resolved.height,
+        },
+      }
+    }),
+  ].sort((left, right) => compareQuestionOrder(
+    { ...left.image, tieBreaker: left.image.assignmentId },
+    { ...right.image, tieBreaker: right.image.assignmentId },
+  ))
   const pendingDirectory = within(root, `.pending-${String(student.id)}-${randomUUID()}`)
   const backupDirectory = within(root, `.backup-${String(student.id)}-${randomUUID()}`)
   const manifestImages: TemporaryQuestionImage[] = []
@@ -979,28 +1006,23 @@ export async function saveTemporaryQuestionSelection(
   let aggregateBytes = 0
   try {
     await mkdir(pendingDirectory, { recursive: true })
-    for (const [index, assignment] of assignments.entries()) {
-      const resolved = resolveImage(config, state, { kind: 'assignment', id: assignment.id })
-      const bytes = await readFile(resolved.path)
+    for (const [index, entry] of images.entries()) {
+      const bytes = await readFile(entry.path)
       aggregateBytes += bytes.byteLength
       if (aggregateBytes > config.maxBatchBytes) {
         throw new TeacherQuestionMediaError('file-too-large', '临时图片总体积超过设置上限')
       }
       const storedName = `${String(index + 1).padStart(3, '0')}_${safeFileName(
-        resolved.fileName,
-        `image${extensionFor(resolved.mediaType)}`,
+        entry.image.fileName,
+        `image${extensionFor(entry.image.mediaType)}`,
       )}`
       await writeFile(within(pendingDirectory, storedName), bytes, { flag: 'wx' })
       manifestImages.push({
+        ...entry.image,
         storedName,
-        fileName: resolved.fileName,
-        ...questionNoProperty(questionNumbers.get(assignment.sourceImageId), resolved.fileName),
-        mediaType: resolved.mediaType,
-        width: resolved.width,
-        height: resolved.height,
       })
     }
-    const manifest: TemporaryQuestionManifest = { version: 1, studentId: student.id, images: manifestImages }
+    const manifest: TemporaryQuestionManifest = { version: 2, studentId: student.id, images: manifestImages }
     await writeFile(
       within(pendingDirectory, TEMPORARY_QUESTION_MANIFEST),
       JSON.stringify(manifest),
@@ -1379,22 +1401,31 @@ async function readTemporaryQuestionManifest(
       within(temporaryQuestionDirectory(config, studentId), TEMPORARY_QUESTION_MANIFEST),
       'utf8',
     ))
-    if (!isTemporaryQuestionManifest(raw, studentId)) return undefined
+    if (!isTemporaryQuestionManifest(raw, studentId)) {
+      throw new TeacherQuestionMediaError('storage-failure', '临时图片记录格式无效，请清空暂存后重新选择图片')
+    }
     return raw
   } catch (error) {
     if (isNodeError(error) && error.code === 'ENOENT') return undefined
-    return undefined
+    if (error instanceof TeacherQuestionMediaError) throw error
+    throw new TeacherQuestionMediaError('storage-failure', '无法读取临时图片记录，请清空暂存后重新选择图片', { cause: error })
   }
 }
 
 function isTemporaryQuestionManifest(value: unknown, studentId: TeacherStudentId): value is TemporaryQuestionManifest {
   if (typeof value !== 'object' || value === null) return false
   const record = value as Record<string, unknown>
-  if (record.version !== 1 || record.studentId !== studentId || !Array.isArray(record.images)) return false
+  if (record.version !== 2 || record.studentId !== studentId || !Array.isArray(record.images)) return false
+  const assignmentIds = new Set<string>()
+  const storedNames = new Set<string>()
   return record.images.length <= 120 && record.images.every((item) => {
     if (typeof item !== 'object' || item === null) return false
     const image = item as Record<string, unknown>
-    return typeof image.storedName === 'string'
+    if (typeof image.assignmentId !== 'string' || image.assignmentId === '' || assignmentIds.has(image.assignmentId)) return false
+    if (typeof image.storedName !== 'string' || storedNames.has(image.storedName)) return false
+    assignmentIds.add(image.assignmentId)
+    storedNames.add(image.storedName)
+    return image.storedName !== '.' && image.storedName !== '..' && !/[\\/:*?"<>|]/u.test(image.storedName)
       && image.storedName !== ''
       && typeof image.fileName === 'string'
       && (image.questionNo === undefined

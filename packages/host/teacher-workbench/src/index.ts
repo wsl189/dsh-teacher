@@ -1254,9 +1254,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Snapshot selected student images into temporary Office-generation storage.
-   * @param request - student identity and ordered assignment ids.
-   * @returns copied-image count or a stable failure.
+   * Accumulate selected student-image snapshots for Office generation; an empty selection clears them.
+   * @param request - student identity and assignment ids to add or refresh.
+   * @returns total staged-image count or a stable failure that preserves the previous selection.
    */
   @Remote('saveTemporaryQuestionSelection')
   saveTemporaryQuestionSelection(

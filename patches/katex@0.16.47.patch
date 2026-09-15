@@ -1,8 +1,28 @@
 diff --git a/dist/katex.js b/dist/katex.js
-index 2de2003251a8e5dda149c3b707eaf28f42b459f2..731b4548901175adda8f558ca818517686998c1f 100644
+index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec66b3e71bc 100644
 --- a/dist/katex.js
 +++ b/dist/katex.js
-@@ -11337,7 +11337,7 @@ defineFunction({
+@@ -4967,6 +4967,10 @@ const makeSymbol = function (value, fontName, mode, options, classes) {
+   }
+   if (options) {
+     symbolNode.maxFontSize = options.sizeMultiplier;
++    // Retain bold on fallback glyphs whose font has no dedicated bold face.
++    if ((options.font === "mathbf" || options.font === "boldsymbol" || options.fontWeight === "textbf") && !fontName.includes("Bold")) {
++      symbolNode.style.fontWeight = "bold";
++    }
+     if (options.style.isTight()) {
+       symbolNode.classes.push("mtight");
+     }
+@@ -4993,7 +4997,7 @@ const mathsym = function (value, mode, options, classes) {
+   // text ordinal and is therefore not present as a symbol in the symbols
+   // table for text, as well as a special case for boldsymbol because it
+   // can be used for bold + and -
+-  if (options.font === "boldsymbol" && lookupSymbol(value, "Main-Bold", mode).metrics) {
++  if ((options.font === "boldsymbol" || options.font === "mathbf") && lookupSymbol(value, "Main-Bold", mode).metrics) {
+     return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
+   } else if (value === "\\" || src_symbols[mode][value].font === "main") {
+     return makeSymbol(value, "Main-Regular", mode, options, classes);
+@@ -11337,7 +11341,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -11,7 +31,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..731b4548901175adda8f558ca8185176
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -11359,7 +11359,7 @@ defineFunction({
+@@ -11359,7 +11363,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -20,11 +40,49 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..731b4548901175adda8f558ca8185176
        body
      };
    },
+@@ -14140,12 +14144,11 @@ defineFunctionBuilders({
+   },
+   mathmlBuilder(group, options) {
+     const node = new MathNode("mo", [makeText(group.text, group.mode)]);
+-    if (group.family === "bin") {
+-      const variant = getVariant(group, options);
+-      if (variant === "bold-italic") {
+-        node.setAttribute("mathvariant", variant);
+-      }
+-    } else if (group.family === "punct") {
++    const variant = getVariant(group, options);
++    if (variant === "bold" || variant === "bold-italic") {
++      node.setAttribute("mathvariant", "bold");
++    }
++    if (group.family === "punct") {
+       node.setAttribute("separator", "true");
+     } else if (group.family === "open" || group.family === "close") {
+       // Delims built here should not stretch vertically.
 diff --git a/dist/katex.mjs b/dist/katex.mjs
-index b4a83b4b7b9b31064413fa7eb5447823110d7305..020ccebf351bbfa22e4e661523ef482c8f8939fc 100644
+index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62962d672e 100644
 --- a/dist/katex.mjs
 +++ b/dist/katex.mjs
-@@ -10555,7 +10555,7 @@ defineFunction({
+@@ -4740,6 +4740,10 @@ var makeSymbol = function makeSymbol(value, fontName, mode, options, classes) {
+   }
+   if (options) {
+     symbolNode.maxFontSize = options.sizeMultiplier;
++    // Retain bold on fallback glyphs whose font has no dedicated bold face.
++    if ((options.font === "mathbf" || options.font === "boldsymbol" || options.fontWeight === "textbf") && !fontName.includes("Bold")) {
++      symbolNode.style.fontWeight = "bold";
++    }
+     if (options.style.isTight()) {
+       symbolNode.classes.push("mtight");
+     }
+@@ -4765,7 +4769,7 @@ var mathsym = function mathsym(value, mode, options, classes) {
+   // text ordinal and is therefore not present as a symbol in the symbols
+   // table for text, as well as a special case for boldsymbol because it
+   // can be used for bold + and -
+-  if (options.font === "boldsymbol" && lookupSymbol(value, "Main-Bold", mode).metrics) {
++  if ((options.font === "boldsymbol" || options.font === "mathbf") && lookupSymbol(value, "Main-Bold", mode).metrics) {
+     return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
+   } else if (value === "\\" || symbols[mode][value].font === "main") {
+     return makeSymbol(value, "Main-Regular", mode, options, classes);
+@@ -10555,7 +10559,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -33,7 +91,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..020ccebf351bbfa22e4e661523ef482c
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -10577,7 +10577,7 @@ defineFunction({
+@@ -10577,7 +10581,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -42,6 +100,61 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..020ccebf351bbfa22e4e661523ef482c
        body
      };
    },
+@@ -13122,12 +13126,11 @@ defineFunctionBuilders({
+   },
+   mathmlBuilder(group, options) {
+     var node = new MathNode("mo", [makeText(group.text, group.mode)]);
+-    if (group.family === "bin") {
+-      var variant = getVariant(group, options);
+-      if (variant === "bold-italic") {
+-        node.setAttribute("mathvariant", variant);
+-      }
+-    } else if (group.family === "punct") {
++    var variant = getVariant(group, options);
++    if (variant === "bold" || variant === "bold-italic") {
++      node.setAttribute("mathvariant", "bold");
++    }
++    if (group.family === "punct") {
+       node.setAttribute("separator", "true");
+     } else if (group.family === "open" || group.family === "close") {
+       // Delims built here should not stretch vertically.
+diff --git a/src/buildCommon.ts b/src/buildCommon.ts
+index 0a37357db6010a2ab3a2402a1ffdc95aa8191fbe..f8273e740cfeefc49d9a09cefd0ca42ab536e13b 100644
+--- a/src/buildCommon.ts
++++ b/src/buildCommon.ts
+@@ -91,6 +91,11 @@ export const makeSymbol = function(
+ 
+     if (options) {
+         symbolNode.maxFontSize = options.sizeMultiplier;
++        // Retain bold on fallback glyphs whose font has no dedicated bold face.
++        if ((options.font === "mathbf" || options.font === "boldsymbol" ||
++                options.fontWeight === "textbf") && !fontName.includes("Bold")) {
++            symbolNode.style.fontWeight = "bold";
++        }
+         if (options.style.isTight()) {
+             symbolNode.classes.push("mtight");
+         }
+@@ -120,7 +125,7 @@ export const mathsym = function(
+     // text ordinal and is therefore not present as a symbol in the symbols
+     // table for text, as well as a special case for boldsymbol because it
+     // can be used for bold + and -
+-    if (options.font === "boldsymbol" &&
++    if ((options.font === "boldsymbol" || options.font === "mathbf") &&
+             lookupSymbol(value, "Main-Bold", mode).metrics) {
+         return makeSymbol(value, "Main-Bold", mode, options,
+             classes.concat(["mathbf"]));
+diff --git a/src/domTree.ts b/src/domTree.ts
+index 50d79dfdce10a17aa0f455b07461c8ca7cf37740..9f3dc63c0aca066362bc2d291da497d33c5edcc9 100644
+--- a/src/domTree.ts
++++ b/src/domTree.ts
+@@ -168,6 +168,7 @@ export type CssStyle = Partial<{
+     borderWidth: string;
+     bottom: string;
+     color: string;
++    fontWeight: string;
+     height: string;
+     left: string;
+     margin: string;
 diff --git a/src/functions/font.ts b/src/functions/font.ts
 index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863743767fd 100644
 --- a/src/functions/font.ts
@@ -73,3 +186,25 @@ index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863
              body,
          };
      },
+diff --git a/src/functions/symbolsOp.ts b/src/functions/symbolsOp.ts
+index b0c5086fb7aab62ea4337ccfd90abf27a0985c75..0ff4d59d193165f0ac5d4deb2b62fd55ea883745 100644
+--- a/src/functions/symbolsOp.ts
++++ b/src/functions/symbolsOp.ts
+@@ -15,12 +15,11 @@ defineFunctionBuilders({
+     mathmlBuilder(group, options) {
+         const node = new MathNode(
+             "mo", [mml.makeText(group.text, group.mode)]);
+-        if (group.family === "bin") {
+-            const variant = mml.getVariant(group, options);
+-            if (variant === "bold-italic") {
+-                node.setAttribute("mathvariant", variant);
+-            }
+-        } else if (group.family === "punct") {
++        const variant = mml.getVariant(group, options);
++        if (variant === "bold" || variant === "bold-italic") {
++            node.setAttribute("mathvariant", "bold");
++        }
++        if (group.family === "punct") {
+             node.setAttribute("separator", "true");
+         } else if (group.family === "open" || group.family === "close") {
+             // Delims built here should not stretch vertically.

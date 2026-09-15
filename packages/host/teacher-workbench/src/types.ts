@@ -1174,11 +1174,11 @@ export interface TeacherQuestionAssignRequest {
   readonly imageIds: readonly TeacherQuestionImageId[]
 }
 
-/** Replace one student's temporary Office-generation image selection. */
+/** Add or update snapshots in one student's temporary Office-generation selection. */
 export interface TeacherQuestionTemporarySaveRequest {
   /** Student visible below the current configured root that owns every selected image. */
   readonly studentId: TeacherStudentId
-  /** Ordered student-image copies to snapshot into temporary storage. */
+  /** Student-image copies to add or refresh; an empty list clears this student's selection. */
   readonly assignmentIds: readonly TeacherQuestionAssignmentId[]
 }
 
@@ -1188,11 +1188,11 @@ export interface TeacherQuestionTemporaryListRequest {
   readonly studentIds: readonly TeacherStudentId[]
 }
 
-/** One available temporary Office-generation selection. */
+/** One student's temporary Office-generation image count. */
 export interface TeacherQuestionTemporarySelection {
   /** Currently visible student that owns the selection. */
   readonly studentId: TeacherStudentId
-  /** Naturally ordered image count in temporary storage. */
+  /** Total staged snapshots across folders; zero after clearing. */
   readonly imageCount: number
 }
 
@@ -1253,7 +1253,7 @@ export type TeacherQuestionMediaBrowseResult = TeacherQuestionMediaBrowseSuccess
 export interface TeacherQuestionTemporarySaveSuccess {
   /** Success discriminant. */
   readonly ok: true
-  /** Stored selection, copied-image count, and committed per-image statistics. */
+  /** Accumulated selection count and committed per-image statistics. */
   readonly value: TeacherQuestionTemporarySelection & { readonly document: TeacherWorkbenchDocument }
 }
 

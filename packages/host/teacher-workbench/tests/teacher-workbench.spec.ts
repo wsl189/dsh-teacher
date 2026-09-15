@@ -214,6 +214,152 @@ function withClasses(...classes: TeacherClass[]): TeacherWorkbenchState {
 }
 
 describe('TeacherWorkbenchService', () => {
+  it('accumulates student-folder snapshots across saves and restart without merging same-named images', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-accumulate-'))
+    temporaryRoots.push(root)
+    const config = testConfig(root)
+    const a = await harness(new MemoryMediaPool(), config)
+    contexts.push(a.ctx)
+    const sourceA = join(config.studentsRoot, '2026', '高一', '一班', '张同学', '作业一')
+    const sourceB = join(config.studentsRoot, '2026', '高一', '一班', '张同学', '作业二')
+    const sourceOther = join(config.studentsRoot, '2026', '高一', '一班', '李同学')
+    const red = await sharp({ create: { width: 12, height: 12, channels: 3, background: '#ff0000' } }).png().toBuffer()
+    const blue = await sharp({ create: { width: 12, height: 12, channels: 3, background: '#0000ff' } }).png().toBuffer()
+    for (const path of [sourceA, sourceB, sourceOther]) await mkdir(path, { recursive: true })
+    await writeFile(join(sourceA, '第1题.png'), red)
+    await writeFile(join(sourceB, '第1题.png'), blue)
+    await writeFile(join(sourceOther, '第1题.png'), blue)
+    const browse = await a.service.browseQuestionMedia({})
+    if (!browse.ok) throw new Error(browse.error.message)
+    const first = browse.value.questionAssignments.find(item => item.relativePath.includes('作业一'))!
+    const second = browse.value.questionAssignments.find(item => item.relativePath.includes('作业二'))!
+    const other = browse.value.questionAssignments.find(item => item.studentId !== first.studentId)!
+    const studentId = first.studentId
+    await expect(a.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [first.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 1 } })
+    await rm(join(sourceA, '第1题.png'))
+    await expect(a.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 2 } })
+    await a.ctx.fiber.dispose()
+    const b = await harness(new MemoryMediaPool(), config)
+    contexts.push(b.ctx)
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId, imageCount: 2 }] })
+    await writeFile(join(sourceB, '第1题.png'), red)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 2 } })
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [other.id] }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId: other.studentId, assignmentIds: [other.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 1 } })
+    const directory = join(config.studentsRoot, '.dsh-question-temp', studentId)
+    const manifest = JSON.parse(await readFile(join(directory, 'manifest.json'), 'utf8')) as {
+      version: number
+      images: Array<{ storedName: string; assignmentId: string }>
+    }
+    expect(manifest.version).toBe(2)
+    expect(manifest.images.map(item => item.assignmentId).sort()).toEqual([first.id, second.id].sort())
+    for (const item of manifest.images) expect(await readFile(join(directory, item.storedName))).toEqual(red)
+    const word = await b.service.generateStudentDocuments({
+      kind: 'word', students: [{ studentId, title: '', includeName: false, includeDate: false }],
+    })
+    if (!word.ok) throw new Error(word.error.message)
+    const wordParts = unzipSync(Buffer.from(word.value.artifacts[0]!.contentBase64, 'base64'))
+    expect(Buffer.from(wordParts['word/document.xml']!).toString().match(/r:embed=/gu)).toHaveLength(2)
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId, other.studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId: other.studentId, imageCount: 1 }] })
+
+    await writeFile(join(sourceA, '第1题.png'), red)
+    const saves = await Promise.all([first.id, second.id].map(id => b.service.saveTemporaryQuestionSelection({
+      studentId, assignmentIds: [id],
+    })))
+    expect(saves).toMatchObject([{ ok: true, value: { imageCount: 1 } }, { ok: true, value: { imageCount: 2 } }])
+    const ppt = await b.service.generateStudentDocuments({
+      kind: 'ppt', students: [{ studentId, title: '', includeName: false, includeDate: false }],
+    })
+    if (!ppt.ok) throw new Error(ppt.error.message)
+    const pptParts = unzipSync(Buffer.from(ppt.value.artifacts[0]!.contentBase64, 'base64'))
+    expect(Object.keys(pptParts).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(2)
+    await b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [first.id] })
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 0 } })
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId, other.studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId: other.studentId, imageCount: 1 }] })
+    expect(await readFile(join(sourceA, '第1题.png'))).toEqual(red)
+    expect(await readFile(join(sourceB, '第1题.png'))).toEqual(red)
+  })
+
+  it('preserves a temporary selection when the accumulated bytes exceed the limit or its manifest is invalid', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-accumulate-limit-'))
+    temporaryRoots.push(root)
+    const bytes = await sharp({ create: { width: 32, height: 32, channels: 3, background: '#ff0000' } }).png({ compressionLevel: 0 }).toBuffer()
+    const config = { ...testConfig(root), maxQuestionBatchBytes: bytes.length }
+    const b = await harness(new MemoryMediaPool(), config)
+    contexts.push(b.ctx)
+    const source = join(config.studentsRoot, '2026', '高一', '一班', '张同学')
+    await mkdir(source, { recursive: true })
+    for (const name of ['第1题.png', '第2题.png']) await writeFile(join(source, name), bytes)
+    const browse = await b.service.browseQuestionMedia({})
+    if (!browse.ok) throw new Error(browse.error.message)
+    const [first, second] = browse.value.questionAssignments
+    const studentId = first!.studentId
+    await b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [first!.id] })
+    const directory = join(config.studentsRoot, '.dsh-question-temp', studentId)
+    const manifestPath = join(directory, 'manifest.json')
+    const manifestBytes = await readFile(manifestPath)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second!.id] }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'file-too-large' } })
+    expect(await readFile(manifestPath)).toEqual(manifestBytes)
+    expect(await readdir(directory)).toHaveLength(2)
+    const manifest = JSON.parse(manifestBytes.toString()) as { version: number; images: Array<{ storedName: string }> }
+    const storedPath = join(directory, manifest.images[0]!.storedName)
+    await rm(storedPath)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second!.id] }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'storage-failure' } })
+    expect(await readFile(manifestPath)).toEqual(manifestBytes)
+    await writeFile(storedPath, bytes)
+    for (const invalid of [
+      { ...manifest, version: 1 },
+      { ...manifest, images: [...manifest.images, ...manifest.images] },
+      { ...manifest, images: [{ ...manifest.images[0], storedName: '../outside.png' }] },
+    ]) {
+      await writeFile(manifestPath, JSON.stringify(invalid))
+      const invalidBytes = await readFile(manifestPath)
+      await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second!.id] }))
+        .resolves.toMatchObject({ ok: false, error: { code: 'storage-failure' } })
+      expect(await readFile(manifestPath)).toEqual(invalidBytes)
+    }
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 0 } })
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [second!.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 1 } })
+  })
+
+  it('applies the temporary image limit to the complete accumulated selection', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-accumulate-count-'))
+    temporaryRoots.push(root)
+    const config = testConfig(root)
+    const b = await harness(new MemoryMediaPool(), config)
+    contexts.push(b.ctx)
+    const source = join(config.studentsRoot, '2026', '高一', '一班', '张同学')
+    const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } }).png().toBuffer()
+    await mkdir(source, { recursive: true })
+    await Promise.all(Array.from({ length: 121 }, (_, index) => writeFile(join(source, `第${String(index + 1)}题.png`), bytes)))
+    const browse = await b.service.browseQuestionMedia({})
+    if (!browse.ok) throw new Error(browse.error.message)
+    const assignments = browse.value.questionAssignments
+    const studentId = assignments[0]!.studentId
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: assignments.slice(0, 120).map(item => item.id) }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 120 } })
+    const manifestPath = join(config.studentsRoot, '.dsh-question-temp', studentId, 'manifest.json')
+    const before = await readFile(manifestPath)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [assignments[120]!.id] }))
+      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+    expect(await readFile(manifestPath)).toEqual(before)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [assignments[0]!.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 120 } })
+  })
+
   it('defaults to small question groups, compact review output, and a finite child deadline', () => {
     expect(TeacherWorkbenchService.Config({} as never)).toMatchObject({
       maxQuestionSourceChunkCharacters: 14_000,
@@ -1737,9 +1883,10 @@ describe('TeacherWorkbenchService', () => {
       manifestPath,
       'utf8',
     )) as {
-      version: 1
+      version: 2
       studentId: TeacherStudentId
       images: Array<{
+        assignmentId: string
         storedName: string
         fileName: string
         questionNo?: number
@@ -1750,7 +1897,8 @@ describe('TeacherWorkbenchService', () => {
     }
     expect(manifest.images.map(item => item.fileName)).toEqual(['第1题.png', '第2题.png', '第10题.png'])
     expect(manifest.images.map(item => item.questionNo)).toEqual([1, 2, 10])
-    const legacyImages = manifest.images.map(item => ({
+    const unnumberedImages = manifest.images.map(item => ({
+      assignmentId: item.assignmentId,
       storedName: item.storedName,
       fileName: item.fileName,
       mediaType: item.mediaType,
@@ -1759,7 +1907,7 @@ describe('TeacherWorkbenchService', () => {
     }))
     await writeFile(manifestPath, JSON.stringify({
       ...manifest,
-      images: [legacyImages[2]!, legacyImages[0]!, legacyImages[1]!],
+      images: [unnumberedImages[2]!, unnumberedImages[0]!, unnumberedImages[1]!],
     }))
 
     const orderedWord = await b.service.generateStudentDocuments({

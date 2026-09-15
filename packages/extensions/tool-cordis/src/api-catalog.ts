@@ -2632,9 +2632,9 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
       },
       {
         signature: '@Remote(\'saveTemporaryQuestionSelection\') saveTemporaryQuestionSelection( request: TeacherQuestionTemporarySaveRequest, ): Promise<TeacherQuestionTemporarySaveResult>',
-        description: 'Snapshot selected student images into temporary Office-generation storage.',
-        parameters: [{ name: 'request', description: 'student identity and ordered assignment ids.' }],
-        returns: 'copied-image count or a stable failure.',
+        description: 'Accumulate selected student-image snapshots for Office generation; an empty selection clears them.',
+        parameters: [{ name: 'request', description: 'student identity and assignment ids to add or refresh.' }],
+        returns: 'total staged-image count or a stable failure that preserves the previous selection.',
       },
       {
         signature: '@Remote(\'listTemporaryQuestionSelections\') async listTemporaryQuestionSelections( request: TeacherQuestionTemporaryListRequest, ): Promise<TeacherQuestionTemporaryListResult>',

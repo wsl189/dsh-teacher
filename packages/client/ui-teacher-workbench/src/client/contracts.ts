@@ -199,7 +199,7 @@ export interface TeacherWorkbenchCommands {
   deleteQuestionBatch: (request: TeacherQuestionBatchDeleteRequest) => Promise<TeacherWorkbenchActionResult>
   /** Copy selected batch images to one student. */
   assignQuestions: (request: TeacherQuestionAssignRequest) => Promise<TeacherWorkbenchActionResult>
-  /** Snapshot selected student images for temporary Word/PPT generation. */
+  /** Accumulate student-image snapshots for Word/PPT generation; an empty selection clears them. */
   saveTemporaryQuestionSelection: (request: TeacherQuestionTemporarySaveRequest) => Promise<TeacherQuestionTemporarySaveResult>
   /** List students with temporary Word/PPT images. */
   listTemporaryQuestionSelections: (request: TeacherQuestionTemporaryListRequest) => Promise<TeacherQuestionTemporaryListResult>

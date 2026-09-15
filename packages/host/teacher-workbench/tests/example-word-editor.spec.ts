@@ -15,6 +15,67 @@ function equations(bytes: Uint8Array) { return Array.from(xml(bytes).getElements
 
 describe('collection Word editing', () => {
   it.each([
+    { latex: String.raw`\mathbf{\subsetneqq}\subsetneqq`, glyph: '⫋' },
+    { latex: String.raw`\mathbfit{\supsetneqq}\supsetneqq`, glyph: '⫌' },
+    { latex: String.raw`\mathbf{\leqslant}\leqslant`, glyph: '⩽' },
+    { latex: String.raw`\mathbfit{\geqslant}\geqslant`, glyph: '⩾' },
+    { latex: String.raw`\mathbf{\subseteq}\subseteq`, glyph: '⊆' },
+    { latex: String.raw`\mathbf{\supseteq}\supseteq`, glyph: '⊇' },
+    { latex: String.raw`\mathbf{\complement}\complement`, glyph: '∁' },
+    { latex: String.raw`\mathbf{\forall}\forall`, glyph: '∀' },
+    { latex: String.raw`\mathbf{\exists}\exists`, glyph: '∃' },
+    { latex: String.raw`\mathbf{\nexists}\nexists`, glyph: '∄' },
+    { latex: String.raw`\mathbf{\nparallel}\nparallel`, glyph: '∦' },
+    { latex: String.raw`\mathbf{\odot}\odot`, glyph: '⊙' },
+    { latex: String.raw`\textbf{▱}\text{▱}`, glyph: '▱' },
+    { latex: String.raw`\textbf{⫽}\text{⫽}`, glyph: '⫽' },
+  ])('preserves local bold on $glyph while its neighbor stays regular through edits and export', async ({ latex, glyph }) => {
+    const original = await createExampleWord('符号：')
+    const paragraph = readExampleWordEditor(original).paragraphs[0]!
+    let bytes = saveExampleWordEditor(original, [{ ...paragraph, content: [{ kind: 'equation', original: null, latex, size: 12, bold: false }] }])
+    for (const suffix of ['', '+1', '+2']) {
+      if (suffix) bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        const runs = Array.from(xml(document).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent?.includes(glyph))
+        expect(runs).toHaveLength(2)
+        expect(runs[0]!.textContent).toBe(glyph)
+        expect(runs[0]!.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('b')
+        expect(runs[0]!.getElementsByTagNameNS(W, 'b').length).toBe(1)
+        expect(runs[1]!.getElementsByTagNameNS(W, 'b').length).toBe(0)
+      }
+    }
+  })
+
+  it.each([
+    { latex: String.raw`\complement_U A`, text: '∁UA' },
+    { latex: String.raw`A\subsetneqq B\supsetneqq C`, text: 'A⫋B⫌C' },
+    { latex: String.raw`A\subseteq B\supseteq C`, text: 'A⊆B⊇C' },
+    { latex: String.raw`a\leqslant b\geqslant c`, text: 'a⩽b⩾c' },
+    { latex: "f'(x)", text: 'f′(x)' },
+    { latex: "f''(x)", text: 'f′′(x)' },
+    { latex: "f'''(x)", text: 'f′′′(x)' },
+    { latex: String.raw`\forall x\exists y\nexists z`, text: '∀x∃y∄z' },
+    { latex: String.raw`AB\nparallel CD`, text: 'AB∦CD' },
+    { latex: String.raw`\odot O`, text: '⊙O' },
+    { latex: String.raw`\text{▱}ABCD`, text: '▱ABCD' },
+  ])('retains $text through repeated equation edits and Word export', async ({ latex, text }) => {
+    const original = await createExampleWord('符号：')
+    const paragraph = readExampleWordEditor(original).paragraphs[0]!
+    let bytes = saveExampleWordEditor(original, [{ ...paragraph, content: [{ kind: 'equation', original: null, latex, size: 12, bold: false }] }])
+    for (const suffix of ['+1', '+2']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+    }
+    const exported = await compileExampleWord([{ bytes }])
+    for (const document of [bytes, exported]) {
+      expect(xml(document).getElementsByTagNameNS(M, 'oMath').item(0)?.textContent?.replaceAll(/\s/gu, '')).toBe(text + '+1+2')
+    }
+  })
+
+  it.each([
     String.raw`\mathbfit{b}=(1,-\sqrt{3})`,
     String.raw`\mathbfit{b=\left(1,-\sqrt{3}\right)}`,
     String.raw`\colorbox{yellow}{$\textcolor{blue}{\mathbfit{b}=(1,-\sqrt{3})}$}`,

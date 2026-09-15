@@ -23,6 +23,21 @@ function preview() {
 
 describe('collected Word formula previews', () => {
   it.each([
+    { latex: String.raw`\mathbf{\subsetneqq}\subsetneqq`, glyph: '⫋' },
+    { latex: String.raw`\mathbfit{\geqslant}\geqslant`, glyph: '⩾' },
+  ])('keeps local bold on fallback glyph $glyph in applied and restored previews', ({ latex, glyph }) => {
+    const applied = renderExampleEquation(latex)
+    const restored = preview()
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(applied.querySelector('math')!)), restored)
+    for (const container of [applied, restored]) {
+      const symbols = Array.from(container.querySelectorAll<HTMLElement>('.katex-html span')).filter(node => node.childElementCount === 0 && node.textContent === glyph)
+      expect(symbols).toHaveLength(2)
+      expect(symbols.map(symbol => symbol.style.fontWeight)).toEqual(['bold', ''])
+      expect(Array.from(container.querySelectorAll('math mo')).map(symbol => symbol.getAttribute('mathvariant'))).toEqual(['bold', null])
+    }
+  })
+
+  it.each([
     { latex: 'x+1', text: 'x+1', structure: 'mrow' },
     { latex: String.raw`-\frac{4}{3}`, text: '−43', structure: 'mfrac' },
     { latex: String.raw`\overrightarrow{PA}`, text: 'PA→', structure: 'mover' },
@@ -71,6 +86,20 @@ describe('collected Word formula previews', () => {
     const container = preview()
     renderExampleWordEquations(savedMath(`<math xmlns="${MATH_NS}"><mrow><mi>AB</mi><mtext>\u00a0⫽\u00a0</mtext><mi>CD</mi></mrow></math>`), container)
     expect(container.querySelector('.katex-html')?.textContent?.replaceAll(/\s/gu, '')).toBe('AB⫽CD')
+  })
+
+  it('restores set relations, quantifiers, and geometry with their original glyphs', () => {
+    const container = preview()
+    renderExampleWordEquations(savedMath(`<math xmlns="${MATH_NS}"><mrow><mi>∁</mi><mo>⫋</mo><mo>⫌</mo><mo>⊆</mo><mo>⊇</mo><mo>⩽</mo><mo>⩾</mo><mi>∀</mi><mi>∃</mi><mi>∄</mi><mo>∦</mo><mo>⊙</mo><mtext>▱</mtext></mrow></math>`), container)
+    expect(container.querySelector('.katex-html')?.textContent?.replaceAll(/\s/gu, '')).toBe('∁⫋⫌⊆⊇⩽⩾∀∃∄∦⊙▱')
+    expect(container.querySelector('math')?.textContent).toBe('∁⫋⫌⊆⊇⩽⩾∀∃∄∦⊙▱')
+  })
+
+  it('renders saved second derivatives with both primes', () => {
+    const container = preview()
+    const formula = renderExampleEquation("f''(x)")
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(formula.querySelector('math')!)), container)
+    expect(container.querySelector('.katex-html')?.textContent?.replaceAll(/\s/gu, '')).toBe('f′′(x)')
   })
 
   it('keeps nested formula colors and background fills when restoring a saved preview', () => {

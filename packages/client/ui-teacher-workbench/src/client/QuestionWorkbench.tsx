@@ -64,7 +64,7 @@ export interface QuestionWorkbenchProps {
   t: TeacherWorkbenchTranslate
 }
 
-type BusyTask = 'document' | 'assign' | 'temporary' | 'student' | 'folder' | null
+type BusyTask = 'document' | 'save' | 'assign' | 'temporary' | 'student' | 'folder' | null
 
 const HIERARCHY_CLICK_WINDOW_MS = 260
 const LIBRARY_NAME_VISIBLE_CHARACTERS = 7
@@ -180,6 +180,9 @@ export function QuestionWorkbench({
   const questionMediaFingerprintRef = useRef<string | null>(null)
   const questionMediaMountedRef = useRef(false)
   const pdfReadGenerationRef = useRef(0)
+  // Reserve file saves before React commits disabled controls, and release after writing settles.
+  const fileSavePendingRef = useRef(false)
+  const temporarySelectionRevisionRef = useRef(0)
   const [busy, setBusy] = useState<BusyTask>(null)
   const [toast, setToast] = useState<string | null>(null)
   const [readingPdf, setReadingPdf] = useState<{ fileName: string } | null>(null)
@@ -281,9 +284,12 @@ export function QuestionWorkbench({
     [classStudents, temporarySelections],
   )
   const studentAssignments = useMemo(
-    () => questionAssignments.filter(item => item.studentId === activeStudentId
-      && (activeFolderId === '' || item.folderId === activeFolderId)),
-    [activeFolderId, activeStudentId, questionAssignments],
+    () => {
+      const folderIds = activeFolderId === '' ? null : questionFolderDescendants(questionFolders, activeFolderId)
+      return questionAssignments.filter(item => item.studentId === activeStudentId
+        && (folderIds === null || (item.folderId !== undefined && folderIds.has(item.folderId))))
+    },
+    [activeFolderId, activeStudentId, questionAssignments, questionFolders],
   )
   const selectedStudentAssignmentIds = useMemo(
     () => studentAssignments.filter(item => selectedAssignmentIds.has(item.id)).map(item => item.id),
@@ -359,13 +365,18 @@ export function QuestionWorkbench({
 
   useEffect(() => {
     let active = true
+    const revision = temporarySelectionRevisionRef.current
     const studentIds = students.map(student => student.id)
     if (studentIds.length === 0) {
       setTemporarySelections(new Map())
       return () => { active = false }
     }
     void commands.listTemporaryQuestionSelections({ studentIds }).then((result) => {
-      if (!active || !result.ok) return
+      if (!active || revision !== temporarySelectionRevisionRef.current) return
+      if (!result.ok) {
+        setToast(result.error.message)
+        return
+      }
       setTemporarySelections(new Map(result.value.map(item => [item.studentId, item.imageCount] as const)))
     })
     return () => { active = false }
@@ -947,16 +958,17 @@ export function QuestionWorkbench({
   }
 
   const saveSelectedBatchImages = async (): Promise<void> => {
-    if (selectedBatchEntries.length === 0 || busy !== null) return
+    if (selectedBatchEntries.length === 0 || busy !== null || fileSavePendingRef.current) return
     const selectedImages = selectedBatchEntries.map(entry => entry.image)
     if (questionBankSaveTarget === null) {
+      fileSavePendingRef.current = true
+      setBusy('assign')
       try {
         const directory = await pickWritableDirectory(
           t('questions.directoryPickerUnsupported'),
           t('questions.directoryPermissionDenied'),
         )
         if (directory === null) return
-        setBusy('assign')
         let saved = 0
         let failed = 0
         for (const image of selectedImages) {
@@ -972,15 +984,16 @@ export function QuestionWorkbench({
             failed += 1
           }
         }
-        setBusy(null)
         if (saved > 0) setSelectedBatchImageIds(new Set())
         setToast(failed === 0
           ? t('questions.imagesSaved', { count: saved })
           : t('questions.imagesSavedWithFailed', { saved, failed }))
       } catch (cause) {
-        setBusy(null)
         if (isAbortError(cause)) return
         setToast(errorMessage(cause, t('questions.imageExportFailed')))
+      } finally {
+        fileSavePendingRef.current = false
+        setBusy(null)
       }
       return
     }
@@ -1000,21 +1013,29 @@ export function QuestionWorkbench({
     setToast(result.ok ? t('questions.assigned') : result.error.message)
   }
 
-  const saveTemporarySelection = async (): Promise<void> => {
-    if (activeStudent === undefined || selectedStudentAssignmentIds.length === 0 || busy !== null) return
+  const saveTemporarySelection = async (clear = false): Promise<void> => {
+    if (activeStudent === undefined || (!clear && selectedStudentAssignmentIds.length === 0) || busy !== null) return
     setBusy('temporary')
+    const assignmentIds = clear ? [] : selectedStudentAssignmentIds
     const result = await commands.saveTemporaryQuestionSelection({
       studentId: activeStudent.id,
-      assignmentIds: selectedStudentAssignmentIds,
+      assignmentIds,
     })
     setBusy(null)
     if (!result.ok) {
       setToast(result.error.message)
       return
     }
-    setTemporarySelections(current => new Map(current).set(result.value.studentId, result.value.imageCount))
-    setSelectedAssignmentIds(new Set())
-    setToast(t('questions.tempSaved', { count: result.value.imageCount }))
+    temporarySelectionRevisionRef.current += 1
+    setTemporarySelections((current) => {
+      const next = new Map(current)
+      if (result.value.imageCount === 0) next.delete(result.value.studentId)
+      else next.set(result.value.studentId, result.value.imageCount)
+      return next
+    })
+    const savedIds = new Set<string>(assignmentIds)
+    setSelectedAssignmentIds(current => new Set([...current].filter(id => !savedIds.has(id))))
+    setToast(clear ? t('questions.temporaryCleared') : t('questions.tempSaved', { count: result.value.imageCount }))
   }
 
   const generateFolderDocument = async (request: TeacherQuestionUploadedDocumentRequest): Promise<void> => {
@@ -1098,6 +1119,7 @@ export function QuestionWorkbench({
     const retry: OfficeRetry = { scope: 'class', request }
     if (result.ok) {
       const skipped = new Set(result.value.skipped.map(item => item.studentId))
+      temporarySelectionRevisionRef.current += 1
       setTemporarySelections((current) => {
         const next = new Map(current)
         for (const student of request.students) {
@@ -1165,7 +1187,9 @@ export function QuestionWorkbench({
   }
 
   const saveOfficeArtifacts = async (): Promise<void> => {
-    if (officeDialog === null || officeDialog.artifacts.length === 0) return
+    if (officeDialog === null || officeDialog.artifacts.length === 0 || busy !== null || fileSavePendingRef.current) return
+    fileSavePendingRef.current = true
+    setBusy('save')
     try {
       if (officeDialog.scope === 'class') {
         const directory = await pickWritableDirectory(
@@ -1198,6 +1222,9 @@ export function QuestionWorkbench({
     } catch (cause) {
       if (isAbortError(cause)) return
       setToast(errorMessage(cause, t('questions.saveFailed')))
+    } finally {
+      fileSavePendingRef.current = false
+      setBusy(null)
     }
   }
 
@@ -1504,6 +1531,12 @@ export function QuestionWorkbench({
             </button>
             <button type="button" onClick={() => { openQuestionBank(activeStudent, activeFolderId) }}>{t('questions.library')}</button>
           </div>
+          <div className={css.legacyTemporarySelection}>
+            <span>{t('questions.temporaryTotal', { count: temporarySelections.get(activeStudent.id) ?? 0 })}</span>
+            <button type="button" disabled={busy !== null} onClick={() => { void saveTemporarySelection(true) }}>
+              {t('questions.clearTemporary')}
+            </button>
+          </div>
           <div className={css.legacyImageScroll}>
             {studentAssignments.length === 0 && <div className={css.legacyDrawerState}>{t('questions.noAssignments')}</div>}
             {studentAssignments.map((assignment, index) => (
@@ -1565,13 +1598,13 @@ export function QuestionWorkbench({
 
       {officeDialog !== null && (
         <div className={css.legacyDialogLayer} role="dialog" aria-modal="true" aria-label={officeDialog.title}>
-          <button type="button" className={css.legacyEditorMask} aria-label={`${t('questions.closeDialog')} ${officeDialog.title}`} onClick={() => { setOfficeDialog(null) }} />
+          <button type="button" className={css.legacyEditorMask} aria-label={`${t('questions.closeDialog')} ${officeDialog.title}`} disabled={busy !== null} onClick={() => { setOfficeDialog(null) }} />
           <section className={`${css.legacyFailureDialog} ${css.legacyOfficeDialog}`}>
             <h3>{officeDialog.title}</h3>
             <p>{officeDialog.message}</p>
             <div>
               {officeDialog.mode === 'success' && (
-                <button type="button" onClick={() => { void saveOfficeArtifacts() }}>
+                <button type="button" disabled={busy !== null} onClick={() => { void saveOfficeArtifacts() }}>
                   {officeDialog.scope === 'class' || officeDialog.artifacts.length === 1
                     ? t('questions.saveGenerated')
                     : t('questions.downloadAll')}
@@ -1580,7 +1613,7 @@ export function QuestionWorkbench({
               {officeDialog.mode === 'error' && officeDialog.retry !== undefined && (
                 <button type="button" onClick={() => { void retryOfficeGeneration() }}>{t('questions.retryGeneration')}</button>
               )}
-              <button type="button" onClick={() => { setOfficeDialog(null) }}>{t('questions.closeDialog')}</button>
+              <button type="button" disabled={busy !== null} onClick={() => { setOfficeDialog(null) }}>{t('questions.closeDialog')}</button>
             </div>
           </section>
         </div>

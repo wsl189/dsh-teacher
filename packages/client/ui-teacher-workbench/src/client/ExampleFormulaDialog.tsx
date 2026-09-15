@@ -45,10 +45,13 @@ const SYMBOL_GROUPS = [
     ['infinity', '\\infty', '\\infty'], ['factorial', 'n!', '#@!'],
   ]],
   ['relations', [
-    ['notEqual', '\\ne', '\\ne'], ['lessEqual', '\\le', '\\le'], ['greaterEqual', '\\ge', '\\ge'],
+    ['notEqual', '\\ne', '\\ne'], ['lessEqual', '\\leqslant', '\\leqslant'], ['greaterEqual', '\\geqslant', '\\geqslant'],
     ['approximate', '\\approx', '\\approx'], ['belongs', '\\in', '\\in'], ['notBelongs', '\\notin', '\\notin'],
-    ['properSubset', '\\subsetneq', '\\subsetneq'], ['subset', '\\subseteq', '\\subseteq'],
+    ['properSubset', '\\subsetneqq', '\\subsetneqq'], ['properSuperset', '\\supsetneqq', '\\supsetneqq'],
+    ['subset', '\\subseteq', '\\subseteq'], ['superset', '\\supseteq', '\\supseteq'],
     ['union', '\\cup', '\\cup'], ['intersection', '\\cap', '\\cap'], ['emptySet', '\\varnothing', '\\varnothing'],
+    ['complement', '\\complement_U A', '\\complement_{#?}{#0}'],
+    ['forAll', '\\forall', '\\forall'], ['exists', '\\exists', '\\exists'], ['notExists', '\\nexists', '\\nexists'],
     ['natural', '\\mathbb{N}', '\\mathbb{N}'], ['integer', '\\mathbb{Z}', '\\mathbb{Z}'],
     ['rational', '\\mathbb{Q}', '\\mathbb{Q}'], ['real', '\\mathbb{R}', '\\mathbb{R}'],
     ['complex', '\\mathbb{C}', '\\mathbb{C}'], ['implies', '\\Rightarrow', '\\Rightarrow'], ['iff', '\\Leftrightarrow', '\\Leftrightarrow'],
@@ -56,12 +59,15 @@ const SYMBOL_GROUPS = [
   ['geometry', [
     ['vector', '\\vec{a}', '\\vec{#0}'], ['directedSegment', '\\overrightarrow{AB}', '\\overrightarrow{#0}'],
     ['angle', '\\angle', '\\angle'], ['triangle', '\\triangle', '\\triangle'],
-    ['parallel', '\\text{⫽}', '\\text{ ⫽ }'], ['perpendicular', '\\perp', '\\perp'], ['degree', '30^{\\circ}', '#@^{\\circ}'],
+    ['parallel', '\\text{⫽}', '\\text{ ⫽ }'], ['notParallel', '\\nparallel', '\\nparallel'],
+    ['perpendicular', '\\perp', '\\perp'], ['circle', '\\odot', '\\odot'],
+    ['parallelogram', '\\text{▱}', '\\text{▱}'], ['degree', '30^{\\circ}', '#@^{\\circ}'],
   ]],
   ['functions', [
     ['sin', '\\sin', '\\sin #0'], ['cos', '\\cos', '\\cos #0'], ['tan', '\\tan', '\\tan #0'],
     ['log', '\\log_a', '\\log_{#?} #0'], ['lg', '\\lg', '\\lg #0'], ['ln', '\\ln', '\\ln #0'],
-    ['derivative', "f'(x)", "f'\\left(#0\\right)"], ['sum', '\\sum', '\\sum_{#?}^{#?} #0'],
+    ['derivative', "f'(x)", "f'\\left(#0\\right)"], ['secondDerivative', "f''(x)", "f''\\left(#0\\right)"],
+    ['sum', '\\sum', '\\sum_{#?}^{#?} #0'],
     ['permutation', 'A_n^m', 'A_{#?}^{#?}'], ['combination', 'C_n^m', 'C_{#?}^{#?}'],
   ]],
   ['roman', [
@@ -116,10 +122,12 @@ export function ExampleFormulaDialog({ latex, onApply, onClose, t }: {
           const labeled = { ...style, label, ariaLabel: label, tooltip: label, class: '' }
           if (style.id !== 'variant-style-bold') return labeled
           const isBold = () => input.queryStyle({ variantStyle: 'bold' }) === 'all' || input.queryStyle({ variantStyle: 'bolditalic' }) === 'all'
+            || input.queryStyle({ fontSeries: 'b' }) === 'all'
           return { ...labeled, checked: isBold, onMenuSelect: () => {
+            const bold = isBold()
             const upright = input.queryStyle({ variantStyle: 'up' }) === 'all' || input.queryStyle({ variantStyle: 'bold' }) === 'all'
               || (['fraktur', 'double-struck', 'calligraphic', 'script', 'monospace'] as const).some(variant => input.queryStyle({ variant }) === 'all')
-            input.applyStyle({ variantStyle: upright ? (isBold() ? 'up' : 'bold') : (isBold() ? 'italic' : 'bolditalic') })
+            input.applyStyle({ variantStyle: upright ? (bold ? 'up' : 'bold') : (bold ? 'italic' : 'bolditalic'), fontSeries: bold ? 'm' : 'b' })
             input.focus()
           } }
         }) }
@@ -159,8 +167,10 @@ export function ExampleFormulaDialog({ latex, onApply, onClose, t }: {
     setInvalid(false)
   }
   const apply = (): void => {
-    // MathLive serializes the saved double-solidus glyph as \sslash after editing.
-    const value = (field.current?.value.trim() ?? '').replaceAll(/\\sslash\b/gu, '\\text{⫽}')
+    // Normalize MathLive's double-solidus and double-prime commands for KaTeX.
+    const value = (field.current?.value.trim() ?? '')
+      .replaceAll(/\\sslash\b/gu, '\\text{⫽}')
+      .replaceAll(/\\doubleprime\b/gu, '\\prime\\prime')
     if (!value || validateLatex(value).length > 0) { setInvalid(true); return }
     try { renderExampleEquation(value) } catch (error) {
       if (!(error instanceof katex.ParseError)) throw error

@@ -4490,6 +4490,7 @@
 
 .legacyDrawerHeader button,
 .legacyImagesHeader button,
+.legacyTemporarySelection button,
 .legacyDrawerFooter button,
 .legacySheetActions button,
 .legacySettingsRows > button {
@@ -4499,6 +4500,16 @@
   align-items: center;
   justify-content: center;
   gap: 5px;
+  font-size: 12px;
+}
+
+.legacyTemporarySelection {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 0;
+  color: var(--legacy-muted);
   font-size: 12px;
 }
 

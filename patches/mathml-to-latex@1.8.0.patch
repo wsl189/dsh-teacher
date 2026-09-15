@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b400047ebe5d73 100644
+index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a537100fc2b0b8 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -1,6 +1,7 @@
@@ -10,7 +10,211 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b40004
  
  // During an iterative conversion (see tree-to-latex) every child is converted
  // before its parent and its LaTeX is stored in this memo. While a memo is
-@@ -3606,7 +3607,7 @@ class MI {
+@@ -149,8 +150,8 @@ const allMathOperatorsByChar = {
+     '&#x2037;': '```',
+     '&#x2036;': '``',
+     '&#x2035;': '`',
+-    '&#x2034;': "'''",
+-    '&#x2033;': "''",
++    '&#x2034;': '\\prime\\prime\\prime',
++    '&#x2033;': '\\prime\\prime',
+     '&#x201F;': '``',
+     '&#x201E;': ',,',
+     '&#x201B;': '`',
+@@ -198,12 +199,12 @@ const allMathOperatorsByChar = {
+     '&#x266F;': '\\#',
+     '&#x266E;': '',
+     '&#x266D;': '',
+-    '&#x2032;': "'",
++    '&#x2032;': '\\prime',
+     '&lt;>': '<>',
+     '**': '\\star\\star',
+     '&#x2207;': '\\nabla',
+     '&#x2202;': '\\partial',
+-    '&#x2299;': '\\bigodot',
++    '&#x2299;': '\\odot',
+     '&#xAC;': '\\neg',
+     '&#x2222;': '\\measuredangle',
+     '&#x2221;': '\\measuredangle',
+@@ -605,8 +606,8 @@ const allMathOperatorsByChar = {
+     '&#x2ACF;': '',
+     '&#x2ACE;': '',
+     '&#x2ACD;': '',
+-    '&#x2ACC;': '\\underset{\\neq}{\\supset}',
+-    '&#x2ACB;': '\\underset{\\neq}{\\subset}',
++    '&#x2ACC;': '\\supsetneqq',
++    '&#x2ACB;': '\\subsetneqq',
+     '&#x2ACA;': '\\underset{\\approx}{\\supset}',
+     '&#x2AC9;': '\\underset{\\approx}{\\subset}',
+     '&#x2AC8;': '\\underset{\\sim}{\\supset}',
+@@ -682,9 +683,9 @@ const allMathOperatorsByChar = {
+     '&#x2A80;': '',
+     '&#x2A7F;': '',
+     '&#x2A7E;&#x338;': '\\bcancel{\\geq}',
+-    '&#x2A7E;': '\\geq',
++    '&#x2A7E;': '\\geqslant',
+     '&#x2A7D;&#x338;': '\\bcancel{\\leq}',
+-    '&#x2A7D;': '\\leq',
++    '&#x2A7D;': '\\leqslant',
+     '&#x2A7C;': '',
+     '&#x2A7B;': '',
+     '&#x2A7A;': '',
+@@ -1039,7 +1040,7 @@ const allMathOperatorsByChar = {
+     '&#x25B5;': '\\triangle',
+     '&#x25B4;': '\\triangle',
+     '&#x25B3;': '\\triangle',
+-    '&#x25B1;': '\\square',
++    '&#x25B1;': '\\text{▱}',
+     '&#x25B0;': '\\square',
+     '&#x25AF;': '\\square',
+     '&#x25AE;': '\\square',
+@@ -1094,7 +1095,7 @@ const allMathOperatorsByChar = {
+     '&#x2244;': '\\not\\simeq',
+     '&#x2243;': '\\simeq',
+     '&#x2241;': '\\not\\sim',
+-    '&#x2226;': '\\not\\parallel',
++    '&#x2226;': '\\nparallel',
+     '&#x2225;': '\\parallel',
+     '&#x2224;': '\\not|',
+     '&#x221D;': '\\propto',
+@@ -1134,7 +1135,7 @@ const allMathOperatorsByChar = {
+     '&#x220C;': '\\not\\in',
+     '&#x2209;': '\\notin',
+     '&#x2208;': '\\in',
+-    '&#x2201;': 'C',
++    '&#x2201;': '\\complement',
+     '&#x2204;': '\\nexists',
+     '&#x2203;': '\\exists',
+     '&#x2200;': '\\forall',
+@@ -1276,8 +1277,8 @@ const allMathOperatorsByGlyph = {
+     '‷': '```',
+     '‶': '``',
+     '‵': '`',
+-    '‴': "'''",
+-    '″': "''",
++    '‴': '\\prime\\prime\\prime',
++    '″': '\\prime\\prime',
+     '‟': '``',
+     '„': ',,',
+     '‛': '`',
+@@ -1324,12 +1325,12 @@ const allMathOperatorsByGlyph = {
+     '♯': '\\#',
+     '♮': '',
+     '♭': '',
+-    '′': "'",
++    '′': '\\prime',
+     '<>': '<>',
+     '**': '\\star\\star',
+     '∇': '\\nabla',
+     '∂': '\\partial',
+-    '⊙': '\\bigodot',
++    '⊙': '\\odot',
+     '¬': '\\neg',
+     '∢': '\\measuredangle',
+     '∡': '\\measuredangle',
+@@ -1730,8 +1731,8 @@ const allMathOperatorsByGlyph = {
+     '⫏': '',
+     '⫎': '',
+     '⫍': '',
+-    '⫌': '\\underset{\\neq}{\\supset}',
+-    '⫋': '\\underset{\\neq}{\\subset}',
++    '⫌': '\\supsetneqq',
++    '⫋': '\\subsetneqq',
+     '⫊': '\\underset{\\approx}{\\supset}',
+     '⫉': '\\underset{\\approx}{\\subset}',
+     '⫈': '\\underset{\\sim}{\\supset}',
+@@ -1807,9 +1808,9 @@ const allMathOperatorsByGlyph = {
+     '⪀': '',
+     '⩿': '',
+     '⩾̸': '\\bcancel{\\geq}',
+-    '⩾': '\\geq',
++    '⩾': '\\geqslant',
+     '⩽̸': '\\bcancel{\\leq}',
+-    '⩽': '\\leq',
++    '⩽': '\\leqslant',
+     '⩼': '',
+     '⩻': '',
+     '⩺': '',
+@@ -2167,7 +2168,7 @@ const allMathOperatorsByGlyph = {
+     '▵': '\\triangle',
+     '▴': '\\triangle',
+     '△': '\\triangle',
+-    '▱': '\\square',
++    '▱': '\\text{▱}',
+     '▰': '\\blacksquare',
+     '▯': '\\square',
+     '▮': '\\blacksquare',
+@@ -2222,7 +2223,7 @@ const allMathOperatorsByGlyph = {
+     '≄': '\\not\\simeq',
+     '≃': '\\simeq',
+     '≁': '\\not\\sim',
+-    '∦': '\\not\\parallel',
++    '∦': '\\nparallel',
+     '∥': '\\parallel',
+     '∤': '\\not|',
+     '∝': '\\propto',
+@@ -2262,7 +2263,7 @@ const allMathOperatorsByGlyph = {
+     '∌': '\\not\\in',
+     '∉': '\\notin',
+     '∈': '\\in',
+-    '∁': 'C',
++    '∁': '\\complement',
+     '∄': '\\nexists',
+     '∃': '\\exists',
+     '∀': '\\forall',
+@@ -2469,6 +2470,12 @@ const allMathOperatorsByGlyph = {
+  * `<mi>`/`<mo>` converters to translate symbol content into LaTeX.
+  */
+ const allMathSymbolsByChar = {
++    '&#x2ACB;': '\\subsetneqq',
++    '&#x2ACC;': '\\supsetneqq',
++    '&#x2226;': '\\nparallel',
++    '&#x2201;': '\\complement',
++    '&#x2204;': '\\nexists',
++    '&#x25B1;': '\\text{▱}',
+     '&#xA0;': '\\textrm{ }',
+     '&#x2203;': '\\exists',
+     '&#x2200;': '\\forall',
+@@ -2506,7 +2513,7 @@ const allMathSymbolsByChar = {
+     '&#x2227;': '\\wedge',
+     '&#x220F;': '\\prod',
+     '&#x2211;': '\\sum',
+-    '&#x2299;': '\\bigodot',
++    '&#x2299;': '\\odot',
+     '&#x2297;': '\\bigoplus',
+     '&#x2295;': 'o+',
+     '&#x2218;': '@',
+@@ -2566,6 +2573,11 @@ const allMathSymbolsByChar = {
+  * converters to translate symbol content into LaTeX.
+  */
+ const allMathSymbolsByGlyph = {
++    '⫋': '\\subsetneqq',
++    '⫌': '\\supsetneqq',
++    '∦': '\\nparallel',
++    '∁': '\\complement',
++    '∄': '\\nexists',
+     ' ': '\\textrm{ }',
+     // Invisible operators (U+2061-U+2064): no visual rendering in LaTeX.
+     '⁡': '',
+@@ -2603,7 +2615,7 @@ const allMathSymbolsByGlyph = {
+     '∧': '\\wedge',
+     '∏': '\\prod',
+     '∑': '\\sum',
+-    '⊙': '\\bigodot',
++    '⊙': '\\odot',
+     '⊗': '\\bigoplus',
+     '⊕': 'o+',
+     '∘': '@',
+@@ -2868,7 +2880,7 @@ const allMathSymbolsByGlyph = {
+     '→': '\\rightarrow',
+     '‡': '\\ddagger',
+     '・': '\\cdot',
+-    '▱': '\\square',
++    '▱': '\\text{▱}',
+     '∆': '\\Delta',
+     ἱ: 'i',
+     '∡': '\\angle',
+@@ -3606,7 +3618,7 @@ class MI {
              case 'italic':
                  return `\\mathit{${value}}`;
              case 'bold-italic':
@@ -19,7 +223,18 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b40004
              case 'double-struck':
                  return `\\mathbb{${value}}`;
              case 'bold-fraktur':
-@@ -5106,6 +5107,24 @@ class TableAnnotator {
+@@ -4454,6 +4466,10 @@ class MText {
+         }, [])
+             .map((char) => {
+             if (!char.isAlphanumeric) {
++                // DSH geometry glyphs remain text atoms when their weight changes.
++                if (attributes.mathvariant && ['⫽', '▱'].includes(char.value)) {
++                    return new TextCommand(attributes.mathvariant).apply(char.value);
++                }
+                 return new MI({
+                     name: 'mi',
+                     attributes: {},
+@@ -5106,6 +5122,24 @@ class TableAnnotator {
   * @param root - the root element of the tree to convert.
   * @returns the LaTeX string for the whole tree.
   */
@@ -44,7 +259,7 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b40004
  const convertTreeToLatex = (root) => {
      var _a, _b;
      for (const normalizer of makeTreeNormalizers(root))
-@@ -5124,7 +5143,11 @@ const convertTreeToLatex = (root) => {
+@@ -5124,7 +5158,11 @@ const convertTreeToLatex = (root) => {
                  continue;
              }
              stack.pop();
@@ -58,7 +273,7 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..47c7c959fb3073ef1ee19b9522b40004
      }
      finally {
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 31258499447701b2a195da3bcb430ba59a4059a0..fbfc8522c71540bfabcc41217a641151307dd9ac 100644
+index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d5e9cb338 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -1,4 +1,5 @@
@@ -67,7 +282,211 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..fbfc8522c71540bfabcc41217a641151
  
  // During an iterative conversion (see tree-to-latex) every child is converted
  // before its parent and its LaTeX is stored in this memo. While a memo is
-@@ -3604,7 +3605,7 @@ class MI {
+@@ -147,8 +148,8 @@ const allMathOperatorsByChar = {
+     '&#x2037;': '```',
+     '&#x2036;': '``',
+     '&#x2035;': '`',
+-    '&#x2034;': "'''",
+-    '&#x2033;': "''",
++    '&#x2034;': '\\prime\\prime\\prime',
++    '&#x2033;': '\\prime\\prime',
+     '&#x201F;': '``',
+     '&#x201E;': ',,',
+     '&#x201B;': '`',
+@@ -196,12 +197,12 @@ const allMathOperatorsByChar = {
+     '&#x266F;': '\\#',
+     '&#x266E;': '',
+     '&#x266D;': '',
+-    '&#x2032;': "'",
++    '&#x2032;': '\\prime',
+     '&lt;>': '<>',
+     '**': '\\star\\star',
+     '&#x2207;': '\\nabla',
+     '&#x2202;': '\\partial',
+-    '&#x2299;': '\\bigodot',
++    '&#x2299;': '\\odot',
+     '&#xAC;': '\\neg',
+     '&#x2222;': '\\measuredangle',
+     '&#x2221;': '\\measuredangle',
+@@ -603,8 +604,8 @@ const allMathOperatorsByChar = {
+     '&#x2ACF;': '',
+     '&#x2ACE;': '',
+     '&#x2ACD;': '',
+-    '&#x2ACC;': '\\underset{\\neq}{\\supset}',
+-    '&#x2ACB;': '\\underset{\\neq}{\\subset}',
++    '&#x2ACC;': '\\supsetneqq',
++    '&#x2ACB;': '\\subsetneqq',
+     '&#x2ACA;': '\\underset{\\approx}{\\supset}',
+     '&#x2AC9;': '\\underset{\\approx}{\\subset}',
+     '&#x2AC8;': '\\underset{\\sim}{\\supset}',
+@@ -680,9 +681,9 @@ const allMathOperatorsByChar = {
+     '&#x2A80;': '',
+     '&#x2A7F;': '',
+     '&#x2A7E;&#x338;': '\\bcancel{\\geq}',
+-    '&#x2A7E;': '\\geq',
++    '&#x2A7E;': '\\geqslant',
+     '&#x2A7D;&#x338;': '\\bcancel{\\leq}',
+-    '&#x2A7D;': '\\leq',
++    '&#x2A7D;': '\\leqslant',
+     '&#x2A7C;': '',
+     '&#x2A7B;': '',
+     '&#x2A7A;': '',
+@@ -1037,7 +1038,7 @@ const allMathOperatorsByChar = {
+     '&#x25B5;': '\\triangle',
+     '&#x25B4;': '\\triangle',
+     '&#x25B3;': '\\triangle',
+-    '&#x25B1;': '\\square',
++    '&#x25B1;': '\\text{▱}',
+     '&#x25B0;': '\\square',
+     '&#x25AF;': '\\square',
+     '&#x25AE;': '\\square',
+@@ -1092,7 +1093,7 @@ const allMathOperatorsByChar = {
+     '&#x2244;': '\\not\\simeq',
+     '&#x2243;': '\\simeq',
+     '&#x2241;': '\\not\\sim',
+-    '&#x2226;': '\\not\\parallel',
++    '&#x2226;': '\\nparallel',
+     '&#x2225;': '\\parallel',
+     '&#x2224;': '\\not|',
+     '&#x221D;': '\\propto',
+@@ -1132,7 +1133,7 @@ const allMathOperatorsByChar = {
+     '&#x220C;': '\\not\\in',
+     '&#x2209;': '\\notin',
+     '&#x2208;': '\\in',
+-    '&#x2201;': 'C',
++    '&#x2201;': '\\complement',
+     '&#x2204;': '\\nexists',
+     '&#x2203;': '\\exists',
+     '&#x2200;': '\\forall',
+@@ -1274,8 +1275,8 @@ const allMathOperatorsByGlyph = {
+     '‷': '```',
+     '‶': '``',
+     '‵': '`',
+-    '‴': "'''",
+-    '″': "''",
++    '‴': '\\prime\\prime\\prime',
++    '″': '\\prime\\prime',
+     '‟': '``',
+     '„': ',,',
+     '‛': '`',
+@@ -1322,12 +1323,12 @@ const allMathOperatorsByGlyph = {
+     '♯': '\\#',
+     '♮': '',
+     '♭': '',
+-    '′': "'",
++    '′': '\\prime',
+     '<>': '<>',
+     '**': '\\star\\star',
+     '∇': '\\nabla',
+     '∂': '\\partial',
+-    '⊙': '\\bigodot',
++    '⊙': '\\odot',
+     '¬': '\\neg',
+     '∢': '\\measuredangle',
+     '∡': '\\measuredangle',
+@@ -1728,8 +1729,8 @@ const allMathOperatorsByGlyph = {
+     '⫏': '',
+     '⫎': '',
+     '⫍': '',
+-    '⫌': '\\underset{\\neq}{\\supset}',
+-    '⫋': '\\underset{\\neq}{\\subset}',
++    '⫌': '\\supsetneqq',
++    '⫋': '\\subsetneqq',
+     '⫊': '\\underset{\\approx}{\\supset}',
+     '⫉': '\\underset{\\approx}{\\subset}',
+     '⫈': '\\underset{\\sim}{\\supset}',
+@@ -1805,9 +1806,9 @@ const allMathOperatorsByGlyph = {
+     '⪀': '',
+     '⩿': '',
+     '⩾̸': '\\bcancel{\\geq}',
+-    '⩾': '\\geq',
++    '⩾': '\\geqslant',
+     '⩽̸': '\\bcancel{\\leq}',
+-    '⩽': '\\leq',
++    '⩽': '\\leqslant',
+     '⩼': '',
+     '⩻': '',
+     '⩺': '',
+@@ -2165,7 +2166,7 @@ const allMathOperatorsByGlyph = {
+     '▵': '\\triangle',
+     '▴': '\\triangle',
+     '△': '\\triangle',
+-    '▱': '\\square',
++    '▱': '\\text{▱}',
+     '▰': '\\blacksquare',
+     '▯': '\\square',
+     '▮': '\\blacksquare',
+@@ -2220,7 +2221,7 @@ const allMathOperatorsByGlyph = {
+     '≄': '\\not\\simeq',
+     '≃': '\\simeq',
+     '≁': '\\not\\sim',
+-    '∦': '\\not\\parallel',
++    '∦': '\\nparallel',
+     '∥': '\\parallel',
+     '∤': '\\not|',
+     '∝': '\\propto',
+@@ -2260,7 +2261,7 @@ const allMathOperatorsByGlyph = {
+     '∌': '\\not\\in',
+     '∉': '\\notin',
+     '∈': '\\in',
+-    '∁': 'C',
++    '∁': '\\complement',
+     '∄': '\\nexists',
+     '∃': '\\exists',
+     '∀': '\\forall',
+@@ -2467,6 +2468,12 @@ const allMathOperatorsByGlyph = {
+  * `<mi>`/`<mo>` converters to translate symbol content into LaTeX.
+  */
+ const allMathSymbolsByChar = {
++    '&#x2ACB;': '\\subsetneqq',
++    '&#x2ACC;': '\\supsetneqq',
++    '&#x2226;': '\\nparallel',
++    '&#x2201;': '\\complement',
++    '&#x2204;': '\\nexists',
++    '&#x25B1;': '\\text{▱}',
+     '&#xA0;': '\\textrm{ }',
+     '&#x2203;': '\\exists',
+     '&#x2200;': '\\forall',
+@@ -2504,7 +2511,7 @@ const allMathSymbolsByChar = {
+     '&#x2227;': '\\wedge',
+     '&#x220F;': '\\prod',
+     '&#x2211;': '\\sum',
+-    '&#x2299;': '\\bigodot',
++    '&#x2299;': '\\odot',
+     '&#x2297;': '\\bigoplus',
+     '&#x2295;': 'o+',
+     '&#x2218;': '@',
+@@ -2564,6 +2571,11 @@ const allMathSymbolsByChar = {
+  * converters to translate symbol content into LaTeX.
+  */
+ const allMathSymbolsByGlyph = {
++    '⫋': '\\subsetneqq',
++    '⫌': '\\supsetneqq',
++    '∦': '\\nparallel',
++    '∁': '\\complement',
++    '∄': '\\nexists',
+     ' ': '\\textrm{ }',
+     // Invisible operators (U+2061-U+2064): no visual rendering in LaTeX.
+     '⁡': '',
+@@ -2601,7 +2613,7 @@ const allMathSymbolsByGlyph = {
+     '∧': '\\wedge',
+     '∏': '\\prod',
+     '∑': '\\sum',
+-    '⊙': '\\bigodot',
++    '⊙': '\\odot',
+     '⊗': '\\bigoplus',
+     '⊕': 'o+',
+     '∘': '@',
+@@ -2866,7 +2878,7 @@ const allMathSymbolsByGlyph = {
+     '→': '\\rightarrow',
+     '‡': '\\ddagger',
+     '・': '\\cdot',
+-    '▱': '\\square',
++    '▱': '\\text{▱}',
+     '∆': '\\Delta',
+     ἱ: 'i',
+     '∡': '\\angle',
+@@ -3604,7 +3616,7 @@ class MI {
              case 'italic':
                  return `\\mathit{${value}}`;
              case 'bold-italic':
@@ -76,7 +495,18 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..fbfc8522c71540bfabcc41217a641151
              case 'double-struck':
                  return `\\mathbb{${value}}`;
              case 'bold-fraktur':
-@@ -5104,6 +5105,24 @@ class TableAnnotator {
+@@ -4452,6 +4464,10 @@ class MText {
+         }, [])
+             .map((char) => {
+             if (!char.isAlphanumeric) {
++                // DSH geometry glyphs remain text atoms when their weight changes.
++                if (attributes.mathvariant && ['⫽', '▱'].includes(char.value)) {
++                    return new TextCommand(attributes.mathvariant).apply(char.value);
++                }
+                 return new MI({
+                     name: 'mi',
+                     attributes: {},
+@@ -5104,6 +5120,24 @@ class TableAnnotator {
   * @param root - the root element of the tree to convert.
   * @returns the LaTeX string for the whole tree.
   */
@@ -101,7 +531,7 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..fbfc8522c71540bfabcc41217a641151
  const convertTreeToLatex = (root) => {
      var _a, _b;
      for (const normalizer of makeTreeNormalizers(root))
-@@ -5122,7 +5141,11 @@ const convertTreeToLatex = (root) => {
+@@ -5122,7 +5156,11 @@ const convertTreeToLatex = (root) => {
                  continue;
              }
              stack.pop();
