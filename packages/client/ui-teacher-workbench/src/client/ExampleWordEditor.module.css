@@ -25,6 +25,7 @@
 .formulaDialog p { font-size: 13px; line-height: 1.6; }
 .formulaDialog::backdrop, .unsavedDialog::backdrop { background: var(--dsw-alias-bg-mask-1); }
 .mathfield :global(math-field) {
+  --text-font-family: 'DSH Math Symbols', KaTeX_Main;
   --caret-color: var(--dsw-alias-state-business-primary);
   --selection-color: var(--dsw-alias-label-primary);
   --selection-background-color: color-mix(in srgb, var(--dsw-alias-state-business-primary) 20%, var(--dsw-alias-bg-base));

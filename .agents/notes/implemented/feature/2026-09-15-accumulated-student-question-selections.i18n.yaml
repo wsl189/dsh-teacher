@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-accumulated-student-question-selections.md
-2026-09-15-accumulated-student-question-selections.md: a6fe17fd784cc0a5229d3e6c506ba4f65c9104fb
-2026-09-15-accumulated-student-question-selections.zh.md: d967c7642a028f4ef1c7f0abae6af0b8603000ab
+2026-09-15-accumulated-student-question-selections.md: 2536e8032664a8bc00eab2c6c6f0f3aa20565e16
+2026-09-15-accumulated-student-question-selections.zh.md: 27c645a2ce0d0d1011a3a2b8b5e617873dec5fe3

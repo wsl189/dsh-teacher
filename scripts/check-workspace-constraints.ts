@@ -171,6 +171,7 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-skill-ppt-master': ['assets'],
   // The equation converter ships its source, licenses, and replacement instructions.
   '@deepseek-ai/dsh-host-teacher-workbench': ['third-party/mathml2omml/**'],
+  '@deepseek-ai/dsh-client-ui-teacher-workbench': ['third-party/stix'],
   // tsdown shares the repository/pack code between the lib entry and the bin
   // through a hashed chunk. The committed bin.js is the link target pnpm can
   // resolve at install time, before the build produces lib/bin.js.

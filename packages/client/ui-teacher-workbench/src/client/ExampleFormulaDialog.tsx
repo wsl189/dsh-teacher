@@ -47,10 +47,10 @@ const SYMBOL_GROUPS = [
   ['relations', [
     ['notEqual', '\\ne', '\\ne'], ['lessEqual', '\\leqslant', '\\leqslant'], ['greaterEqual', '\\geqslant', '\\geqslant'],
     ['approximate', '\\approx', '\\approx'], ['belongs', '\\in', '\\in'], ['notBelongs', '\\notin', '\\notin'],
-    ['properSubset', '\\subsetneqq', '\\subsetneqq'], ['properSuperset', '\\supsetneqq', '\\supsetneqq'],
+    ['properSubset', '\\text{⫋}', '\\text{ ⫋ }'], ['properSuperset', '\\text{⫌}', '\\text{ ⫌ }'],
     ['subset', '\\subseteq', '\\subseteq'], ['superset', '\\supseteq', '\\supseteq'],
     ['union', '\\cup', '\\cup'], ['intersection', '\\cap', '\\cap'], ['emptySet', '\\varnothing', '\\varnothing'],
-    ['complement', '\\complement_U A', '\\complement_{#?}{#0}'],
+    ['complement', '\\text{∁}_U A', '\\text{∁}_{#?}{#0}'],
     ['forAll', '\\forall', '\\forall'], ['exists', '\\exists', '\\exists'], ['notExists', '\\nexists', '\\nexists'],
     ['natural', '\\mathbb{N}', '\\mathbb{N}'], ['integer', '\\mathbb{Z}', '\\mathbb{Z}'],
     ['rational', '\\mathbb{Q}', '\\mathbb{Q}'], ['real', '\\mathbb{R}', '\\mathbb{R}'],
@@ -59,7 +59,7 @@ const SYMBOL_GROUPS = [
   ['geometry', [
     ['vector', '\\vec{a}', '\\vec{#0}'], ['directedSegment', '\\overrightarrow{AB}', '\\overrightarrow{#0}'],
     ['angle', '\\angle', '\\angle'], ['triangle', '\\triangle', '\\triangle'],
-    ['parallel', '\\text{⫽}', '\\text{ ⫽ }'], ['notParallel', '\\nparallel', '\\nparallel'],
+    ['parallel', '\\text{⫽}', '\\text{ ⫽ }'], ['notParallel', '\\text{⫽⃥}', '\\text{ ⫽⃥ }'],
     ['perpendicular', '\\perp', '\\perp'], ['circle', '\\odot', '\\odot'],
     ['parallelogram', '\\text{▱}', '\\text{▱}'], ['degree', '30^{\\circ}', '#@^{\\circ}'],
   ]],

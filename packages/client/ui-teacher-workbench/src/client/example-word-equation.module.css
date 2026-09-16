@@ -1,3 +1,4 @@
+:global(.katex .textrm) { font-family: 'DSH Math Symbols', KaTeX_Main; }
 .equation { position: relative; display: inline-block; }
 .equation :global(.katex) { font-size: 1em; }
 .equation :global(.katex-display) { margin: 0; }

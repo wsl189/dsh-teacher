@@ -1,5 +1,5 @@
 diff --git a/dist/index.cjs b/dist/index.cjs
-index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a537100fc2b0b8 100644
+index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..ffd477a8461545999372ac41878d703a8566197e 100644
 --- a/dist/index.cjs
 +++ b/dist/index.cjs
 @@ -1,6 +1,7 @@
@@ -162,10 +162,11 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      '∄': '\\nexists',
      '∃': '\\exists',
      '∀': '\\forall',
-@@ -2469,6 +2470,12 @@ const allMathOperatorsByGlyph = {
+@@ -2469,10 +2470,17 @@ const allMathOperatorsByGlyph = {
   * `<mi>`/`<mo>` converters to translate symbol content into LaTeX.
   */
  const allMathSymbolsByChar = {
++    '&#x22A5;': '\\perp',
 +    '&#x2ACB;': '\\subsetneqq',
 +    '&#x2ACC;': '\\supsetneqq',
 +    '&#x2226;': '\\nparallel',
@@ -175,7 +176,12 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      '&#xA0;': '\\textrm{ }',
      '&#x2203;': '\\exists',
      '&#x2200;': '\\forall',
-@@ -2506,7 +2513,7 @@ const allMathSymbolsByChar = {
+-    '&#x21D4;': '\\iff',
++    '&#x21D4;': '\\Leftrightarrow',
+     '&#x21D2;': '=>',
+     '&#xAC;': '\\neg',
+     '&#x2124;': '\\mathbb{Z}',
+@@ -2506,7 +2514,7 @@ const allMathSymbolsByChar = {
      '&#x2227;': '\\wedge',
      '&#x220F;': '\\prod',
      '&#x2211;': '\\sum',
@@ -184,10 +190,11 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      '&#x2297;': '\\bigoplus',
      '&#x2295;': 'o+',
      '&#x2218;': '@',
-@@ -2566,6 +2573,11 @@ const allMathSymbolsByChar = {
+@@ -2566,6 +2574,12 @@ const allMathSymbolsByChar = {
   * converters to translate symbol content into LaTeX.
   */
  const allMathSymbolsByGlyph = {
++    '⊥': '\\perp',
 +    '⫋': '\\subsetneqq',
 +    '⫌': '\\supsetneqq',
 +    '∦': '\\nparallel',
@@ -196,7 +203,16 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      ' ': '\\textrm{ }',
      // Invisible operators (U+2061-U+2064): no visual rendering in LaTeX.
      '⁡': '',
-@@ -2603,7 +2615,7 @@ const allMathSymbolsByGlyph = {
+@@ -2574,7 +2588,7 @@ const allMathSymbolsByGlyph = {
+     '⁤': '',
+     '∃': '\\exists',
+     '∀': '\\forall',
+-    '⇔': '\\iff',
++    '⇔': '\\Leftrightarrow',
+     '⇒': '\\Rightarrow',
+     '¬': '\\neg',
+     '□': '\\square',
+@@ -2603,7 +2617,7 @@ const allMathSymbolsByGlyph = {
      '∧': '\\wedge',
      '∏': '\\prod',
      '∑': '\\sum',
@@ -205,7 +221,7 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      '⊗': '\\bigoplus',
      '⊕': 'o+',
      '∘': '@',
-@@ -2868,7 +2880,7 @@ const allMathSymbolsByGlyph = {
+@@ -2868,7 +2882,7 @@ const allMathSymbolsByGlyph = {
      '→': '\\rightarrow',
      '‡': '\\ddagger',
      '・': '\\cdot',
@@ -214,7 +230,17 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      '∆': '\\Delta',
      ἱ: 'i',
      '∡': '\\angle',
-@@ -3606,7 +3618,7 @@ class MI {
+@@ -3586,6 +3600,9 @@ class MI {
+         if (normalizedValue === ' ')
+             return Character.apply(normalizedValue);
+         const trimmedValue = normalizedValue.trim();
++        if (/^(sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|log|lg|ln|exp|lim|min|max|sup|inf|det|gcd)$/.test(trimmedValue)) {
++            return this.wrapInMathVariant('\\' + trimmedValue, this.getMathVariant(this._mathmlElement.attributes));
++        }
+         const convertedChar = Character.apply(trimmedValue);
+         const parsedChar = this.utf8Converter.convert(convertedChar);
+         if (parsedChar !== convertedChar)
+@@ -3606,7 +3623,7 @@ class MI {
              case 'italic':
                  return `\\mathit{${value}}`;
              case 'bold-italic':
@@ -223,7 +249,16 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
              case 'double-struck':
                  return `\\mathbb{${value}}`;
              case 'bold-fraktur':
-@@ -4454,6 +4466,10 @@ class MText {
+@@ -4427,6 +4444,8 @@ class MText {
+      */
+     convert() {
+         const { attributes, value } = this._mathmlElement;
++        // Keep literal textbook glyphs and their combining marks in a single text run.
++        if (/^[\s⫋⫌⫽⃥▱∁]+$/u.test(value)) return new TextCommand(attributes.mathvariant).apply(value);
+         return [...value]
+             .map((char) => {
+             // if is a letter, number or space, return it
+@@ -4454,9 +4473,13 @@ class MText {
          }, [])
              .map((char) => {
              if (!char.isAlphanumeric) {
@@ -233,14 +268,33 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
 +                }
                  return new MI({
                      name: 'mi',
-                     attributes: {},
-@@ -5106,6 +5122,24 @@ class TableAnnotator {
+-                    attributes: {},
++                    attributes,
+                     children: [],
+                     value: char.value,
+                 }).convert();
+@@ -4679,6 +4702,13 @@ class GenericUnderOver {
+         if (childrenLength !== 2)
+             throw new InvalidNumberOfChildrenError(name, 2, childrenLength);
+         const content = mathMLElementToLaTeXConverter(children[0]).convert();
++        if (name === 'mover' && this._mathmlElement.attributes.accent === 'true') {
++            const mark = children[1];
++            const stretch = mark.attributes.stretchy === 'true';
++            const command = { '⃗': 'vec', '→': 'overrightarrow', '^': stretch ? 'widehat' : 'hat',
++                'ˉ': 'bar', '‾': 'overline', '~': stretch ? 'widetilde' : 'tilde', '˙': 'dot', '¨': 'ddot' }[mark.value];
++            if (command) return `\\${command}{${content}}`;
++        }
+         const accent = mathMLElementToLaTeXConverter(children[1]).convert();
+         return this._applyCommand(content, accent);
+     }
+@@ -5106,6 +5136,25 @@ class TableAnnotator {
   * @param root - the root element of the tree to convert.
   * @returns the LaTeX string for the whole tree.
   */
 +
 +// DSH Teacher: retain colors and mathematical bold italics when reopening saved math.
 +const withMathColors = (node, latex) => {
++    if (node.attributes?.fontweight === 'bold') latex = `\\boldsymbol{${latex}}`;
 +    if (['mn', 'mo'].includes(node.name) || (node.name === 'mi' && node.children.length > 0)) {
 +        const command = { bold: 'mathbf', italic: 'mathit', 'bold-italic': 'mathbfit' }[node.attributes?.mathvariant];
 +        if (command) latex = `\\${command}{${latex}}`;
@@ -259,7 +313,7 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
  const convertTreeToLatex = (root) => {
      var _a, _b;
      for (const normalizer of makeTreeNormalizers(root))
-@@ -5124,7 +5158,11 @@ const convertTreeToLatex = (root) => {
+@@ -5124,7 +5173,11 @@ const convertTreeToLatex = (root) => {
                  continue;
              }
              stack.pop();
@@ -273,7 +327,7 @@ index eec5f8b4776a15d023c6fe6c0a476ff07a9eb14c..7bfef8577c3e8b5d997df03dc8a53710
      }
      finally {
 diff --git a/dist/index.mjs b/dist/index.mjs
-index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d5e9cb338 100644
+index 31258499447701b2a195da3bcb430ba59a4059a0..f64c70474e43f544a1560257123b70c5a4c326c0 100644
 --- a/dist/index.mjs
 +++ b/dist/index.mjs
 @@ -1,4 +1,5 @@
@@ -434,10 +488,11 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      '∄': '\\nexists',
      '∃': '\\exists',
      '∀': '\\forall',
-@@ -2467,6 +2468,12 @@ const allMathOperatorsByGlyph = {
+@@ -2467,10 +2468,17 @@ const allMathOperatorsByGlyph = {
   * `<mi>`/`<mo>` converters to translate symbol content into LaTeX.
   */
  const allMathSymbolsByChar = {
++    '&#x22A5;': '\\perp',
 +    '&#x2ACB;': '\\subsetneqq',
 +    '&#x2ACC;': '\\supsetneqq',
 +    '&#x2226;': '\\nparallel',
@@ -447,7 +502,12 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      '&#xA0;': '\\textrm{ }',
      '&#x2203;': '\\exists',
      '&#x2200;': '\\forall',
-@@ -2504,7 +2511,7 @@ const allMathSymbolsByChar = {
+-    '&#x21D4;': '\\iff',
++    '&#x21D4;': '\\Leftrightarrow',
+     '&#x21D2;': '=>',
+     '&#xAC;': '\\neg',
+     '&#x2124;': '\\mathbb{Z}',
+@@ -2504,7 +2512,7 @@ const allMathSymbolsByChar = {
      '&#x2227;': '\\wedge',
      '&#x220F;': '\\prod',
      '&#x2211;': '\\sum',
@@ -456,10 +516,11 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      '&#x2297;': '\\bigoplus',
      '&#x2295;': 'o+',
      '&#x2218;': '@',
-@@ -2564,6 +2571,11 @@ const allMathSymbolsByChar = {
+@@ -2564,6 +2572,12 @@ const allMathSymbolsByChar = {
   * converters to translate symbol content into LaTeX.
   */
  const allMathSymbolsByGlyph = {
++    '⊥': '\\perp',
 +    '⫋': '\\subsetneqq',
 +    '⫌': '\\supsetneqq',
 +    '∦': '\\nparallel',
@@ -468,7 +529,16 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      ' ': '\\textrm{ }',
      // Invisible operators (U+2061-U+2064): no visual rendering in LaTeX.
      '⁡': '',
-@@ -2601,7 +2613,7 @@ const allMathSymbolsByGlyph = {
+@@ -2572,7 +2586,7 @@ const allMathSymbolsByGlyph = {
+     '⁤': '',
+     '∃': '\\exists',
+     '∀': '\\forall',
+-    '⇔': '\\iff',
++    '⇔': '\\Leftrightarrow',
+     '⇒': '\\Rightarrow',
+     '¬': '\\neg',
+     '□': '\\square',
+@@ -2601,7 +2615,7 @@ const allMathSymbolsByGlyph = {
      '∧': '\\wedge',
      '∏': '\\prod',
      '∑': '\\sum',
@@ -477,7 +547,7 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      '⊗': '\\bigoplus',
      '⊕': 'o+',
      '∘': '@',
-@@ -2866,7 +2878,7 @@ const allMathSymbolsByGlyph = {
+@@ -2866,7 +2880,7 @@ const allMathSymbolsByGlyph = {
      '→': '\\rightarrow',
      '‡': '\\ddagger',
      '・': '\\cdot',
@@ -486,7 +556,17 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
      '∆': '\\Delta',
      ἱ: 'i',
      '∡': '\\angle',
-@@ -3604,7 +3616,7 @@ class MI {
+@@ -3584,6 +3598,9 @@ class MI {
+         if (normalizedValue === ' ')
+             return Character.apply(normalizedValue);
+         const trimmedValue = normalizedValue.trim();
++        if (/^(sin|cos|tan|cot|sec|csc|arcsin|arccos|arctan|log|lg|ln|exp|lim|min|max|sup|inf|det|gcd)$/.test(trimmedValue)) {
++            return this.wrapInMathVariant('\\' + trimmedValue, this.getMathVariant(this._mathmlElement.attributes));
++        }
+         const convertedChar = Character.apply(trimmedValue);
+         const parsedChar = this.utf8Converter.convert(convertedChar);
+         if (parsedChar !== convertedChar)
+@@ -3604,7 +3621,7 @@ class MI {
              case 'italic':
                  return `\\mathit{${value}}`;
              case 'bold-italic':
@@ -495,7 +575,16 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
              case 'double-struck':
                  return `\\mathbb{${value}}`;
              case 'bold-fraktur':
-@@ -4452,6 +4464,10 @@ class MText {
+@@ -4425,6 +4442,8 @@ class MText {
+      */
+     convert() {
+         const { attributes, value } = this._mathmlElement;
++        // Keep literal textbook glyphs and their combining marks in a single text run.
++        if (/^[\s⫋⫌⫽⃥▱∁]+$/u.test(value)) return new TextCommand(attributes.mathvariant).apply(value);
+         return [...value]
+             .map((char) => {
+             // if is a letter, number or space, return it
+@@ -4452,9 +4471,13 @@ class MText {
          }, [])
              .map((char) => {
              if (!char.isAlphanumeric) {
@@ -505,14 +594,33 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
 +                }
                  return new MI({
                      name: 'mi',
-                     attributes: {},
-@@ -5104,6 +5120,24 @@ class TableAnnotator {
+-                    attributes: {},
++                    attributes,
+                     children: [],
+                     value: char.value,
+                 }).convert();
+@@ -4677,6 +4700,13 @@ class GenericUnderOver {
+         if (childrenLength !== 2)
+             throw new InvalidNumberOfChildrenError(name, 2, childrenLength);
+         const content = mathMLElementToLaTeXConverter(children[0]).convert();
++        if (name === 'mover' && this._mathmlElement.attributes.accent === 'true') {
++            const mark = children[1];
++            const stretch = mark.attributes.stretchy === 'true';
++            const command = { '⃗': 'vec', '→': 'overrightarrow', '^': stretch ? 'widehat' : 'hat',
++                'ˉ': 'bar', '‾': 'overline', '~': stretch ? 'widetilde' : 'tilde', '˙': 'dot', '¨': 'ddot' }[mark.value];
++            if (command) return `\\${command}{${content}}`;
++        }
+         const accent = mathMLElementToLaTeXConverter(children[1]).convert();
+         return this._applyCommand(content, accent);
+     }
+@@ -5104,6 +5134,25 @@ class TableAnnotator {
   * @param root - the root element of the tree to convert.
   * @returns the LaTeX string for the whole tree.
   */
 +
 +// DSH Teacher: retain colors and mathematical bold italics when reopening saved math.
 +const withMathColors = (node, latex) => {
++    if (node.attributes?.fontweight === 'bold') latex = `\\boldsymbol{${latex}}`;
 +    if (['mn', 'mo'].includes(node.name) || (node.name === 'mi' && node.children.length > 0)) {
 +        const command = { bold: 'mathbf', italic: 'mathit', 'bold-italic': 'mathbfit' }[node.attributes?.mathvariant];
 +        if (command) latex = `\\${command}{${latex}}`;
@@ -531,7 +639,7 @@ index 31258499447701b2a195da3bcb430ba59a4059a0..ea16d1ce6ecd4ae91b2aa6e16724709d
  const convertTreeToLatex = (root) => {
      var _a, _b;
      for (const normalizer of makeTreeNormalizers(root))
-@@ -5122,7 +5156,11 @@ const convertTreeToLatex = (root) => {
+@@ -5122,7 +5171,11 @@ const convertTreeToLatex = (root) => {
                  continue;
              }
              stack.pop();

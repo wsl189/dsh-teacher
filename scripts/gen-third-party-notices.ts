@@ -65,7 +65,7 @@ export const OFFICE_VIEWER_PACKAGE = '@huanlin/dsh-plugin-better-sidebar-plugin-
 export const MATHML_PACKAGE = 'mathml2omml'
 const MATHML_DISTRIBUTION_ROOT = 'packages/host/teacher-workbench/third-party/mathml2omml'
 const MATHML_DISTRIBUTION_SHA256 = {
-  'colors.patch': '8343b58fd20a5bb4fb766ac5acb3b785f240eb5ab002f0d56ac61f82e545516a',
+  'colors.patch': 'c95b38d7f3882bd7ca0c127d901922ac3fbe632ddd1056ced4da17864236874e',
   'COPYING.GPL-3': '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986',
   'COPYING.LGPL-3': 'e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118',
   'COPYING.entities': 'cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164',
@@ -1113,7 +1113,9 @@ function renderMathmlDistribution(deps: ExternalDep[]): string {
 
 The teacher workbench uses [\`mathml2omml\`](https://github.com/fiduswriter/mathml2omml) 0.5.0 by Johannes Wilm under LGPL-3.0-or-later. The project owner explicitly authorizes this version's distribution under those terms in the [example-collection decision](.agents/notes/implemented/feature/2026-09-08-example-collection.md). The converter remains an external, replaceable runtime module. Users may modify it and reverse engineer the combined application to debug those modifications.
 
-Every teacher-workbench package includes [the notice and replacement instructions](${MATHML_DISTRIBUTION_ROOT}/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](${MATHML_DISTRIBUTION_ROOT}/mathml2omml-0.5.0-source.tar.gz) from upstream commit \`0ddeb8b59ff1a97796b25d8f682dfb410febde1d\`. The accompanying [color-preservation source patch](${MATHML_DISTRIBUTION_ROOT}/colors.patch) supplies the local changes and is applied before rebuilding. The packet also contains the bundled \`entities\` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from \`html-parse-stringify\`. The Windows installer includes the same packet under \`resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml\`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
+Every teacher-workbench package includes [the notice and replacement instructions](${MATHML_DISTRIBUTION_ROOT}/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](${MATHML_DISTRIBUTION_ROOT}/mathml2omml-0.5.0-source.tar.gz) from upstream commit \`0ddeb8b59ff1a97796b25d8f682dfb410febde1d\`. The accompanying [equation-formatting source patch](${MATHML_DISTRIBUTION_ROOT}/colors.patch) supplies the local changes and is applied before rebuilding. The packet also contains the bundled \`entities\` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from \`html-parse-stringify\`. The Windows installer includes the same packet under \`resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml\`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
+
+The formula palette embeds five unchanged glyphs from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
 `
 }
 

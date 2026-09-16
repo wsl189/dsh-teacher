@@ -16,6 +16,7 @@ import type {
   TeacherStudentId,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
+import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../src/settings.ts'
 import type { TeacherWorkbenchCommands } from '../src/client/contracts.ts'
 import { zh } from '../src/client/locales.ts'
@@ -53,11 +54,13 @@ const defaultQuestionCuttingReasoning: QuestionWorkbenchProps['questionCuttingRe
 }
 
 function QuestionWorkbench(
-  props: Omit<QuestionWorkbenchProps, 'cutting' | 'questionCuttingReasoning'>
-    & { questionCuttingReasoning?: QuestionWorkbenchProps['questionCuttingReasoning'] },
+  props: Omit<QuestionWorkbenchProps, 'cutting' | 'questionCuttingReasoning' | 'saveDirectoryAvailable' | 'renderSlot'>
+    & Partial<Pick<QuestionWorkbenchProps, 'questionCuttingReasoning' | 'saveDirectoryAvailable' | 'renderSlot'>>,
 ) {
   return <QuestionWorkbenchComponent
     {...props}
+    saveDirectoryAvailable={props.saveDirectoryAvailable ?? false}
+    renderSlot={props.renderSlot ?? (() => null)}
     questionCuttingReasoning={props.questionCuttingReasoning ?? defaultQuestionCuttingReasoning}
     cutting={EMPTY_QUESTION_CUTTING_VIEW}
   />
@@ -165,6 +168,8 @@ describe('QuestionWorkbench reference shell', () => {
     vi.setSystemTime(15_000)
     render(
       <QuestionWorkbenchComponent
+        saveDirectoryAvailable={false}
+        renderSlot={() => null}
         state={state}
         settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={commands()}
@@ -228,6 +233,8 @@ describe('QuestionWorkbench reference shell', () => {
     try {
       render(
         <QuestionWorkbenchComponent
+          saveDirectoryAvailable={false}
+          renderSlot={() => null}
           state={state}
           settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
           commands={commands()}
@@ -267,6 +274,8 @@ describe('QuestionWorkbench reference shell', () => {
   it('shows retained unverified questions as a completed-job warning', () => {
     render(
       <QuestionWorkbenchComponent
+        saveDirectoryAvailable={false}
+        renderSlot={() => null}
         state={state}
         settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS}
         commands={commands()}
@@ -968,10 +977,10 @@ describe('QuestionWorkbench reference shell', () => {
       if (options?.create !== true) throw new DOMException('missing', 'NotFoundError')
       return { createWritable: async () => ({ write, close }) }
     })
-    const showDirectoryPicker = vi.fn(async () => ({
-      queryPermission: async () => 'granted' as const,
-      getFileHandle,
-    }))
+    const showDirectoryPicker = vi.fn(async (options?: { mode?: string }) => {
+      if (options?.mode !== 'readwrite') throw new DOMException('write permission required', 'AbortError')
+      return { getFileHandle }
+    })
     vi.stubGlobal('showDirectoryPicker', showDirectoryPicker)
     render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
 
@@ -985,6 +994,7 @@ describe('QuestionWorkbench reference shell', () => {
       fireEvent.click(save)
     })
     expect(showDirectoryPicker).toHaveBeenCalledTimes(1)
+    expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: 'readwrite' })
 
     await waitFor(() => {
       expect(c.readQuestionImage).toHaveBeenCalledWith({ target: { kind: 'batch', id: imageId } })
@@ -1180,6 +1190,114 @@ describe('QuestionWorkbench reference shell', () => {
     })
   })
 
+  it('releases temporary-save controls after a rejected request and retains the checked images for retry', async () => {
+    const c = commands()
+    const pending = Promise.withResolvers<Awaited<ReturnType<TeacherWorkbenchCommands['saveTemporaryQuestionSelection']>>>()
+    vi.mocked(c.saveTemporaryQuestionSelection).mockImplementationOnce(() => pending.promise)
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    fireEvent.click(screen.getByRole('button', { name: '张三' }))
+    const drawer = await screen.findByRole('complementary', { name: '学生图片' })
+    const selected = within(drawer).getByRole<HTMLInputElement>('checkbox', { name: '选择' })
+    fireEvent.click(selected)
+    const save = within(drawer).getByRole<HTMLButtonElement>('button', { name: '临时保存' })
+    fireEvent.click(save)
+    expect(screen.getByText('正在更新暂存图片…')).toBeTruthy()
+    await act(async () => { pending.reject(new Error('连接已断开')) })
+    expect(save.disabled).toBe(false)
+    expect(selected.checked).toBe(true)
+    expect(screen.queryByText('正在更新暂存图片…')).toBeNull()
+    expect(screen.getByText('连接已断开')).toBeTruthy()
+    fireEvent.click(save)
+    await screen.findByText('该学生已暂存 1 张')
+    expect(selected.checked).toBe(false)
+  })
+
+  it.each(['word', 'ppt'] as const)('releases %s generation controls after rejection and retries the staged selection', async (kind) => {
+    const c = commands()
+    c.listTemporaryQuestionSelections = vi.fn(async () => ({ ok: true as const, value: [{ studentId, imageCount: 1 }] }))
+    const pending = Promise.withResolvers<Awaited<ReturnType<TeacherWorkbenchCommands['generateStudentDocuments']>>>()
+    c.generateStudentDocuments = vi.fn<TeacherWorkbenchCommands['generateStudentDocuments']>()
+      .mockImplementationOnce(() => pending.promise)
+      .mockResolvedValue({ ok: true, value: { artifacts: [{ fileName: '练习.docx', mediaType: 'application/octet-stream', contentBase64: 'UEs=' }], skipped: [] } })
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    const generate = screen.getByRole<HTMLButtonElement>('button', { name: kind === 'word' ? 'Word' : 'PPT' })
+    await waitFor(() => { expect(generate.disabled).toBe(false) })
+    fireEvent.click(generate)
+    if (kind === 'word') fireEvent.click(screen.getByRole('button', { name: '确认生成' }))
+    expect(screen.getByText('正在生成 Word/PPT…')).toBeTruthy()
+    await act(async () => { pending.reject(new Error('生成连接已断开')) })
+    expect(screen.queryByText('正在生成 Word/PPT…')).toBeNull()
+    const dialog = await screen.findByRole('dialog', { name: '批量生成失败' })
+    expect(within(dialog).getByText('生成连接已断开')).toBeTruthy()
+    fireEvent.click(within(dialog).getByRole('button', { name: '重试' }))
+    await screen.findByRole('dialog', { name: '批量生成成功' })
+    expect(c.generateStudentDocuments).toHaveBeenCalledTimes(2)
+    expect(generate.disabled).toBe(true)
+  })
+
+  it('keeps failed large Office files available for retry without saving successful files again', async () => {
+    const c = commands()
+    const secondStudentId = 'student-second' as TeacherStudentId
+    const exportState: TeacherWorkbenchState = {
+      ...state,
+      students: [...state.students, { ...state.students[0]!, id: secondStudentId, name: '李四' }],
+    }
+    const binary = String.fromCharCode(128).repeat(8 * 1024 * 1024)
+    c.listTemporaryQuestionSelections = vi.fn(async () => ({ ok: true as const, value: [
+      { studentId, imageCount: 1 }, { studentId: secondStudentId, imageCount: 1 },
+    ] }))
+    c.generateStudentDocuments = vi.fn(async () => ({
+      ok: true as const,
+      value: { artifacts: [
+        { fileName: 'first.docx', mediaType: 'application/octet-stream', contentBase64: 'UEs=' },
+        { fileName: 'second.docx', mediaType: 'application/octet-stream', contentBase64: btoa(binary) },
+      ], skipped: [] },
+    }))
+    const blobs: Blob[] = []
+    const abort = vi.fn(async () => {})
+    const firstWrite = vi.fn(async () => {})
+    const secondWrite = vi.fn(async (blob: Blob) => { blobs.push(blob) })
+    const secondClose = vi.fn(async () => {}).mockRejectedValueOnce(new Error('disk write failed'))
+    vi.stubGlobal('showDirectoryPicker', vi.fn(async () => ({
+      queryPermission: async () => 'granted',
+      getFileHandle: async (name: string, options?: { create?: boolean }) => {
+        if (options?.create !== true) throw new DOMException('missing', 'NotFoundError')
+        return { createWritable: async () => name === 'first.docx'
+          ? { write: firstWrite, close: async () => {}, abort }
+          : { write: secondWrite, close: secondClose, abort } }
+      },
+    })))
+    render(<QuestionWorkbench state={exportState} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t} />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    await waitFor(() => { expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Word' }).disabled).toBe(false) })
+    fireEvent.click(screen.getByRole('button', { name: 'Word' }))
+    fireEvent.click(screen.getByRole('button', { name: '确认生成' }))
+    const dialog = await screen.findByRole('dialog', { name: '批量生成成功' })
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await within(dialog).findByText('已保存 1 个文件，失败 1 个')
+    expect(abort).toHaveBeenCalledTimes(1)
+    expect(screen.queryByText('正在写入文件…')).toBeNull()
+    fireEvent.click(within(dialog).getByRole('button', { name: '保存' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '批量生成成功' })).toBeNull() })
+    expect(firstWrite).toHaveBeenCalledTimes(1)
+    expect(secondWrite).toHaveBeenCalledTimes(2)
+    expect(c.generateStudentDocuments).toHaveBeenCalledTimes(1)
+    const saved = await new Promise<ArrayBuffer>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onerror = reject
+      reader.onload = () => {
+        if (reader.result instanceof ArrayBuffer) resolve(reader.result)
+        else reject(new Error('file bytes unavailable'))
+      }
+      reader.readAsArrayBuffer(blobs[1]!)
+    })
+    const bytes = new Uint8Array(saved)
+    expect(bytes.byteLength).toBe(binary.length)
+    expect(bytes.every(byte => byte === 128)).toBe(true)
+  })
+
   it('restores independent per-student Word options and class PowerPoint generation', async () => {
     const c = commands()
     const write = vi.fn(async () => {})
@@ -1272,8 +1390,6 @@ describe('QuestionWorkbench reference shell', () => {
     const write = vi.fn(() => new Promise<void>((resolve) => { finishWrite = resolve }))
     const close = vi.fn(async () => {})
     const directory = {
-      queryPermission: vi.fn(async (): Promise<'granted' | 'denied'> => 'granted'),
-      requestPermission: vi.fn(async () => 'denied' as const),
       getFileHandle: vi.fn(async (_name: string, options?: { create?: boolean }) => {
         if (options?.create !== true) throw new DOMException('missing', 'NotFoundError')
         return { createWritable: async () => ({ write, close }) }
@@ -1314,19 +1430,21 @@ describe('QuestionWorkbench reference shell', () => {
       fireEvent.click(save)
     })
     expect(showDirectoryPicker).toHaveBeenCalledTimes(1)
+    expect(showDirectoryPicker).toHaveBeenCalledWith({ mode: 'readwrite' })
     expect(save.disabled).toBe(true)
     fireEvent.click(within(dialog).getByRole('button', { name: '关闭' }))
     expect(screen.getByRole('dialog', { name: '批量生成成功' })).toBe(dialog)
     await act(async () => { cancelPicker(new DOMException('cancelled', 'AbortError')) })
     expect(save.disabled).toBe(false)
     expect(write).not.toHaveBeenCalled()
+    expect(within(dialog).getByText('未保存文件：已取消选择，或浏览器未授予写入权限。可重新选择保存位置。')).toBeTruthy()
 
-    directory.queryPermission.mockResolvedValueOnce('denied')
     fireEvent.click(save)
-    await act(async () => { chooseDirectory(directory) })
+    await act(async () => { cancelPicker(new DOMException('write permission denied', 'NotAllowedError')) })
     expect(save.disabled).toBe(false)
     expect(write).not.toHaveBeenCalled()
     expect(screen.getByRole('dialog', { name: '批量生成成功' })).toBe(dialog)
+    expect(within(dialog).getByText('未授予目标文件夹写入权限')).toBeTruthy()
 
     fireEvent.click(save)
     await act(async () => { chooseDirectory(directory) })
@@ -1341,7 +1459,58 @@ describe('QuestionWorkbench reference shell', () => {
     expect(screen.queryByText(/File picker already active/u)).toBeNull()
   })
 
-  it('restores toolbox generation from a naturally ordered browser folder', async () => {
+  it.each(['word', 'ppt'] as const)('saves generated %s files to a selected Host directory and retries only failed files', async (kind) => {
+    const c = commands()
+    c.listTemporaryQuestionSelections = vi.fn(async () => ({ ok: true as const, value: [{ studentId, imageCount: 1 }] }))
+    const extension = kind === 'word' ? 'docx' : 'pptx'
+    const artifacts = ['张三', '李四'].map(name => ({ fileName: `${name}.${extension}`, mediaType: 'application/octet-stream', contentBase64: 'UEs=' }))
+    c.generateStudentDocuments = vi.fn(async () => ({ ok: true as const, value: { artifacts, skipped: [] } }))
+    let finishSave: (value: Awaited<ReturnType<typeof c.saveQuestionDocument>>) => void = () => { throw new Error('save not started') }
+    c.saveQuestionDocument = vi.fn()
+      .mockResolvedValueOnce({ ok: true, value: { path: `/chosen folder/${artifacts[0]!.fileName}` } })
+      .mockImplementationOnce(() => new Promise((resolve) => { finishSave = resolve }))
+      .mockResolvedValueOnce({ ok: true, value: { path: `/chosen folder/${artifacts[1]!.fileName}` } })
+    const browserPicker = vi.fn()
+    vi.stubGlobal('showDirectoryPicker', browserPicker)
+    render(<QuestionWorkbench state={state} settings={DEFAULT_TEACHER_WORKBENCH_SETTINGS} commands={c} t={t}
+      saveDirectoryAvailable
+      renderSlot={((_slot: string, owner: DirectoryFlowOwnerProps) => owner.open ? <div role="dialog" aria-label={owner.title}>
+        <button onClick={owner.onCancel}>取消目录</button>
+        <button onClick={() => { owner.onPicked('/chosen folder') }}>{owner.confirmLabel}</button>
+      </div> : null) as QuestionWorkbenchProps['renderSlot']}
+    />)
+    fireEvent.doubleClick(screen.getByRole('button', { name: '高一一班' }))
+    const generate = screen.getByRole<HTMLButtonElement>('button', { name: kind === 'word' ? 'Word' : 'PPT' })
+    await waitFor(() => { expect(generate.disabled).toBe(false) })
+    fireEvent.click(generate)
+    if (kind === 'word') fireEvent.click(screen.getByRole('button', { name: '确认生成' }))
+    const dialog = await screen.findByRole('dialog', { name: '批量生成成功' })
+    expect(within(dialog).queryByRole('button', { name: '直接下载' })).toBeNull()
+    const save = within(dialog).getByRole<HTMLButtonElement>('button', { name: '保存' })
+    fireEvent.click(save)
+    expect(save.disabled).toBe(true)
+    expect(c.saveQuestionDocument).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: '取消目录' }))
+    expect(save.disabled).toBe(false)
+    expect(within(dialog).getByText('已取消选择保存目录。文件仍可重新保存。')).toBeTruthy()
+    fireEvent.click(save)
+    fireEvent.click(screen.getByRole('button', { name: '保存到此文件夹' }))
+    await waitFor(() => { expect(c.saveQuestionDocument).toHaveBeenCalledTimes(2) })
+    fireEvent.click(save)
+    expect(save.disabled).toBe(true)
+    await act(async () => { finishSave({ ok: false, error: { code: 'storage-failure', message: '磁盘不可写' } }) })
+    expect(within(dialog).getByText(/磁盘不可写/u)).toBeTruthy()
+    expect(save.disabled).toBe(false)
+    fireEvent.click(save)
+    fireEvent.click(screen.getByRole('button', { name: '保存到此文件夹' }))
+    await waitFor(() => { expect(screen.queryByRole('dialog', { name: '批量生成成功' })).toBeNull() })
+    expect(c.saveQuestionDocument).toHaveBeenNthCalledWith(3, { directory: '/chosen folder', artifact: artifacts[1] })
+    expect(c.generateStudentDocuments).toHaveBeenCalledTimes(1)
+    expect(browserPicker).not.toHaveBeenCalled()
+    expect(screen.getByText('已保存 1 个文件到：/chosen folder')).toBeTruthy()
+  })
+
+  it('submits every image from a naturally ordered browser folder larger than 120 images', async () => {
     const c = commands()
     c.generateUploadedQuestionDocument = vi.fn(async (request: TeacherQuestionUploadedDocumentRequest) => ({
       ok: true as const,
@@ -1355,19 +1524,23 @@ describe('QuestionWorkbench reference shell', () => {
     fireEvent.click(screen.getByRole('button', { name: '技能库' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '生成 Word' }))
     const input = view.container.querySelector<HTMLInputElement>('input[webkitdirectory]')!
-    const second = new File([new Uint8Array([2])], '第2题.png', { type: 'image/png' })
-    const tenth = new File([new Uint8Array([10])], '第10题.png', { type: 'image/png' })
-    Object.defineProperty(second, 'webkitRelativePath', { value: '练习图片/第2题.png' })
-    Object.defineProperty(tenth, 'webkitRelativePath', { value: '练习图片/第10题.png' })
-    fireEvent.change(input, { target: { files: [tenth, second] } })
+    const files = Array.from({ length: 121 }, (_, index) => {
+      const file = new File([new Uint8Array([index])], `第${String(index + 1)}题.png`, { type: 'image/png' })
+      Object.defineProperty(file, 'webkitRelativePath', { value: `练习图片/${file.name}` })
+      return file
+    })
+    const expectedImages = files.map((file, index) => ({
+      fileName: file.name,
+      relativePath: file.webkitRelativePath,
+      contentBase64: btoa(String.fromCharCode(index)),
+    }))
+    const selectedFiles = [...files].reverse()
+    fireEvent.change(input, { target: { files: selectedFiles } })
     await waitFor(() => {
       expect(c.generateUploadedQuestionDocument).toHaveBeenCalledWith(expect.objectContaining({
         kind: 'word',
         folderName: '练习图片',
-        images: [
-          expect.objectContaining({ relativePath: '练习图片/第2题.png' }),
-          expect.objectContaining({ relativePath: '练习图片/第10题.png' }),
-        ],
+        images: expectedImages,
       }))
     })
     const wordDialog = await screen.findByRole('dialog', { name: 'Word 生成完成' })
@@ -1375,11 +1548,12 @@ describe('QuestionWorkbench reference shell', () => {
 
     fireEvent.click(screen.getByRole('button', { name: '技能库' }))
     fireEvent.click(screen.getByRole('menuitem', { name: '生成 PPT' }))
-    fireEvent.change(input, { target: { files: [tenth, second] } })
+    fireEvent.change(input, { target: { files: selectedFiles } })
     await waitFor(() => {
       expect(c.generateUploadedQuestionDocument).toHaveBeenLastCalledWith(expect.objectContaining({
         kind: 'ppt',
         folderName: '练习图片',
+        images: expectedImages,
       }))
     })
     expect(await screen.findByRole('dialog', { name: 'PPT 生成完成' })).toBeTruthy()

@@ -58,6 +58,7 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
       }
       for (const run of Array.from(document.getElementsByTagNameNS(MATH_NS, 'r'))) {
         const properties = child(run, WORD_NS, 'w:rPr')
+        property(properties, 'w:rFonts', { ascii: 'Cambria Math', hAnsi: 'Cambria Math', eastAsia: 'Cambria Math', cs: 'Cambria Math', hint: 'default' })
         if (run.firstChild !== properties) run.insertBefore(properties, run.firstChild)
         const mathProperties = Array.from(run.childNodes).find(
           node => node.nodeType === node.ELEMENT_NODE && node.namespaceURI === MATH_NS && node.localName === 'rPr',
@@ -92,7 +93,7 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
       property(properties, 'w:rFonts', {
         ascii: mathematical ? 'Cambria Math' : 'Times New Roman',
         hAnsi: mathematical ? 'Cambria Math' : 'Times New Roman',
-        eastAsia: '宋体',
+        eastAsia: mathematical ? 'Cambria Math' : '宋体',
         cs: mathematical ? 'Cambria Math' : 'Times New Roman',
         hint: 'default',
       })
@@ -137,14 +138,18 @@ function normalizeMathLetters(document: XmlDocument, entries: Record<string, Uin
     const colored = [equation, ...Array.from(equation.getElementsByTagNameNS(MATHML_NS, '*'))]
     const missingColors = ([['mathcolor', 'color'], ['mathbackground', 'shd']] as const).some(([attribute, property]) =>
       colored.some(element => element.hasAttribute(attribute)) && native?.getElementsByTagNameNS(WORD_NS, property).length === 0)
-    if (letters.length === 0 && !missingColors) continue
+    const invalidText = Array.from(native?.getElementsByTagNameNS(MATH_NS, '*') ?? []).some(element =>
+      Array.from(element.childNodes).some(node => element.localName === 't'
+        ? node.nodeType === 1 : (node.nodeType === 3 || node.nodeType === 4) && Boolean(node.textContent?.trim())))
+    const missingAlphabet = colored.some(element => /script|fraktur|double-struck|sans-serif|monospace/u.test(element.getAttribute('mathvariant') ?? '')) && native?.getElementsByTagNameNS(MATH_NS, 'scr').length === 0
+    if (letters.length === 0 && !missingColors && !invalidText && !missingAlphabet) continue
     for (const letter of letters) letter.setAttribute('mathvariant', 'bold-italic')
     const replacement = exampleMathmlToOffice(serializer.serializeToString(equation))
     if (native === undefined || native.parentNode === null) {
       throw new Error('Collected Word equation has no replaceable native content')
     }
     if (replacement.textContent !== native.textContent) throw new Error('Collected Word letter formatting would change equation text')
-    if (missingColors) {
+    if (missingColors || invalidText || missingAlphabet) {
       const style = equation.getAttribute('style') ?? ''
       const size = /font-size\s*:\s*([\d.]+)pt/u.exec(style)?.[1]
       formatExampleOfficeMath(replacement, size === undefined ? Number(native.getElementsByTagNameNS(WORD_NS, 'sz').item(0)?.getAttributeNS(WORD_NS, 'val') ?? '24') / 2 : Number(size),
@@ -173,6 +178,11 @@ function child(parent: XmlElement, namespace: string, name: string): XmlElement 
 
 function property(parent: XmlElement, name: string, attributes: Readonly<Record<string, string>>): void {
   const element = child(parent, WORD_NS, name)
+  if (parent.localName === 'rPr') {
+    const order = ['rStyle', 'rFonts', 'b', 'bCs', 'i', 'iCs', 'color', 'sz', 'szCs', 'shd']
+    const following = Array.from(parent.childNodes).find(node => order.indexOf(node.localName ?? '') > order.indexOf(element.localName ?? ''))
+    if (following !== undefined) parent.insertBefore(element, following)
+  }
   if (parent.localName === 'pPr' && name === 'w:ind') {
     const justification = parent.getElementsByTagNameNS(WORD_NS, 'jc').item(0)
     if (justification !== null) parent.insertBefore(element, justification)

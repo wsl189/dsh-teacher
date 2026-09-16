@@ -100,6 +100,12 @@ interface StudentHierarchy {
   readonly directories: StudentDirectory[]
 }
 
+interface StudentRoster {
+  readonly classes: TeacherClass[]
+  readonly students: TeacherStudent[]
+  readonly directories: Omit<StudentDirectory, 'folderIdsByRelativeDirectory'>[]
+}
+
 interface StudentFolderDirectory {
   readonly absolutePath: string
   readonly relativePath: string
@@ -133,6 +139,19 @@ export async function discoverQuestionMedia(
     files,
     directories,
   }
+}
+
+/**
+ * Resolve current-root student identities without reading question images or nested homework directories.
+ * @param config - live student root; library images are irrelevant to staged snapshots.
+ * @param state - durable roster used to retain matching student identities.
+ * @returns students whose directories are currently present.
+ */
+export async function discoverQuestionStudents(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+): Promise<readonly TeacherStudent[]> {
+  return (await discoverStudentRoster(config, state, new Map())).students
 }
 
 /**
@@ -440,6 +459,23 @@ async function discoverStudentHierarchy(
   discoveredDirectories: Map<string, DiscoveredQuestionDirectory>,
 ): Promise<StudentHierarchy> {
   const root = configuredRoot(config.studentsRoot, '学生目录')
+  const roster = await discoverStudentRoster(config, state, discoveredDirectories)
+  const questionFolders: TeacherQuestionFolder[] = []
+  const directories: StudentDirectory[] = []
+  for (const directory of roster.directories) {
+    const discovered = await discoverStudentFolders(root, state, directory, discoveredDirectories)
+    questionFolders.push(...discovered.folders)
+    directories.push({ ...directory, folderIdsByRelativeDirectory: discovered.idsByRelativeDirectory })
+  }
+  return { classes: roster.classes, students: roster.students, questionFolders, directories }
+}
+
+async function discoverStudentRoster(
+  config: TeacherQuestionMediaConfig,
+  state: TeacherWorkbenchState,
+  discoveredDirectories: Map<string, DiscoveredQuestionDirectory>,
+): Promise<StudentRoster> {
+  const root = configuredRoot(config.studentsRoot, '学生目录')
   const durableClasses = state.classes.filter(item => item.usage === 'roster')
   const classes: TeacherClass[] = []
   const students: TeacherStudent[] = []
@@ -452,10 +488,6 @@ async function discoverStudentHierarchy(
     for (const levelOne of await childDirectories(yearPath)) {
       const levelOnePath = join(yearPath, levelOne)
       const levelTwoNames = await childDirectories(levelOnePath)
-      const levelTwoChildren = new Map<string, string[]>()
-      for (const levelTwo of levelTwoNames) {
-        levelTwoChildren.set(levelTwo, await childDirectories(join(levelOnePath, levelTwo)))
-      }
       const legacy = !levelOne.includes('班') && levelTwoNames.some(name => name.includes('班'))
       if (legacy) {
         for (const className of levelTwoNames) {
@@ -465,7 +497,7 @@ async function discoverStudentHierarchy(
             grade: levelOne,
             className,
             groupPath: join(levelOnePath, className),
-            studentNames: levelTwoChildren.get(className) ?? [],
+            studentNames: await childDirectories(join(levelOnePath, className)),
             durableClasses,
             durableStudents: state.students,
             classes,
@@ -496,18 +528,10 @@ async function discoverStudentHierarchy(
       })
     }
   }
-  const questionFolders: TeacherQuestionFolder[] = []
-  const directories: StudentDirectory[] = []
-  for (const directory of unresolvedDirectories) {
-    const discovered = await discoverStudentFolders(root, state, directory, discoveredDirectories)
-    questionFolders.push(...discovered.folders)
-    directories.push({ ...directory, folderIdsByRelativeDirectory: discovered.idsByRelativeDirectory })
-  }
   return {
     classes,
     students,
-    questionFolders,
-    directories,
+    directories: unresolvedDirectories,
   }
 }
 

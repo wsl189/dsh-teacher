@@ -199,8 +199,15 @@ export function apply(ctx: ClientContext): void {
     if (controller.getSnapshot().status !== 'cold') void controller.resync()
   })
 
+  const saveDirectoryFlow = {
+    getSnapshot: () => ctx.slots.entries('teacherWorkbench.saveDirectoryFlow').length > 0,
+    subscribe: (listener: () => void) => ctx.slots.subscribe('teacherWorkbench.saveDirectoryFlow', listener),
+  }
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
-    hooks: { workbench: controller, teacherSettings: settings, questionCuttingSettings, questionCutting, examples, timetableImport },
+    hooks: {
+      saveDirectoryFlow, workbench: controller, teacherSettings: settings, questionCuttingSettings,
+      questionCutting, examples, timetableImport,
+    },
     timetableImportCommands: timetableImport.commands,
     exampleCommands: examples.commands,
     ensure: () => controller.refresh(),
@@ -277,6 +284,7 @@ export function apply(ctx: ClientContext): void {
     listTemporaryQuestionSelections: request => controller.listTemporaryQuestionSelections(request),
     generateQuestionDocument: request => controller.generateQuestionDocument(request),
     generateUploadedQuestionDocument: request => controller.generateUploadedQuestionDocument(request),
+    saveQuestionDocument: request => controller.saveQuestionDocument(request),
     generateStudentDocuments: request => controller.generateStudentDocuments(request),
   })
   const settingsInjected = (): TeacherWorkbenchSettingsInjected => ({
@@ -293,6 +301,7 @@ export function apply(ctx: ClientContext): void {
   }, SidebarWorkbench))
   ctx.slots.inject('shell.overlay', () => ctx.slots.register({
     name: 'shell.overlay',
+    children: { 'teacherWorkbench.saveDirectoryFlow': { kind: 'single', scope: 'root' } },
     id: 'teacher-workbench',
     order: 20,
     locale: NS,

@@ -1002,7 +1002,7 @@ export interface TeacherExampleCorrectionConfig {
 }
 ```
 
-Source: [`packages/host/teacher-workbench/src/index.ts:205`](../packages/host/teacher-workbench/src/index.ts)
+Source: [`packages/host/teacher-workbench/src/index.ts:209`](../packages/host/teacher-workbench/src/index.ts)
 
 <a id="deepseek-aidsh-host-webserver"></a>
 

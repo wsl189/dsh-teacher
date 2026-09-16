@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+当教师工作台声明 `teacherWorkbench.saveDirectoryFlow` 槽位时，本包也独立填充该槽位。选出的绝对路径属于 Host 电脑，文档写入与重试由工作台负责。
+
 ## 概述
 
 本包提供 Web GUI 的原生目录拾取表面：当工作区流程请求一个目录时，一个无渲染的浏览器填充会在运行宿主的机器上打开操作系统自带的选择器，并回报唯一结果——拾取的路径、取消或失败。它填充 `ui-workspace` 声明的两个目录流程槽位，用一行 cordis.yml 组合出原生拾取交互的客户端一侧。当浏览器与宿主运行在同一台机器上时选择它；进程内与远程浏览器部署则需要 [`-browse`](../ui-directory-picker-browse/README.zh.md) 表面。

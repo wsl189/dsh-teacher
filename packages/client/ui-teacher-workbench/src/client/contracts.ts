@@ -1,6 +1,7 @@
 /** Component-facing workbench contracts. */
 
 import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ExampleCollectionCommands, ExampleCollectionSnapshot } from './example-collection-controller.ts'
 import type { TimetableImportCommands, TimetableImportView } from './timetable-import-controller.ts'
@@ -25,6 +26,8 @@ import type {
   TeacherQuestionBatchDocumentResult,
   TeacherQuestionBatchSaveRequest,
   TeacherQuestionDocumentRequest,
+  TeacherQuestionDocumentSaveRequest,
+  TeacherQuestionDocumentSaveResult,
   TeacherQuestionDocumentResult,
   TeacherQuestionImageDeleteRequest,
   TeacherQuestionImageReadRequest,
@@ -77,6 +80,13 @@ import type {
   QuestionCuttingEnqueueRequest,
   QuestionCuttingView,
 } from './question-cutting-controller.ts'
+
+declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /** Destination picker for generated question documents. */
+    'teacherWorkbench.saveDirectoryFlow': { kind: 'single'; scope: 'root'; owner: DirectoryFlowOwnerProps }
+  }
+}
 
 /** Semantic commands available to the workbench modules. */
 export interface TeacherWorkbenchCommands {
@@ -207,6 +217,8 @@ export interface TeacherWorkbenchCommands {
   generateQuestionDocument: (request: TeacherQuestionDocumentRequest) => Promise<TeacherQuestionDocumentResult>
   /** Generate one Word or PowerPoint file from a browser-selected image directory. */
   generateUploadedQuestionDocument: (request: TeacherQuestionUploadedDocumentRequest) => Promise<TeacherQuestionDocumentResult>
+  /** Write a generated Office file into an existing operator-selected Host directory. */
+  saveQuestionDocument: (request: TeacherQuestionDocumentSaveRequest) => Promise<TeacherQuestionDocumentSaveResult>
   /** Generate one independent Office file per selected student. */
   generateStudentDocuments: (request: TeacherQuestionBatchDocumentRequest) => Promise<TeacherQuestionBatchDocumentResult>
 }
@@ -218,6 +230,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
   /** Saved-question commands, including original and Word file reads. */
   exampleCommands: ExampleCollectionCommands
   hooks: {
+    /** True while the composed Host directory picker can select an Office destination. */
+    saveDirectoryFlow: HostObservable<boolean>
     /** Recognition progress and review drafts that survive workbench navigation. */
     timetableImport: HostObservable<TimetableImportView>
     /** Independent SQLite-backed example collection and unsaved description drafts. */

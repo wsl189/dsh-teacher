@@ -59,6 +59,6 @@
     - paragraph: 解析开头：按原题条件计算。
     - paragraph:
       - text: 计算结果为
-      - math: ∁ U A ; A ⫋ B ; A ⫌ B ; A ⊆ B ; A ⊇ B ; a ⩽ b ; a ⩾ b ; ∀ x ; ∃ x ; ∄ x ; A B ∦ C D ; ⊙ O ; ▱ A B C D ; f ′ ′ ( x ) + 1
+      - math: ∁ U A ; A ⫋ B ; A ⫌ B ; A ⊆ B ; A ⊇ B ; a ⩽ b ; a ⩾ b ; ∀ x ; ∃ x ; ∄ x ; A B ⫽⃥ C D ; ⊙ O ; ▱ A B C D ; f ′ ′ ( x ) + 1
       - text: 。
     - paragraph: 解析末尾：检验所有条件。

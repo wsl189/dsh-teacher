@@ -945,7 +945,7 @@ export async function persistQuestionAssignments(
 }
 
 /**
- * Add or update independent snapshots in one student's temporary Office selection; an empty list clears it.
+ * Accumulate student snapshots within the configured byte budget, without an image-count cap; an empty list clears them.
  * @param config - current media roots and decoded-byte limits.
  * @param state - authoritative roster and assignment metadata.
  * @param request - student identity and ordered selected assignment ids.
@@ -956,7 +956,6 @@ export async function saveTemporaryQuestionSelection(
   state: TeacherWorkbenchState,
   request: TeacherQuestionTemporarySaveRequest,
 ): Promise<PersistedTemporaryQuestionSelection> {
-  if (request.assignmentIds.length > 120) throw new TeacherQuestionMediaError('invalid-request', '一次最多临时保存 120 张图片')
   const student = state.students.find(item => item.id === request.studentId)
   if (student === undefined) throw new TeacherQuestionMediaError('not-found', '学生不存在')
   const requested = new Set(request.assignmentIds)
@@ -974,9 +973,6 @@ export async function saveTemporaryQuestionSelection(
   const retained = request.assignmentIds.length === 0
     ? []
     : (await readTemporaryQuestionManifest(config, student.id))?.images.filter(image => !requested.has(image.assignmentId)) ?? []
-  if (retained.length + assignments.length > 120) {
-    throw new TeacherQuestionMediaError('invalid-request', '每名学生最多暂存 120 张图片，请先清空暂存或生成文档')
-  }
   const images = [
     ...retained.map(({ storedName, ...image }) => ({
       image, path: within(finalDirectory, storedName),
@@ -1217,7 +1213,7 @@ export async function generateQuestionDocument(
 }
 
 /**
- * Generate one Office artifact from a browser-selected image directory.
+ * Generate one Office artifact from a browser-selected image directory within byte limits, without an image-count cap.
  * @param config - current media roots and decoded-byte limits.
  * @param request - selected directory name, ordered source images, and output family.
  * @returns a canonical base64 Word or PowerPoint artifact.
@@ -1227,7 +1223,6 @@ export async function generateUploadedQuestionDocument(
   request: TeacherQuestionUploadedDocumentRequest,
 ): Promise<TeacherQuestionDocumentPayload> {
   if (request.images.length === 0) throw new TeacherQuestionMediaError('invalid-request', '所选文件夹中没有可用图片')
-  if (request.images.length > 120) throw new TeacherQuestionMediaError('invalid-request', '一次最多生成 120 张图片')
   let aggregateBytes = 0
   const images: RenderableImage[] = []
   try {
@@ -1354,23 +1349,10 @@ async function loadTemporaryStudentImages(
     { fileName: left.fileName, ...questionNoProperty(left.questionNo, left.fileName), tieBreaker: left.storedName },
     { fileName: right.fileName, ...questionNoProperty(right.questionNo, right.fileName), tieBreaker: right.storedName },
   ))
-  return await Promise.all(images.map(async (image) => {
-    const bytes = await readFile(within(directory, image.storedName))
-    if (image.mediaType !== 'image/webp') return {
-      fileName: image.fileName,
-      mediaType: image.mediaType,
-      width: image.width,
-      height: image.height,
-      bytes,
-    }
-    return {
-      fileName: image.fileName,
-      mediaType: 'image/png' as const,
-      width: image.width,
-      height: image.height,
-      bytes: await sharp(bytes).rotate().png().toBuffer(),
-    }
-  }))
+  return await loadDocumentImageFiles(images.map(image => ({
+    ...image,
+    path: within(directory, image.storedName),
+  })))
 }
 
 async function loadStoredImages(
@@ -1378,18 +1360,23 @@ async function loadStoredImages(
   state: TeacherWorkbenchState,
   targets: readonly TeacherQuestionImageTarget[],
 ): Promise<RenderableImage[]> {
-  return await Promise.all(targets.map(async (target) => {
-    const resolved = resolveImage(config, state, target)
-    const bytes = await readFile(resolved.path)
-    if (resolved.mediaType !== 'image/webp') return { ...resolved, bytes }
-    return {
-      fileName: resolved.fileName,
-      mediaType: 'image/png' as const,
-      width: resolved.width,
-      height: resolved.height,
-      bytes: await sharp(bytes).rotate().png().toBuffer(),
-    }
-  }))
+  return await loadDocumentImageFiles(targets.map(target => resolveImage(config, state, target)))
+}
+
+/** Read and normalize one file at a time so selection size cannot multiply active file reads or WebP conversions. */
+async function loadDocumentImageFiles(files: readonly TeacherQuestionImageFile[]): Promise<RenderableImage[]> {
+  const images: RenderableImage[] = []
+  for (const image of files) {
+    const bytes = await readFile(image.path)
+    images.push({
+      fileName: image.fileName,
+      mediaType: image.mediaType === 'image/webp' ? 'image/png' : image.mediaType,
+      width: image.width,
+      height: image.height,
+      bytes: image.mediaType === 'image/webp' ? await sharp(bytes).rotate().png().toBuffer() : bytes,
+    })
+  }
+  return images
 }
 
 async function readTemporaryQuestionManifest(
@@ -1418,7 +1405,7 @@ function isTemporaryQuestionManifest(value: unknown, studentId: TeacherStudentId
   if (record.version !== 2 || record.studentId !== studentId || !Array.isArray(record.images)) return false
   const assignmentIds = new Set<string>()
   const storedNames = new Set<string>()
-  return record.images.length <= 120 && record.images.every((item) => {
+  return record.images.every((item) => {
     if (typeof item !== 'object' || item === null) return false
     const image = item as Record<string, unknown>
     if (typeof image.assignmentId !== 'string' || image.assignmentId === '' || assignmentIds.has(image.assignmentId)) return false

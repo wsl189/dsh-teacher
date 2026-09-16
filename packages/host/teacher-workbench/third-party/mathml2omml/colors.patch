@@ -24,7 +24,16 @@
      )?.attribs.mathbackground ||
      ''
    let variant =
-@@ -97,7 +93,7 @@
+@@ -43,7 +39,7 @@
+       (element) => element.name === 'mstyle' && element.attribs && element.attribs.fontweight
+     )?.attribs.fontweight ||
+     ''
+-  if (fontweight === 'bold' && !['bold', 'bold-italic'].includes(variant)) {
++  if (fontweight === 'bold' && ['', 'normal', 'italic'].includes(variant)) {
+     if (variant.includes('italic')) {
+       variant = 'bold-italic'
+     } else {
+@@ -97,11 +93,12 @@
    }
  
    return {
@@ -33,6 +42,182 @@
      variant,
      size,
      scriptlevel,
+     background,
+-    fontstyle
++    fontstyle,
++    fontweight
+   }
+ }
+--- a/src/mathml/text_container.js
++++ b/src/mathml/text_container.js
+@@ -1,19 +1,22 @@
+ import { getStyle } from './text_style.js'
++import { getTextContent } from '../helpers.js'
+ 
+ const STYLES = {
+-  bold: 'b',
+-  italic: 'i',
+-  'bold-italic': 'bi'
++  normal: 'p', bold: 'b', italic: 'i', 'bold-italic': 'bi',
++  script: 'p', 'bold-script': 'b', fraktur: 'p', 'bold-fraktur': 'b',
++  'double-struck': 'p', 'sans-serif': 'p', 'bold-sans-serif': 'b',
++  'sans-serif-italic': 'i', 'sans-serif-bold-italic': 'bi', monospace: 'p'
++}
++const SCRIPTS = {
++  script: 'script', 'bold-script': 'script', fraktur: 'fraktur', 'bold-fraktur': 'fraktur',
++  'double-struck': 'double-struck', 'sans-serif': 'sans-serif', 'bold-sans-serif': 'sans-serif',
++  'sans-serif-italic': 'sans-serif', 'sans-serif-bold-italic': 'sans-serif', monospace: 'monospace'
+ }
+ 
+ function textContainer(element, targetParent, previousSibling, nextSibling, ancestors, textType) {
+-  if (previousSibling.isNary) {
+-    const previousSiblingTarget = targetParent.children[targetParent.children.length - 1]
+-    targetParent = previousSiblingTarget.children[previousSiblingTarget.children.length - 1]
+-  }
+-
+   const hasMglyphChild = element.children?.find((element) => element.name === 'mglyph')
+   const style = getStyle(element, ancestors, previousSibling?.style)
++  if (textType === 'mi' && !style.variant && getTextContent(element).length > 1) style.variant = 'normal'
+   element.style = style // Add it to element to make it comparable
+   element.hasMglyphChild = hasMglyphChild
+   const styleSame =
+@@ -25,9 +28,9 @@
+     textType === previousSibling?.name ||
+     (['mi', 'mn', 'mo'].includes(textType) && ['mi', 'mn', 'mo'].includes(previousSibling?.name))
+   let targetElement
+-  if (sameGroup && styleSame && !hasMglyphChild) {
+-    const rElement = targetParent.children[targetParent.children.length - 1]
+-    targetElement = rElement.children[rElement.children.length - 1]
++  const previousRun = targetParent.children[targetParent.children.length - 1]
++  if (sameGroup && styleSame && !hasMglyphChild && previousRun?.name === 'm:r') {
++    targetElement = previousRun.children[previousRun.children.length - 1]
+   } else {
+     const rElement = {
+       name: 'm:r',
+@@ -43,37 +46,30 @@
+         attribs: {},
+         children: []
+       }
+-      if (style.variant.includes('bold')) {
++      if (style.variant.includes('bold') || style.fontweight === 'bold') {
+         wrPr.children.push({ name: 'w:b', type: 'tag', attribs: {}, children: [] })
+       }
+       if (style.variant.includes('italic')) {
+         wrPr.children.push({ name: 'w:i', type: 'tag', attribs: {}, children: [] })
+       }
+       rElement.children.push(wrPr)
+-      const mrPr = {
+-        name: 'm:rPr',
+-        type: 'tag',
+-        attribs: {},
+-        children: [
+-          {
+-            name: 'm:nor',
+-            type: 'tag',
+-            attribs: {},
+-            children: []
+-          }
+-        ]
++      const mrPr = { name: 'm:rPr', type: 'tag', attribs: {}, children: [] }
++      if (textType === 'mtext') {
++        mrPr.children.push({ name: 'm:nor', type: 'tag', attribs: {}, children: [] })
++      } else if (SCRIPTS[style.variant]) {
++        mrPr.children.push({ name: 'm:scr', type: 'tag', attribs: { 'm:val': SCRIPTS[style.variant] }, children: [] })
+       }
+-      if (style.variant !== 'italic') {
++      if (STYLES[style.variant]) {
+         mrPr.children.push({
+           name: 'm:sty',
+           type: 'tag',
+           attribs: {
+-            'm:val': STYLES[style.variant]
++            'm:val': style.fontweight === 'bold' ? (STYLES[style.variant].includes('i') ? 'bi' : 'b') : STYLES[style.variant]
+           },
+           children: []
+         })
+       }
+-      rElement.children.push(mrPr)
++      rElement.children.unshift(mrPr)
+     } else if (hasMglyphChild || textType === 'mtext') {
+       rElement.children.push({
+         name: 'm:rPr',
+--- a/src/mathml/mrow.js
++++ b/src/mathml/mrow.js
+@@ -1,8 +1,4 @@
+ export function mrow(element, targetParent, previousSibling, nextSibling, ancestors) {
+-  if (previousSibling.isNary) {
+-    const targetSibling = targetParent.children[targetParent.children.length - 1]
+-    return targetSibling.children[targetSibling.children.length - 1]
+-  }
+   // Ignore as default behavior
+   return targetParent
+ }
+--- a/src/mathml/under_or_over.js
++++ b/src/mathml/under_or_over.js
+@@ -110,7 +110,7 @@
+   // 2. The type of the script element is mo.
+   if (
+     (direction === 'under' && script.name === 'mo' && ['\u0332', '\u005F'].includes(scriptText)) ||
+-    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF'].includes(scriptText))
++    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF', '\u02C9', '\u203E'].includes(scriptText))
+   ) {
+     // m:bar
+     targetParent.children.push({
+@@ -133,28 +133,7 @@
+             }
+           ]
+         },
+-        {
+-          type: 'tag',
+-          name: 'm:e',
+-          attribs: {},
+-          children: [
+-            {
+-              type: 'tag',
+-              name: direction === 'under' ? 'm:sSub' : 'm:sSup',
+-              attribs: {},
+-              children: [
+-                {
+-                  type: 'tag',
+-                  name: direction === 'under' ? 'm:sSubPr' : 'm:sSupPr',
+-                  attribs: {},
+-                  children: [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [] }]
+-                },
+-                baseTarget,
+-                { type: 'tag', name: 'm:sub', attribs: {}, children: [] }
+-              ]
+-            }
+-          ]
+-        }
++        baseTarget
+       ]
+     })
+     return
+--- a/src/ooml/nary.js
++++ b/src/ooml/nary.js
+@@ -13,6 +13,8 @@
+ }
+ 
+ export function getNaryTarget(naryChar, element, type, subHide = false, supHide = false) {
++  const base = element.children[0]
++  const bold = /bold/.test(base.attribs?.mathvariant || '') || base.attribs?.fontweight === 'bold'
+   const stretchy = element.attribs?.stretchy
+   const grow =
+     stretchy === 'true' ? '1' : stretchy === 'false' ? '0' : GROW_REGEXP.test(naryChar) ? '1' : '0'
+@@ -40,7 +42,12 @@
+             name: 'm:supHide',
+             attribs: { 'm:val': supHide ? 'on' : 'off' },
+             children: []
+-          }
++          },
++          ...(bold ? [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [
++            { type: 'tag', name: 'w:rPr', attribs: {}, children: [
++              { type: 'tag', name: 'w:b', attribs: {}, children: [] }
++            ] }
++          ] }] : [])
+         ]
+       }
+     ]
 --- a/src/walker.js
 +++ b/src/walker.js
 @@ -1,5 +1,28 @@
@@ -64,7 +249,18 @@
  
  export function walker(
    element,
-@@ -23,6 +46,7 @@
+@@ -8,6 +31,10 @@
+   nextSibling = false,
+   ancestors = []
+ ) {
++  if (previousSibling.isNary) {
++    targetParent = previousSibling.naryArgument
++    previousSibling = false
++  }
+   if (
+     !previousSibling &&
+     ['m:deg', 'm:den', 'm:e', 'm:fName', 'm:lim', 'm:num', 'm:sub', 'm:sup'].includes(
+@@ -23,6 +50,7 @@
      // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
      addScriptlevel(targetParent, ancestors)
    }
@@ -72,11 +268,15 @@
    let targetElement
    const nameOrType = element.name || element.type
    if (mathmlHandlers[nameOrType]) {
-@@ -40,6 +64,9 @@
+@@ -40,6 +68,13 @@
  
      targetElement = targetParent
    }
 +
++  if (element.isNary) {
++    const nary = targetParent.children[targetParent.children.length - 1]
++    element.naryArgument = nary.children[nary.children.length - 1]
++  }
 +  const colorStyle = getStyle(element, ancestors)
 +  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
  

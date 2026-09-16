@@ -20,6 +20,7 @@ import type {
   TeacherExampleId, TeacherExampleRequest, TeacherExampleResult, TeacherExampleUpdateRequest, TeacherExampleUploadRequest,
 } from './example-types.ts'
 import { relative } from 'node:path'
+import { saveQuestionDocument } from './question-document-save.ts'
 import {
   teacherWorkbenchDomainSpec,
   teacherWorkbenchStateSchema,
@@ -49,6 +50,7 @@ import {
 } from './question-media.ts'
 import {
   discoverQuestionMedia,
+  discoverQuestionStudents,
   discoveredQuestionTargetKey,
   persistDiscoveredQuestionCopies,
   readDiscoveredQuestionFile,
@@ -92,6 +94,8 @@ import type {
   TeacherQuestionCropReviewRequest,
   TeacherQuestionCropReviewResult,
   TeacherQuestionDocumentRequest,
+  TeacherQuestionDocumentSaveRequest,
+  TeacherQuestionDocumentSaveResult,
   TeacherQuestionDocumentResult,
   TeacherQuestionImageDeleteRequest,
   TeacherQuestionMediaBrowseRequest,
@@ -1320,12 +1324,12 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   ): Promise<TeacherQuestionTemporaryListResult> {
     try {
       const current = this.requireGlobal().get().state
-      const { config, discovered } = await this.discoverCurrentQuestionMedia(current)
+      const { config, state } = await this.questionStudentDocumentContext(current, 'temporary')
       return Object.freeze({
         ok: true,
         value: Object.freeze(await listTemporaryQuestionSelections(
           config,
-          currentQuestionMediaState(current, discovered.value),
+          state,
           request,
         )),
       })
@@ -1383,17 +1387,37 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult> {
     try {
       const current = this.requireGlobal().get().state
-      const { config, discovered } = await this.discoverCurrentQuestionMedia(current)
+      const { config, state } = await this.questionStudentDocumentContext(current, request.source ?? 'temporary')
       return Object.freeze({
         ok: true,
         value: Object.freeze(await generateStudentOfficeDocuments(
           config,
-          currentQuestionMediaState(current, discovered.value),
+          state,
           request,
         )),
       })
     } catch (error) {
       return questionRejected(error)
+    }
+  }
+
+  /**
+   * Write one generated Office file to the operator-selected Host directory.
+   * @param request - absolute directory and generated artifact; existing files receive a numbered suffix.
+   * @returns the saved absolute path or a stable failure; no parent directory is created.
+   */
+  @Remote('saveQuestionDocument')
+  async saveQuestionDocument(request: TeacherQuestionDocumentSaveRequest): Promise<TeacherQuestionDocumentSaveResult> {
+    try {
+      return { ok: true, value: { path: await saveQuestionDocument(request) } }
+    } catch (error) {
+      if (error instanceof TeacherQuestionMediaError) return questionRejected(error)
+      const code = error instanceof Error && 'code' in error ? String(error.code) : ''
+      const reason = code === 'ENOENT' ? '保存目录不存在，请重新选择'
+        : code === 'EACCES' || code === 'EPERM' ? '没有该目录的写入权限'
+          : code === 'ENOSPC' ? '磁盘空间不足'
+            : error instanceof Error ? error.message : String(error)
+      return questionRejected(new TeacherQuestionMediaError('storage-failure', reason))
     }
   }
 
@@ -1405,6 +1429,23 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       maxImageBytes: config.maxQuestionImageBytes,
       maxBatchBytes: config.maxQuestionBatchBytes,
     }
+  }
+
+  private async questionStudentDocumentContext(
+    current: TeacherWorkbenchState,
+    source: 'assigned' | 'temporary',
+  ): Promise<{ readonly config: TeacherQuestionMediaConfig; readonly state: TeacherWorkbenchState }> {
+    if (source === 'assigned') {
+      const { config, discovered } = await this.discoverCurrentQuestionMedia(current)
+      return { config, state: currentQuestionMediaState(current, discovered.value) }
+    }
+    const revision = this.questionMediaSettingsRevision
+    const config = this.questionMediaConfig()
+    const students = await discoverQuestionStudents(config, current)
+    if (revision !== this.questionMediaSettingsRevision) {
+      throw new TeacherQuestionMediaError('storage-failure', '试题工作区目录设置已更改，请重试')
+    }
+    return { config, state: { ...current, students } }
   }
 
   private rememberQuestionMedia(discovered: DiscoveredQuestionMedia): void {

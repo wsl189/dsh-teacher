@@ -2,7 +2,7 @@
 
 import { useEffect } from 'react'
 import clsx from 'clsx'
-import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import { IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../settings.ts'
@@ -25,6 +25,7 @@ import css from './TeacherWorkbench.module.css'
 /** Full main-surface component props. */
 export type WorkbenchSurfaceProps =
   PropsRuntime<'shell.overlay'>
+  & PropsRenderSlots<'teacherWorkbench.saveDirectoryFlow'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
   & InjectFace<TeacherWorkbenchInjected>
@@ -58,6 +59,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
   const active = props.useStore(state => state.active)
   const snapshot = props.useWorkbench(state => state)
   const settings = props.useTeacherSettings(state => state.value ?? DEFAULT_TEACHER_WORKBENCH_SETTINGS)
+  const saveDirectoryAvailable = props.useSaveDirectoryFlow(value => value)
   const questionCuttingReasoning = props.useQuestionCuttingSettings(state => ({
     enabled: state.value?.questionSegmentationReasoningEnabled ?? false,
     writable: state.writable,
@@ -131,6 +133,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     listTemporaryQuestionSelections: props.listTemporaryQuestionSelections,
     generateQuestionDocument: props.generateQuestionDocument,
     generateUploadedQuestionDocument: props.generateUploadedQuestionDocument,
+    saveQuestionDocument: props.saveQuestionDocument,
     generateStudentDocuments: props.generateStudentDocuments,
   }
   const errorKey = snapshot.error?.code === 'revision-conflict'
@@ -192,6 +195,8 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                   />
                   : active === 'questions'
                     ? <ConnectedQuestionWorkbench
+                      saveDirectoryAvailable={saveDirectoryAvailable}
+                      renderSlot={props.renderSlot}
                       state={snapshot.document.state}
                       settings={settings}
                       commands={commands}

@@ -34,7 +34,15 @@ export function exampleLatexToOffice(latex: string, display: boolean): { office:
  */
 export function exampleMathmlToOffice(mathml: string): XmlElement {
   const source = new DOMParser().parseFromString(mathml, 'application/xml')
-  for (const element of Array.from(source.getElementsByTagName('*'))) {
+  for (let element of Array.from(source.getElementsByTagName('*'))) {
+    // Older KaTeX equations wrapped compound expressions in token elements.
+    if (['mi', 'mo'].includes(element.localName ?? '') && Array.from(element.childNodes).some(node => node.nodeType === 1 && node.localName !== 'mglyph')) {
+      const row = source.createElementNS(element.namespaceURI, 'mrow')
+      for (const attribute of Array.from(element.attributes)) row.setAttribute(attribute.name, attribute.value)
+      while (element.firstChild !== null) row.appendChild(element.firstChild)
+      element.parentNode?.replaceChild(row, element)
+      element = row
+    }
     for (const name of ['mathcolor', 'color', 'mathbackground']) {
       const value = element.getAttribute(name)
       if (!value) continue
@@ -81,7 +89,7 @@ export function exampleMathmlToOffice(mathml: string): XmlElement {
 export function formatExampleOfficeMath(equation: XmlElement, size: number, bold: boolean): void {
   for (const run of Array.from(equation.getElementsByTagNameNS(M, 'r'))) {
     const pr = child(run, W, 'w:rPr')
-    property(pr, W, 'w:rFonts', { ascii: 'Cambria Math', hAnsi: 'Cambria Math', cs: 'Cambria Math', eastAsia: '宋体' })
+    property(pr, W, 'w:rFonts', { ascii: 'Cambria Math', hAnsi: 'Cambria Math', cs: 'Cambria Math', eastAsia: 'Cambria Math' })
     property(pr, W, 'w:sz', { val: String(Math.round(size * 2)) })
     property(pr, W, 'w:szCs', { val: String(Math.round(size * 2)) })
     const mathPr = child(run, M, 'm:rPr')

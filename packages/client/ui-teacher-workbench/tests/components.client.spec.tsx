@@ -406,6 +406,8 @@ describe('WorkbenchSurface', () => {
         value: { questionSegmentationReasoningEnabled: false },
         base: {}, user: {}, revision: 1, writable: true, mode: 'host' as const,
       }),
+      renderSlot: () => null,
+      useSaveDirectoryFlow: selector => selector(false),
       useQuestionCutting: selector => selector(EMPTY_QUESTION_CUTTING_VIEW),
       useTimetableImport: selector => selector(EMPTY_TIMETABLE_IMPORT_VIEW),
       timetableImportCommands: { start: vi.fn(), updateItems: vi.fn(), discard: vi.fn(), importSelected: vi.fn() },

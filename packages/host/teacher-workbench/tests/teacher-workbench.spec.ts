@@ -335,7 +335,38 @@ describe('TeacherWorkbenchService', () => {
       .resolves.toMatchObject({ ok: true, value: { imageCount: 1 } })
   })
 
-  it('applies the temporary image limit to the complete accumulated selection', async () => {
+  it.each(['word', 'ppt'] as const)('generates staged %s images without scanning the question library', async (kind) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-staged-only-'))
+    temporaryRoots.push(root)
+    const config = testConfig(root)
+    const b = await harness(new MemoryMediaPool(), config)
+    contexts.push(b.ctx)
+    const source = join(config.studentsRoot, '2026', '高一', '一班', '张同学')
+    await mkdir(source, { recursive: true })
+    const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } }).png().toBuffer()
+    await writeFile(join(source, '第1题.png'), bytes)
+    const browse = await b.service.browseQuestionMedia({})
+    if (!browse.ok) throw new Error(browse.error.message)
+    const assignment = browse.value.questionAssignments[0]!
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId: assignment.studentId, assignmentIds: [assignment.id] }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 1 } })
+    await rm(join(source, '第1题.png'))
+    await rm(config.segmentsRoot, { recursive: true, force: true })
+    await writeFile(config.segmentsRoot, 'unavailable library directory')
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [assignment.studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId: assignment.studentId, imageCount: 1 }] })
+    const generated = await b.service.generateStudentDocuments({
+      kind,
+      students: [{ studentId: assignment.studentId, title: '', includeName: false, includeDate: false }],
+    })
+    if (!generated.ok) throw new Error(generated.error.message)
+    expect(generated.value.artifacts).toHaveLength(1)
+    expect(generated.value.skipped).toEqual([])
+    const parts = unzipSync(Buffer.from(generated.value.artifacts[0]!.contentBase64, 'base64'))
+    expect(Object.keys(parts).some(name => /^(?:word|ppt)\/media\/.+\.png$/u.test(name))).toBe(true)
+  })
+
+  it.each(['word', 'ppt'] as const)('accumulates and exports 500 student images to %s without truncating the selection', async (kind) => {
     const root = await mkdtemp(join(tmpdir(), 'dsh-question-accumulate-count-'))
     temporaryRoots.push(root)
     const config = testConfig(root)
@@ -343,21 +374,67 @@ describe('TeacherWorkbenchService', () => {
     contexts.push(b.ctx)
     const source = join(config.studentsRoot, '2026', '高一', '一班', '张同学')
     const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } }).png().toBuffer()
+    const webp = await sharp(bytes).webp({ lossless: true }).toBuffer()
     await mkdir(source, { recursive: true })
-    await Promise.all(Array.from({ length: 121 }, (_, index) => writeFile(join(source, `第${String(index + 1)}题.png`), bytes)))
+    for (let index = 1; index <= 500; index += 1) {
+      const isWebp = index % 2 === 0
+      await writeFile(join(source, `第${String(index)}题.${isWebp ? 'webp' : 'png'}`), isWebp ? webp : bytes)
+    }
     const browse = await b.service.browseQuestionMedia({})
     if (!browse.ok) throw new Error(browse.error.message)
     const assignments = browse.value.questionAssignments
     const studentId = assignments[0]!.studentId
-    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: assignments.slice(0, 120).map(item => item.id) }))
-      .resolves.toMatchObject({ ok: true, value: { imageCount: 120 } })
-    const manifestPath = join(config.studentsRoot, '.dsh-question-temp', studentId, 'manifest.json')
-    const before = await readFile(manifestPath)
-    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [assignments[120]!.id] }))
-      .resolves.toMatchObject({ ok: false, error: { code: 'invalid-request' } })
-    expect(await readFile(manifestPath)).toEqual(before)
+    expect(assignments).toHaveLength(500)
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: assignments.slice(0, 121).map(item => item.id) }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 121 } })
+    await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: assignments.slice(121).map(item => item.id) }))
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 500 } })
     await expect(b.service.saveTemporaryQuestionSelection({ studentId, assignmentIds: [assignments[0]!.id] }))
-      .resolves.toMatchObject({ ok: true, value: { imageCount: 120 } })
+      .resolves.toMatchObject({ ok: true, value: { imageCount: 500 } })
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [{ studentId, imageCount: 500 }] })
+    const generated = await b.service.generateStudentDocuments({
+      kind,
+      students: [{ studentId, title: '', includeName: false, includeDate: false }],
+    })
+    if (!generated.ok) throw new Error(generated.error.message)
+    expect(generated.value.skipped).toEqual([])
+    expect(generated.value.artifacts).toHaveLength(1)
+    const parts = unzipSync(Buffer.from(generated.value.artifacts[0]!.contentBase64, 'base64'))
+    const media = Object.keys(parts).filter(name => /^(?:word|ppt)\/media\/.+/u.test(name))
+    expect(media.length).toBeGreaterThan(0)
+    expect(media.every(name => name.endsWith('.png'))).toBe(true)
+    if (kind === 'word') {
+      expect(Buffer.from(parts['word/document.xml']!).toString().match(/r:embed=/gu)).toHaveLength(500)
+    } else {
+      expect(Object.keys(parts).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(500)
+    }
+    await expect(b.service.listTemporaryQuestionSelections({ studentIds: [studentId] }))
+      .resolves.toMatchObject({ ok: true, value: [] })
+  })
+
+  it.each(['word', 'ppt'] as const)('exports every image from a 121-image uploaded folder to %s', async (kind) => {
+    const root = await mkdtemp(join(tmpdir(), 'dsh-question-upload-count-'))
+    temporaryRoots.push(root)
+    const b = await harness(new MemoryMediaPool(), testConfig(root))
+    contexts.push(b.ctx)
+    const bytes = await sharp({ create: { width: 2, height: 2, channels: 3, background: '#ff0000' } }).png().toBuffer()
+    const generated = await b.service.generateUploadedQuestionDocument({
+      kind,
+      folderName: '练习图片',
+      images: Array.from({ length: 121 }, (_, index) => ({
+        fileName: `第${String(index + 1)}题.png`,
+        relativePath: `练习图片/第${String(index + 1)}题.png`,
+        contentBase64: bytes.toString('base64'),
+      })),
+    })
+    if (!generated.ok) throw new Error(generated.error.message)
+    const parts = unzipSync(Buffer.from(generated.value.contentBase64, 'base64'))
+    if (kind === 'word') {
+      expect(Buffer.from(parts['word/document.xml']!).toString().match(/r:embed=/gu)).toHaveLength(121)
+    } else {
+      expect(Object.keys(parts).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(121)
+    }
   })
 
   it('defaults to small question groups, compact review output, and a finite child deadline', () => {

@@ -39,9 +39,9 @@ patchedDependencies:
   dsh-better-sidebar@0.17.1: 8ea1292ecde710b0ba079872481e1517c3faaa8bf44fd90e23a0c6c2ca4f5d1d
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.1: 5d0df683dd92b21df2238f151ed5c3700e2dc73158c2e58e2fd77f361a1ec835
-  katex@0.16.47: 1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489
-  mathml-to-latex@1.8.0: 4f4a91de65e25cdc68f15ccb66c9373c10289cda63063aefc885b4ea433bfea7
-  mathml2omml@0.5.0: afe1e5ef2d9d4b63aa3db485bf831ec364043d580a911da719d853487f960a72
+  katex@0.16.47: 7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5
+  mathml-to-latex@1.8.0: b5417b2c9516cd01fcac2a5e76ffcc7758ba3b7e938b391cdbe976eae3b43d39
+  mathml2omml@0.5.0: a920b2ab32f7b0adca9c314439ffae421a29435b3b8016366d9595ce71df4711
   node-pty@1.2.0-beta.15: b40ae545608897914bd25fb009c97eeac478c34e8a910298ddcb01b746534bb0
 
 importers:
@@ -2681,6 +2681,9 @@ importers:
         specifier: ^2.0.0
         version: 2.1.1
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-teacher-workbench':
+        specifier: workspace:^
+        version: link:../ui-teacher-workbench
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
@@ -2723,6 +2726,9 @@ importers:
 
   packages/client/ui-directory-picker-native:
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-teacher-workbench':
+        specifier: workspace:^
+        version: link:../ui-teacher-workbench
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
@@ -3228,7 +3234,7 @@ importers:
         version: 2.1.1
       katex:
         specifier: ^0.16.47
-        version: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+        version: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3
@@ -3810,7 +3816,7 @@ importers:
         version: 0.8.3
       katex:
         specifier: ^0.16.47
-        version: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+        version: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       lucide-react:
         specifier: ^1.31.0
         version: 1.35.0(react@18.3.1)
@@ -3819,7 +3825,7 @@ importers:
         version: 0.110.0
       mathml-to-latex:
         specifier: 1.8.0
-        version: 1.8.0(patch_hash=4f4a91de65e25cdc68f15ccb66c9373c10289cda63063aefc885b4ea433bfea7)
+        version: 1.8.0(patch_hash=b5417b2c9516cd01fcac2a5e76ffcc7758ba3b7e938b391cdbe976eae3b43d39)
       pdf-lib:
         specifier: ^1.17.1
         version: 1.17.1
@@ -3827,6 +3833,9 @@ importers:
         specifier: ^6.2.108
         version: 6.2.108
     devDependencies:
+      '@deepseek-ai/dsh-client-ui-workspace':
+        specifier: workspace:^
+        version: link:../ui-workspace
       '@deepseek-ai/cordis':
         specifier: workspace:^
         version: link:../../../vendor/cordis
@@ -6469,13 +6478,13 @@ importers:
         version: 0.8.3
       katex:
         specifier: ^0.16.47
-        version: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+        version: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       mathml-to-latex:
         specifier: 1.8.0
-        version: 1.8.0(patch_hash=4f4a91de65e25cdc68f15ccb66c9373c10289cda63063aefc885b4ea433bfea7)
+        version: 1.8.0(patch_hash=b5417b2c9516cd01fcac2a5e76ffcc7758ba3b7e938b391cdbe976eae3b43d39)
       mathml2omml:
         specifier: 0.5.0
-        version: 0.5.0(patch_hash=afe1e5ef2d9d4b63aa3db485bf831ec364043d580a911da719d853487f960a72)
+        version: 0.5.0(patch_hash=a920b2ab32f7b0adca9c314439ffae421a29435b3b8016366d9595ce71df4711)
       mdast-util-from-markdown:
         specifier: ^2.0.3
         version: 2.0.3
@@ -27540,7 +27549,7 @@ snapshots:
       jwa: 2.0.1
       safe-buffer: 5.2.1
 
-  katex@0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489):
+  katex@0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5):
     dependencies:
       commander: 8.3.0
 
@@ -27803,12 +27812,12 @@ snapshots:
     dependencies:
       '@cortex-js/compute-engine': 0.58.0
 
-  mathml-to-latex@1.8.0(patch_hash=4f4a91de65e25cdc68f15ccb66c9373c10289cda63063aefc885b4ea433bfea7):
+  mathml-to-latex@1.8.0(patch_hash=b5417b2c9516cd01fcac2a5e76ffcc7758ba3b7e938b391cdbe976eae3b43d39):
     dependencies:
       '@xmldom/xmldom': 0.9.12
       color-string: 2.1.4
 
-  mathml2omml@0.5.0(patch_hash=afe1e5ef2d9d4b63aa3db485bf831ec364043d580a911da719d853487f960a72): {}
+  mathml2omml@0.5.0(patch_hash=a920b2ab32f7b0adca9c314439ffae421a29435b3b8016366d9595ce71df4711): {}
 
   mdast-util-find-and-replace@3.0.2:
     dependencies:
@@ -27958,7 +27967,7 @@ snapshots:
       dayjs: 1.11.21
       dompurify: 3.4.14
       es-toolkit: 1.49.0
-      katex: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+      katex: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       khroma: 2.1.0
       marked: 16.4.2
       roughjs: 4.6.6
@@ -27983,7 +27992,7 @@ snapshots:
       dompurify: 3.4.14
       es-toolkit: 1.49.0
       fastdom: 1.0.12
-      katex: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+      katex: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       khroma: 2.1.0
       marked: 16.4.2
       roughjs: 4.6.6
@@ -28072,7 +28081,7 @@ snapshots:
     dependencies:
       '@types/katex': 0.16.8
       devlop: 1.1.0
-      katex: 0.16.47(patch_hash=1fb63388bf8b96f87e32df45c80bc90d3cfb2770382bcb6941841665a8e5a489)
+      katex: 0.16.47(patch_hash=7141b37a88044fef297cee3f72e389973f3ea76a371f523e38bcb6436c5dcaa5)
       micromark-factory-space: 2.0.1
       micromark-util-character: 2.1.1
       micromark-util-symbol: 2.0.1

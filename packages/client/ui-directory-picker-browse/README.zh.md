@@ -7,6 +7,8 @@ kind: "package-reference"
 
 [English](README.md) | 中文
 
+当教师工作台声明 `teacherWorkbench.saveDirectoryFlow` 槽位时，本包也独立填充该槽位。选出的绝对路径属于 Host 电脑，文档写入与重试由工作台负责。调用方可提供本地化的对话框标题与确认按钮文案。
+
 ## 概述
 
 本包提供 Web GUI 的应用内目录浏览表面：一个「选择工作区目录」对话框，通过本地宿主列出、导航并创建文件夹，不涉及任何操作系统选择框。它填充 `ui-workspace` 声明的两个目录流程槽位，用一行 cordis.yml 组合出浏览拾取交互的客户端一侧。当浏览器为远程或进程内、没有本地操作系统选择器时选择它；本地部署可优先选择 [`-native`](../ui-directory-picker-native/README.zh.md) 表面。

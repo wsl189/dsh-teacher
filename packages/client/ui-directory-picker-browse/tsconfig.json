@@ -8,6 +8,7 @@
     "src"
   ],
   "references": [
+    { "path": "../ui-teacher-workbench" },
     {
       "path": "../../runtime-diagnostics/invariants"
     },

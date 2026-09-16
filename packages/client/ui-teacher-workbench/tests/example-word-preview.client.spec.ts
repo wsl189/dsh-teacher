@@ -22,9 +22,32 @@ function preview() {
 }
 
 describe('collected Word formula previews', () => {
+  it.each([{ command: 'sin', text: 'sin' }, { command: 'sum', text: '∑' }])('retains local bold on the $command operator in saved previews', ({ command, text }) => {
+    const applied = renderExampleEquation(`\\mathbf{\\${command}}x+\\${command} y`)
+    const restored = preview()
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(applied.querySelector('math')!)), restored)
+    for (const container of [applied, restored]) {
+      const operators = Array.from(container.querySelectorAll('math mi, math mo')).filter(node => node.textContent === text)
+      expect(operators.map(node => node.getAttribute('mathvariant'))).toEqual(['bold', null])
+    }
+  })
+
+  it('retains the number-set alphabet and its independent bold weight in applied and saved previews', () => {
+    const applied = renderExampleEquation(String.raw`\mathbf{\mathbb{N}}+\mathbb{N}`)
+    const restored = preview()
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(applied.querySelector('math')!)), restored)
+    for (const container of [applied, restored]) {
+      const letters = Array.from(container.querySelectorAll<HTMLElement>('.katex-html .mathbb')).filter(node => node.textContent === 'N')
+      expect(letters).toHaveLength(2)
+      expect(letters.map(letter => letter.style.fontWeight)).toEqual(['bold', ''])
+      expect(container.querySelector('math mi')?.getAttribute('mathvariant')).toBe('double-struck')
+    }
+  })
+
   it.each([
     { latex: String.raw`\mathbf{\subsetneqq}\subsetneqq`, glyph: '⫋' },
     { latex: String.raw`\mathbfit{\geqslant}\geqslant`, glyph: '⩾' },
+    { latex: String.raw`\mathbf{\nexists}\nexists`, glyph: '∄' },
   ])('keeps local bold on fallback glyph $glyph in applied and restored previews', ({ latex, glyph }) => {
     const applied = renderExampleEquation(latex)
     const restored = preview()
@@ -33,7 +56,9 @@ describe('collected Word formula previews', () => {
       const symbols = Array.from(container.querySelectorAll<HTMLElement>('.katex-html span')).filter(node => node.childElementCount === 0 && node.textContent === glyph)
       expect(symbols).toHaveLength(2)
       expect(symbols.map(symbol => symbol.style.fontWeight)).toEqual(['bold', ''])
-      expect(Array.from(container.querySelectorAll('math mo')).map(symbol => symbol.getAttribute('mathvariant'))).toEqual(['bold', null])
+      const variants = Array.from(container.querySelectorAll('math mo, math mi')).map(symbol => symbol.getAttribute('mathvariant'))
+      expect(variants[0]).toBe('bold')
+      expect([null, 'normal']).toContain(variants[1])
     }
   })
 

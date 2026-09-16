@@ -50,6 +50,8 @@ import type {
   TeacherQuestionBatchDocumentResult,
   TeacherQuestionBatchSaveRequest,
   TeacherQuestionDocumentRequest,
+  TeacherQuestionDocumentSaveRequest,
+  TeacherQuestionDocumentSaveResult,
   TeacherQuestionDocumentResult,
   TeacherQuestionFolder,
   TeacherQuestionFolderId,
@@ -142,7 +144,9 @@ export interface TeacherWorkbenchRemote {
   generateUploadedQuestionDocument: (
     request: TeacherQuestionUploadedDocumentRequest,
   ) => Promise<RemoteResult<TeacherQuestionDocumentResult>>
-  /** Generate independent per-student Office documents. */
+  /** Write a generated Office artifact to an existing operator-selected Host directory. */
+  saveQuestionDocument: (request: TeacherQuestionDocumentSaveRequest) => Promise<RemoteResult<TeacherQuestionDocumentSaveResult>>
+  /** Generate independent Office files for the selected students. */
   generateStudentDocuments: (
     request: TeacherQuestionBatchDocumentRequest,
   ) => Promise<RemoteResult<TeacherQuestionBatchDocumentResult>>
@@ -1455,6 +1459,20 @@ export class TeacherWorkbenchController implements HostObservable<TeacherWorkben
       return carried.ok
         ? carried.value
         : { ok: false, error: { code: 'generation-failure', message: carried.error.message } }
+    } catch (error) {
+      return transportQuestionFailure(error)
+    }
+  }
+
+  /**
+   * Save an Office artifact to the selected Host directory without overwriting existing files.
+   * @param request - existing absolute directory and generated Office bytes.
+   * @returns the actual path or a retryable save failure.
+   */
+  async saveQuestionDocument(request: TeacherQuestionDocumentSaveRequest): Promise<TeacherQuestionDocumentSaveResult> {
+    try {
+      const result = await this.remote.saveQuestionDocument(request)
+      return result.ok ? result.value : { ok: false, error: { code: 'storage-failure', message: result.error.message } }
     } catch (error) {
       return transportQuestionFailure(error)
     }

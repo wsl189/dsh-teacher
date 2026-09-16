@@ -46,6 +46,10 @@ import css from './DirectoryBrowser.module.css'
 
 /** Owner-supplied browser props: browse calls, pick semantics, and copy. */
 export interface DirectoryBrowserProps {
+  /** Owner-localized title; absent uses this package's workspace title. */
+  title?: string
+  /** Owner-localized confirmation action; absent uses Open. */
+  confirmLabel?: string
   /** Dialog visibility (owner-local; closed unmounts nothing but resets on reopen). */
   open: boolean
   /** List Host filesystem roots; Windows answers its available drive roots. */
@@ -278,7 +282,7 @@ function LevelColumn({ entries, selectedPath, busy, onPick, showHidden, filterPr
  * @returns the dialog element (null while closed, via Modal).
  */
 export function DirectoryBrowser({
-  open, listDirectoryRoots, listDirectory, createDirectory, onOpen, onClose, busy, t,
+  open, listDirectoryRoots, listDirectory, createDirectory, onOpen, onClose, busy, t, title, confirmLabel,
 }: DirectoryBrowserProps) {
   // Miller state: the listed level, the selected row in it, and the selected
   // folder's own listing (the right column; null while nothing is selected).
@@ -818,7 +822,7 @@ export function DirectoryBrowser({
       // adoption pins the flow — dismissing it would leave the owner's
       // createWorkspace to land after an apparent cancel.
       onClose={() => { if (folderDraft === null && !busy) onClose() }}
-      title={t('browser.title')}
+      title={title ?? t('browser.title')}
       className={clsx(css.dialog)}
       headless
     >
@@ -867,7 +871,7 @@ export function DirectoryBrowser({
       >
         <div className={css.header}>
           <div className={css.titleRow}>
-            <h2 className={css.title}>{t('browser.title')}</h2>
+            <h2 className={css.title}>{title ?? t('browser.title')}</h2>
             {rootOptions.length > 1 && currentRoot !== null && (
               <select
                 className={css.rootSelect}
@@ -1067,7 +1071,7 @@ export function DirectoryBrowser({
             /* v8 ignore next -- narrowing guard: Open disables while no target exists. */
             onClick={() => { if (targetPath !== null) onOpen(targetPath) }}
           >
-            {t('browser.open')}
+            {confirmLabel ?? t('browser.open')}
           </Button>
         </div>
       </div>

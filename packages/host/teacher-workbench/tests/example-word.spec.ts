@@ -63,7 +63,7 @@ describe('editable equations in collected Word documents', () => {
         expect(variable.getElementsByTagNameNS(WORD_NS, 'rFonts').item(0)?.getAttributeNS(WORD_NS, 'ascii')).toBe('Cambria Math')
       }
       const ordinary = Array.from(doc.getElementsByTagNameNS(MATH_NS, 'r')).filter(run =>
-        run.getElementsByTagNameNS(MATH_NS, 'nor').length > 0 && /^[Aa]$/u.test(run.textContent ?? ''),
+        ['p', 'b'].includes(run.getElementsByTagNameNS(MATH_NS, 'sty').item(0)?.getAttributeNS(MATH_NS, 'val') ?? '') && /^[Aa]$/u.test(run.textContent ?? ''),
       )
       expect(ordinary.map(run => run.textContent)).toEqual(Array.from({ length: copies }, () => ['A', 'a', 'a']).flat())
       expect(doc.documentElement?.textContent).toBe(documentXml(original).document.documentElement?.textContent?.repeat(copies))

@@ -1,0 +1,437 @@
+[
+  {
+    "label": "阿尔法 α",
+    "regular": "\\alpha",
+    "bold": "\\mathbfit{\\alpha}"
+  },
+  {
+    "label": "贝塔 β",
+    "regular": "\\beta",
+    "bold": "\\mathbfit{\\beta}"
+  },
+  {
+    "label": "伽马 γ",
+    "regular": "\\gamma",
+    "bold": "\\mathbfit{\\gamma}"
+  },
+  {
+    "label": "德尔塔 δ",
+    "regular": "\\delta",
+    "bold": "\\mathbfit{\\delta}"
+  },
+  {
+    "label": "西塔 θ",
+    "regular": "\\theta",
+    "bold": "\\mathbfit{\\theta}"
+  },
+  {
+    "label": "兰姆达 λ",
+    "regular": "\\lambda",
+    "bold": "\\mathbfit{\\lambda}"
+  },
+  {
+    "label": "缪 μ",
+    "regular": "\\mu",
+    "bold": "\\mathbfit{\\mu}"
+  },
+  {
+    "label": "派 π",
+    "regular": "\\pi",
+    "bold": "\\mathbfit{\\pi}"
+  },
+  {
+    "label": "柔 ρ",
+    "regular": "\\rho",
+    "bold": "\\mathbfit{\\rho}"
+  },
+  {
+    "label": "西格玛 σ",
+    "regular": "\\sigma",
+    "bold": "\\mathbfit{\\sigma}"
+  },
+  {
+    "label": "斐 φ",
+    "regular": "\\varphi",
+    "bold": "\\mathbfit{\\varphi}"
+  },
+  {
+    "label": "欧米伽 ω",
+    "regular": "\\omega",
+    "bold": "\\mathbfit{\\omega}"
+  },
+  {
+    "label": "大写德尔塔 Δ",
+    "regular": "\\Delta",
+    "bold": "\\mathbf{\\Delta}"
+  },
+  {
+    "label": "分数",
+    "regular": "\\frac{x}{2}",
+    "bold": "\\frac{\\mathbfit{x}}{\\mathbf{2}}"
+  },
+  {
+    "label": "平方根",
+    "regular": "\\sqrt{x}",
+    "bold": "\\sqrt{\\mathbfit{x}}"
+  },
+  {
+    "label": "n 次根式",
+    "regular": "\\sqrt[2]{x}",
+    "bold": "\\sqrt[\\mathbf{2}]{\\mathbfit{x}}"
+  },
+  {
+    "label": "乘方",
+    "regular": "x^{2}",
+    "bold": "\\mathbfit{x}^{\\mathbf{2}}"
+  },
+  {
+    "label": "平方",
+    "regular": "x^{2}",
+    "bold": "\\mathbfit{x}^{\\mathbf{2}}"
+  },
+  {
+    "label": "下标",
+    "regular": "x_{2}",
+    "bold": "\\mathbfit{x}_{\\mathbf{2}}"
+  },
+  {
+    "label": "绝对值",
+    "regular": "\\mid x \\mid",
+    "bold": "\\mathbf{\\mid} \\mathbfit{x} \\mathbf{\\mid}"
+  },
+  {
+    "label": "正负号 ±",
+    "regular": "\\pm",
+    "bold": "\\mathbf{\\pm}"
+  },
+  {
+    "label": "乘号 ×",
+    "regular": "\\times",
+    "bold": "\\mathbf{\\times}"
+  },
+  {
+    "label": "除号 ÷",
+    "regular": "\\div",
+    "bold": "\\mathbf{\\div}"
+  },
+  {
+    "label": "点乘 ·",
+    "regular": "\\cdot",
+    "bold": "\\mathbf{\\cdot}"
+  },
+  {
+    "label": "无穷大 ∞",
+    "regular": "\\infty",
+    "bold": "\\mathbf{\\infty}"
+  },
+  {
+    "label": "阶乘",
+    "regular": "x !",
+    "bold": "\\mathbfit{x} \\mathbf{!}"
+  },
+  {
+    "label": "不等于 ≠",
+    "regular": "\\neq",
+    "bold": "\\mathbf{\\neq}"
+  },
+  {
+    "label": "小于等于 ⩽",
+    "regular": "\\leqslant",
+    "bold": "\\mathbf{⩽}"
+  },
+  {
+    "label": "大于等于 ⩾",
+    "regular": "\\geqslant",
+    "bold": "\\mathbf{⩾}"
+  },
+  {
+    "label": "约等于 ≈",
+    "regular": "\\approx",
+    "bold": "\\mathbf{\\approx}"
+  },
+  {
+    "label": "属于 ∈",
+    "regular": "\\in",
+    "bold": "\\mathbf{∈}"
+  },
+  {
+    "label": "不属于 ∉",
+    "regular": "\\notin",
+    "bold": "\\mathbf{\\notin}"
+  },
+  {
+    "label": "真子集 ⫋",
+    "regular": "\\text{ ⫋ }",
+    "bold": "\\text{ } \\textbf{⫋} \\text{ }"
+  },
+  {
+    "label": "真包含 ⫌",
+    "regular": "\\text{ ⫌ }",
+    "bold": "\\text{ } \\textbf{⫌} \\text{ }"
+  },
+  {
+    "label": "子集 ⊆",
+    "regular": "\\subseteq",
+    "bold": "\\mathbf{⊆}"
+  },
+  {
+    "label": "包含 ⊇",
+    "regular": "\\supseteq",
+    "bold": "\\mathbf{⊇}"
+  },
+  {
+    "label": "并集 ∪",
+    "regular": "\\cup",
+    "bold": "\\mathbf{\\cup}"
+  },
+  {
+    "label": "交集 ∩",
+    "regular": "\\cap",
+    "bold": "\\mathbf{\\cap}"
+  },
+  {
+    "label": "空集 ∅",
+    "regular": "\\emptyset",
+    "bold": "\\mathbf{\\emptyset}"
+  },
+  {
+    "label": "补集",
+    "regular": "\\text{∁}_{2} x",
+    "bold": "\\textbf{∁} _{\\mathbf{2}} \\mathbfit{x}"
+  },
+  {
+    "label": "任意 ∀",
+    "regular": "\\forall",
+    "bold": "\\mathbf{\\forall}"
+  },
+  {
+    "label": "存在 ∃",
+    "regular": "\\exists",
+    "bold": "\\mathbf{\\exists}"
+  },
+  {
+    "label": "不存在 ∄",
+    "regular": "\\nexists",
+    "bold": "\\mathbf{\\nexists}"
+  },
+  {
+    "label": "自然数集 ℕ",
+    "regular": "\\mathbb{N}",
+    "bold": "\\boldsymbol{\\mathbb{N}}"
+  },
+  {
+    "label": "整数集 ℤ",
+    "regular": "\\mathbb{Z}",
+    "bold": "\\boldsymbol{\\mathbb{Z}}"
+  },
+  {
+    "label": "有理数集 ℚ",
+    "regular": "\\mathbb{Q}",
+    "bold": "\\boldsymbol{\\mathbb{Q}}"
+  },
+  {
+    "label": "实数集 ℝ",
+    "regular": "\\mathbb{R}",
+    "bold": "\\boldsymbol{\\mathbb{R}}"
+  },
+  {
+    "label": "复数集 ℂ",
+    "regular": "\\mathbb{C}",
+    "bold": "\\boldsymbol{\\mathbb{C}}"
+  },
+  {
+    "label": "推出 ⇒",
+    "regular": "\\Rightarrow",
+    "bold": "\\mathbf{\\Rightarrow}"
+  },
+  {
+    "label": "等价 ⇔",
+    "regular": "\\Leftrightarrow",
+    "bold": "\\mathbf{\\Leftrightarrow}"
+  },
+  {
+    "label": "向量",
+    "regular": "\\vec{x}",
+    "bold": "\\vec{\\mathbfit{x}}"
+  },
+  {
+    "label": "有向线段",
+    "regular": "\\overrightarrow{x}",
+    "bold": "\\overrightarrow{\\mathbfit{x}}"
+  },
+  {
+    "label": "角 ∠",
+    "regular": "\\angle",
+    "bold": "\\mathbf{\\angle}"
+  },
+  {
+    "label": "三角形 △",
+    "regular": "\\triangle",
+    "bold": "\\mathbf{\\triangle}"
+  },
+  {
+    "label": "平行 ⫽",
+    "regular": "\\text{ ⫽ }",
+    "bold": "\\text{ } \\textbf{⫽} \\text{ }"
+  },
+  {
+    "label": "不平行 ∦",
+    "regular": "\\text{ ⫽⃥ }",
+    "bold": "\\text{ } \\textbf{⫽⃥} \\text{ }"
+  },
+  {
+    "label": "垂直 ⊥",
+    "regular": "\\bot",
+    "bold": "\\mathbf{\\perp}"
+  },
+  {
+    "label": "圆 ⊙",
+    "regular": "\\odot",
+    "bold": "\\mathbf{\\odot}"
+  },
+  {
+    "label": "平行四边形 ▱",
+    "regular": "\\text{▱}",
+    "bold": "\\textbf{▱}"
+  },
+  {
+    "label": "角度 °",
+    "regular": "x^{\\circ}",
+    "bold": "\\mathbfit{x}^{\\mathbf{\\circ}}"
+  },
+  {
+    "label": "正弦 sin",
+    "regular": "\\sin x",
+    "bold": "\\mathbf{\\sin} \\mathbfit{x}"
+  },
+  {
+    "label": "余弦 cos",
+    "regular": "\\cos x",
+    "bold": "\\mathbf{\\cos} \\mathbfit{x}"
+  },
+  {
+    "label": "正切 tan",
+    "regular": "\\tan x",
+    "bold": "\\mathbf{\\tan} \\mathbfit{x}"
+  },
+  {
+    "label": "以 a 为底的对数",
+    "regular": "\\left(\\log \\right)_{2} x",
+    "bold": "\\left(\\mathbf{\\log} \\right)_{\\mathbf{2}} \\mathbfit{x}"
+  },
+  {
+    "label": "常用对数 lg",
+    "regular": "\\lg x",
+    "bold": "\\mathbf{\\lg} \\mathbfit{x}"
+  },
+  {
+    "label": "自然对数 ln",
+    "regular": "\\ln x",
+    "bold": "\\mathbf{\\ln} \\mathbfit{x}"
+  },
+  {
+    "label": "导数",
+    "regular": "f^{\\prime} \\left(x\\right)",
+    "bold": "\\mathbfit{f}^{\\mathbf{\\prime}} \\left(\\mathbfit{x}\\right)"
+  },
+  {
+    "label": "二阶导数",
+    "regular": "f^{\\prime \\prime} \\left(x\\right)",
+    "bold": "\\mathbfit{f}^{\\mathbf{\\prime} \\mathbf{\\prime}} \\left(\\mathbfit{x}\\right)"
+  },
+  {
+    "label": "求和",
+    "regular": "\\sum_{2}^{2} x",
+    "bold": "\\mathbf{\\sum}_{\\mathbf{2}}^{\\mathbf{2}} \\mathbfit{x}"
+  },
+  {
+    "label": "排列数",
+    "regular": "A_{2}^{2}",
+    "bold": "\\mathbfit{A}_{\\mathbf{2}}^{\\mathbf{2}}"
+  },
+  {
+    "label": "组合数",
+    "regular": "C_{2}^{2}",
+    "bold": "\\mathbfit{C}_{\\mathbf{2}}^{\\mathbf{2}}"
+  },
+  {
+    "label": "罗马数字 i",
+    "regular": "\\text{i}",
+    "bold": "\\textbf{i}"
+  },
+  {
+    "label": "罗马数字 ii",
+    "regular": "\\text{ii}",
+    "bold": "\\textbf{ii}"
+  },
+  {
+    "label": "罗马数字 iii",
+    "regular": "\\text{iii}",
+    "bold": "\\textbf{iii}"
+  },
+  {
+    "label": "罗马数字 iv",
+    "regular": "\\text{iv}",
+    "bold": "\\textbf{iv}"
+  },
+  {
+    "label": "罗马数字 v",
+    "regular": "\\text{v}",
+    "bold": "\\textbf{v}"
+  },
+  {
+    "label": "罗马数字 vi",
+    "regular": "\\text{vi}",
+    "bold": "\\textbf{vi}"
+  },
+  {
+    "label": "罗马数字 vii",
+    "regular": "\\text{vii}",
+    "bold": "\\textbf{vii}"
+  },
+  {
+    "label": "罗马数字 viii",
+    "regular": "\\text{viii}",
+    "bold": "\\textbf{viii}"
+  },
+  {
+    "label": "帽号",
+    "regular": "\\hat{x}",
+    "bold": "\\hat{\\mathbfit{x}}"
+  },
+  {
+    "label": "宽帽号",
+    "regular": "\\widehat{x}",
+    "bold": "\\widehat{\\mathbfit{x}}"
+  },
+  {
+    "label": "横线",
+    "regular": "\\bar{x}",
+    "bold": "\\bar{\\mathbfit{x}}"
+  },
+  {
+    "label": "长横线",
+    "regular": "\\overline{x}",
+    "bold": "\\overline{\\mathbfit{x}}"
+  },
+  {
+    "label": "波浪号",
+    "regular": "\\tilde{x}",
+    "bold": "\\tilde{\\mathbfit{x}}"
+  },
+  {
+    "label": "向量箭头",
+    "regular": "\\vec{x}",
+    "bold": "\\vec{\\mathbfit{x}}"
+  },
+  {
+    "label": "单点",
+    "regular": "\\dot{x}",
+    "bold": "\\dot{\\mathbfit{x}}"
+  },
+  {
+    "label": "双点",
+    "regular": "\\ddot{x}",
+    "bold": "\\ddot{\\mathbfit{x}}"
+  }
+]

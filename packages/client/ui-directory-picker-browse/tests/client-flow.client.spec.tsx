@@ -53,6 +53,33 @@ function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowO
 }
 
 describe('directory-picker-browse client half', () => {
+  it('fills the question-document destination slot independently of workspace declarations', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    b.slots.register({
+      name: 'root',
+      children: { 'teacherWorkbench.saveDirectoryFlow': { kind: 'single', scope: 'root' } },
+    } as never, () => null)
+    await Promise.resolve()
+    expect(b.slots.entries('teacherWorkbench.saveDirectoryFlow')).toHaveLength(1)
+    await fiber.dispose()
+    expect(b.slots.entries('teacherWorkbench.saveDirectoryFlow')).toHaveLength(0)
+  })
+
+  it('uses the destination owner’s title and confirmation action', async () => {
+    const b = await bench()
+    await b.ctx.plugin({ inject: [...inject], apply }).await()
+    const selected = owner({ title: '选择保存目录', confirmLabel: '保存到此文件夹' })
+    render(<BrowseDirectoryFlow {...selected} listDirectoryRoots={b.listDirectoryRoots}
+      listDirectory={b.listDirectory} createDirectory={b.createDirectory} t={b.ctx.locale.bind('directory-browser')} />)
+    await screen.findByRole('dialog', { name: '选择保存目录' })
+    const confirm = await screen.findByRole('button', { name: '保存到此文件夹' })
+    await waitFor(() => { expect((confirm as HTMLButtonElement).disabled).toBe(false) })
+    fireEvent.click(confirm)
+    expect(selected.onPicked).toHaveBeenCalledWith(HOME)
+  })
+
   it('declares the services it drives', () => {
     expect(inject).toEqual(['slots', 'uiWorkspace', 'locale'])
   })

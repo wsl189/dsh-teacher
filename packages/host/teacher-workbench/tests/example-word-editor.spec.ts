@@ -14,6 +14,228 @@ function xml(bytes: Uint8Array) { return new DOMParser().parseFromString(strFrom
 function equations(bytes: Uint8Array) { return Array.from(xml(bytes).getElementsByTagNameNS(M, 'oMath')).map(node => new XMLSerializer().serializeToString(node)) }
 
 describe('collection Word editing', () => {
+  it.each(['sin', 'cos', 'tan', 'log', 'lg', 'ln'])('keeps local bold on the %s function name after editing', async (name) => {
+    let bytes = await createExampleWord(`$\\mathbf{\\${name}}x+\\${name} y$`)
+    for (const suffix of ['+1', '+2']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        const runs = Array.from(xml(document).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent === name)
+        expect(runs).toHaveLength(2)
+        expect(runs.map(run => run.getElementsByTagNameNS(W, 'b').length > 0)).toEqual([true, false])
+        expect(runs.map(run => run.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val'))).toEqual(['b', 'p'])
+      }
+    }
+  })
+
+  it('keeps a locally bold summation sign in its native control properties', async () => {
+    let bytes = await createExampleWord(String.raw`$\mathbf{\sum}_{1}^{n}x+\sum_{1}^{n}y$`)
+    for (const suffix of ['+1', '+2']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        const operators = Array.from(xml(document).getElementsByTagNameNS(M, 'naryPr'))
+        expect(operators).toHaveLength(2)
+        expect(operators.map(operator => operator.getElementsByTagNameNS(W, 'b').length > 0)).toEqual([true, false])
+      }
+    }
+  })
+
+  it('repairs saved summations with text outside native runs before exporting', async () => {
+    const original = await createExampleWord(String.raw`$\sum_{i=1}^{n} x+1+2$`)
+    const document = xml(original)
+    const equation = document.getElementsByTagNameNS(M, 'oMath').item(0)!
+    const suffix = equation.lastChild!
+    const text = suffix.textContent ?? ''
+    expect(text).toBe('+1+2')
+    equation.removeChild(suffix)
+    equation.getElementsByTagNameNS(M, 'e').item(0)!.appendChild(document.createTextNode(text))
+    const entries = unzipSync(original)
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    expect(repaired).toBeDefined()
+    expect(equations(await compileExampleWord([{ bytes: repaired! }]))).toEqual(equations(repaired!))
+    const normalized = xml(repaired!).getElementsByTagNameNS(M, 'oMath').item(0)!
+    expect(normalized.textContent).toBe(equation.textContent)
+    for (const element of Array.from(normalized.getElementsByTagNameNS(M, '*'))) {
+      if (element.localName !== 't') expect(Array.from(element.childNodes).filter(node => node.nodeType === 3 && node.textContent?.trim())).toHaveLength(0)
+    }
+  })
+
+  it.each([
+    String.raw`\sum_{i=1}^{n} x+y+2`, String.raw`\prod_{i=1}^{n} x+y+2`, String.raw`\int_{0}^{1} x+2`,
+    String.raw`\sum_{i=1}^{n}\frac{x}{y}+2`, String.raw`\sum_{i=1}^{n}\sum_{j=1}^{m} a_{ij}+2`,
+  ])('keeps native text runs and operand colors after %s through editing and export', async (latex) => {
+    let bytes = await createExampleWord(`$\\textcolor{blue}{${latex}}$`)
+    let expected = xml(bytes).getElementsByTagNameNS(M, 'oMath').item(0)!.textContent ?? ''
+    for (const suffix of ['+3', '+4']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      expected += suffix
+      const exported = await compileExampleWord([{ bytes }])
+      for (const document of [bytes, exported]) {
+        const equation = xml(document).getElementsByTagNameNS(M, 'oMath').item(0)!
+        expect(equation.textContent).toBe(expected)
+        for (const element of Array.from(equation.getElementsByTagNameNS(M, '*'))) {
+          if (element.localName === 't') continue
+          expect(Array.from(element.childNodes).filter(node => node.nodeType === 3 && node.textContent?.trim())).toHaveLength(0)
+        }
+        const operand = Array.from(equation.getElementsByTagNameNS(M, 'r')).find(run => /[xa]/u.test(run.textContent ?? ''))!
+        expect(operand.getElementsByTagNameNS(W, 'color').item(0)?.getAttributeNS(W, 'val')).toBe('0000FF')
+      }
+      expect(equations(exported)).toEqual(equations(bytes))
+    }
+  })
+
+  it.each([String.raw`\perp`, String.raw`\bot`, '⊥'])('keeps local bold on %s after repeated editing', async (command) => {
+    let bytes = await createExampleWord(`$${command}+\\mathbf{${command}}$`)
+    for (const suffix of ['+1', '+2']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        const runs = Array.from(xml(document).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent?.includes('⊥'))
+        expect(runs).toHaveLength(2)
+        expect(runs.map(run => run.getElementsByTagNameNS(W, 'b').length > 0)).toEqual([false, true])
+      }
+    }
+  })
+
+  it.each([String.raw`\Leftrightarrow`, String.raw`\Longleftrightarrow`])('keeps the length of %s with local bold across repeated saves', async (command) => {
+    let bytes = await createExampleWord(`$${command}+\\boldsymbol{${command}}$`)
+    let expected = xml(bytes).getElementsByTagNameNS(M, 'oMath').item(0)!.textContent ?? ''
+    for (const suffix of ['+1', '+2']) {
+      const model = readExampleWordEditor(bytes)
+      bytes = saveExampleWordEditor(bytes, model.paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      expected += suffix
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        expect(xml(document).getElementsByTagNameNS(M, 'oMath').item(0)!.textContent).toBe(expected)
+      }
+    }
+  })
+
+  it('keeps multi-letter function names upright in native Word after editing', async () => {
+    const original = await createExampleWord(String.raw`$\lg x+\ln y+\sin z$`)
+    const model = readExampleWordEditor(original)
+    const saved = saveExampleWordEditor(original, model.paragraphs.map(row => ({ ...row,
+      content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + '+1' } : inline),
+    })))
+    for (const bytes of [original, saved, await compileExampleWord([{ bytes: saved }])]) {
+      const functions = Array.from(xml(bytes).getElementsByTagNameNS(M, 'r')).filter(run => ['lg', 'ln', 'sin'].includes(run.textContent ?? ''))
+      expect(functions).toHaveLength(3)
+      for (const run of functions) expect(run.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('p')
+    }
+  })
+
+  it.each(['vec', 'overrightarrow', 'hat', 'widehat', 'bar', 'overline', 'tilde', 'dot', 'ddot'])('keeps the %s accent attached to its letters when reopening and editing', async (command) => {
+    let bytes = await createExampleWord(`$\\boldsymbol{\\${command}{AB}}$`)
+    for (const suffix of ['+1', '+2']) {
+      const model = readExampleWordEditor(bytes)
+      expect(model.equations[0]!.latex).toContain(`\\${command}{`)
+      expect(model.equations[0]!.latex).not.toContain('\\overset')
+      bytes = saveExampleWordEditor(bytes, model.paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+    }
+    for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+      const equation = xml(document).getElementsByTagNameNS(M, 'oMath').item(0)!
+      expect(equation.textContent).toBe('AB+1+2')
+      expect(equation.getElementsByTagNameNS(M, ['overline', 'bar'].includes(command) ? 'bar' : 'acc').length).toBe(1)
+    }
+  })
+
+  it.each([
+    ['mathbb', 'double-struck'], ['mathcal', 'script'], ['mathfrak', 'fraktur'], ['mathsf', 'sans-serif'], ['mathtt', 'monospace'],
+  ])('keeps local bold and the %s alphabet together across repeated saves', async (command, script) => {
+    let bytes = await createExampleWord(`$\\mathbf{\\${command}{N}}+\\${command}{N}$`)
+    for (const suffix of ['+1', '+2']) {
+      bytes = saveExampleWordEditor(bytes, readExampleWordEditor(bytes).paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + suffix } : inline),
+      })))
+      for (const document of [bytes, await compileExampleWord([{ bytes }])]) {
+        const runs = Array.from(xml(document).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent === 'N')
+        expect(runs).toHaveLength(2)
+        for (const run of runs) expect(run.getElementsByTagNameNS(M, 'scr').item(0)?.getAttributeNS(M, 'val')).toBe(script)
+        expect(runs[0]!.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('b')
+        expect(runs[0]!.getElementsByTagNameNS(W, 'b').length).toBe(1)
+        expect(runs[1]!.getElementsByTagNameNS(W, 'b').length).toBe(0)
+      }
+    }
+  })
+
+  it.each([
+    String.raw`\boldsymbol{\text{∁}_U A+\frac{x}{\sqrt{y}}}`,
+    String.raw`\boldsymbol{f''(x)+\widehat{ABC}}`,
+    String.raw`A\text{ ⫋ }B\textbf{ ⫌ }C+AB\text{ ⫽⃥ }CD`,
+  ])('keeps compound emphasis and textbook symbols in editable native structures: %s', async (latex) => {
+    const original = await createExampleWord('符号')
+    const paragraph = readExampleWordEditor(original).paragraphs[0]!
+    const saved = saveExampleWordEditor(original, [{ ...paragraph, content: [{ kind: 'equation', original: null, latex, size: 18, bold: false }] }])
+    const model = readExampleWordEditor(saved)
+    const edited = saveExampleWordEditor(saved, model.paragraphs.map(row => ({ ...row,
+      content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: inline.latex + '+1' } : inline),
+    })))
+    for (const bytes of [saved, edited, await compileExampleWord([{ bytes: edited }])]) {
+      const equation = xml(bytes).getElementsByTagNameNS(M, 'oMath').item(0)!
+      for (const text of Array.from(equation.getElementsByTagNameNS(M, 't'))) {
+        expect(Array.from(text.childNodes).filter(node => node.nodeType === 1)).toHaveLength(0)
+      }
+      for (const fonts of Array.from(equation.getElementsByTagNameNS(W, 'rFonts'))) expect(fonts.getAttributeNS(W, 'eastAsia')).toBe('Cambria Math')
+      expect(equation.textContent?.replaceAll(/\s/gu, '')).toContain(latex.includes('∁') ? '∁UA' : latex.includes("f''") ? 'f′′(x)' : 'A⫋B⫌C+AB⫽⃥CD')
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+  })
+
+  it.each([
+    ['mathcal', 'script'], ['mathfrak', 'fraktur'], ['mathbb', 'double-struck'], ['mathsf', 'sans-serif'], ['mathtt', 'monospace'],
+  ])('retains the %s mathematical alphabet and repairs a saved document with the alphabet missing', async (command, script) => {
+    const original = await createExampleWord(`$\\${command}{C}$`)
+    const model = readExampleWordEditor(original)
+    const saved = saveExampleWordEditor(original, model.paragraphs.map(row => ({ ...row,
+      content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, size: 18, bold: true } : inline),
+    })))
+    const broken = unzipSync(saved)
+    const document = xml(saved)
+    const alphabet = document.getElementsByTagNameNS(M, 'scr').item(0)!
+    expect(alphabet.getAttributeNS(M, 'val')).toBe(script)
+    alphabet.parentNode!.removeChild(alphabet)
+    broken['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(broken))
+    expect(repaired).toBeDefined()
+    for (const bytes of [saved, repaired!]) {
+      expect(xml(bytes).getElementsByTagNameNS(M, 'scr').item(0)?.getAttributeNS(M, 'val')).toBe(script)
+      expect(xml(bytes).getElementsByTagNameNS(M, 'nor').length).toBe(0)
+      expect(readExampleWordEditor(bytes).paragraphs[0]!.content[0]).toMatchObject({ kind: 'equation', size: 18, bold: true })
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+  })
+
+  it('repairs an invalid compound native text run without losing saved size or emphasis', async () => {
+    const original = await createExampleWord(String.raw`$\boldsymbol{b=(1,-\sqrt{3})}$`)
+    const document = xml(original)
+    const equation = document.getElementsByTagNameNS(M, 'oMath').item(0)!
+    const run = document.createElementNS(M, 'm:r')
+    const text = document.createElementNS(M, 'm:t')
+    while (equation.firstChild !== null) text.appendChild(equation.firstChild)
+    run.appendChild(text)
+    equation.appendChild(run)
+    const entries = unzipSync(original)
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    expect(repaired).toBeDefined()
+    const restored = xml(repaired!).getElementsByTagNameNS(M, 'oMath').item(0)!
+    expect(restored.textContent).toBe('b=(1,−3)')
+    expect(restored.getElementsByTagNameNS(M, 'rad')).toHaveLength(1)
+    for (const leaf of Array.from(restored.getElementsByTagNameNS(M, 't'))) expect(leaf.childNodes.length).toBe(1)
+    expect(restored.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('bi')
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
   it.each([
     { latex: String.raw`\mathbf{\subsetneqq}\subsetneqq`, glyph: '⫋' },
     { latex: String.raw`\mathbfit{\supsetneqq}\supsetneqq`, glyph: '⫌' },

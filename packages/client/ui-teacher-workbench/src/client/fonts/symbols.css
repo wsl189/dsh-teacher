@@ -1,0 +1,9 @@
+/* STIX Two Math, SIL OFL 1.1: compact set relations and anchored negation marks. */
+@font-face {
+  font-family: 'DSH Math Symbols';
+  src: url('./STIXTwoMath-Symbols.woff2') format('woff2');
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  unicode-range: U+20E5, U+2201, U+2ACB-2ACC, U+2AFD;
+}

@@ -289,6 +289,13 @@ listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 @Remote('generateStudentDocuments') async generateStudentDocuments(request: TeacherQuestionBatchDocumentRequest): Promise<TeacherQuestionBatchDocumentResult>
 
 /**
+ * Write one generated Office file to the operator-selected Host directory.
+ * @param request - absolute directory and generated artifact; existing files receive a numbered suffix.
+ * @returns the saved absolute path or a stable failure; no parent directory is created.
+ */
+@Remote('saveQuestionDocument') async saveQuestionDocument(request: TeacherQuestionDocumentSaveRequest): Promise<TeacherQuestionDocumentSaveResult>
+
+/**
  * Resolve storage policy at call time so settings changes affect later tool operations.
  * @returns the current source-document and generated-output policy.
  */

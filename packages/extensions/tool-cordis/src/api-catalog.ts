@@ -2661,6 +2661,12 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'independent artifacts, skipped students, or a stable failure.',
       },
       {
+        signature: '@Remote(\'saveQuestionDocument\') async saveQuestionDocument(request: TeacherQuestionDocumentSaveRequest): Promise<TeacherQuestionDocumentSaveResult>',
+        description: 'Write one generated Office file to the operator-selected Host directory.',
+        parameters: [{ name: 'request', description: 'absolute directory and generated artifact; existing files receive a numbered suffix.' }],
+        returns: 'the saved absolute path or a stable failure; no parent directory is created.',
+      },
+      {
         signature: 'sourceConfig(): TeacherWorkbenchSourceConfig',
         description: 'Resolve storage policy at call time so settings changes affect later tool operations.',
         parameters: [],
@@ -6245,6 +6251,14 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeacherQuestionDocumentResult',
     declaration: 'export type TeacherQuestionDocumentResult = TeacherQuestionDocumentSuccess | TeacherQuestionRejected;',
+  },
+  {
+    name: 'TeacherQuestionDocumentSaveRequest',
+    declaration: 'export interface TeacherQuestionDocumentSaveRequest {\n    readonly directory: string;\n    readonly artifact: TeacherQuestionDocumentPayload;\n}',
+  },
+  {
+    name: 'TeacherQuestionDocumentSaveResult',
+    declaration: 'export type TeacherQuestionDocumentSaveResult = {\n    readonly ok: true;\n    readonly value: {\n        readonly path: string;\n    };\n} | TeacherQuestionRejected;',
   },
   {
     name: 'TeacherQuestionDocumentSkipped',

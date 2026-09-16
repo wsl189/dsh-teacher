@@ -39,6 +39,10 @@ import type { createWorkspaceViewStore } from '../stores.ts'
  * to run/render its interaction and reports exactly one outcome per open.
  */
 export interface DirectoryFlowOwnerProps {
+  /** Owner-localized title when the picker serves a purpose other than workspace creation. */
+  title?: string
+  /** Owner-localized action for confirming the selected directory. */
+  confirmLabel?: string
   /** True while a picking interaction is requested; flipping back to false withdraws the request. */
   open: boolean
   /** True while the owner adopts a picked path (`createWorkspace` in flight); occupants disable their commit affordances. */

@@ -35,6 +35,20 @@ function owner(overrides: Partial<DirectoryFlowOwnerProps> = {}): DirectoryFlowO
 }
 
 describe('directory-picker-native client half', () => {
+  it('fills the question-document destination slot independently of workspace declarations', async () => {
+    const b = await bench()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    b.slots.register({
+      name: 'root',
+      children: { 'teacherWorkbench.saveDirectoryFlow': { kind: 'single', scope: 'root' } },
+    } as never, () => null)
+    await Promise.resolve()
+    expect(b.slots.entries('teacherWorkbench.saveDirectoryFlow')).toHaveLength(1)
+    await fiber.dispose()
+    expect(b.slots.entries('teacherWorkbench.saveDirectoryFlow')).toHaveLength(0)
+  })
+
   it('declares the services it drives', () => {
     expect(inject).toEqual(['slots', 'uiWorkspace'])
   })

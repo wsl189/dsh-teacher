@@ -1,4 +1,4 @@
-import { mkdir, readFile, readdir, stat, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, rm, stat, utimes, writeFile } from 'node:fs/promises'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
@@ -20,6 +20,7 @@ import {
   type WebScaffold,
 } from './scaffold.ts'
 import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './support.ts'
+import { auditExampleFormulaPalette } from './example-formula-palette-fixture.ts'
 import { ExampleCorrectionAdapter } from './example-correction-fixture.ts'
 import { TimetableAgentAdapter, smallGradeEntries, studyEntries } from './timetable-agent-fixture.ts'
 
@@ -1029,8 +1030,8 @@ describe('web e2e: durable teacher workbench', () => {
     }
     await mathfield.press('ControlOrMeta+a')
     await mathfield.pressSequentially('a')
-    await expect.poll(() => mathfield.locator('.ML__mathit').evaluate(element => getComputedStyle(element).fontFamily)).not.toBe('')
-    const letterFont = await mathfield.locator('.ML__mathit').evaluate(element => getComputedStyle(element).fontFamily)
+    const letterFont = 'KaTeX_Math'
+    await expect.poll(() => mathfield.locator('.ML__mathit').evaluate(element => getComputedStyle(element).fontFamily)).toBe(letterFont)
     await mathfield.press('ControlOrMeta+a')
     await mathfield.locator('[part="menu-toggle"]').click()
     await formulaMenu.getByRole('menuitem', { name: '字体样式', exact: true }).hover()
@@ -1131,7 +1132,7 @@ describe('web e2e: durable teacher workbench', () => {
     expect(edited.value.equations).toHaveLength(2)
     expect(edited.value.equations[0]!.latex.replaceAll(' ', '')).toContain(String.raw`\frac{4}{3}`)
     expect(edited.value.equations[0]!.latex).toContain('\\textcolor{#0000ff}')
-    expect(edited.value.equations[1]!.latex.replaceAll(' ', '')).toBe(String.raw`\text{ii}+\sqrt{x}+\frac{\alpha}{\theta}+\overset{\rightarrow}{AB}+AB\textrm{}⫽\textrm{}CD+\begin{cases}x+y=3\\x-y=1\end{cases}`)
+    expect(edited.value.equations[1]!.latex.replaceAll(' ', '')).toBe(String.raw`\text{ii}+\sqrt{x}+\frac{\alpha}{\theta}+\overrightarrow{AB}+AB\text{⫽}CD+\begin{cases}x+y=3\\x-y=1\end{cases}`)
     expect(edited.value.equations[1]!.mathml).toContain('<mtable')
     expect(edited.value.paragraphs.at(-1)?.content.at(-1)).toMatchObject({ kind: 'equation', bold: true })
     expect(await insertedEquation.locator('math').evaluate(element => getComputedStyle(element).fontWeight)).toBe('700')
@@ -1248,7 +1249,7 @@ describe('web e2e: durable teacher workbench', () => {
     await mathfield.pressSequentially('+1')
     await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
     expect(await formulaEditor.count()).toBe(0)
-    expect(await editor.locator('[data-equation] math').last().textContent()).toContain('⫽')
+    expect(await editor.locator('[data-equation] math').last().textContent().then(text => text?.replaceAll(/\s/gu, ''))).toContain('⫽')
     await page.keyboard.press('Escape')
     await page.getByRole('button', { name: '放弃', exact: true }).click()
     await explanation.screenshot({ path: join(screenshotRoot, 'formula-card-layout.png'), animations: 'disabled' })
@@ -1335,8 +1336,8 @@ describe('web e2e: durable teacher workbench', () => {
     const paletteLatex = await enteredLatex()
     await formulaEditor.getByRole('button', { name: '应用公式', exact: true }).click()
     await expect.poll(() => formulaEditor.count(), { message: paletteLatex }).toBe(0)
-    const symbolText = '∁UA;A⫋B;A⫌B;A⊆B;A⊇B;a⩽b;a⩾b;∀x;∃x;∄x;AB∦CD;⊙O;▱ABCD;f′′(x)'
-    const previewSymbolText = () => editor.locator('[data-equation] math').last().textContent()
+    const symbolText = '∁UA;A⫋B;A⫌B;A⊆B;A⊇B;a⩽b;a⩾b;∀x;∃x;∄x;AB⫽⃥CD;⊙O;▱ABCD;f′′(x)'
+    const previewSymbolText = () => editor.locator('[data-equation] math').last().textContent().then(text => text?.replaceAll(/\s/gu, ''))
     expect(await previewSymbolText()).toBe(symbolText)
     await expandedExplanation.getByRole('button', { name: '保存', exact: true }).click()
     await expandedExplanation.getByText('已保存', { exact: true }).waitFor()
@@ -1377,7 +1378,7 @@ describe('web e2e: durable teacher workbench', () => {
       await mathfield.pressSequentially(';')
       await formulaEditor.getByRole('button', { name: button, exact: true }).click()
       await mathfield.press('Home')
-      if (glyph === '⫽') await mathfield.press('ArrowRight')
+      if (glyph === '⫽' || glyph === '⫋') await mathfield.press('ArrowRight')
       await mathfield.press('Shift+ArrowRight')
       for (const enabled of [true, false, true]) {
         await mathfield.locator('[part="menu-toggle"]').click()
@@ -1433,9 +1434,11 @@ describe('web e2e: durable teacher workbench', () => {
       fileURLToPath(new URL('./expected/teacher-workbench/example-bold-symbols.expected.md', import.meta.url)),
       `${await captureStableAria(page, 'dialog[aria-label="解析 Word 预览大窗口"]', scaffold.workspaceCwd)}\n\n${JSON.stringify(symbolWeights, null, 2)}`, MODE,
     )
+    const completePalette = await auditExampleFormulaPalette(page, scaffold, { id, document: 'explanation' }, screenshotRoot)
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/teacher-workbench/example-complete-palette.expected.json', import.meta.url)), JSON.stringify(completePalette, null, 2), MODE)
     await expandedExplanation.getByRole('button', { name: '关闭预览', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
-  }, 90_000)
+  }, 900_000)
 
   it('returns to the conversation when the current Session is reselected', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-teacher-workbench-conversation-return'))
@@ -2092,6 +2095,7 @@ describe('web e2e: durable teacher workbench', () => {
       '甲同学/月考/第一周/订正/第3题.png',
       '甲同学/周练/其他目录.png',
       '乙同学/月考/其他学生.png',
+      ...Array.from({ length: 120 }, (_, index) => `甲同学/周练/加练/第${String(index + 4)}题.png`),
     ]) {
       const segments = path.split('/')
       await mkdir(join(classDirectory, ...segments.slice(0, -1)), { recursive: true })
@@ -2127,47 +2131,19 @@ describe('web e2e: durable teacher workbench', () => {
     await classDrawer.getByRole('button', { name: '月考', exact: true }).click()
     await studentImages.getByText('该学生已暂存 3 张', { exact: true }).waitFor()
 
-    const picker = await page.evaluateHandle(() => {
-      const files: Record<string, string> = {}
-      const directory = {
-        queryPermission: async () => 'granted',
-        getFileHandle: async (name: string, options?: { create?: boolean }) => {
-          if (options?.create !== true && files[name] === undefined) throw new DOMException('missing', 'NotFoundError')
-          return {
-            createWritable: async () => ({
-              write: async (blob: Blob) => {
-                const bytes = new Uint8Array(await blob.arrayBuffer())
-                files[name] = btoa(Array.from(bytes, byte => String.fromCharCode(byte)).join(''))
-              },
-              close: async () => {},
-            }),
-          }
-        },
-      }
-      let active = false
-      let calls = 0
-      let finish: (cancel: boolean) => void = () => { throw new Error('no picker is open') }
-      Object.defineProperty(window, 'showDirectoryPicker', {
-        configurable: true,
-        value: () => {
-          calls += 1
-          if (active) return Promise.reject(new DOMException('File picker already active', 'InvalidStateError'))
-          active = true
-          return new Promise<typeof directory>((resolve, reject) => {
-            finish = (cancel) => {
-              if (cancel) reject(new DOMException('cancelled', 'AbortError'))
-              else resolve(directory)
-            }
-          }).finally(() => { active = false })
-        },
-      })
-      return { finish: (cancel: boolean) => { finish(cancel) }, calls: () => calls, files }
-    })
-    onTestFinished(async () => {
-      await picker.dispose()
-      await page.reload({ waitUntil: 'load' })
-    })
+    const destination = join(scaffold.harnessHome, ' 保存目录 含空格\u00a0')
+    await mkdir(destination)
+    const chooseDestination = async (): Promise<Locator> => {
+      const picker = page.getByRole('dialog', { name: '选择保存目录（运行 DSH 的电脑）', exact: true })
+      await picker.getByRole('button', { name: '编辑路径' }).click()
+      const pathInput = picker.getByRole('textbox', { name: '编辑路径' })
+      await pathInput.fill(destination)
+      await pathInput.press('Enter')
+      return picker
+    }
     const saveDialogAria: string[] = []
+    let cancelledSaveAria = ''
+    let failedWriteAria = ''
     let accumulatedAria = ''
     for (const kind of ['word', 'ppt'] as const) {
       if (kind === 'ppt') {
@@ -2178,36 +2154,53 @@ describe('web e2e: durable teacher workbench', () => {
       await studentImages.getByRole('button', { name: '临时保存', exact: true }).click()
       await studentImages.getByText('该学生已暂存 3 张', { exact: true }).waitFor()
       await classDrawer.getByRole('button', { name: '周练', exact: true }).click()
-      await expect.poll(() => studentImages.getByRole('checkbox', { name: '选择' }).count()).toBe(1)
-      await studentImages.getByRole('checkbox', { name: '选择' }).check()
+      await expect.poll(() => studentImages.getByRole('checkbox', { name: '选择' }).count()).toBe(121)
+      await studentImages.getByRole('button', { name: '全选', exact: true }).click()
       await studentImages.getByRole('button', { name: '临时保存', exact: true }).click()
-      await studentImages.getByText('该学生已暂存 4 张', { exact: true }).waitFor()
-      if (kind === 'word') accumulatedAria = await captureStableAria(page, 'aside[aria-label="学生图片"]', scaffold.workspaceCwd)
+      await studentImages.getByText('该学生已暂存 124 张', { exact: true }).waitFor()
+      if (kind === 'word') accumulatedAria = await captureStableAria(
+        page, 'aside[aria-label="学生图片"] [class*="legacyTemporarySelection"]', scaffold.workspaceCwd,
+      )
       await classDrawer.getByRole('button', { name: kind === 'word' ? 'Word' : 'PPT', exact: true }).click()
       if (kind === 'word') await page.getByRole('button', { name: '确认生成', exact: true }).click()
       const dialog = page.getByRole('dialog', { name: '批量生成成功' })
       await dialog.waitFor({ timeout: 20_000 })
       const save = dialog.getByRole('button', { name: '保存', exact: true })
-      const before = await picker.evaluate(value => value.calls())
-      await save.evaluate((button: HTMLButtonElement) => { button.click(); button.click() })
-      expect(await picker.evaluate(value => value.calls())).toBe(before + 1)
+      await save.click()
+      const picker = page.getByRole('dialog', { name: '选择保存目录（运行 DSH 的电脑）', exact: true })
+      await picker.waitFor()
       expect(await save.isDisabled()).toBe(true)
       expect(await dialog.getByRole('button', { name: '关闭', exact: true }).isDisabled()).toBe(true)
+      expect(await dialog.getByRole('button', { name: '直接下载', exact: true }).count()).toBe(0)
       saveDialogAria.push(await captureStableAria(page, '[role="dialog"][aria-label="批量生成成功"]', scaffold.workspaceCwd))
-      await picker.evaluate((value) => { value.finish(true) })
+      await picker.getByRole('button', { name: '取消', exact: true }).click()
       await expect.poll(() => save.isDisabled()).toBe(false)
+      await dialog.getByText('已取消选择保存目录。文件仍可重新保存。', { exact: true }).waitFor()
+      if (kind === 'word') cancelledSaveAria = await captureStableAria(page, '[role="dialog"][aria-label="批量生成成功"]', scaffold.workspaceCwd)
       await save.click()
-      await picker.evaluate((value) => { value.finish(false) })
+      await chooseDestination()
+      if (kind === 'word') await rm(destination, { recursive: true })
+      await picker.getByRole('button', { name: '保存到此文件夹', exact: true }).click()
+      if (kind === 'word') {
+        await dialog.getByText(/保存目录不存在，请重新选择/u).waitFor()
+        expect(await save.isDisabled()).toBe(false)
+        failedWriteAria = await captureStableAria(page, '[role="dialog"][aria-label="批量生成成功"]', scaffold.workspaceCwd)
+        await mkdir(destination)
+        await writeFile(join(destination, '甲同学.docx'), 'existing document')
+        await save.click()
+        await chooseDestination()
+        await picker.getByRole('button', { name: '保存到此文件夹', exact: true }).click()
+      }
       await dialog.waitFor({ state: 'hidden', timeout: 10_000 })
-      expect(await picker.evaluate(value => value.calls())).toBe(before + 2)
+      await page.getByText(`已保存 1 个文件到：${destination}`, { exact: true }).waitFor()
     }
-    const files = await picker.evaluate(value => value.files)
-    expect(Object.keys(files).sort()).toEqual(['甲同学.docx', '甲同学.pptx'])
-    const word = unzipSync(Buffer.from(files['甲同学.docx']!, 'base64'))
-    expect(strFromU8(word['word/document.xml']!).match(/r:embed=/gu)).toHaveLength(4)
-    const ppt = unzipSync(Buffer.from(files['甲同学.pptx']!, 'base64'))
-    expect(Object.keys(ppt).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(4)
-    await studentImages.getByRole('checkbox', { name: '选择' }).check()
+    expect((await readdir(destination)).sort()).toEqual(['甲同学.docx', '甲同学.pptx', '甲同学_1.docx'])
+    expect(await readFile(join(destination, '甲同学.docx'), 'utf8')).toBe('existing document')
+    const word = unzipSync(await readFile(join(destination, '甲同学_1.docx')))
+    expect(strFromU8(word['word/document.xml']!).match(/r:embed=/gu)).toHaveLength(124)
+    const ppt = unzipSync(await readFile(join(destination, '甲同学.pptx')))
+    expect(Object.keys(ppt).filter(name => /^ppt\/slides\/slide\d+\.xml$/u.test(name))).toHaveLength(124)
+    await studentImages.getByRole('checkbox', { name: '选择' }).first().check()
     await studentImages.getByRole('button', { name: '临时保存', exact: true }).click()
     await studentImages.getByText('该学生已暂存 1 张', { exact: true }).waitFor()
     await studentImages.getByRole('button', { name: '清空暂存', exact: true }).click()
@@ -2219,9 +2212,13 @@ describe('web e2e: durable teacher workbench', () => {
       '# Student folder subtree', subtreeAria,
       '# Accumulated across sibling folders', accumulatedAria,
       '# Word save in progress', saveDialogAria[0],
+      '# Directory selection not completed', cancelledSaveAria,
+      '# Failed write retained for retry', failedWriteAria,
       '# PowerPoint save in progress', saveDialogAria[1],
-      '# Saved files', '甲同学.docx: 4 images', '甲同学.pptx: 4 slides',
-      '# Cleared selection', await captureStableAria(page, 'aside[aria-label="学生图片"]', scaffold.workspaceCwd),
+      '# Saved files', '甲同学.docx: existing document preserved', '甲同学_1.docx: 124 images', '甲同学.pptx: 124 slides',
+      '# Cleared selection', await captureStableAria(
+        page, 'aside[aria-label="学生图片"] [class*="legacyTemporarySelection"]', scaffold.workspaceCwd,
+      ),
     ].join('\n\n'), MODE)
     expect(tripwire.pageErrors).toEqual([])
   })

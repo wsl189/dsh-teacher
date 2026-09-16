@@ -335,6 +335,8 @@ export const LINK_MAP: Readonly<Record<string, string>> = {
   TeacherQuestionCropReviewResult: 'teacher-workbench.md',
   TeacherQuestionDocumentRequest: 'teacher-workbench.md',
   TeacherQuestionDocumentResult: 'teacher-workbench.md',
+  TeacherQuestionDocumentSaveRequest: 'teacher-workbench.md',
+  TeacherQuestionDocumentSaveResult: 'teacher-workbench.md',
   TeacherQuestionImageDeleteRequest: 'teacher-workbench.md',
   TeacherQuestionImageReadRequest: 'teacher-workbench.md',
   TeacherQuestionImageReadResult: 'teacher-workbench.md',

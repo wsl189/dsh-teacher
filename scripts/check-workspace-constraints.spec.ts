@@ -80,13 +80,16 @@ describe('experimental workspace constraints', () => {
 })
 
 describe('package payload constraints', () => {
-  it('requires the teacher workbench converter packet and rejects a broader third-party payload', () => {
-    const manifest = JSON.parse(readFileSync(new URL('../packages/host/teacher-workbench/package.json', import.meta.url), 'utf8')) as PackageManifest
-    const workspace = { dir: 'packages/host/teacher-workbench', manifest }
+  it.each([
+    ['packages/host/teacher-workbench', 'third-party/mathml2omml/**'],
+    ['packages/client/ui-teacher-workbench', 'third-party/stix'],
+  ])('requires the licensed packet in %s and rejects a broader third-party payload', (dir, packet) => {
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as PackageManifest
+    const workspace = { dir, manifest }
     expect(checkWorkspaceManifest(workspace)).toEqual([])
     for (const files of [
-      manifest.files!.filter(file => file !== 'third-party/mathml2omml/**'),
-      manifest.files!.map(file => file === 'third-party/mathml2omml/**' ? 'third-party/**' : file),
+      manifest.files!.filter(file => file !== packet),
+      manifest.files!.map(file => file === packet ? 'third-party/**' : file),
     ]) {
       expect(checkWorkspaceManifest({ ...workspace, manifest: { ...manifest, files } })).toEqual([
         expect.stringContaining('package.json files must be'),

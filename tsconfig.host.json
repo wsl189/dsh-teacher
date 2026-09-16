@@ -37,6 +37,7 @@
     "apps/web/tests/timetable-dense-import.e2e.ts",
     "apps/web/tests/timetable-agent-fixture.ts",
     "apps/web/tests/example-correction-fixture.ts",
+    "apps/web/tests/example-formula-palette-fixture.ts",
     "apps/web/tests/better-sidebar.e2e.ts",
     "apps/web/tests/question-segmentation.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",

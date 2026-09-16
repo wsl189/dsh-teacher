@@ -1,8 +1,42 @@
 diff --git a/dist/index.cjs.js b/dist/index.cjs.js
-index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d3102edb6 100644
+index 433f45e1dc2643852f889d42a17fbbd4ae90d175..878f36578d1bf10a0e7d47c06f5735c5664d37b1 100644
 --- a/dist/index.cjs.js
 +++ b/dist/index.cjs.js
-@@ -1656,12 +1656,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+@@ -774,6 +774,8 @@ function getNary(node) {
+ }
+ 
+ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false) {
++  const base = element.children[0]
++  const bold = /bold/.test(base.attribs?.mathvariant || '') || base.attribs?.fontweight === 'bold'
+   const stretchy = element.attribs?.stretchy
+   const grow =
+     stretchy === 'true' ? '1' : stretchy === 'false' ? '0' : GROW_REGEXP.test(naryChar) ? '1' : '0'
+@@ -801,7 +803,12 @@ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false
+             name: 'm:supHide',
+             attribs: { 'm:val': supHide ? 'on' : 'off' },
+             children: []
+-          }
++          },
++          ...(bold ? [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [
++            { type: 'tag', name: 'w:rPr', attribs: {}, children: [
++              { type: 'tag', name: 'w:b', attribs: {}, children: [] }
++            ] }
++          ] }] : [])
+         ]
+       }
+     ]
+@@ -1148,10 +1155,6 @@ function mmultiscripts(element, targetParent, previousSibling, nextSibling, ance
+ }
+ 
+ function mrow(element, targetParent, previousSibling, nextSibling, ancestors) {
+-  if (previousSibling.isNary) {
+-    const targetSibling = targetParent.children[targetParent.children.length - 1]
+-    return targetSibling.children[targetSibling.children.length - 1]
+-  }
+   // Ignore as default behavior
+   return targetParent
+ }
+@@ -1656,12 +1659,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
  
  function getStyle(element, ancestors, previousStyle = {}) {
    const elAttributes = element.attribs || {}
@@ -17,7 +51,7 @@ index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d
    // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
    // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
    const size =
-@@ -1679,7 +1675,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1679,7 +1678,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
    const background =
      elAttributes.mathbackground ||
      ancestors.find(
@@ -26,7 +60,16 @@ index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d
      )?.attribs.mathbackground ||
      ''
    let variant =
-@@ -1751,7 +1747,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1697,7 +1696,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+       (element) => element.name === 'mstyle' && element.attribs && element.attribs.fontweight
+     )?.attribs.fontweight ||
+     ''
+-  if (fontweight === 'bold' && !['bold', 'bold-italic'].includes(variant)) {
++  if (fontweight === 'bold' && ['', 'normal', 'italic'].includes(variant)) {
+     if (variant.includes('italic')) {
+       variant = 'bold-italic'
+     } else {
+@@ -1751,29 +1750,32 @@ function getStyle(element, ancestors, previousStyle = {}) {
    }
  
    return {
@@ -35,7 +78,140 @@ index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d
      variant,
      size,
      scriptlevel,
-@@ -2272,6 +2268,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
+     background,
+-    fontstyle
++    fontstyle,
++    fontweight
+   }
+ }
+ 
+ const STYLES = {
+-  bold: 'b',
+-  italic: 'i',
+-  'bold-italic': 'bi'
++  normal: 'p', bold: 'b', italic: 'i', 'bold-italic': 'bi',
++  script: 'p', 'bold-script': 'b', fraktur: 'p', 'bold-fraktur': 'b',
++  'double-struck': 'p', 'sans-serif': 'p', 'bold-sans-serif': 'b',
++  'sans-serif-italic': 'i', 'sans-serif-bold-italic': 'bi', monospace: 'p'
++}
++const SCRIPTS = {
++  script: 'script', 'bold-script': 'script', fraktur: 'fraktur', 'bold-fraktur': 'fraktur',
++  'double-struck': 'double-struck', 'sans-serif': 'sans-serif', 'bold-sans-serif': 'sans-serif',
++  'sans-serif-italic': 'sans-serif', 'sans-serif-bold-italic': 'sans-serif', monospace: 'monospace'
+ }
+ 
+ function textContainer(element, targetParent, previousSibling, nextSibling, ancestors, textType) {
+-  if (previousSibling.isNary) {
+-    const previousSiblingTarget = targetParent.children[targetParent.children.length - 1]
+-    targetParent = previousSiblingTarget.children[previousSiblingTarget.children.length - 1]
+-  }
+-
+   const hasMglyphChild = element.children?.find((element) => element.name === 'mglyph')
+   const style = getStyle(element, ancestors, previousSibling?.style)
++  if (textType === 'mi' && !style.variant && getTextContent(element).length > 1) style.variant = 'normal'
+   element.style = style // Add it to element to make it comparable
+   element.hasMglyphChild = hasMglyphChild
+   const styleSame =
+@@ -1785,9 +1787,9 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+     textType === previousSibling?.name ||
+     (['mi', 'mn', 'mo'].includes(textType) && ['mi', 'mn', 'mo'].includes(previousSibling?.name))
+   let targetElement
+-  if (sameGroup && styleSame && !hasMglyphChild) {
+-    const rElement = targetParent.children[targetParent.children.length - 1]
+-    targetElement = rElement.children[rElement.children.length - 1]
++  const previousRun = targetParent.children[targetParent.children.length - 1]
++  if (sameGroup && styleSame && !hasMglyphChild && previousRun?.name === 'm:r') {
++    targetElement = previousRun.children[previousRun.children.length - 1]
+   } else {
+     const rElement = {
+       name: 'm:r',
+@@ -1803,37 +1805,30 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+         attribs: {},
+         children: []
+       }
+-      if (style.variant.includes('bold')) {
++      if (style.variant.includes('bold') || style.fontweight === 'bold') {
+         wrPr.children.push({ name: 'w:b', type: 'tag', attribs: {}, children: [] })
+       }
+       if (style.variant.includes('italic')) {
+         wrPr.children.push({ name: 'w:i', type: 'tag', attribs: {}, children: [] })
+       }
+       rElement.children.push(wrPr)
+-      const mrPr = {
+-        name: 'm:rPr',
+-        type: 'tag',
+-        attribs: {},
+-        children: [
+-          {
+-            name: 'm:nor',
+-            type: 'tag',
+-            attribs: {},
+-            children: []
+-          }
+-        ]
++      const mrPr = { name: 'm:rPr', type: 'tag', attribs: {}, children: [] }
++      if (textType === 'mtext') {
++        mrPr.children.push({ name: 'm:nor', type: 'tag', attribs: {}, children: [] })
++      } else if (SCRIPTS[style.variant]) {
++        mrPr.children.push({ name: 'm:scr', type: 'tag', attribs: { 'm:val': SCRIPTS[style.variant] }, children: [] })
+       }
+-      if (style.variant !== 'italic') {
++      if (STYLES[style.variant]) {
+         mrPr.children.push({
+           name: 'm:sty',
+           type: 'tag',
+           attribs: {
+-            'm:val': STYLES[style.variant]
++            'm:val': style.fontweight === 'bold' ? (STYLES[style.variant].includes('i') ? 'bi' : 'b') : STYLES[style.variant]
+           },
+           children: []
+         })
+       }
+-      rElement.children.push(mrPr)
++      rElement.children.unshift(mrPr)
+     } else if (hasMglyphChild || textType === 'mtext') {
+       rElement.children.push({
+         name: 'm:rPr',
+@@ -2005,7 +2000,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+   // 2. The type of the script element is mo.
+   if (
+     (direction === 'under' && script.name === 'mo' && ['\u0332', '\u005F'].includes(scriptText)) ||
+-    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF'].includes(scriptText))
++    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF', '\u02C9', '\u203E'].includes(scriptText))
+   ) {
+     // m:bar
+     targetParent.children.push({
+@@ -2028,28 +2023,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+             }
+           ]
+         },
+-        {
+-          type: 'tag',
+-          name: 'm:e',
+-          attribs: {},
+-          children: [
+-            {
+-              type: 'tag',
+-              name: direction === 'under' ? 'm:sSub' : 'm:sSup',
+-              attribs: {},
+-              children: [
+-                {
+-                  type: 'tag',
+-                  name: direction === 'under' ? 'm:sSubPr' : 'm:sSupPr',
+-                  attribs: {},
+-                  children: [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [] }]
+-                },
+-                baseTarget,
+-                { type: 'tag', name: 'm:sub', attribs: {}, children: [] }
+-              ]
+-            }
+-          ]
+-        }
++        baseTarget
+       ]
+     })
+     return
+@@ -2272,6 +2246,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
    text: text
  })
  
@@ -64,7 +240,18 @@ index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d
  function walker(
    element,
    targetParent,
-@@ -2294,6 +2312,7 @@ function walker(
+@@ -2279,6 +2275,10 @@ function walker(
+   nextSibling = false,
+   ancestors = []
+ ) {
++  if (previousSibling.isNary) {
++    targetParent = previousSibling.naryArgument
++    previousSibling = false
++  }
+   if (
+     !previousSibling &&
+     ['m:deg', 'm:den', 'm:e', 'm:fName', 'm:lim', 'm:num', 'm:sub', 'm:sup'].includes(
+@@ -2294,6 +2294,7 @@ function walker(
      // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
      addScriptlevel(targetParent, ancestors)
    }
@@ -72,26 +259,64 @@ index 433f45e1dc2643852f889d42a17fbbd4ae90d175..39d9a195497294231285eb37e49d3c3d
    let targetElement
    const nameOrType = element.name || element.type
    if (mathmlHandlers[nameOrType]) {
-@@ -2312,6 +2331,9 @@ function walker(
+@@ -2312,6 +2313,13 @@ function walker(
      targetElement = targetParent
    }
  
++  if (element.isNary) {
++    const nary = targetParent.children[targetParent.children.length - 1]
++    element.naryArgument = nary.children[nary.children.length - 1]
++  }
 +  const colorStyle = getStyle(element, ancestors)
 +  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
 +
    if (!targetElement) {
      // Target element hasn't been assigned, so don't handle children.
      return
-@@ -2358,4 +2380,3 @@ const mml2omml = (mmlString, options) => {
+@@ -2358,4 +2366,3 @@ const mml2omml = (mmlString, options) => {
  }
  
  exports.mml2omml = mml2omml
 -//# sourceMappingURL=index.cjs.js.map
 diff --git a/dist/index.esm.js b/dist/index.esm.js
-index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc8385554252d68ba2 100644
+index ade1aa012da79be3f72d63bab6c1016ca68597a8..d1d2c4373039b9262a66d00fb6d4db4e0a50e2d9 100644
 --- a/dist/index.esm.js
 +++ b/dist/index.esm.js
-@@ -1656,12 +1656,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+@@ -774,6 +774,8 @@ function getNary(node) {
+ }
+ 
+ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false) {
++  const base = element.children[0]
++  const bold = /bold/.test(base.attribs?.mathvariant || '') || base.attribs?.fontweight === 'bold'
+   const stretchy = element.attribs?.stretchy
+   const grow =
+     stretchy === 'true' ? '1' : stretchy === 'false' ? '0' : GROW_REGEXP.test(naryChar) ? '1' : '0'
+@@ -801,7 +803,12 @@ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false
+             name: 'm:supHide',
+             attribs: { 'm:val': supHide ? 'on' : 'off' },
+             children: []
+-          }
++          },
++          ...(bold ? [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [
++            { type: 'tag', name: 'w:rPr', attribs: {}, children: [
++              { type: 'tag', name: 'w:b', attribs: {}, children: [] }
++            ] }
++          ] }] : [])
+         ]
+       }
+     ]
+@@ -1148,10 +1155,6 @@ function mmultiscripts(element, targetParent, previousSibling, nextSibling, ance
+ }
+ 
+ function mrow(element, targetParent, previousSibling, nextSibling, ancestors) {
+-  if (previousSibling.isNary) {
+-    const targetSibling = targetParent.children[targetParent.children.length - 1]
+-    return targetSibling.children[targetSibling.children.length - 1]
+-  }
+   // Ignore as default behavior
+   return targetParent
+ }
+@@ -1656,12 +1659,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
  
  function getStyle(element, ancestors, previousStyle = {}) {
    const elAttributes = element.attribs || {}
@@ -106,7 +331,7 @@ index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc83855542
    // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
    // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
    const size =
-@@ -1679,7 +1675,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1679,7 +1678,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
    const background =
      elAttributes.mathbackground ||
      ancestors.find(
@@ -115,7 +340,16 @@ index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc83855542
      )?.attribs.mathbackground ||
      ''
    let variant =
-@@ -1751,7 +1747,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1697,7 +1696,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+       (element) => element.name === 'mstyle' && element.attribs && element.attribs.fontweight
+     )?.attribs.fontweight ||
+     ''
+-  if (fontweight === 'bold' && !['bold', 'bold-italic'].includes(variant)) {
++  if (fontweight === 'bold' && ['', 'normal', 'italic'].includes(variant)) {
+     if (variant.includes('italic')) {
+       variant = 'bold-italic'
+     } else {
+@@ -1751,29 +1750,32 @@ function getStyle(element, ancestors, previousStyle = {}) {
    }
  
    return {
@@ -124,7 +358,140 @@ index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc83855542
      variant,
      size,
      scriptlevel,
-@@ -2272,6 +2268,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
+     background,
+-    fontstyle
++    fontstyle,
++    fontweight
+   }
+ }
+ 
+ const STYLES = {
+-  bold: 'b',
+-  italic: 'i',
+-  'bold-italic': 'bi'
++  normal: 'p', bold: 'b', italic: 'i', 'bold-italic': 'bi',
++  script: 'p', 'bold-script': 'b', fraktur: 'p', 'bold-fraktur': 'b',
++  'double-struck': 'p', 'sans-serif': 'p', 'bold-sans-serif': 'b',
++  'sans-serif-italic': 'i', 'sans-serif-bold-italic': 'bi', monospace: 'p'
++}
++const SCRIPTS = {
++  script: 'script', 'bold-script': 'script', fraktur: 'fraktur', 'bold-fraktur': 'fraktur',
++  'double-struck': 'double-struck', 'sans-serif': 'sans-serif', 'bold-sans-serif': 'sans-serif',
++  'sans-serif-italic': 'sans-serif', 'sans-serif-bold-italic': 'sans-serif', monospace: 'monospace'
+ }
+ 
+ function textContainer(element, targetParent, previousSibling, nextSibling, ancestors, textType) {
+-  if (previousSibling.isNary) {
+-    const previousSiblingTarget = targetParent.children[targetParent.children.length - 1]
+-    targetParent = previousSiblingTarget.children[previousSiblingTarget.children.length - 1]
+-  }
+-
+   const hasMglyphChild = element.children?.find((element) => element.name === 'mglyph')
+   const style = getStyle(element, ancestors, previousSibling?.style)
++  if (textType === 'mi' && !style.variant && getTextContent(element).length > 1) style.variant = 'normal'
+   element.style = style // Add it to element to make it comparable
+   element.hasMglyphChild = hasMglyphChild
+   const styleSame =
+@@ -1785,9 +1787,9 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+     textType === previousSibling?.name ||
+     (['mi', 'mn', 'mo'].includes(textType) && ['mi', 'mn', 'mo'].includes(previousSibling?.name))
+   let targetElement
+-  if (sameGroup && styleSame && !hasMglyphChild) {
+-    const rElement = targetParent.children[targetParent.children.length - 1]
+-    targetElement = rElement.children[rElement.children.length - 1]
++  const previousRun = targetParent.children[targetParent.children.length - 1]
++  if (sameGroup && styleSame && !hasMglyphChild && previousRun?.name === 'm:r') {
++    targetElement = previousRun.children[previousRun.children.length - 1]
+   } else {
+     const rElement = {
+       name: 'm:r',
+@@ -1803,37 +1805,30 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+         attribs: {},
+         children: []
+       }
+-      if (style.variant.includes('bold')) {
++      if (style.variant.includes('bold') || style.fontweight === 'bold') {
+         wrPr.children.push({ name: 'w:b', type: 'tag', attribs: {}, children: [] })
+       }
+       if (style.variant.includes('italic')) {
+         wrPr.children.push({ name: 'w:i', type: 'tag', attribs: {}, children: [] })
+       }
+       rElement.children.push(wrPr)
+-      const mrPr = {
+-        name: 'm:rPr',
+-        type: 'tag',
+-        attribs: {},
+-        children: [
+-          {
+-            name: 'm:nor',
+-            type: 'tag',
+-            attribs: {},
+-            children: []
+-          }
+-        ]
++      const mrPr = { name: 'm:rPr', type: 'tag', attribs: {}, children: [] }
++      if (textType === 'mtext') {
++        mrPr.children.push({ name: 'm:nor', type: 'tag', attribs: {}, children: [] })
++      } else if (SCRIPTS[style.variant]) {
++        mrPr.children.push({ name: 'm:scr', type: 'tag', attribs: { 'm:val': SCRIPTS[style.variant] }, children: [] })
+       }
+-      if (style.variant !== 'italic') {
++      if (STYLES[style.variant]) {
+         mrPr.children.push({
+           name: 'm:sty',
+           type: 'tag',
+           attribs: {
+-            'm:val': STYLES[style.variant]
++            'm:val': style.fontweight === 'bold' ? (STYLES[style.variant].includes('i') ? 'bi' : 'b') : STYLES[style.variant]
+           },
+           children: []
+         })
+       }
+-      rElement.children.push(mrPr)
++      rElement.children.unshift(mrPr)
+     } else if (hasMglyphChild || textType === 'mtext') {
+       rElement.children.push({
+         name: 'm:rPr',
+@@ -2005,7 +2000,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+   // 2. The type of the script element is mo.
+   if (
+     (direction === 'under' && script.name === 'mo' && ['\u0332', '\u005F'].includes(scriptText)) ||
+-    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF'].includes(scriptText))
++    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF', '\u02C9', '\u203E'].includes(scriptText))
+   ) {
+     // m:bar
+     targetParent.children.push({
+@@ -2028,28 +2023,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+             }
+           ]
+         },
+-        {
+-          type: 'tag',
+-          name: 'm:e',
+-          attribs: {},
+-          children: [
+-            {
+-              type: 'tag',
+-              name: direction === 'under' ? 'm:sSub' : 'm:sSup',
+-              attribs: {},
+-              children: [
+-                {
+-                  type: 'tag',
+-                  name: direction === 'under' ? 'm:sSubPr' : 'm:sSupPr',
+-                  attribs: {},
+-                  children: [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [] }]
+-                },
+-                baseTarget,
+-                { type: 'tag', name: 'm:sub', attribs: {}, children: [] }
+-              ]
+-            }
+-          ]
+-        }
++        baseTarget
+       ]
+     })
+     return
+@@ -2272,6 +2246,28 @@ const mathmlHandlers = /*#__PURE__*/ Object.freeze({
    text: text
  })
  
@@ -153,7 +520,18 @@ index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc83855542
  function walker(
    element,
    targetParent,
-@@ -2294,6 +2312,7 @@ function walker(
+@@ -2279,6 +2275,10 @@ function walker(
+   nextSibling = false,
+   ancestors = []
+ ) {
++  if (previousSibling.isNary) {
++    targetParent = previousSibling.naryArgument
++    previousSibling = false
++  }
+   if (
+     !previousSibling &&
+     ['m:deg', 'm:den', 'm:e', 'm:fName', 'm:lim', 'm:num', 'm:sub', 'm:sup'].includes(
+@@ -2294,6 +2294,7 @@ function walker(
      // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
      addScriptlevel(targetParent, ancestors)
    }
@@ -161,26 +539,69 @@ index ade1aa012da79be3f72d63bab6c1016ca68597a8..11308d0ba9deda3632dc45dc83855542
    let targetElement
    const nameOrType = element.name || element.type
    if (mathmlHandlers[nameOrType]) {
-@@ -2312,6 +2331,9 @@ function walker(
+@@ -2312,6 +2313,13 @@ function walker(
      targetElement = targetParent
    }
  
++  if (element.isNary) {
++    const nary = targetParent.children[targetParent.children.length - 1]
++    element.naryArgument = nary.children[nary.children.length - 1]
++  }
 +  const colorStyle = getStyle(element, ancestors)
 +  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
 +
    if (!targetElement) {
      // Target element hasn't been assigned, so don't handle children.
      return
-@@ -2358,4 +2380,3 @@ const mml2omml = (mmlString, options) => {
+@@ -2358,4 +2366,3 @@ const mml2omml = (mmlString, options) => {
  }
  
  export { mml2omml }
 -//# sourceMappingURL=index.esm.js.map
 diff --git a/dist/index.js b/dist/index.js
-index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebce63f65b5 100644
+index 0a32f222c93e5b82cb33b4b38638f235a85fba85..021ff30f9f3c300dee23dd6d72cf35fd344a81df 100644
 --- a/dist/index.js
 +++ b/dist/index.js
-@@ -1639,12 +1639,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
+@@ -1048,10 +1048,6 @@ function mmultiscripts(element, targetParent, previousSibling, nextSibling, ance
+ }
+ 
+ function mrow(element, targetParent, previousSibling, nextSibling, ancestors) {
+-  if (previousSibling.isNary) {
+-    const targetSibling = targetParent.children[targetParent.children.length - 1];
+-    return targetSibling.children[targetSibling.children.length - 1]
+-  }
+   // Ignore as default behavior
+   return targetParent
+ }
+@@ -1152,9 +1148,11 @@ function getNary(node) {
+ }
+ 
+ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false) {
+-  const stretchy = element.attribs?.stretchy;
++  const base = element.children[0]
++  const bold = /bold/.test(base.attribs?.mathvariant || '') || base.attribs?.fontweight === 'bold'
++  const stretchy = element.attribs?.stretchy
+   const grow =
+-    stretchy === 'true' ? '1' : stretchy === 'false' ? '0' : GROW_REGEXP.test(naryChar) ? '1' : '0';
++    stretchy === 'true' ? '1' : stretchy === 'false' ? '0' : GROW_REGEXP.test(naryChar) ? '1' : '0'
+   return {
+     type: 'tag',
+     name: 'm:nary',
+@@ -1179,7 +1177,12 @@ function getNaryTarget(naryChar, element, type, subHide = false, supHide = false
+             name: 'm:supHide',
+             attribs: { 'm:val': supHide ? 'on' : 'off' },
+             children: []
+-          }
++          },
++          ...(bold ? [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [
++            { type: 'tag', name: 'w:rPr', attribs: {}, children: [
++              { type: 'tag', name: 'w:b', attribs: {}, children: [] }
++            ] }
++          ] }] : [])
+         ]
+       }
+     ]
+@@ -1639,12 +1642,8 @@ function munderover(element, targetParent, previousSibling, nextSibling, ancesto
  
  function getStyle(element, ancestors, previousStyle = {}) {
    const elAttributes = element.attribs || {};
@@ -195,7 +616,7 @@ index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebc
    // const minsize = parseFloat(elAttributes.scriptminsize || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptminsize)?.attribs.scriptminsize || '8pt')
    // const sizemultiplier = parseFloat(elAttributes.scriptsizemultiplier || ancestors.find(element => element.name === 'mstyle' && element.attribs && element.attribs.scriptsizemultiplier)?.attribs.scriptsizemultiplier || '0.71')
    const size =
-@@ -1662,7 +1658,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1662,7 +1661,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
    const background =
      elAttributes.mathbackground ||
      ancestors.find(
@@ -204,7 +625,16 @@ index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebc
      )?.attribs.mathbackground ||
      '';
    let variant =
-@@ -1734,7 +1730,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+@@ -1680,7 +1679,7 @@ function getStyle(element, ancestors, previousStyle = {}) {
+       (element) => element.name === 'mstyle' && element.attribs && element.attribs.fontweight
+     )?.attribs.fontweight ||
+     '';
+-  if (fontweight === 'bold' && !['bold', 'bold-italic'].includes(variant)) {
++  if (fontweight === 'bold' && ['', 'normal', 'italic'].includes(variant)) {
+     if (variant.includes('italic')) {
+       variant = 'bold-italic';
+     } else {
+@@ -1734,50 +1733,53 @@ function getStyle(element, ancestors, previousStyle = {}) {
    }
  
    return {
@@ -213,7 +643,198 @@ index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebc
      variant,
      size,
      scriptlevel,
-@@ -2255,6 +2251,28 @@ var mathmlHandlers = /*#__PURE__*/Object.freeze({
+     background,
+-    fontstyle
++    fontstyle,
++    fontweight
+   }
+ }
+ 
+ const STYLES = {
+-  bold: 'b',
+-  italic: 'i',
+-  'bold-italic': 'bi'
++  normal: 'p', bold: 'b', italic: 'i', 'bold-italic': 'bi',
++  script: 'p', 'bold-script': 'b', fraktur: 'p', 'bold-fraktur': 'b',
++  'double-struck': 'p', 'sans-serif': 'p', 'bold-sans-serif': 'b',
++  'sans-serif-italic': 'i', 'sans-serif-bold-italic': 'bi', monospace: 'p'
++}
++const SCRIPTS = {
++  script: 'script', 'bold-script': 'script', fraktur: 'fraktur', 'bold-fraktur': 'fraktur',
++  'double-struck': 'double-struck', 'sans-serif': 'sans-serif', 'bold-sans-serif': 'sans-serif',
++  'sans-serif-italic': 'sans-serif', 'sans-serif-bold-italic': 'sans-serif', monospace: 'monospace'
+ };
+ 
+ function textContainer(element, targetParent, previousSibling, nextSibling, ancestors, textType) {
+-  if (previousSibling.isNary) {
+-    const previousSiblingTarget = targetParent.children[targetParent.children.length - 1];
+-    targetParent = previousSiblingTarget.children[previousSiblingTarget.children.length - 1];
+-  }
+-
+-  const hasMglyphChild = element.children?.find((element) => element.name === 'mglyph');
+-  const style = getStyle(element, ancestors, previousSibling?.style);
+-  element.style = style; // Add it to element to make it comparable
+-  element.hasMglyphChild = hasMglyphChild;
++  const hasMglyphChild = element.children?.find((element) => element.name === 'mglyph')
++  const style = getStyle(element, ancestors, previousSibling?.style)
++  if (textType === 'mi' && !style.variant && getTextContent(element).length > 1) style.variant = 'normal'
++  element.style = style // Add it to element to make it comparable
++  element.hasMglyphChild = hasMglyphChild
+   const styleSame =
+     Object.keys(style).every((key) => {
+-      const previousStyle = previousSibling?.style;
++      const previousStyle = previousSibling?.style
+       return previousStyle && style[key] === previousStyle[key]
+-    }) && previousSibling?.hasMglyphChild === hasMglyphChild;
++    }) && previousSibling?.hasMglyphChild === hasMglyphChild
+   const sameGroup = // Only group mtexts or mi, mn, mo with oneanother.
+     textType === previousSibling?.name ||
+-    (['mi', 'mn', 'mo'].includes(textType) && ['mi', 'mn', 'mo'].includes(previousSibling?.name));
+-  let targetElement;
+-  if (sameGroup && styleSame && !hasMglyphChild) {
+-    const rElement = targetParent.children[targetParent.children.length - 1];
+-    targetElement = rElement.children[rElement.children.length - 1];
++    (['mi', 'mn', 'mo'].includes(textType) && ['mi', 'mn', 'mo'].includes(previousSibling?.name))
++  let targetElement
++  const previousRun = targetParent.children[targetParent.children.length - 1]
++  if (sameGroup && styleSame && !hasMglyphChild && previousRun?.name === 'm:r') {
++    targetElement = previousRun.children[previousRun.children.length - 1]
+   } else {
+     const rElement = {
+       name: 'm:r',
+       type: 'tag',
+       attribs: {},
+       children: []
+-    };
++    }
+ 
+     if (style.variant) {
+       const wrPr = {
+@@ -1785,38 +1787,31 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+         type: 'tag',
+         attribs: {},
+         children: []
+-      };
+-      if (style.variant.includes('bold')) {
+-        wrPr.children.push({ name: 'w:b', type: 'tag', attribs: {}, children: [] });
++      }
++      if (style.variant.includes('bold') || style.fontweight === 'bold') {
++        wrPr.children.push({ name: 'w:b', type: 'tag', attribs: {}, children: [] })
+       }
+       if (style.variant.includes('italic')) {
+-        wrPr.children.push({ name: 'w:i', type: 'tag', attribs: {}, children: [] });
++        wrPr.children.push({ name: 'w:i', type: 'tag', attribs: {}, children: [] })
+       }
+-      rElement.children.push(wrPr);
+-      const mrPr = {
+-        name: 'm:rPr',
+-        type: 'tag',
+-        attribs: {},
+-        children: [
+-          {
+-            name: 'm:nor',
+-            type: 'tag',
+-            attribs: {},
+-            children: []
+-          }
+-        ]
+-      };
+-      if (style.variant !== 'italic') {
++      rElement.children.push(wrPr)
++      const mrPr = { name: 'm:rPr', type: 'tag', attribs: {}, children: [] }
++      if (textType === 'mtext') {
++        mrPr.children.push({ name: 'm:nor', type: 'tag', attribs: {}, children: [] })
++      } else if (SCRIPTS[style.variant]) {
++        mrPr.children.push({ name: 'm:scr', type: 'tag', attribs: { 'm:val': SCRIPTS[style.variant] }, children: [] })
++      }
++      if (STYLES[style.variant]) {
+         mrPr.children.push({
+           name: 'm:sty',
+           type: 'tag',
+           attribs: {
+-            'm:val': STYLES[style.variant]
++            'm:val': style.fontweight === 'bold' ? (STYLES[style.variant].includes('i') ? 'bi' : 'b') : STYLES[style.variant]
+           },
+           children: []
+-        });
++        })
+       }
+-      rElement.children.push(mrPr);
++      rElement.children.unshift(mrPr)
+     } else if (hasMglyphChild || textType === 'mtext') {
+       rElement.children.push({
+         name: 'm:rPr',
+@@ -1830,7 +1825,7 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+             children: []
+           }
+         ]
+-      });
++      })
+     } else if (style.fontstyle === 'normal' || (textType === 'ms' && style.fontstyle === '')) {
+       rElement.children.push({
+         name: 'm:rPr',
+@@ -1844,7 +1839,7 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+             children: []
+           }
+         ]
+-      });
++      })
+     }
+ 
+     targetElement = {
+@@ -1854,9 +1849,9 @@ function textContainer(element, targetParent, previousSibling, nextSibling, ance
+         'xml:space': 'preserve'
+       },
+       children: []
+-    };
+-    rElement.children.push(targetElement);
+-    targetParent.children.push(rElement);
++    }
++    rElement.children.push(targetElement)
++    targetParent.children.push(rElement)
+   }
+   return targetElement
+ }
+@@ -1988,7 +1983,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+   // 2. The type of the script element is mo.
+   if (
+     (direction === 'under' && script.name === 'mo' && ['\u0332', '\u005F'].includes(scriptText)) ||
+-    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF'].includes(scriptText))
++    (direction === 'over' && script.name === 'mo' && ['\u0305', '\u00AF', '\u02C9', '\u203E'].includes(scriptText))
+   ) {
+     // m:bar
+     targetParent.children.push({
+@@ -2011,28 +2006,7 @@ function underOrOver(element, targetParent, previousSibling, nextSibling, ancest
+             }
+           ]
+         },
+-        {
+-          type: 'tag',
+-          name: 'm:e',
+-          attribs: {},
+-          children: [
+-            {
+-              type: 'tag',
+-              name: direction === 'under' ? 'm:sSub' : 'm:sSup',
+-              attribs: {},
+-              children: [
+-                {
+-                  type: 'tag',
+-                  name: direction === 'under' ? 'm:sSubPr' : 'm:sSupPr',
+-                  attribs: {},
+-                  children: [{ type: 'tag', name: 'm:ctrlPr', attribs: {}, children: [] }]
+-                },
+-                baseTarget,
+-                { type: 'tag', name: 'm:sub', attribs: {}, children: [] }
+-              ]
+-            }
+-          ]
+-        }
++        baseTarget
+       ]
+     });
+     return
+@@ -2255,6 +2229,28 @@ var mathmlHandlers = /*#__PURE__*/Object.freeze({
      text: text
  });
  
@@ -242,25 +863,77 @@ index 0a32f222c93e5b82cb33b4b38638f235a85fba85..9c6e4b21c9c6f341b85274fcf4ee5ebc
  function walker(
    element,
    targetParent,
-@@ -2277,6 +2295,7 @@ function walker(
+@@ -2262,6 +2258,10 @@ function walker(
+   nextSibling = false,
+   ancestors = []
+ ) {
++  if (previousSibling.isNary) {
++    targetParent = previousSibling.naryArgument
++    previousSibling = false
++  }
+   if (
+     !previousSibling &&
+     ['m:deg', 'm:den', 'm:e', 'm:fName', 'm:lim', 'm:num', 'm:sub', 'm:sup'].includes(
+@@ -2275,10 +2275,11 @@ function walker(
+     // So we will check whether to add the m:rPr.
+     // For possible parent types, see
      // https://docs.microsoft.com/en-us/dotnet/api/documentformat.openxml.math.argumentproperties?view=openxml-2.8.1#remarks
-     addScriptlevel(targetParent, ancestors);
+-    addScriptlevel(targetParent, ancestors);
++    addScriptlevel(targetParent, ancestors)
    }
+-  let targetElement;
+-  const nameOrType = element.name || element.type;
 +  const previousTargetCount = targetParent.children?.length ?? 0
-   let targetElement;
-   const nameOrType = element.name || element.type;
++  let targetElement
++  const nameOrType = element.name || element.type
    if (mathmlHandlers[nameOrType]) {
-@@ -2295,6 +2314,9 @@ function walker(
-     targetElement = targetParent;
-   }
+     targetElement = mathmlHandlers[nameOrType](
+       element,
+@@ -2286,22 +2287,29 @@ function walker(
+       previousSibling,
+       nextSibling,
+       ancestors
+-    );
++    )
+   } else {
+     if (nameOrType && nameOrType !== 'root') {
+-      console.warn(`Type not supported: ${nameOrType}`);
++      console.warn(`Type not supported: ${nameOrType}`)
+     }
  
+-    targetElement = targetParent;
++    targetElement = targetParent
++  }
++
++  if (element.isNary) {
++    const nary = targetParent.children[targetParent.children.length - 1]
++    element.naryArgument = nary.children[nary.children.length - 1]
+   }
 +  const colorStyle = getStyle(element, ancestors)
 +  for (const target of targetParent.children?.slice(previousTargetCount) ?? []) applyMathColors(target, colorStyle)
-+
+ 
    if (!targetElement) {
      // Target element hasn't been assigned, so don't handle children.
      return
-@@ -2341,4 +2363,3 @@ const mml2omml = (mmlString, options) => {
+   }
+   if (element.children?.length) {
+-    ancestors = [...ancestors];
+-    ancestors.unshift(element);
++    ancestors = [...ancestors]
++    ancestors.unshift(element)
+     for (let i = 0; i < element.children.length; i++) {
+       walker(
+         element.children[i],
+@@ -2309,7 +2317,7 @@ function walker(
+         element.children[i - 1],
+         element.children[i + 1],
+         ancestors
+-      );
++      )
+     }
+   }
+ }
+@@ -2341,4 +2349,3 @@ const mml2omml = (mmlString, options) => {
  };
  
  export { mml2omml };

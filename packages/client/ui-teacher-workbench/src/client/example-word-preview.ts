@@ -3,6 +3,7 @@
 import { strFromU8, unzipSync } from 'fflate/browser'
 import DOMPurify from 'dompurify'
 import katex from 'katex'
+import './fonts/symbols.css'
 import { MathMLToLaTeX } from 'mathml-to-latex'
 import 'katex/dist/katex.min.css'
 import css from './example-word-equation.module.css'
@@ -39,6 +40,7 @@ export function renderExampleMathml(
   }
   const fragment = DOMPurify.sanitize(new XMLSerializer().serializeToString(normalized), {
     USE_PROFILES: { mathMl: true }, RETURN_DOM_FRAGMENT: true, FORBID_TAGS: ['annotation'], ADD_FORBID_CONTENTS: ['annotation'],
+    ADD_ATTR: ['fontweight'],
   })
   for (const [index, math] of fragment.querySelectorAll('math').entries()) {
     const latex = formatting?.latex ?? MathMLToLaTeX.convert(new XMLSerializer().serializeToString(math))

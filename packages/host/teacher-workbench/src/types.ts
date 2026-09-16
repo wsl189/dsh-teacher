@@ -1337,6 +1337,17 @@ export interface TeacherQuestionDocumentPayload {
   readonly contentBase64: string
 }
 
+/** Save an Office artifact in an operator-selected existing Host directory. */
+export interface TeacherQuestionDocumentSaveRequest {
+  /** Absolute Host directory, preserved without trimming or rewriting whitespace. */
+  readonly directory: string
+  /** Generated Word or PowerPoint bytes and their suggested file name. */
+  readonly artifact: TeacherQuestionDocumentPayload
+}
+
+/** Saved file path, or a retryable failure that leaves the browser artifact available. */
+export type TeacherQuestionDocumentSaveResult = { readonly ok: true; readonly value: { readonly path: string } } | TeacherQuestionRejected
+
 /** Successful document generation. */
 export interface TeacherQuestionDocumentSuccess {
   /** Success discriminant. */

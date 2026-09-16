@@ -71,6 +71,7 @@ function commands(): TeacherWorkbenchCommands {
     browseQuestionMedia: vi.fn(async () => ({ ok: false, error: { code: 'storage-failure', message: 'unavailable' } } as const)),
     generateQuestionDocument: vi.fn(async () => ({ ok: false, error: { code: 'generation-failure', message: 'unavailable' } } as const)),
     generateUploadedQuestionDocument: vi.fn(async () => ({ ok: false, error: { code: 'generation-failure', message: 'unavailable' } } as const)),
+    saveQuestionDocument: vi.fn(async () => ({ ok: false, error: { code: 'storage-failure', message: 'unavailable' } } as const)),
     generateStudentDocuments: vi.fn(async () => ({ ok: false, error: { code: 'generation-failure', message: 'unavailable' } } as const)),
   }
 }

@@ -1,8 +1,22 @@
 diff --git a/dist/katex.js b/dist/katex.js
-index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec66b3e71bc 100644
+index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff132b936b3 100644
 --- a/dist/katex.js
 +++ b/dist/katex.js
-@@ -4967,6 +4967,10 @@ const makeSymbol = function (value, fontName, mode, options, classes) {
+@@ -3853,6 +3853,13 @@ function setFontMetrics(fontName, metrics) {
+  * Note: the `width` property may be undefined if fontMetricsData.js wasn't
+  * built using `Make extended_metrics`.
+  */
++const textbookSymbolMetrics = {
++  8421: [0.16, 0.678, 0, 0, 0],
++  8705: [0.016, 0.778, 0, 0, 0.474],
++  10955: [0.327, 0.734, 0, 0, 0.72],
++  10956: [0.327, 0.734, 0, 0, 0.72],
++  11005: [0.228, 0.727, 0, 0, 0.726],
++};
+ function getCharacterMetrics(character, font, mode) {
+   if (!fontMetricsData[font]) {
+     throw new Error("Font metrics not found for font: " + font + ".");
+@@ -4967,6 +4974,10 @@ const makeSymbol = function (value, fontName, mode, options, classes) {
    }
    if (options) {
      symbolNode.maxFontSize = options.sizeMultiplier;
@@ -13,7 +27,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec6
      if (options.style.isTight()) {
        symbolNode.classes.push("mtight");
      }
-@@ -4993,7 +4997,7 @@ const mathsym = function (value, mode, options, classes) {
+@@ -4993,7 +5004,7 @@ const mathsym = function (value, mode, options, classes) {
    // text ordinal and is therefore not present as a symbol in the symbols
    // table for text, as well as a special case for boldsymbol because it
    // can be used for bold + and -
@@ -22,7 +36,60 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec6
      return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
    } else if (value === "\\" || src_symbols[mode][value].font === "main") {
      return makeSymbol(value, "Main-Regular", mode, options, classes);
-@@ -11337,7 +11341,7 @@ defineFunction({
+@@ -5083,7 +5094,7 @@ const makeOrd = function (group, options, type) {
+   } else if (type === "textord") {
+     const font = src_symbols[mode][text] && src_symbols[mode][text].font;
+     if (font === "ams") {
+-      const fontName = retrieveTextFontName("amsrm", fontWeight, fontShape);
++      const fontName = "AMS-Regular";
+       return makeSymbol(text, fontName, mode, options, classes.concat("amsrm", fontWeight, fontShape));
+     } else if (font === "main" || !font) {
+       const fontName = retrieveTextFontName("textrm", fontWeight, fontShape);
+@@ -7746,16 +7757,16 @@ function mclass_mathmlBuilder(group, options) {
+   } else if (group.mclass === "mord") {
+     if (group.isCharacterBox) {
+       node = inner[0];
+-      node.type = "mi";
++      if (node.type !== "mstyle") node.type = "mi";
+     } else {
+-      node = new MathNode("mi", inner);
++      node = new MathNode("mrow", inner);
+     }
+   } else {
+     if (group.isCharacterBox) {
+       node = inner[0];
+-      node.type = "mo";
++      if (node.type !== "mstyle") node.type = "mo";
+     } else {
+-      node = new MathNode("mo", inner);
++      node = new MathNode("mrow", inner);
+     }
+ 
+     // Set spacing based on what is the most likely adjacent atom type.
+@@ -11320,13 +11331,19 @@ defineFunction({
+ 
+ const font_htmlBuilder = (group, options) => {
+   const font = group.font;
+-  const newOptions = options.withFont(font);
++  const newOptions = (font === "mathbf" || font === "boldsymbol" ? options.withTextFontWeight("textbf") : options).withFont(font);
+   return buildGroup(group.body, newOptions);
+ };
+ const font_mathmlBuilder = (group, options) => {
+   const font = group.font;
+-  const newOptions = options.withFont(font);
+-  return buildMathML_buildGroup(group.body, newOptions);
++  const newOptions = (font === "mathbf" || font === "boldsymbol" ? options.withTextFontWeight("textbf") : options).withFont(font);
++  const node = buildMathML_buildGroup(group.body, newOptions);
++  if (options.fontWeight === "textbf" && ["mathbb", "mathcal", "mathfrak", "mathscr", "mathsf", "mathtt"].includes(font)) {
++    const styled = node instanceof MathNode && node.type === "mi" ? node : new MathNode("mstyle", [node]);
++    styled.setAttribute("fontweight", "bold");
++    return styled;
++  }
++  return node;
+ };
+ const fontAliases = {
+   "\\Bbb": "\\mathbb",
+@@ -11337,7 +11354,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -31,7 +98,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec6
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -11359,7 +11363,7 @@ defineFunction({
+@@ -11359,7 +11376,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -40,7 +107,27 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec6
        body
      };
    },
-@@ -14140,12 +14144,11 @@ defineFunctionBuilders({
+@@ -12881,9 +12898,11 @@ const op_htmlBuilder = (grp, options) => {
+ };
+ const op_mathmlBuilder = (group, options) => {
+   let node;
++  const bold = ["mathbf", "boldsymbol", "mathbfit"].includes(options.font) || options.fontWeight === "textbf";
+   if (group.symbol) {
+     // This is a symbol. Just add the symbol.
+     node = new MathNode("mo", [makeText(group.name, group.mode)]);
++    if (bold) node.setAttribute("mathvariant", "bold");
+     if (noSuccessor.has(group.name)) {
+       node.setAttribute("largeop", "false");
+     }
+@@ -12894,6 +12913,7 @@ const op_mathmlBuilder = (group, options) => {
+     // This is a text operator. Add all the characters from the
+     // operator's name.
+     node = new MathNode("mi", [new TextNode(group.name.slice(1))]);
++    if (bold) node.setAttribute("mathvariant", "bold");
+     // Append an <mo>&ApplyFunction;</mo>.
+     // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
+     const operator = new MathNode("mo", [makeText("\u2061", "text")]);
+@@ -14140,12 +14160,11 @@ defineFunctionBuilders({
    },
    mathmlBuilder(group, options) {
      const node = new MathNode("mo", [makeText(group.text, group.mode)]);
@@ -59,10 +146,31 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..5250a62d01c2b1c2b29be70d7dbd0ec6
      } else if (group.family === "open" || group.family === "close") {
        // Delims built here should not stretch vertically.
 diff --git a/dist/katex.mjs b/dist/katex.mjs
-index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62962d672e 100644
+index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2b303043b 100644
 --- a/dist/katex.mjs
 +++ b/dist/katex.mjs
-@@ -4740,6 +4740,10 @@ var makeSymbol = function makeSymbol(value, fontName, mode, options, classes) {
+@@ -3682,12 +3682,20 @@ function setFontMetrics(fontName, metrics) {
+  * Note: the `width` property may be undefined if fontMetricsData.js wasn't
+  * built using `Make extended_metrics`.
+  */
++const textbookSymbolMetrics = {
++  8421: [0.16, 0.678, 0, 0, 0],
++  8705: [0.016, 0.778, 0, 0, 0.474],
++  10955: [0.327, 0.734, 0, 0, 0.72],
++  10956: [0.327, 0.734, 0, 0, 0.72],
++  11005: [0.228, 0.727, 0, 0, 0.726],
++};
+ function getCharacterMetrics(character, font, mode) {
+   if (!fontMetricsData[font]) {
+     throw new Error("Font metrics not found for font: " + font + ".");
+   }
+   var ch = character.charCodeAt(0);
+   var metrics = fontMetricsData[font][ch];
++  if (!metrics && mode === "text" && font.startsWith("Main-")) metrics = textbookSymbolMetrics[ch];
+   if (!metrics && character[0] in extraCharacterMap) {
+     ch = extraCharacterMap[character[0]].charCodeAt(0);
+     metrics = fontMetricsData[font][ch];
+@@ -4740,6 +4748,10 @@ var makeSymbol = function makeSymbol(value, fontName, mode, options, classes) {
    }
    if (options) {
      symbolNode.maxFontSize = options.sizeMultiplier;
@@ -73,7 +181,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62
      if (options.style.isTight()) {
        symbolNode.classes.push("mtight");
      }
-@@ -4765,7 +4769,7 @@ var mathsym = function mathsym(value, mode, options, classes) {
+@@ -4765,7 +4777,7 @@ var mathsym = function mathsym(value, mode, options, classes) {
    // text ordinal and is therefore not present as a symbol in the symbols
    // table for text, as well as a special case for boldsymbol because it
    // can be used for bold + and -
@@ -82,7 +190,60 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62
      return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
    } else if (value === "\\" || symbols[mode][value].font === "main") {
      return makeSymbol(value, "Main-Regular", mode, options, classes);
-@@ -10555,7 +10559,7 @@ defineFunction({
+@@ -4851,7 +4863,7 @@ var makeOrd = function makeOrd(group, options, type) {
+   } else if (type === "textord") {
+     var _font = symbols[mode][text] && symbols[mode][text].font;
+     if (_font === "ams") {
+-      var _fontName = retrieveTextFontName("amsrm", fontWeight, fontShape);
++      var _fontName = "AMS-Regular";
+       return makeSymbol(text, _fontName, mode, options, classes.concat("amsrm", fontWeight, fontShape));
+     } else if (_font === "main" || !_font) {
+       var _fontName2 = retrieveTextFontName("textrm", fontWeight, fontShape);
+@@ -7251,16 +7263,16 @@ function mathmlBuilder$8(group, options) {
+   } else if (group.mclass === "mord") {
+     if (group.isCharacterBox) {
+       node = inner[0];
+-      node.type = "mi";
++      if (node.type !== "mstyle") node.type = "mi";
+     } else {
+-      node = new MathNode("mi", inner);
++      node = new MathNode("mrow", inner);
+     }
+   } else {
+     if (group.isCharacterBox) {
+       node = inner[0];
+-      node.type = "mo";
++      if (node.type !== "mstyle") node.type = "mo";
+     } else {
+-      node = new MathNode("mo", inner);
++      node = new MathNode("mrow", inner);
+     }
+     // Set spacing based on what is the most likely adjacent atom type.
+     // See TeXbook p170.
+@@ -10538,13 +10550,19 @@ defineFunction({
+ // TODO(kevinb): implement \\sl and \\sc
+ var htmlBuilder$5 = (group, options) => {
+   var font = group.font;
+-  var newOptions = options.withFont(font);
++  var newOptions = (font === "mathbf" || font === "boldsymbol" ? options.withTextFontWeight("textbf") : options).withFont(font);
+   return buildGroup$1(group.body, newOptions);
+ };
+ var mathmlBuilder$4 = (group, options) => {
+   var font = group.font;
+-  var newOptions = options.withFont(font);
+-  return buildGroup(group.body, newOptions);
++  var newOptions = (font === "mathbf" || font === "boldsymbol" ? options.withTextFontWeight("textbf") : options).withFont(font);
++  var node = buildGroup(group.body, newOptions);
++  if (options.fontWeight === "textbf" && ["mathbb", "mathcal", "mathfrak", "mathscr", "mathsf", "mathtt"].includes(font)) {
++    var styled = node instanceof MathNode && node.type === "mi" ? node : new MathNode("mstyle", [node]);
++    styled.setAttribute("fontweight", "bold");
++    return styled;
++  }
++  return node;
+ };
+ var fontAliases = {
+   "\\Bbb": "\\mathbb",
+@@ -10555,7 +10573,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -91,7 +252,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -10577,7 +10581,7 @@ defineFunction({
+@@ -10577,7 +10595,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -100,7 +261,27 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62
        body
      };
    },
-@@ -13122,12 +13126,11 @@ defineFunctionBuilders({
+@@ -11990,9 +12008,11 @@ var htmlBuilder$2 = (grp, options) => {
+ };
+ var mathmlBuilder$1 = (group, options) => {
+   var node;
++  var bold = ["mathbf", "boldsymbol", "mathbfit"].includes(options.font) || options.fontWeight === "textbf";
+   if (group.symbol) {
+     // This is a symbol. Just add the symbol.
+     node = new MathNode("mo", [makeText(group.name, group.mode)]);
++    if (bold) node.setAttribute("mathvariant", "bold");
+     if (noSuccessor.has(group.name)) {
+       node.setAttribute("largeop", "false");
+     }
+@@ -12003,6 +12023,7 @@ var mathmlBuilder$1 = (group, options) => {
+     // This is a text operator. Add all the characters from the
+     // operator's name.
+     node = new MathNode("mi", [new TextNode(group.name.slice(1))]);
++    if (bold) node.setAttribute("mathvariant", "bold");
+     // Append an <mo>&ApplyFunction;</mo>.
+     // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
+     var operator = new MathNode("mo", [makeText("\u2061", "text")]);
+@@ -13122,12 +13143,11 @@ defineFunctionBuilders({
    },
    mathmlBuilder(group, options) {
      var node = new MathNode("mo", [makeText(group.text, group.mode)]);
@@ -119,7 +300,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..ac9558ef5f1a18c1687cc48a7cc22e62
      } else if (group.family === "open" || group.family === "close") {
        // Delims built here should not stretch vertically.
 diff --git a/src/buildCommon.ts b/src/buildCommon.ts
-index 0a37357db6010a2ab3a2402a1ffdc95aa8191fbe..f8273e740cfeefc49d9a09cefd0ca42ab536e13b 100644
+index 0a37357db6010a2ab3a2402a1ffdc95aa8191fbe..b24293354c3fb7d57dcd0587be4e443ef6d177d4 100644
 --- a/src/buildCommon.ts
 +++ b/src/buildCommon.ts
 @@ -91,6 +91,11 @@ export const makeSymbol = function(
@@ -143,6 +324,15 @@ index 0a37357db6010a2ab3a2402a1ffdc95aa8191fbe..f8273e740cfeefc49d9a09cefd0ca42a
              lookupSymbol(value, "Main-Bold", mode).metrics) {
          return makeSymbol(value, "Main-Bold", mode, options,
              classes.concat(["mathbf"]));
+@@ -231,7 +236,7 @@ export const makeOrd = function<NODETYPE extends "spacing" | "mathord" | "textor
+     } else if (type === "textord") {
+         const font = symbols[mode][text] && symbols[mode][text].font;
+         if (font === "ams") {
+-            const fontName = retrieveTextFontName("amsrm", fontWeight, fontShape);
++            const fontName = "AMS-Regular";
+             return makeSymbol(
+                 text, fontName, mode, options,
+                 classes.concat("amsrm", fontWeight, fontShape));
 diff --git a/src/domTree.ts b/src/domTree.ts
 index 50d79dfdce10a17aa0f455b07461c8ca7cf37740..9f3dc63c0aca066362bc2d291da497d33c5edcc9 100644
 --- a/src/domTree.ts
@@ -155,11 +345,73 @@ index 50d79dfdce10a17aa0f455b07461c8ca7cf37740..9f3dc63c0aca066362bc2d291da497d3
      height: string;
      left: string;
      margin: string;
+diff --git a/src/fontMetrics.ts b/src/fontMetrics.ts
+index acd75c207de14fa7eb97e25ccd1d999584f6b917..8ff688c380d16ff4ba80b4e98db55f227ea0269d 100644
+--- a/src/fontMetrics.ts
++++ b/src/fontMetrics.ts
+@@ -191,6 +191,15 @@ export function setFontMetrics(
+     metricMap[fontName] = metrics;
+ }
+ 
++// STIX Two Math 2.13 text symbols; dimensions match the shipped Unicode font subset.
++const textbookSymbolMetrics: Record<number, CharacterMetricsTuple> = {
++  8421: [0.16, 0.678, 0, 0, 0],
++  8705: [0.016, 0.778, 0, 0, 0.474],
++  10955: [0.327, 0.734, 0, 0, 0.72],
++  10956: [0.327, 0.734, 0, 0, 0.72],
++  11005: [0.228, 0.727, 0, 0, 0.726],
++};
++
+ /**
+  * This function is a convenience function for looking up information in the
+  * metricMap table. It takes a character as a string, and a font.
+@@ -208,6 +217,7 @@ export function getCharacterMetrics(
+     }
+     let ch = character.charCodeAt(0);
+     let metrics = metricMap[font][ch];
++    if (!metrics && mode === "text" && font.startsWith("Main-")) metrics = textbookSymbolMetrics[ch];
+     if (!metrics && character[0] in extraCharacterMap) {
+         ch = extraCharacterMap[character[0]].charCodeAt(0);
+         metrics = metricMap[font][ch];
 diff --git a/src/functions/font.ts b/src/functions/font.ts
-index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863743767fd 100644
+index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..38ffd27217216e64a09d9e17c7f411e3a2b7468f 100644
 --- a/src/functions/font.ts
 +++ b/src/functions/font.ts
-@@ -31,7 +31,7 @@ const fontAliases = {
+@@ -2,6 +2,7 @@
+ 
+ import {binrelClass} from "./mclass";
+ import defineFunction, {normalizeArgument} from "../defineFunction";
++import {MathNode} from "../mathMLTree";
+ import {isCharacterBox} from "../utils";
+ 
+ import * as html from "../buildHTML";
+@@ -13,14 +14,22 @@ import type {Slice1} from "../types";
+ 
+ const htmlBuilder = (group: ParseNode<"font">, options: Options) => {
+     const font = group.font;
+-    const newOptions = options.withFont(font);
++    const newOptions = (font === "mathbf" || font === "boldsymbol" ?
++        options.withTextFontWeight("textbf") : options).withFont(font);
+     return html.buildGroup(group.body, newOptions);
+ };
+ 
+ const mathmlBuilder = (group: ParseNode<"font">, options: Options) => {
+     const font = group.font;
+-    const newOptions = options.withFont(font);
+-    return mml.buildGroup(group.body, newOptions);
++    const newOptions = (font === "mathbf" || font === "boldsymbol" ?
++        options.withTextFontWeight("textbf") : options).withFont(font);
++    const node = mml.buildGroup(group.body, newOptions);
++    if (options.fontWeight === "textbf" && ["mathbb", "mathcal", "mathfrak", "mathscr", "mathsf", "mathtt"].includes(font)) {
++        const styled = node instanceof MathNode && node.type === "mi" ? node : new MathNode("mstyle", [node]);
++        styled.setAttribute("fontweight", "bold");
++        return styled;
++    }
++    return node;
+ };
+ 
+ const fontAliases = {
+@@ -31,7 +40,7 @@ const fontAliases = {
  
  type OldFontCommands = "\\rm" | "\\sf" | "\\tt" | "\\bf" | "\\it" | "\\cal";
  type FontCommands =
@@ -168,7 +420,7 @@ index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863
      "\\mathbb" | "\\mathcal" | "\\mathfrak" | "\\mathscr" | "\\mathsf" |
      "\\mathtt";
  
-@@ -39,7 +39,7 @@ defineFunction({
+@@ -39,7 +48,7 @@ defineFunction({
      type: "font",
      names: [
          // styles, except \boldsymbol defined below
@@ -177,7 +429,7 @@ index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863
  
          // families
          "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf",
-@@ -61,7 +61,7 @@ defineFunction({
+@@ -61,7 +70,7 @@ defineFunction({
          return {
              type: "font",
              mode: parser.mode,
@@ -186,6 +438,57 @@ index a6e2cfb1412a5e3ab24eb0f20e695ad48de95b10..e5f4eb33c83f1dad92adcd9b2e71b863
              body,
          };
      },
+diff --git a/src/functions/mclass.ts b/src/functions/mclass.ts
+index 788eddc4762387296bbe1f8212edc0f18cf8f5f6..d697b0257017a6e48e9077c44d2b01a017afd88c 100644
+--- a/src/functions/mclass.ts
++++ b/src/functions/mclass.ts
+@@ -24,16 +24,16 @@ function mathmlBuilder(group: ParseNode<"mclass">, options: Options) {
+     } else if (group.mclass === "mord") {
+         if (group.isCharacterBox) {
+             node = inner[0];
+-            node.type = "mi";
++            if (node.type !== "mstyle") node.type = "mi";
+         } else {
+-            node = new MathNode("mi", inner);
++            node = new MathNode("mrow", inner);
+         }
+     } else {
+         if (group.isCharacterBox) {
+             node = inner[0];
+-            node.type = "mo";
++            if (node.type !== "mstyle") node.type = "mo";
+         } else {
+-            node = new MathNode("mo", inner);
++            node = new MathNode("mrow", inner);
+         }
+ 
+         // Set spacing based on what is the most likely adjacent atom type.
+diff --git a/src/functions/op.ts b/src/functions/op.ts
+index 1d6231494868191fc6a61cb8d003b506782cacf9..01afe6904bd21e025eafd14ca059eee56e52bccf 100644
+--- a/src/functions/op.ts
++++ b/src/functions/op.ts
+@@ -145,11 +145,13 @@ export const htmlBuilder: HtmlBuilderSupSub<"op"> = (grp, options) => {
+ 
+ const mathmlBuilder: MathMLBuilder<"op"> = (group, options) => {
+     let node;
++    const bold = ["mathbf", "boldsymbol", "mathbfit"].includes(options.font) || options.fontWeight === "textbf";
+ 
+     if (group.symbol) {
+         // This is a symbol. Just add the symbol.
+         node = new MathNode(
+             "mo", [mml.makeText(group.name, group.mode)]);
++        if (bold) node.setAttribute("mathvariant", "bold");
+         if (noSuccessor.has(group.name)) {
+             node.setAttribute("largeop", "false");
+         }
+@@ -162,6 +164,7 @@ const mathmlBuilder: MathMLBuilder<"op"> = (group, options) => {
+         // operator's name.
+         node = new MathNode(
+             "mi", [new TextNode(group.name!.slice(1))]);
++        if (bold) node.setAttribute("mathvariant", "bold");
+         // Append an <mo>&ApplyFunction;</mo>.
+         // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
+         const operator = new MathNode("mo",
 diff --git a/src/functions/symbolsOp.ts b/src/functions/symbolsOp.ts
 index b0c5086fb7aab62ea4337ccfd90abf27a0985c75..0ff4d59d193165f0ac5d4deb2b62fd55ea883745 100644
 --- a/src/functions/symbolsOp.ts

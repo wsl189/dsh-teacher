@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
+import type { PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   FileText,
   FolderOpen,
@@ -45,7 +46,9 @@ import { readPdfPageCount } from './question-segmentation.ts'
 import css from './TeacherWorkbench.module.css'
 
 /** Reference-style question-workspace module props. */
-export interface QuestionWorkbenchProps {
+export interface QuestionWorkbenchProps extends PropsRenderSlots<'teacherWorkbench.saveDirectoryFlow'> {
+  /** True while the configured Host directory-picker interaction is installed. */
+  saveDirectoryAvailable: boolean
   /** Current durable workbench state. */
   state: TeacherWorkbenchState
   /** Browser-side rendering settings. */
@@ -64,7 +67,7 @@ export interface QuestionWorkbenchProps {
   t: TeacherWorkbenchTranslate
 }
 
-type BusyTask = 'document' | 'save' | 'assign' | 'temporary' | 'student' | 'folder' | null
+type BusyTask = 'document' | 'save' | 'write' | 'assign' | 'temporary' | 'student' | 'folder' | null
 
 const HIERARCHY_CLICK_WINDOW_MS = 260
 const LIBRARY_NAME_VISIBLE_CHARACTERS = 7
@@ -165,10 +168,14 @@ export function QuestionWorkbench({
   state,
   settings,
   commands,
+  saveDirectoryAvailable,
+  renderSlot,
   questionCuttingReasoning,
   cutting,
   t,
 }: QuestionWorkbenchProps) {
+  const [saveDirectoryOpen, setSaveDirectoryOpen] = useState(false)
+  const hostSaveWritingRef = useRef(false)
   const fallbackYear = settings.academicYear.trim() || String(new Date().getFullYear())
   const durableClasses = useMemo(() => state.classes.filter(item => item.usage === 'roster'), [state.classes])
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -968,7 +975,6 @@ export function QuestionWorkbench({
           t('questions.directoryPickerUnsupported'),
           t('questions.directoryPermissionDenied'),
         )
-        if (directory === null) return
         let saved = 0
         let failed = 0
         for (const image of selectedImages) {
@@ -1017,35 +1023,40 @@ export function QuestionWorkbench({
     if (activeStudent === undefined || (!clear && selectedStudentAssignmentIds.length === 0) || busy !== null) return
     setBusy('temporary')
     const assignmentIds = clear ? [] : selectedStudentAssignmentIds
-    const result = await commands.saveTemporaryQuestionSelection({
-      studentId: activeStudent.id,
-      assignmentIds,
-    })
-    setBusy(null)
-    if (!result.ok) {
-      setToast(result.error.message)
-      return
+    try {
+      const result = await commands.saveTemporaryQuestionSelection({
+        studentId: activeStudent.id,
+        assignmentIds,
+      })
+      if (!result.ok) {
+        setToast(result.error.message)
+        return
+      }
+      temporarySelectionRevisionRef.current += 1
+      setTemporarySelections((current) => {
+        const next = new Map(current)
+        if (result.value.imageCount === 0) next.delete(result.value.studentId)
+        else next.set(result.value.studentId, result.value.imageCount)
+        return next
+      })
+      const savedIds = new Set<string>(assignmentIds)
+      setSelectedAssignmentIds(current => new Set([...current].filter(id => !savedIds.has(id))))
+      setToast(clear ? t('questions.temporaryCleared') : t('questions.tempSaved', { count: result.value.imageCount }))
+    } catch (cause) {
+      setToast(errorMessage(cause, t('questions.temporarySaveFailed')))
+    } finally {
+      setBusy(null)
     }
-    temporarySelectionRevisionRef.current += 1
-    setTemporarySelections((current) => {
-      const next = new Map(current)
-      if (result.value.imageCount === 0) next.delete(result.value.studentId)
-      else next.set(result.value.studentId, result.value.imageCount)
-      return next
-    })
-    const savedIds = new Set<string>(assignmentIds)
-    setSelectedAssignmentIds(current => new Set([...current].filter(id => !savedIds.has(id))))
-    setToast(clear ? t('questions.temporaryCleared') : t('questions.tempSaved', { count: result.value.imageCount }))
   }
 
   const generateFolderDocument = async (request: TeacherQuestionUploadedDocumentRequest): Promise<void> => {
     if (busy !== null) return
     setSkillMenuOpen(false)
     setBusy('document')
-    const result = await commands.generateUploadedQuestionDocument(request)
-    setBusy(null)
     const retry: OfficeRetry = { scope: 'folder', request }
-    if (result.ok) {
+    try {
+      const result = await commands.generateUploadedQuestionDocument(request)
+      if (!result.ok) throw new Error(result.error.message)
       setOfficeDialog({
         mode: 'success',
         scope: 'folder',
@@ -1054,15 +1065,17 @@ export function QuestionWorkbench({
         artifacts: [result.value],
         retry,
       })
-    } else {
+    } catch (cause) {
       setOfficeDialog({
         mode: 'error',
         scope: 'folder',
         title: t('questions.generationFailed'),
-        message: result.error.message,
+        message: errorMessage(cause, t('questions.generationFailed')),
         artifacts: [],
         retry,
       })
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -1113,11 +1126,11 @@ export function QuestionWorkbench({
   const generateClassDocuments = async (request: TeacherQuestionBatchDocumentRequest): Promise<void> => {
     if (request.students.length === 0 || busy !== null) return
     setBusy('document')
-    const result = await commands.generateStudentDocuments(request)
-    setBusy(null)
     setBatchWordOpen(false)
     const retry: OfficeRetry = { scope: 'class', request }
-    if (result.ok) {
+    try {
+      const result = await commands.generateStudentDocuments(request)
+      if (!result.ok) throw new Error(result.error.message)
       const skipped = new Set(result.value.skipped.map(item => item.studentId))
       temporarySelectionRevisionRef.current += 1
       setTemporarySelections((current) => {
@@ -1140,15 +1153,17 @@ export function QuestionWorkbench({
         artifacts: result.value.artifacts,
         retry,
       })
-    } else {
+    } catch (cause) {
       setOfficeDialog({
         mode: 'error',
         scope: 'class',
         title: t('questions.batchGenerationFailed'),
-        message: result.error.message,
+        message: errorMessage(cause, t('questions.batchGenerationFailed')),
         artifacts: [],
         retry,
       })
+    } finally {
+      setBusy(null)
     }
   }
 
@@ -1186,42 +1201,103 @@ export function QuestionWorkbench({
     else await generateClassDocuments(retry.request)
   }
 
+  const finishDirectoryChoice = (message: string): void => {
+    setSaveDirectoryOpen(false)
+    fileSavePendingRef.current = false
+    setBusy(null)
+    setOfficeDialog(current => current === null ? null : { ...current, message })
+  }
+
+  const saveOfficeToDirectory = async (directory: string): Promise<void> => {
+    if (officeDialog === null || hostSaveWritingRef.current) return
+    hostSaveWritingRef.current = true
+    setSaveDirectoryOpen(false)
+    setBusy('write')
+    const failed: TeacherQuestionDocumentPayload[] = []
+    const paths: string[] = []
+    const failures: string[] = []
+    try {
+      for (const artifact of officeDialog.artifacts) {
+        try {
+          const result = await commands.saveQuestionDocument({ directory, artifact })
+          if (!result.ok) throw new Error(result.error.message)
+          paths.push(result.value.path)
+        } catch (cause) {
+          failed.push(artifact)
+          failures.push(`${artifact.fileName}: ${errorMessage(cause, t('questions.saveFailed'))}`)
+        }
+      }
+      if (failed.length > 0) {
+        setOfficeDialog({ ...officeDialog, artifacts: failed, message: [
+          t('questions.filesSaved', { saved: paths.length, failed: failed.length }), ...failures,
+        ].join('\n') })
+      } else {
+        setToast(t('questions.savedToDirectory', { count: paths.length, path: directory }))
+        setOfficeDialog(null)
+      }
+    } finally {
+      hostSaveWritingRef.current = false
+      fileSavePendingRef.current = false
+      setBusy(null)
+    }
+  }
+
+  useEffect(() => {
+    if (saveDirectoryOpen && !saveDirectoryAvailable) {
+      setSaveDirectoryOpen(false)
+      fileSavePendingRef.current = false
+      setBusy(null)
+      setOfficeDialog(current => current === null ? null : { ...current, message: t('questions.saveDirectoryUnavailable') })
+    }
+  }, [saveDirectoryAvailable, saveDirectoryOpen, t])
+
   const saveOfficeArtifacts = async (): Promise<void> => {
     if (officeDialog === null || officeDialog.artifacts.length === 0 || busy !== null || fileSavePendingRef.current) return
     fileSavePendingRef.current = true
     setBusy('save')
+    if (saveDirectoryAvailable) {
+      setSaveDirectoryOpen(true)
+      return
+    }
     try {
-      if (officeDialog.scope === 'class') {
+      if (officeDialog.scope === 'class' || officeDialog.artifacts.length > 1) {
         const directory = await pickWritableDirectory(
           t('questions.directoryPickerUnsupported'),
           t('questions.directoryPermissionDenied'),
         )
-        if (directory === null) return
+        setBusy('write')
         let saved = 0
-        let failed = 0
+        const failed: TeacherQuestionDocumentPayload[] = []
         for (const artifact of officeDialog.artifacts) {
           try {
             await writeUniqueFile(directory, artifact.fileName, artifactBlob(artifact))
             saved += 1
           } catch {
-            failed += 1
+            failed.push(artifact)
           }
         }
-        setToast(t('questions.filesSaved', { saved, failed }))
+        const message = t('questions.filesSaved', { saved, failed: failed.length })
+        setToast(message)
+        if (failed.length > 0) {
+          setOfficeDialog({ ...officeDialog, message, artifacts: failed })
+          return
+        }
       } else if (officeDialog.artifacts.length === 1) {
         const artifact = officeDialog.artifacts[0]
         if (artifact === undefined) return
-        const saved = await saveSingleArtifact(artifact)
-        if (!saved) return
+        const saved = await saveSingleArtifact(artifact, () => { setBusy('write') }, t('questions.filePickerUnsupported'))
+        if (!saved) {
+          setOfficeDialog({ ...officeDialog, message: t('questions.saveNotCompleted') })
+          return
+        }
         setToast(t('questions.fileSaved', { name: artifact.fileName }))
-      } else {
-        for (const artifact of officeDialog.artifacts) downloadArtifact(artifact)
-        setToast(t('questions.filesDownloaded', { count: officeDialog.artifacts.length }))
       }
       setOfficeDialog(null)
     } catch (cause) {
-      if (isAbortError(cause)) return
-      setToast(errorMessage(cause, t('questions.saveFailed')))
+      const message = isAbortError(cause)
+        ? t('questions.saveNotCompleted')
+        : errorMessage(cause, t('questions.saveFailed'))
+      setOfficeDialog({ ...officeDialog, message })
     } finally {
       fileSavePendingRef.current = false
       setBusy(null)
@@ -1596,6 +1672,16 @@ export function QuestionWorkbench({
         </aside>
       )}
 
+      {renderSlot('teacherWorkbench.saveDirectoryFlow', {
+        open: saveDirectoryOpen,
+        busy: busy === 'write',
+        title: t('questions.saveDirectoryTitle'),
+        confirmLabel: t('questions.saveHere'),
+        onPicked: (path) => { void saveOfficeToDirectory(path) },
+        onCancel: () => { finishDirectoryChoice(t('questions.saveCancelled')) },
+        onError: finishDirectoryChoice,
+      })}
+
       {officeDialog !== null && (
         <div className={css.legacyDialogLayer} role="dialog" aria-modal="true" aria-label={officeDialog.title}>
           <button type="button" className={css.legacyEditorMask} aria-label={`${t('questions.closeDialog')} ${officeDialog.title}`} disabled={busy !== null} onClick={() => { setOfficeDialog(null) }} />
@@ -1605,13 +1691,11 @@ export function QuestionWorkbench({
             <div>
               {officeDialog.mode === 'success' && (
                 <button type="button" disabled={busy !== null} onClick={() => { void saveOfficeArtifacts() }}>
-                  {officeDialog.scope === 'class' || officeDialog.artifacts.length === 1
-                    ? t('questions.saveGenerated')
-                    : t('questions.downloadAll')}
+                  {t('questions.saveGenerated')}
                 </button>
               )}
               {officeDialog.mode === 'error' && officeDialog.retry !== undefined && (
-                <button type="button" onClick={() => { void retryOfficeGeneration() }}>{t('questions.retryGeneration')}</button>
+                <button type="button" disabled={busy !== null} onClick={() => { void retryOfficeGeneration() }}>{t('questions.retryGeneration')}</button>
               )}
               <button type="button" disabled={busy !== null} onClick={() => { setOfficeDialog(null) }}>{t('questions.closeDialog')}</button>
             </div>
@@ -1744,7 +1828,15 @@ export function QuestionWorkbench({
       )}
 
       {toast !== null && <div className={css.legacyToast} role="status">{toast}</div>}
-      {busy !== null && <div className={css.legacyProgress} role="status"><span />{t('saving')}</div>}
+      {busy !== null && (
+        <div className={css.legacyProgress} role="status"><span />{
+          busy === 'document' ? t('questions.generatingDocument')
+            : busy === 'temporary' ? t('questions.updatingTemporary')
+              : busy === 'save' ? t('questions.choosingSaveLocation')
+                : busy === 'write' ? t('questions.writingFiles')
+                  : t('saving')
+        }</div>
+      )}
     </div>
   )
 }
@@ -2208,7 +2300,6 @@ async function buildFolderDocumentRequest(
       numeric: true,
       sensitivity: 'base',
     }))
-    .slice(0, 120)
   if (selected.length === 0) throw new Error('所选文件夹中没有可用图片')
   const totalBytes = selected.reduce((sum, item) => sum + item.file.size, 0)
   if (totalBytes > 80 * 1024 * 1024) throw new Error('图片总体积过大，请减少后重试')
@@ -2252,6 +2343,7 @@ async function fileToBase64(file: File): Promise<string> {
 interface OfficeWritable {
   write(data: Blob): Promise<void>
   close(): Promise<void>
+  abort(): Promise<void>
 }
 
 interface OfficeFileHandle {
@@ -2259,35 +2351,45 @@ interface OfficeFileHandle {
 }
 
 interface OfficeDirectoryHandle {
-  queryPermission?(options?: { readonly mode?: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>
-  requestPermission?(options?: { readonly mode?: 'read' | 'readwrite' }): Promise<'granted' | 'denied' | 'prompt'>
   getFileHandle(name: string, options?: { readonly create?: boolean }): Promise<OfficeFileHandle>
 }
 
 type OfficePickerGlobal = typeof globalThis & {
   showSaveFilePicker?: (options: { readonly suggestedName: string }) => Promise<OfficeFileHandle>
-  showDirectoryPicker?: () => Promise<OfficeDirectoryHandle>
+  showDirectoryPicker?: (options: { readonly mode: 'readwrite' }) => Promise<OfficeDirectoryHandle>
 }
 
 async function pickWritableDirectory(
   unsupported: string,
   denied: string,
-): Promise<OfficeDirectoryHandle | null> {
+): Promise<OfficeDirectoryHandle> {
   const picker = (globalThis as OfficePickerGlobal).showDirectoryPicker
   if (picker === undefined) throw new Error(unsupported)
-  const directory = await picker()
-  let permission = await directory.queryPermission?.({ mode: 'readwrite' })
-  if (permission !== 'granted') permission = await directory.requestPermission?.({ mode: 'readwrite' })
-  if (permission !== 'granted') throw new Error(denied)
-  return directory
+  try {
+    return await picker({ mode: 'readwrite' })
+  } catch (cause) {
+    if (cause instanceof DOMException && cause.name === 'NotAllowedError') throw new Error(denied, { cause })
+    throw cause
+  }
 }
 
 async function writeUniqueFile(directory: OfficeDirectoryHandle, desiredName: string, blob: Blob): Promise<void> {
   const fileName = await uniqueDirectoryFileName(directory, desiredName)
   const handle = await directory.getFileHandle(fileName, { create: true })
+  await writeOfficeFile(handle, blob)
+}
+
+async function writeOfficeFile(handle: OfficeFileHandle, blob: Blob): Promise<void> {
   const writable = await handle.createWritable()
-  await writable.write(blob)
-  await writable.close()
+  try {
+    await writable.write(blob)
+    await writable.close()
+  } catch (cause) {
+    await writable.abort().catch(() => {
+      // Closing may already have errored the stream; retain the original write or close failure.
+    })
+    throw cause
+  }
 }
 
 async function uniqueDirectoryFileName(directory: OfficeDirectoryHandle, desiredName: string): Promise<string> {
@@ -2308,21 +2410,18 @@ async function uniqueDirectoryFileName(directory: OfficeDirectoryHandle, desired
   return `${stem}_${Date.now()}${extension}`
 }
 
-async function saveSingleArtifact(artifact: TeacherQuestionDocumentPayload): Promise<boolean> {
+async function saveSingleArtifact(artifact: TeacherQuestionDocumentPayload, onWrite: () => void, unsupported: string): Promise<boolean> {
   const picker = (globalThis as OfficePickerGlobal).showSaveFilePicker
-  if (globalThis.isSecureContext && picker !== undefined) {
-    try {
-      const handle = await picker({ suggestedName: artifact.fileName })
-      const writable = await handle.createWritable()
-      await writable.write(artifactBlob(artifact))
-      await writable.close()
-      return true
-    } catch (cause) {
-      if (isAbortError(cause)) return false
-    }
+  if (!globalThis.isSecureContext || picker === undefined) throw new Error(unsupported)
+  try {
+    const handle = await picker({ suggestedName: artifact.fileName })
+    onWrite()
+    await writeOfficeFile(handle, artifactBlob(artifact))
+    return true
+  } catch (cause) {
+    if (isAbortError(cause)) return false
+    throw cause
   }
-  downloadArtifact(artifact)
-  return true
 }
 
 function isAbortError(cause: unknown): boolean {
@@ -2331,17 +2430,9 @@ function isAbortError(cause: unknown): boolean {
 
 function artifactBlob(artifact: TeacherQuestionDocumentPayload): Blob {
   const binary = atob(artifact.contentBase64)
-  const bytes = Uint8Array.from(binary, character => character.charCodeAt(0))
+  const bytes = new Uint8Array(binary.length)
+  for (let index = 0; index < binary.length; index += 1) bytes[index] = binary.charCodeAt(index)
   return new Blob([bytes], { type: artifact.mediaType })
-}
-
-function downloadArtifact(artifact: { fileName: string; mediaType: string; contentBase64: string }): void {
-  const url = URL.createObjectURL(artifactBlob(artifact))
-  const anchor = document.createElement('a')
-  anchor.href = url
-  anchor.download = artifact.fileName
-  anchor.click()
-  setTimeout(() => { URL.revokeObjectURL(url) }, 0)
 }
 
 function errorMessage(cause: unknown, fallback: string): string {
