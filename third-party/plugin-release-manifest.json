@@ -1,0 +1,79 @@
+{
+  "checkedAt": "2026-09-16",
+  "officialDshRelease": "dsh-v0.1.6-alpha.1",
+  "plugins": [
+    {
+      "name": "@dickpy/dsh-imagegen",
+      "version": "1.5.12",
+      "tarball": "https://registry.npmjs.org/@dickpy/dsh-imagegen/-/dsh-imagegen-1.5.12.tgz",
+      "integrity": "sha512-ACLnE4nsQqSDy6RVVqhEOadodPsCmyZMDJP7O4qdB/MLO99i8lF+QFUeZPCvpM1HDjP23gUUFf6pQg+ouAGdVA==",
+      "shippedArtifact": "third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.12.tgz",
+      "shippedSha256": "54861229cc8673d0802b7575699377ba7b140f24a5809003bba0359484e38d5f"
+    },
+    {
+      "name": "@xmanrui/dsh-im",
+      "version": "4.21.1",
+      "tarball": "https://registry.npmjs.org/@xmanrui/dsh-im/-/dsh-im-4.21.1.tgz",
+      "integrity": "sha512-kJed9ScJ7K7AMdv9QXAlneDzuHL4vjBHCYllyAi0Q7h4lUUROhV5/KcZsVAARpVI9hE3Z7czdJ700UnjE2yuHA==",
+      "shippedArtifact": "third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz",
+      "shippedSha256": "1ac5b7881fd1cbe7f1055b6b4b4010106d51f42ab36ab27f04375fa14c75fb2b"
+    },
+    {
+      "name": "dsh-skill-mcp-panel",
+      "version": "2.0.4",
+      "tarball": "https://registry.npmjs.org/dsh-skill-mcp-panel/-/dsh-skill-mcp-panel-2.0.4.tgz",
+      "integrity": "sha512-VmOy6RrlMjMxPoenKSLDLkusf0Qj6ZcWZUD5l6Zm29XL2THLcmAeL9uvBVctWej9iDIXwwsEX2z1/X4+Rq5hVg==",
+      "shippedArtifact": "third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz",
+      "shippedSha256": "899032938e14052fe235de1067f94c1def075d6718cea629b558b98b0f630116"
+    },
+    {
+      "name": "dsh-univer-office",
+      "version": "0.3.0",
+      "tarball": "https://registry.npmjs.org/dsh-univer-office/-/dsh-univer-office-0.3.0.tgz",
+      "integrity": "sha512-GTA2C8Yg0uolFQHqAbSh8Xn0ooyTyudUjQCC/DgcQzpQEa9vpGSinGTZO6t97jClmytTUF7oXT7ycx2DehdJCg==",
+      "shippedArtifact": "third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz",
+      "shippedSha256": "a9acf39e142b9ddaf573b4334c47f78e086fc033426b1cc2c91fedf3c91c791d",
+      "nativeRuntimeDependencies": {
+        "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260910-22fe9c7",
+        "@univerjs-pro/exchange-node-binding": "0.1.2"
+      }
+    },
+    {
+      "name": "@huanlin/dsh-plugin-better-sidebar-plugin-office",
+      "version": "0.2.0",
+      "tarball": "https://registry.npmjs.org/@huanlin/dsh-plugin-better-sidebar-plugin-office/-/dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz",
+      "integrity": "sha512-RPwk9ojWIT3u2cyfLztn8q5/xS6czuvqQohJ2wReZ+dIdgF8HpAUhdm2i6XayazME0K6quF2/TNAfuFvC+tycg==",
+      "shippedArtifact": "third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz",
+      "shippedSha256": "9c768ddf730d9b55d64538b1126b0fd3a451bd40a445cfefbeb5f9690fbca261"
+    },
+    {
+      "name": "@anysearch/anysearch-dsh",
+      "version": "0.1.4",
+      "tarball": "https://registry.npmjs.org/@anysearch/anysearch-dsh/-/anysearch-dsh-0.1.4.tgz",
+      "integrity": "sha512-v7jb1oTrMcfq+DxMoRvwDZQ8xVCvU/Pf4MJKnGXAKt35GUzsLFfJW8eKgSg837/kzEVZTGg64lM94UwgiNMUuQ==",
+      "shippedArtifact": "third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz",
+      "shippedSha256": "08d583857ec3b9307157f45c68bfbc91f7863a54c143a0f3e34079afff578079"
+    },
+    {
+      "name": "dsh-plugin-cron",
+      "version": "0.1.3",
+      "tarball": "https://registry.npmjs.org/dsh-plugin-cron/-/dsh-plugin-cron-0.1.3.tgz",
+      "integrity": "sha512-afx7PFSuFzmtjNlx7MdjTW2QFYTuPyDmuA06Q4lPk+Eav+sNMnvHRWgWspaZY53ze6QdJ7rkpu0Dz9Xusf4Pmg==",
+      "shippedArtifact": "third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz",
+      "shippedSha256": "0f14d57ee8554231688e5d985c77e253327fda9e36d463efb7d6d12b17489d7b"
+    }
+  ],
+  "bundledSkills": [
+    {
+      "name": "ppt-master",
+      "version": "6.4.0",
+      "source": "https://github.com/hugohe3/ppt-master/tree/v6.4.0",
+      "sourceArchiveSha256": "62d994c148b5ac9a851b03a771c2666b7e2e7c0ecb44260f695e5fcbafd33a86",
+      "shippedDirectory": "packages/skill/skill-ppt-master/assets/ppt-master",
+      "files": 12981,
+      "logicalBytes": 83654741,
+      "treeSha256": "cca6932ff33320f7b3e47682316916873363bbbf3752c36225d867796ee9adf3",
+      "digestAlgorithm": "For each relative path in lexicographic order: UTF-8 path, NUL, file bytes, NUL."
+    }
+  ]
+}

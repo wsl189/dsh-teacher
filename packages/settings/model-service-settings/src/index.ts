@@ -7,13 +7,10 @@
 
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
-import {
-  installSettingsSection,
-  settingsNamespace,
-} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 
 /** Settings namespace containing provider-owned typed model routes. */
-export const MODEL_SERVICE_SETTINGS_NAMESPACE = settingsNamespace('model-service-settings')
+export const MODEL_SERVICE_SETTINGS_NAMESPACE = 'model-service-settings'
 
 /** The four product model types accepted by Models settings. */
 export const MODEL_SERVICE_TYPES = ['chat', 'vision', 'speech', 'image'] as const
@@ -180,10 +177,12 @@ export const name = 'model-service-settings'
  * @param config - composition-layer provider routes.
  */
 export function apply(ctx: Context, config: Config): void {
-  installSettingsSection(ctx, MODEL_SERVICE_SETTINGS_NAMESPACE, Config, config, {
-    setSource: () => {},
-    onChange: () => {},
-    validate: assertModelServiceSettings,
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, MODEL_SERVICE_SETTINGS_NAMESPACE, Config, config, {
+      setSource: () => {},
+      onChange: () => {},
+      validate: assertModelServiceSettings,
+    })
   })
 }
 

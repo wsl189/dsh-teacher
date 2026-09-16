@@ -40,7 +40,7 @@ describe('bundled Univer Viewer without a license', () => {
       handle.agent.followup(createUserMessage({ content: [{ type: 'text', text: prompt }], source: { kind: 'user' } }))
       await handle.agent.whenIdle()
     }
-    const results = handle.agent.session.events.filter(event => event.type === 'tool/result')
+    const results = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
     expect(results).toHaveLength(1)
     expect(results.every(event => event.data.message.content.every(block => !block.isError))).toBe(true)
     const query = new URLSearchParams({
@@ -49,12 +49,12 @@ describe('bundled Univer Viewer without a license', () => {
     const response = await scaffold.hostFetch('/univer-api/state?' + query.toString())
     expect(response.status).toBe(200)
     const state = await response.json() as { gateway: string; worktrees: { worktreeUrl: string }[] }
-    expect(await (await fetch(state.gateway + '/runtime-config')).json()).toEqual({ license: '' })
     const worktree = state.worktrees[0]
     if (worktree === undefined) throw new Error('the recorded Univer Sheet has no draft worktree')
-    viewerUrl = worktree.worktreeUrl
+    viewerUrl = new URL(worktree.worktreeUrl, scaffold.baseUrl).href
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
+    await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
   }, 60_000)
 
   afterAll(async () => {
@@ -76,38 +76,14 @@ describe('bundled Univer Viewer without a license', () => {
     await page.getByRole('tab', { name: 'Formulas', exact: true }).waitFor({ timeout: 20_000 })
     await page.getByText('General', { exact: true }).waitFor({ timeout: 20_000 })
     expect(await page.locator('body').innerText()).not.toContain('requires a valid UNIVER_LICENSE')
+    await page.getByRole('status', { name: 'Synced', exact: true }).waitFor({ timeout: 30_000 })
     expect(errors).toEqual([])
     await compareOrRefreshGolden(
       join(SNAPSHOT_DIR, 'ui.expected.md'), await page.locator('body').ariaSnapshot(), scaffold.mode,
     )
   })
 
-  it('still rejects a malformed runtime license value', async () => {
-    await page.route('**/runtime-config', route => route.fulfill({ json: { license: 123 } }))
-    await page.goto(viewerUrl, { waitUntil: 'load' })
-    await page.getByText(/requires a valid UNIVER_LICENSE/).waitFor({ timeout: 20_000 })
-    expect(await page.locator('canvas').count()).toBe(0)
-  })
-
   it('keeps its snapshot inventory closed', async () => {
     await assertFixtureInventory(SNAPSHOT_DIR, ['session.jsonl', 'ui.expected.md', 'workspace'])
   })
-})
-
-it('forwards an explicitly configured license to the Univer Viewer', async () => {
-  vi.stubEnv('UNIVER_LICENSE', ' configured-license ')
-  let scaffold: WebScaffold | undefined
-  try {
-    scaffold = await launchWebScaffold()
-    const response = await scaffold.hostFetch('/univer-api/gateway/start', { method: 'POST' })
-    const started = await response.json() as { ok: boolean; gateway: string }
-    expect(started.ok).toBe(true)
-    expect(await (await fetch(started.gateway + '/runtime-config')).json()).toEqual({ license: 'configured-license' })
-  } finally {
-    try {
-      await scaffold?.close()
-    } finally {
-      vi.unstubAllEnvs()
-    }
-  }
 })

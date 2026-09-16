@@ -2,8 +2,9 @@
 
 import { randomUUID } from 'node:crypto'
 import type { Context } from '@deepseek-ai/cordis'
-import { assertNever, BlockAssembler, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
-import { SessionId } from '@deepseek-ai/dsh-session'
+import { AssistantStreamAccumulator, BlockAssembler, createAssistantMessage, createUserMessage } from '@deepseek-ai/dsh-llm'
+import { assertNever } from '@deepseek-ai/dsh-util-values'
+import { canonicalHeader, SessionId } from '@deepseek-ai/dsh-session'
 import type { ModelCheckRequest, ModelCheckResult } from './types.ts'
 
 /** Limits resolved by the Session Controller before a check starts. */
@@ -49,7 +50,7 @@ export async function checkModel(
       session.append('turn/start', { turn: 1 })
       session.append('step/start', { turn: 1, step: 1 })
       session.append('request/header', {
-        header: { config: prepared.config, adapterDefaults: prepared.adapterDefaults }, reason: 'initial',
+        header: canonicalHeader({ config: prepared.config, adapterDefaults: prepared.adapterDefaults }), reason: 'initial',
       })
       const input = createUserMessage({
         content: [{ type: 'text', text: 'Reply with OK.' }],
@@ -57,13 +58,14 @@ export async function checkModel(
       })
       session.append('user/message', input, { surfaceOp: 'append' })
       const assembler = new BlockAssembler()
+      const stream = new AssistantStreamAccumulator()
       let finished = false
       try {
         for await (const chunk of prepared.stream({
           ...prepared.config, messages: [input], sessionId: session.id, signal,
         })) {
           signal.throwIfAborted()
-          session.append('assistant/chunk', { turn: 1, step: 1, chunk })
+          stream.push({ time: Date.now(), chunk })
           assembler.push(chunk)
           if (chunk.type === 'finish') finished = true
         }
@@ -83,11 +85,12 @@ export async function checkModel(
         }
         const message = createAssistantMessage({ content: assembler.blocks(), source: request })
         session.append('assistant/message', {
-          turn: 1, step: 1, message, ...assembler.usage === undefined ? {} : { usage: assembler.usage },
+          turn: 1, step: 1, message, stream: [...stream.snapshot()], ...assembler.usage === undefined ? {} : { usage: assembler.usage },
         }, { surfaceOp: 'append' })
         session.append('step/end', { turn: 1, step: 1 })
         session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
       } catch (error) {
+        session.append('assistant/attempt', { turn: 1, step: 1, stream: [...stream.snapshot()] })
         session.append('step/end', { turn: 1, step: 1 })
         session.append('turn/end', {
           turn: 1, reason: { kind: 'error', error: {

@@ -2,9 +2,6 @@
   "name": "@deepseek-ai/dsh-desktop",
   "description": "Electron and NSIS desktop distribution for the DSH Web application",
   "version": "1.2.8",
-  "publishConfig": {
-    "access": "public"
-  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/deepseek-ai/deepseek-harness.git",
@@ -15,10 +12,15 @@
   "scripts": {
     "bundle": "tsdown",
     "generate:icon": "tsx scripts/generate-icon.ts",
-    "package:win": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never"
+    "package:win": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never",
+    "build": "tsc -b && tsdown",
+    "package:win:x64": "pnpm run package:win",
+    "package:win:x64:dir": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win --x64 --dir --publish never"
   },
   "license": "MIT",
   "dependencies": {
+    "electron-updater": "6.8.9",
+    "semver": "^7.8.5",
     "@joplin/turndown-plugin-gfm": "^1.0.67",
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
@@ -33,19 +35,28 @@
     "@deepseek-ai/dsh-util-crypto": "workspace:^",
     "@deepseek-ai/dsh-util-workspace-path": "workspace:^",
     "electron-log": "5.4.4",
-    "electron-updater": "6.8.9",
     "turndown": "^7.2.4"
   },
   "devDependencies": {
+    "@aws-sdk/client-s3": "3.1067.0",
+    "@deepseek-ai/dsh-home-paths": "workspace:^",
+    "@electron/notarize": "2.5.0",
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^22.20.0",
+    "@types/semver": "^7.8.0",
+    "app-builder-lib": "26.15.3",
     "electron": "43.4.1",
     "electron-builder": "26.15.7",
-    "sharp": "^0.35.3",
+    "extract-zip": "^2.0.1",
+    "js-yaml": "^4.2.0",
+    "pnpm": "11.7.0",
     "tar": "7.5.22",
-    "typescript": "^6.0.3"
+    "typescript": "^6.0.3",
+    "sharp": "^0.35.3"
   },
   "files": [
     "lib/*.js",
     "lib/*.cjs"
-  ]
+  ],
+  "private": true
 }

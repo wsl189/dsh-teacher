@@ -3,6 +3,10 @@
     - button "Use the ask_user_question tool to" [disabled]
   - img
   - text: Standard mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -17,10 +21,6 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - text: Running
 - button "Ask question waiting":
   - img
@@ -47,5 +47,5 @@
   - button "Next question" [disabled]:
     - img
   - status
-  - button "Skip this question"
+  - button "Skip"
   - button "Submit" [disabled]

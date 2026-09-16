@@ -47,15 +47,15 @@ describe('application entrypoints', () => {
     ])
   })
 
-  it('classifies the Windows-MCP test servers without admitting sibling executables', () => {
+  it('classifies test servers without admitting sibling executables', () => {
     const root = fixture()
-    write(root, 'packages/mcp/windows-mcp/tests/fixtures/desktop-server.mjs', '#!/usr/bin/env node\n')
-    write(root, 'packages/mcp/windows-mcp/tests/fixtures/capabilities-server.mjs', '#!/usr/bin/env node\n')
+    write(root, 'packages/test-support/llm-mock-server/src/bin.ts', '#!/usr/bin/env node\n')
+    write(root, 'packages/sdk/client/tests/fake-runtime.ts', '#!/usr/bin/env node\n')
     expect(applicationEntrypointViolations(root)).toEqual([])
 
-    write(root, 'packages/mcp/windows-mcp/tests/fixtures/rogue.mjs', '#!/usr/bin/env node\n')
+    write(root, 'packages/mcp/mcp-client/tests/fixtures/rogue.mjs', '#!/usr/bin/env node\n')
     expect(applicationEntrypointViolations(root)).toEqual([
-      'packages/mcp/windows-mcp/tests/fixtures/rogue.mjs: executable source has no application/build/test classification',
+      'packages/mcp/mcp-client/tests/fixtures/rogue.mjs: executable source has no application/build/test classification',
     ])
   })
 
@@ -83,6 +83,15 @@ describe('application entrypoints', () => {
 
     expect(applicationEntrypointViolations(root)).toEqual([
       'apps/rogue/src/bin.ts: executable source has no application/build/test classification',
+    ])
+  })
+
+  it('rejects a packaging dispatcher owned by the CLI workspace', () => {
+    const root = fixture()
+    write(root, 'apps/cli/src/runtime-bootstrap.ts', '#!/usr/bin/env node\n')
+
+    expect(applicationEntrypointViolations(root)).toEqual([
+      'apps/cli/src/runtime-bootstrap.ts: executable source has no application/build/test classification',
     ])
   })
 

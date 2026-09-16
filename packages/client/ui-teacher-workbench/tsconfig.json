@@ -2,30 +2,65 @@
   "extends": "../../../tsconfig.base.client.json",
   "compilerOptions": {
     "rootDir": "src",
-    "customConditions": ["browser"],
+    "customConditions": [
+      "browser"
+    ],
     "outDir": "lib/types"
   },
   "include": [
     "src"
   ],
   "references": [
-    { "path": "../../../vendor/cordis" },
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../../api/remotes/tsconfig.client.json" },
-    { "path": "../../api/session-controller/tsconfig.client.json" },
-    { "path": "../../runtime-diagnostics/invariants" },
-    { "path": "../../settings/settings" },
-    { "path": "../../util/concurrency" },
-    { "path": "../../typert/protocol" },
-    { "path": "../connection/tsconfig.client.json" },
-    { "path": "../locale" },
-    { "path": "../store" },
-    { "path": "../ui-layout" },
-    { "path": "../ui-primitives" },
-    { "path": "../ui-renderer" },
-    { "path": "../ui-settings" },
-    { "path": "../ui-sidebar" },
-    { "path": "../ui-slots" },
-    { "path": "../ui-workspace" }
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../../api/remotes/tsconfig.client.json"
+    },
+    {
+      "path": "../../api/session-controller/tsconfig.client.json"
+    },
+    {
+      "path": "../../settings/settings"
+    },
+    {
+      "path": "../../util/concurrency"
+    },
+    {
+      "path": "../../typert/protocol"
+    },
+    {
+      "path": "../connection/tsconfig.client.json"
+    },
+    {
+      "path": "../locale"
+    },
+    {
+      "path": "../store"
+    },
+    {
+      "path": "../ui-layout"
+    },
+    {
+      "path": "../ui-primitives"
+    },
+    {
+      "path": "../ui-renderer"
+    },
+    {
+      "path": "../ui-settings"
+    },
+    {
+      "path": "../ui-sidebar"
+    },
+    {
+      "path": "../ui-slots"
+    },
+    {
+      "path": "../ui-workspace"
+    }
   ]
 }

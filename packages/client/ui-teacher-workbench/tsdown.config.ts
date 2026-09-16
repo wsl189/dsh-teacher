@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createRequire } from 'node:module'
 
-const bundle = clientBundle('@deepseek-ai/dsh-client-ui-teacher-workbench', ['lib/types/index.js', 'lib/types/invariant.js'])
+const bundle = clientBundle('@deepseek-ai/dsh-client-ui-teacher-workbench', ['lib/types/index.js'])
 const require = createRequire(import.meta.url)
 const fontStyles = new Set(['mathlive/fonts.css', 'katex/dist/katex.min.css', './fonts/symbols.css'])
 

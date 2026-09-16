@@ -1,5 +1,7 @@
 /** Connection verification reuses one model and ignores obsolete responses. */
 
+import { Context } from '@deepseek-ai/cordis'
+import { TestRemote, RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import type { ModelCheckResult, ModelProviderGroup, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -51,7 +53,10 @@ function harness() {
       checkModel,
     },
   }
-  const mirror = new SettingsDescribeMirror(wire)
+  const ctx = new Context()
+  new TestRemote(ctx, { ...wire })
+  onTestFinished(() => ctx.fiber.dispose())
+  const mirror = new SettingsDescribeMirror(ctx)
   const controller = new ModelsSettingsStore(wire, settingsSchema, mirror)
   onTestFinished(() => { controller.dispose() })
   return {
@@ -161,7 +166,7 @@ describe('automatic connection verification', () => {
   it('preserves a failed connection until retry without trying the remaining models', async () => {
     const { controller, checkModel } = harness()
     await controller.load()
-    checkModel.mockResolvedValueOnce({ ok: false, error: { code: 'MODEL_NOT_FOUND', message: 'Invalid model id', details: {} } })
+    checkModel.mockResolvedValueOnce({ ok: false, error: new RemoteError('session/model-check-failed', 'Invalid model id', { provider: 'saved', model: 'first' }) })
     await controller.verifyConnection('saved')
     expect(controller.store.getSnapshot().checks.saved).toMatchObject({ model: 'first', status: 'failed', error: 'Invalid model id' })
     await controller.verifyConnection('saved')

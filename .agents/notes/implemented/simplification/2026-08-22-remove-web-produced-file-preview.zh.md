@@ -14,7 +14,7 @@ Status: implemented
 
 产出文件路径不包含 `session.previewFile` RPC、`previewFileMaxBytes` 配置、`conversation.details.file` 插槽、预览选择状态或 Host 文件读取传输，也没有保留兼容路径或持久数据。原预览决策已完整合并至本记录，其英文／中文配对和一致性记录随之删除。
 
-浏览器保留的输入框上传文件是另一类当前调用方，由[上传文件预览决策](../feature/2026-08-23-uploaded-document-sidebar-preview.zh.md)负责。该渲染器读取浏览器已经拥有的未发送 `File`，不创建工作区路径或 Host RPC，并随草稿关闭；它不会恢复产出文件预览行为。
+浏览器保留的输入框上传文件是另一类当前调用方，由[上传文件预览决策](../architecture/2026-09-16-official-release-integration.zh.md)负责。该渲染器读取浏览器已经拥有的未发送 `File`，不创建工作区路径或 Host RPC，并随草稿关闭；它不会恢复产出文件预览行为。
 
 ## Alternatives considered
 

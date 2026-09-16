@@ -5,13 +5,15 @@ import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { exampleMathmlToOffice, formatExampleOfficeMath } from './example-word-math.ts'
 import { exampleWordIsEdited, normalizeExampleFigures, normalizeExampleLetterRuns, normalizeExampleParagraphs } from './example-word-layout.ts'
 import { normalizeExampleImageSizes } from './example-word-images.ts'
+import { normalizeExampleComplement } from './example-word-complement.ts'
+import { normalizeExampleRelations } from './example-word-relations.ts'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const MATH_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 const MATHML_NS = 'http://www.w3.org/1998/Math/MathML'
 
 /**
- * Apply textbook typography, source-relative illustrations, and missing native equation colors.
+ * Apply textbook typography, native complement runs, source-relative illustrations, and missing equation colors.
  * @param bytes - generated collection document; lowercase bold identifiers gain mathematical italics without changing equation text.
  * @returns normalized bytes, or undefined when the saved typography and layout already match.
  */
@@ -105,6 +107,10 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
         for (const name of ['w:b', 'w:bCs']) property(properties, name, { val: String(style === 'DshExampleVector') })
         for (const name of ['w:i', 'w:iCs']) property(properties, name, { val: String(variable) })
       }
+    }
+    if (path === 'word/document.xml') {
+      if (normalizeExampleComplement(document, entries)) changed = true
+      if (normalizeExampleRelations(document, entries)) changed = true
     }
     const normalized = new XMLSerializer().serializeToString(document)
     if (normalized === source) continue

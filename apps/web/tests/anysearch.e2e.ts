@@ -7,15 +7,15 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import type { ToolResult } from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-web'
 import { launchWebScaffold, type WebScaffold } from './scaffold.ts'
 
 const KEY_REF = credentialRef('DSH_ANYSEARCH_BUNDLED_TEST_KEY')
 const SETTINGS_KEY_REF = credentialRef('DSH_ANYSEARCH_SETTINGS_TEST_KEY')
-const SETTINGS_NS = settingsNamespace('web-search-anysearch')
-const DEEPSEEK_SETTINGS_NS = settingsNamespace('web-search-deepseek')
+const SETTINGS_NS = 'web-search-anysearch'
+const DEEPSEEK_SETTINGS_NS = 'web-search-deepseek'
 const SOURCE_URL = 'https://docs.example.test/anysearch'
 const SOURCE = { title: 'AnySearch fixture', url: SOURCE_URL, snippet: 'Search integration', content: 'Page content' }
 

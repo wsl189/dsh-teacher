@@ -1,6 +1,6 @@
 ---
 description: "零依赖有界异步映射：为模型支持与普通并发工作提供来源顺序结果和完全停稳失败。"
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-concurrency
@@ -79,5 +79,7 @@ import { mapConcurrently } from '@deepseek-ai/dsh-concurrency'
 
 <a id="dev-note"></a>
 ### 开发备注
+
+不发布运行时 invariant 配套插件；映射任务的接纳和结束不存在服务所拥有的事件关系。
 
 本库不承载能力专用的取消、结果联合、重试或进度上报；这些策略由 Consumer 负责。

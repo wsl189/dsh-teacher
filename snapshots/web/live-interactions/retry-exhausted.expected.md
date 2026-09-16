@@ -3,6 +3,10 @@
     - button "Reply with a one-sentence description" [disabled]
   - img
   - text: Standard mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -17,24 +21,18 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - group:
   - status: Retried model request (2/2) · {{duration}}
 - status:
   - text: This turn failedupstream 503
   - code: SERVER
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps
+- img
+- text: 1 turns 1 steps

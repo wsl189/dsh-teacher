@@ -14,7 +14,7 @@ Produced-file chips and matching inline-code mentions use the existing `openFile
 
 The produced-file path has no `session.previewFile` RPC, `previewFileMaxBytes` configuration, `conversation.details.file` slot, preview selection state, or Host file-read transport. No compatibility path or durable data remains. The former preview decision is fully consolidated into this note and removed with its English/Chinese pair and consistency record.
 
-Browser-held composer uploads are a separate current consumer described by the [uploaded-document preview decision](../feature/2026-08-23-uploaded-document-sidebar-preview.md). That renderer reads an unsent `File` already owned by the browser, creates no workspace path or Host RPC, and closes with the draft; it does not restore produced-file preview behavior.
+Browser-held composer uploads are a separate current consumer described by the [uploaded-document preview decision](../architecture/2026-09-16-official-release-integration.md). That renderer reads an unsent `File` already owned by the browser, creates no workspace path or Host RPC, and closes with the draft; it does not restore produced-file preview behavior.
 
 ## Alternatives considered
 

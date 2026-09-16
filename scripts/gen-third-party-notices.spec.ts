@@ -11,11 +11,11 @@ import {
   UNIVER_PRO_RUNTIME_PACKAGES,
   claudeDistributionFromManifest,
   collectPythonDependencies,
+  assertRuntimeLicenses,
   isOwnerAuthorizedRuntime,
   isPermissive,
   type Manifest,
   manifestPatterns,
-  parseHashedRequirementPins,
   parsePyprojectRequirements,
   parseVendoredRows,
   render,
@@ -33,32 +33,19 @@ describe('THIRD_PARTY_NOTICES.md', () => {
   // already runs in the test lane, so the check costs no extra CI process.
   // Pre-commit regenerates the file whenever a manifest is staged, so reaching
   // this assertion means the notices were committed without that hook.
-  it('matches what the generator produces from the current manifests', () => {
-    const generated = render()
+  // This case resolves all browser build graphs as well as installed license metadata.
+  it('matches what the generator produces from the current manifests', {
+    timeout: 120_000,
+  }, async () => {
+    const generated = await render()
     expect(generated).toContain('It depends on the third-party software listed below.')
     expect(generated).toContain('## Bundled skill distributions')
-    expect(generated).toContain('[`PPT Master`](https://github.com/hugohe3/ppt-master) 6.1.0')
-    expect(generated).toContain('12,939-file, 79,496,215-byte upstream Skill directory')
-    expect(generated).toContain('## Bundled Windows-MCP desktop runtime')
-    expect(generated).toContain('CPython](https://www.python.org/) 3.14.7')
-    expect(generated).toContain('Windows-MCP](https://github.com/CursorTouch/Windows-MCP) 0.8.5')
-    expect(generated).toContain('[source snapshot](third-party/windows-mcp/windows-mcp-source.zip)')
-    expect(generated).toContain('[sampling patch](third-party/windows-mcp/patches/correlated-sampling.patch)')
-    expect(generated).toContain('The GPL `fuzzywuzzy`, `Levenshtein`, and `python-Levenshtein` distributions are excluded.')
+    expect(generated).toContain('[`PPT Master`](https://github.com/hugohe3/ppt-master) 6.4.0')
+    expect(generated).toContain('12,981-file, 83,654,741-byte upstream Skill directory')
     expect(generated).toContain('## Editable Word equations')
     expect(generated).toContain('mathml2omml-0.5.0-source.tar.gz')
     expect(generated).toContain('Users may modify it and reverse engineer the combined application')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
-  })
-})
-
-describe('parseHashedRequirementPins', () => {
-  it('normalizes Python distribution names and rejects duplicates', () => {
-    expect(parseHashedRequirementPins('The_Fuzz==0.22.1\nwindows-mcp==0.8.5\n')).toEqual(new Map([
-      ['the-fuzz', '0.22.1'],
-      ['windows-mcp', '0.8.5'],
-    ]))
-    expect(() => parseHashedRequirementPins('the.fuzz==1 \\\nthe_fuzz==2 \\\n')).toThrow(/duplicate Windows-MCP requirement the-fuzz/)
   })
 })
 
@@ -73,6 +60,37 @@ function workspace(entries: Record<string, Manifest>): { manifests: Map<string, 
 }
 
 describe('tierExternalDeps', () => {
+  it('keeps license rejection active when a browser library is declared for development', () => {
+    const { manifests, names } = workspace({
+      'packages/client/ui/package.json': { devDependencies: { 'browser-lib': '^1', 'test-tool': '^1' } },
+    })
+    const tiers = tierExternalDeps(manifests, names, new Set(['browser-lib']))
+    const dependencies = [{ name: 'browser-lib', license: 'GPL-3.0-only' }, { name: 'test-tool', license: 'GPL-3.0-only' }]
+      .filter(dep => tiers.get(dep.name))
+    expect(dependencies.map(dep => dep.name)).toEqual(['browser-lib'])
+    expect(() => { assertRuntimeLicenses(dependencies) }).toThrow('browser-lib (GPL-3.0-only)')
+    expect(() => { assertRuntimeLicenses([{ name: 'browser-lib', license: 'MIT' }]) }).not.toThrow()
+    expect(() => { assertRuntimeLicenses([{ name: CLAUDE_AGENT_SDK_PACKAGE, license: 'SEE LICENSE IN README.md' }]) })
+      .not.toThrow()
+  })
+
+  it('keeps browser-bundled development dependencies in runtime disclosures', () => {
+    const { manifests, names } = workspace({
+      'packages/client/ui/package.json': {
+        name: '@fixture/ui', devDependencies: { react: '^18', 'browser-lib': '^1', 'type-only': '^1' },
+      },
+    })
+    expect(tierExternalDeps(manifests, names, new Set(['react', 'browser-lib']))).toEqual(new Map([
+      ['tsx', true], ['react', true], ['browser-lib', true], ['type-only', false],
+    ]))
+  })
+
+  it('rejects a browser library missing from the disclosed declarations', () => {
+    const { manifests, names } = workspace({})
+    expect(() => tierExternalDeps(manifests, names, new Set(['missing-lib'])))
+      .toThrow('browser package missing-lib has no workspace dependency declaration')
+  })
+
   it('tiers by declaring area, not by the declaring section name', () => {
     const { manifests, names } = workspace({
       // Root tooling and test infrastructure never ship, whichever section declares them.
@@ -330,7 +348,7 @@ describe('owner-authorized runtime distributions', () => {
     expect(isOwnerAuthorizedRuntime(`${CLAUDE_AGENT_SDK_PACKAGE}-linux-x64`))
       .toBe(false)
     expect(isOwnerAuthorizedRuntime(`${OFFICE_VIEWER_PACKAGE}-fork`)).toBe(false)
-    expect(isOwnerAuthorizedRuntime(`${UNIVER_PRO_RUNTIME_PACKAGES[1]}-win32-x64-msvc`)).toBe(false)
+    expect(isOwnerAuthorizedRuntime(`${UNIVER_PRO_RUNTIME_PACKAGES[0]}-win32-x64-msvc`)).toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
     expect(isPermissive('AGPL-3.0')).toBe(false)
@@ -413,14 +431,14 @@ describe('owner-authorized runtime distributions', () => {
     })).toThrow('outside its authorized platform-payload identity')
   })
 
-  it('derives the exact commercial Univer roots and their platform payloads', () => {
+  it('derives the exact commercial Univer roots and bundled modules', () => {
     expect(univerCommercialDistributionFromManifests({
       name: UNIVER_OFFICE_PACKAGE,
-      version: '0.2.12',
+      version: '0.3.0',
       dependencies: {
         '@univerjs-pro/cli-assets': '0.1.0',
-        '@univerjs-pro/engine-formula-rust-binding': '1.2.3',
-        '@univerjs-pro/exchange-node-binding': '0.4.5',
+        '@univerjs-pro/engine-formula-rust-binding': '1.0.0',
+        '@univerjs-pro/exchange-node-binding': '0.1.2',
       },
       devDependencies: {
         '@univer-cli/content-execution': '9.8.7',
@@ -431,27 +449,23 @@ describe('owner-authorized runtime distributions', () => {
       { name: '@univerjs-pro/cli-assets', version: '0.1.0' },
       {
         name: '@univerjs-pro/engine-formula-rust-binding',
-        version: '1.2.3',
-        optionalDependencies: {
-          '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc': '1.2.3',
-        },
+        version: '1.0.0',
+        optionalDependencies: { '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc': '1.0.0' },
       },
       {
         name: '@univerjs-pro/exchange-node-binding',
-        version: '0.4.5',
-        optionalDependencies: {
-          '@univerjs-pro/exchange-node-binding-linux-x64-gnu': '0.4.5',
-        },
+        version: '0.1.2',
+        optionalDependencies: { '@univerjs-pro/exchange-node-binding-win32-x64-msvc': '0.1.2' },
       },
     ])).toEqual({
-      pluginVersion: '0.2.12',
+      pluginVersion: '0.3.0',
       packages: [
         { name: '@univer-cli/content-execution', version: '9.8.7', role: 'bundled artifact module' },
         { name: '@univerjs-pro/cli-assets', version: '0.1.0', role: 'runtime dependency' },
-        { name: '@univerjs-pro/engine-formula-rust-binding', version: '1.2.3', role: 'runtime dependency' },
-        { name: '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc', version: '1.2.3', role: 'optional platform payload' },
-        { name: '@univerjs-pro/exchange-node-binding', version: '0.4.5', role: 'runtime dependency' },
-        { name: '@univerjs-pro/exchange-node-binding-linux-x64-gnu', version: '0.4.5', role: 'optional platform payload' },
+        { name: '@univerjs-pro/engine-formula-rust-binding', version: '1.0.0', role: 'runtime dependency' },
+        { name: '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc', version: '1.0.0', role: 'optional platform payload' },
+        { name: '@univerjs-pro/exchange-node-binding', version: '0.1.2', role: 'runtime dependency' },
+        { name: '@univerjs-pro/exchange-node-binding-win32-x64-msvc', version: '0.1.2', role: 'optional platform payload' },
         { name: '@univerjs-pro/sheets', version: '9.8.7', role: 'bundled artifact module' },
       ],
     })
@@ -482,7 +496,7 @@ describe('owner-authorized runtime distributions', () => {
       version: '1.0.0',
       dependencies,
       devDependencies,
-    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[1]
+    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[0]
       ? { ...root, version: '2.0.0' }
       : root))).toThrow('does not match the 1.0.0 version')
     expect(() => univerCommercialDistributionFromManifests({
@@ -490,7 +504,7 @@ describe('owner-authorized runtime distributions', () => {
       version: '1.0.0',
       dependencies,
       devDependencies,
-    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[1]
+    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[0]
       ? { ...root, optionalDependencies: { '@univerjs-pro/unrelated': '1.0.0' } }
       : root))).toThrow('outside its authorized platform-payload identity')
   })
@@ -508,12 +522,12 @@ describe('owner-authorized runtime distributions', () => {
 
 describe('manifestPatterns', () => {
   it('derives globs from the declared members, so a new member area is read', () => {
-    expect(manifestPatterns(['packages/*/*', 'tools/*', 'native/landlock-run', 'native/landlock-run/packages/*'])).toEqual([
+    expect(manifestPatterns(['packages/*/*', 'tools/*', 'native/system', 'native/system/packages/*'])).toEqual([
       'package.json',
       'packages/*/*/package.json',
       'tools/*/package.json',
-      'native/landlock-run/package.json',
-      'native/landlock-run/packages/*/package.json',
+      'native/system/package.json',
+      'native/system/packages/*/package.json',
     ])
   })
 })

@@ -3,6 +3,10 @@
     - button "Use the ask_user_question tool to" [disabled]
   - img
   - text: Standard mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -17,10 +21,6 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - button "Think The user wants me to ask them a checkpoint question first, then continue with whatever they interject. Let me do exactly that.":
   - img
   - img
@@ -32,12 +32,9 @@
 - text: "Interjection: include the word ORANGE in your final reply."
 - button "Copy":
   - img
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

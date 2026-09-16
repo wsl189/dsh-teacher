@@ -1,0 +1,42 @@
+[
+  {
+    "name": "补集全集",
+    "latex": "\\text{∁}_{U}{A}"
+  },
+  {
+    "name": "补集替换全集",
+    "latex": "\\text{∁}_{U}{A}"
+  },
+  {
+    "name": "补集多个字母",
+    "latex": "\\text{∁}_{UV}{A}"
+  },
+  {
+    "name": "下标",
+    "latex": "A_{n}"
+  },
+  {
+    "name": "乘方",
+    "latex": "A^{n}"
+  },
+  {
+    "name": "分数",
+    "latex": "\\frac{A}{n}"
+  },
+  {
+    "name": "平方根",
+    "latex": "\\sqrt{x}"
+  },
+  {
+    "name": "n 次根式",
+    "latex": "\\sqrt[n]{A}"
+  },
+  {
+    "name": "绝对值",
+    "latex": "\\left|x\\right|"
+  },
+  {
+    "name": "帽号",
+    "latex": "\\hat{U}"
+  }
+]

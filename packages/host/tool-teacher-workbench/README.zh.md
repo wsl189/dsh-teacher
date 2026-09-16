@@ -80,4 +80,6 @@ kind: "package-reference"
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；Host 文档 schema 负责工作台数据之间的权威关系。
+
 语义校验与持久化保留在 Host 服务中；工具处理器把模型意图转换为这些权威操作，并报告已提交结果。

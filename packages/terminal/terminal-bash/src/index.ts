@@ -11,7 +11,8 @@ import { TerminalBackendCleanupError } from '@deepseek-ai/dsh-terminal'
 import type { TerminalBackend, TerminalBackendSpawnSpec, TerminalSendOperation } from '@deepseek-ai/dsh-terminal'
 import type { SubprocessTerminalHandle, SubprocessTerminalSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import type { SandboxExecutionPolicy } from '@deepseek-ai/dsh-sandbox'
-import { effectiveSandboxMode } from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-session-projection'
 import { ENCODING_PREAMBLE } from '@deepseek-ai/dsh-pwsh-local'
 import { type Config, type ResolvedConfig, resolveConfig, type ShellDialect, validateConfig } from './config.ts'
 import { LocalPtySession } from './session.ts'
@@ -22,12 +23,13 @@ export type { Config as TerminalLocalConfig } from './config.ts'
 
 /** Cordis plugin name. */
 export const name = 'terminal-bash'
-/** Required services: PTY registry, shared confinement policy, and process substrate. */
-export const inject = ['terminals', 'sandboxPolicy', 'subprocess']
+/** Required services: terminal registry, shared confinement policy, projection registry, and process substrate. */
+export const inject = ['terminals', 'sandboxPolicy', 'sessionProjections', 'subprocess']
 
 interface SandboxModeFenceState {
   pty: Context['terminals']
   sandboxPolicy: Context['sandboxPolicy']
+  sessionProjections: Context['sessionProjections']
 }
 
 const sandboxModeFences = new WeakMap<Agent, SandboxModeFenceState>()
@@ -37,15 +39,21 @@ function ensureSandboxModeFence(ctx: Context, owner: Agent): void {
   if (existing !== undefined) {
     existing.pty = ctx.terminals
     existing.sandboxPolicy = ctx.sandboxPolicy
+    existing.sessionProjections = ctx.sessionProjections
     return
   }
-  const state: SandboxModeFenceState = { pty: ctx.terminals, sandboxPolicy: ctx.sandboxPolicy }
+  const state: SandboxModeFenceState = {
+    pty: ctx.terminals,
+    sandboxPolicy: ctx.sandboxPolicy,
+    sessionProjections: ctx.sessionProjections,
+  }
   sandboxModeFences.set(owner, state)
   owner.ctx.on('internal/dispatch', (_mode, eventName, args) => {
     if (eventName !== 'session/event') return
     const [session, event] = args as [Session, SessionEvent]
     if (session !== owner.session || event.type !== 'sandbox/mode') return
-    const currentMode = effectiveSandboxMode(session.events) ?? state.sandboxPolicy.defaultMode
+    const folded = state.sessionProjections.stateOf(session, 'sandboxMode') ?? null
+    const currentMode = folded ?? state.sandboxPolicy.defaultMode
     if (event.data.mode === currentMode || !state.pty.hasOwnerActivity(owner)) return
     throw new Error(
       `cannot change sandbox mode from "${currentMode}" to "${event.data.mode}" while persistent terminal sessions are open or being created; wait for creation to settle and close them first`,
@@ -89,7 +97,7 @@ function childEnvironment(spec: TerminalBackendSpawnSpec, dialect: ShellDialect)
 export const PWSH_PROMPT_SETUP =
   "function prompt { [Console]::Write([char]27 + ']133;D;' + [int]$LASTEXITCODE + [char]7); '" + CONTROLLED_PROMPT + "' }"
 
-function spawnArgv(ctx: Context, config: ResolvedConfig, policy: SandboxExecutionPolicy): string[] {
+async function spawnArgv(ctx: Context, config: ResolvedConfig, policy: SandboxExecutionPolicy, signal?: AbortSignal): Promise<string[]> {
   const argv = [config.shellPath, ...config.shellArgs]
   if (policy.mode === 'danger-full-access') return argv
   const sandbox = ctx.get('sandbox')
@@ -97,7 +105,7 @@ function spawnArgv(ctx: Context, config: ResolvedConfig, policy: SandboxExecutio
     throw new Error(`terminal-bash: sandbox mode "${policy.mode}" requires a ctx.sandbox provider in the execution world`)
   }
   // Re-state the discriminant because object spread does not preserve its narrowed type.
-  return sandbox.confine(argv, { ...policy, mode: policy.mode }).argv
+  return (await sandbox.confine(argv, { ...policy, mode: policy.mode }, signal)).argv
 }
 
 // TODO(pty-initialize-race-home): Fold this outer abort race into
@@ -184,7 +192,8 @@ export class BashTerminalBackend implements TerminalBackend {
     spec.signal?.throwIfAborted()
     ensureSandboxModeFence(this.ctx, spec.owner)
     const policy = this.ctx.sandboxPolicy.resolve({ session: spec.owner.session })
-    const argv = spawnArgv(this.ctx, this.config, policy)
+    const argv = await spawnArgv(this.ctx, this.config, policy, spec.signal)
+    spec.signal?.throwIfAborted()
     if (argv[0] === undefined) throw new Error('terminal-bash: sandbox returned empty argv')
     const terminal = await this.spawnTerminal({
       argv,
@@ -192,6 +201,7 @@ export class BashTerminalBackend implements TerminalBackend {
       env: childEnvironment(spec, this.config.shellDialect),
       rows: this.config.rows,
       cols: this.config.cols,
+      terminalType: 'dumb',
       graceMs: this.config.disposeGraceMs,
       signal: spec.signal,
     })

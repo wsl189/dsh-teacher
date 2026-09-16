@@ -1,15 +1,16 @@
 - dialog "选择机器人工作区目录":
   - banner:
     - heading "选择机器人工作区目录" [level=3]
-    - combobox "选择磁盘":
-      - option "C:\\"
-      - option "D:\\"
-      - option / [selected]
     - navigation "当前目录":
       - button /
       - button "tmp"
       - button "{{workspace}}"
       - button "saved-workspace"
+    - text: 直接输入路径 支持 Windows 盘符、UNC 与 POSIX 绝对路径。
+    - textbox "工作区绝对路径":
+      - /placeholder: 输入 Host 上的完整绝对路径
+      - text: {{cwd}}/saved-workspace
+    - button "前往"
   - list:
     - listitem:
       - button "课程资料"

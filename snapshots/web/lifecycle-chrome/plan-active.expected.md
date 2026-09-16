@@ -31,8 +31,8 @@
   - img
   - text: Standard mode
   - img
-- textbox "Describe what you want to build... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Describe what you want to build, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
 - button "Upload a file and extract it with MinerU OCR"
 - button "Choose File"
@@ -43,6 +43,3 @@
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: Details
-- button "Close details"
-- text: Click a tool row in the message flow to view its details

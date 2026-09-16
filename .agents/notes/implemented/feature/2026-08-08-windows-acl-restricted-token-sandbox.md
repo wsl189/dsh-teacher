@@ -46,4 +46,4 @@ The cross-platform process suites pin the ordinary Node `windowsHide` option, bo
 
 ## Related
 
-The [pwsh executor decision](2026-08-01-pwsh-tool-and-executor.md) owns the pwsh-sandbox/tool-pwsh dialect split this rung consumes.
+The [pwsh executor decision](../../archived/feature/2026-08-01-pwsh-tool-and-executor.md) owns the pwsh-sandbox/tool-pwsh dialect split this rung consumes.

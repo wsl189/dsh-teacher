@@ -43,9 +43,11 @@ const noAttention: AttentionSnapshot = new Map()
 
 const globalProps: Pick<
   SidebarWorkbenchProps,
-  'useSessions' | 'useSessionPendingInteraction' | 'useWorkspaces' | 'expandSidebar'
+  'useSessions' | 'useSessionPendingInteraction' | 'useWorkspaces' | 'expandSidebar' | 'usePanelInfo' | 'useResource'
 > = {
   expandSidebar: vi.fn(),
+  usePanelInfo: () => { throw new Error('unused panel hook') },
+  useResource: () => { throw new Error('unused resource hook') },
   useSessions: (() => undefined) as SidebarWorkbenchProps['useSessions'],
   useSessionPendingInteraction: selector => selector(noAttention),
   useWorkspaces: (() => undefined) as SidebarWorkbenchProps['useWorkspaces'],

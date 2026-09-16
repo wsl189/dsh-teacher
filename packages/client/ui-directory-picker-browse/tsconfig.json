@@ -10,7 +10,7 @@
   "references": [
     { "path": "../ui-teacher-workbench" },
     {
-      "path": "../../runtime-diagnostics/invariants"
+      "path": "../../../vendor/cordis"
     },
     {
       "path": "../ui-slots"

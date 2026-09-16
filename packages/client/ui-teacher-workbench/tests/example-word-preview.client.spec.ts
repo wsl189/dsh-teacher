@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 
 import { describe, expect, it, vi } from 'vitest'
+import { createRequire } from 'node:module'
+import katex from 'katex'
 import { strToU8, zipSync } from 'fflate/browser'
 import { renderExampleEquation, renderExampleWordEquations, renderExampleWordOptionRows } from '../src/client/example-word-preview.ts'
 
@@ -22,6 +24,26 @@ function preview() {
 }
 
 describe('collected Word formula previews', () => {
+  it.each([String.raw`\text{∁}_U A`, String.raw`\textbf{∁}_U A`, String.raw`\complement_U A`])('uses matching complement metrics in browser and Node renderers: %s', (latex) => {
+    const commonJsKatex = createRequire(import.meta.url)('katex') as typeof katex
+    const options = { output: 'html', strict: 'ignore' } as const
+    expect(commonJsKatex.renderToString(latex, options)).toBe(katex.renderToString(latex, options))
+  })
+
+  it.each([String.raw`\text{∁}_U A`, String.raw`\complement_U A`])('retains an upright complement and italic set variables when applying and reopening %s', (latex) => {
+    const applied = renderExampleEquation(latex)
+    const restored = preview()
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(applied.querySelector('math')!)), restored)
+    for (const container of [applied, restored]) {
+      const letters = Array.from(container.querySelectorAll('.katex-html .mathnormal')).map(node => node.textContent)
+      expect(letters).toEqual(['U', 'A'])
+      const sign = Array.from(container.querySelectorAll('.katex-html span')).find(node => node.childElementCount === 0 && node.textContent === '∁')
+      expect(sign).toBeDefined()
+      expect(sign?.closest('.mathnormal, .textit')).toBeNull()
+      expect(container.querySelector('math msub > mi, math msub > mtext')?.textContent).toBe('∁')
+    }
+  })
+
   it.each([{ command: 'sin', text: 'sin' }, { command: 'sum', text: '∑' }])('retains local bold on the $command operator in saved previews', ({ command, text }) => {
     const applied = renderExampleEquation(`\\mathbf{\\${command}}x+\\${command} y`)
     const restored = preview()

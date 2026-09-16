@@ -103,7 +103,7 @@ function api(overrides: {
     },
   }
   const wire = face as never
-  return { face: wire, mirror: new SettingsDescribeMirror(wire), seenRefs }
+  return { face: wire, mirror: new SettingsDescribeMirror({ remote: wire } as never), seenRefs }
 }
 
 describe('ModelsSettingsStore', () => {
@@ -286,7 +286,7 @@ describe('edge joins', () => {
     const store = new ModelsSettingsStore(
       face,
       settingsSchema,
-      new SettingsDescribeMirror(face, 'memory'),
+      new SettingsDescribeMirror({ remote: face } as never, 'memory'),
     )
     await store.load()
     expect(store.store.getSnapshot()).toMatchObject({

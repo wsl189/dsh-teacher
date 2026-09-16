@@ -70,4 +70,6 @@ kind: "package-reference"
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；命名空间验证器在提交之前检查每条提供方路由。
+
 增加协议时，必须同时提供类型归属、请求 Consumer、响应解析与聚焦测试。供应商默认值放在组合中，不要写进 namespace 校验器。

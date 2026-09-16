@@ -66,4 +66,6 @@ None until a user submits the edited draft through an ordinary message path.
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; each transcription request validates provider selection.
+
 Keep recordings and transcripts transient here; durability begins only in the Consumer that accepts an edited draft.

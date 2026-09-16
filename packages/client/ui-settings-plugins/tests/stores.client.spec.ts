@@ -5,8 +5,8 @@
 
 import { describe, expect, it, vi } from 'vitest'
 import type { SettingsPathOpView } from '@deepseek-ai/dsh-api-remotes/client'
-import { stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
-import { booleanField, CardForm, numberField, textField } from '../src/client/card-form.ts'
+import { RemoteError, stubSettingsScope, type StubSettingsScope } from '@deepseek-ai/dsh-client-test-runtime'
+import { CardForm, numberField, textField } from '../src/client/card-form.ts'
 import { AgentLoopCardController, type AgentLoopSettings } from '../src/client/agent-loop-card-controller.ts'
 import { BashCardController, type BashSettings } from '../src/client/bash-card-controller.ts'
 import {
@@ -19,10 +19,6 @@ import {
   type SubagentModelSelectionSettings,
 } from '../src/client/subagent-model-selection-card-controller.ts'
 import { WebSearchCardController, type WebSearchSettings } from '../src/client/web-search-card-controller.ts'
-import {
-  TeacherWorkbenchCardController,
-  type TeacherWorkbenchHostSettings,
-} from '../src/client/teacher-workbench-card-controller.ts'
 
 /** Make the stub behave like a Host that accepts every write. */
 function acceptWrites<T>(host: StubSettingsScope<T>): void {
@@ -50,13 +46,18 @@ function acceptWrites<T>(host: StubSettingsScope<T>): void {
   })
 }
 
+/** The card plugin's context, scripted down to the namespaces a card reaches. */
+function ctxWith(namespaces: object) {
+  return { remote: namespaces } as never
+}
+
 function credentialsApi(configured: boolean) {
   const describe = vi.fn(() => Promise.resolve({
     ok: true as const,
-    value: { ANYSEARCH_API_KEY: { configured, writable: true } },
+    value: { DEEPSEEK_API_KEY: { configured, writable: true } },
   }))
   const set = vi.fn(() => Promise.resolve({ ok: true as const, value: undefined }))
-  return { api: { describe, set } as never, describe, set }
+  return { ctx: ctxWith({ credentials: { describe, set } }), describe, set }
 }
 
 function modelsApi(options: {
@@ -71,9 +72,9 @@ function modelsApi(options: {
   const models = vi.fn(() => Promise.resolve({
     ...(options.error === undefined
       ? { ok: true as const, value: { groups: options.groups ?? [], failures: options.failures ?? [] } }
-      : { ok: false as const, error: { code: 'internal' as const, message: options.error, details: {} } }),
+      : { ok: false as const, error: new RemoteError('gateway/internal', options.error, {}) }),
   }))
-  return { api: { modelCatalog: models } as never, models }
+  return { ctx: ctxWith({ session: { modelCatalog: models } }), models }
 }
 
 function deferred<T>() {
@@ -324,23 +325,6 @@ describe('CardForm', () => {
 
     expect(subject.shell()).toMatchObject({ available: false, writable: false })
   })
-
-  it('round-trips exact boolean drafts', async () => {
-    const host = stubSettingsScope<Record<string, unknown>>()
-    acceptWrites(host)
-    const subject = new CardForm(host.scope, [booleanField('enabled')])
-    host.publish({ status: 'ready', writable: true, value: { enabled: false }, user: {} })
-
-    subject.actions().edit('enabled', 'true')
-    await subject.save()
-
-    expect(host.set).toHaveBeenCalledWith('enabled', true)
-    expect(subject.field('enabled').text).toBe('true')
-
-    const spec = booleanField('enabled')
-    expect(spec.parse('false')).toEqual({ kind: 'set', value: false })
-    expect(spec.parse('invalid')).toBeUndefined()
-  })
 })
 
 describe('BashCardController', () => {
@@ -449,34 +433,6 @@ describe('AgentLoopCardController', () => {
   })
 })
 
-describe('TeacherWorkbenchCardController', () => {
-  it('stages and saves a document-extraction storage preference', async () => {
-    const host = stubSettingsScope<TeacherWorkbenchHostSettings>()
-    acceptWrites(host)
-    const controller = new TeacherWorkbenchCardController(host.scope)
-    host.publish({
-      status: 'ready',
-      writable: true,
-      value: { segmentsRoot: '/questions' },
-      base: { segmentsRoot: '/questions' },
-      user: {},
-    })
-    const face = controller.inject()
-
-    expect(face.hooks.teacherWorkbenchCard.getSnapshot().segmentsRoot)
-      .toEqual({ text: '/questions', overridden: false, invalid: false })
-    face.edit('segmentsRoot', '/new-questions')
-    face.save()
-    await vi.waitFor(() => {
-      expect(host.set).toHaveBeenCalledWith('segmentsRoot', '/new-questions')
-    })
-    expect(face.hooks.teacherWorkbenchCard.getSnapshot()).toMatchObject({
-      dirty: false,
-      segmentsRoot: { text: '/new-questions', overridden: true },
-    })
-  })
-})
-
 describe('SubagentModelSelectionCardController', () => {
   it('joins stored routes with the live catalog without dropping unavailable choices', () => {
     const candidates = subagentModelCandidates(
@@ -503,7 +459,7 @@ describe('SubagentModelSelectionCardController', () => {
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 3,
       value: { enabled: false, allowedModels: [] }, user: {},
@@ -534,7 +490,7 @@ describe('SubagentModelSelectionCardController', () => {
 
   it('starts an empty draft when a ready test scope has no decoded value', () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
-    const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().api)
+    const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().ctx)
     host.publish({ status: 'ready', writable: true, revision: 0, value: undefined })
     const face = controller.inject()
 
@@ -550,7 +506,7 @@ describe('SubagentModelSelectionCardController', () => {
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
     const face = controller.inject()
 
@@ -577,7 +533,7 @@ describe('SubagentModelSelectionCardController', () => {
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
       failures: [{ id: 'beta', name: 'Beta', message: 'offline' }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 5,
       value: { enabled: true, allowedModels: [{ provider: 'alpha', model: 'fast' }] }, user: {},
@@ -610,7 +566,7 @@ describe('SubagentModelSelectionCardController', () => {
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     const face = controller.inject()
     await vi.waitFor(() => { expect(models.models).toHaveBeenCalledOnce() })
 
@@ -630,7 +586,7 @@ describe('SubagentModelSelectionCardController', () => {
   it('reports a directory error and retries it', async () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
     const models = modelsApi({ error: 'offline' })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
     const face = controller.inject()
     const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
@@ -646,7 +602,7 @@ describe('SubagentModelSelectionCardController', () => {
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha API', models: [{ id: 'fast', name: 'Fast' }] }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 4,
       value: { enabled: false, allowedModels: [] }, user: {},
@@ -680,7 +636,7 @@ describe('SubagentModelSelectionCardController', () => {
     const models = modelsApi({
       groups: [{ id: 'alpha', name: 'Alpha', models: [{ id: 'fast', name: 'Fast' }] }],
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     host.publish({
       status: 'ready', writable: true, revision: 4,
       value: { enabled: false, allowedModels: [] }, user: {},
@@ -717,7 +673,7 @@ describe('SubagentModelSelectionCardController', () => {
       })
       .mockImplementationOnce(() => refreshed.promise)
     const controller = new SubagentModelSelectionCardController(
-      host.scope, { modelCatalog: models },
+      host.scope, ctxWith({ session: { modelCatalog: models } }),
     )
     const face = controller.inject()
     const state = () => face.hooks.subagentModelSelectionCard.getSnapshot()
@@ -756,7 +712,7 @@ describe('SubagentModelSelectionCardController', () => {
       status: 'ready', writable: true, revision: 4,
       value: { enabled: false, allowedModels: [] }, user: {},
     })
-    const controller = new SubagentModelSelectionCardController(host.scope, models.api)
+    const controller = new SubagentModelSelectionCardController(host.scope, models.ctx)
     const face = controller.inject()
     face.toggleEnabled()
     await vi.waitFor(() => { expect(face.hooks.subagentModelSelectionCard.getSnapshot().candidates).toHaveLength(1) })
@@ -796,7 +752,7 @@ describe('SubagentModelSelectionCardController', () => {
         },
       })
     const controller = new SubagentModelSelectionCardController(
-      host.scope, { modelCatalog: models },
+      host.scope, ctxWith({ session: { modelCatalog: models } }),
     )
     const state = () => controller.inject().hooks.subagentModelSelectionCard.getSnapshot()
     await vi.waitFor(() => { expect(state().candidates[0]?.provider).toBe('alpha') })
@@ -822,7 +778,7 @@ describe('SubagentModelSelectionCardController', () => {
         allowedModels: allowedModels?.op === 'set' ? allowedModels.value as never[] : [],
       } })
     })
-    const controller = new SubagentModelSelectionCardController({ ...host.scope, mutate }, catalog.api)
+    const controller = new SubagentModelSelectionCardController({ ...host.scope, mutate }, catalog.ctx)
     const face = controller.inject()
 
     face.save()
@@ -845,25 +801,25 @@ describe('SubagentModelSelectionCardController', () => {
     expect(mutate).toHaveBeenCalledOnce()
   })
 
-  it('suppresses duplicate directory loads and late resolve or reject settlements', async () => {
+  it('suppresses duplicate directory loads and late settlements', async () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
     host.publish({ status: 'ready', writable: true, value: { enabled: false, allowedModels: [] }, user: {} })
 
     const pending = deferred<never>()
     const models = vi.fn(() => pending.promise)
-    const controller = new SubagentModelSelectionCardController(host.scope, { modelCatalog: models })
+    const controller = new SubagentModelSelectionCardController(host.scope, ctxWith({ session: { modelCatalog: models } }))
     const face = controller.inject()
     face.toggleEnabled()
     face.retryCatalog()
     expect(models).toHaveBeenCalledOnce()
     controller.dispose()
-    pending.reject(new Error('late failure'))
-    await pending.promise.catch(() => undefined)
+    pending.resolve({ ok: false, error: new RemoteError('gateway/internal', 'late failure', {}) } as never)
+    await pending.promise
 
     const pendingResolve = deferred<never>()
     const resolving = new SubagentModelSelectionCardController(
       host.scope,
-      { modelCatalog: () => pendingResolve.promise },
+      ctxWith({ session: { modelCatalog: () => pendingResolve.promise } }),
     )
     const resolvingFace = resolving.inject()
     resolvingFace.toggleEnabled()
@@ -876,7 +832,7 @@ describe('SubagentModelSelectionCardController', () => {
 
   it('ignores writes while read-only and scope notifications after disposal', () => {
     const host = stubSettingsScope<SubagentModelSelectionSettings>()
-    const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().api)
+    const controller = new SubagentModelSelectionCardController(host.scope, modelsApi().ctx)
     host.publish({ status: 'ready', writable: false, value: { enabled: false, allowedModels: [] }, user: {} })
     const face = controller.inject()
 
@@ -901,18 +857,14 @@ describe('WebSearchCardController', () => {
   it('reads the credential state for the reference the tab names', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     const state = () => controller.inject().hooks.webSearchCard.getSnapshot()
     await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
 
-    host.publish({
-      status: 'ready', writable: true,
-      value: { maxResults: 8, baseURL: 'https://search.test/v1' }, user: {},
-    })
+    host.publish({ status: 'ready', writable: true, value: { baseURL: 'https://search.test/v1' }, user: {} })
     await vi.waitFor(() => { expect(state().apiKeyConfigured).toBe(true) })
 
     expect(state()).toMatchObject({
-      maxResults: { text: '8', overridden: false },
       baseURL: { text: 'https://search.test/v1', overridden: false },
       apiKey: { text: '', overridden: false },
     })
@@ -921,7 +873,7 @@ describe('WebSearchCardController', () => {
   it('writes the staged key through the credentials domain, never the settings section', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     const face = controller.inject()
 
@@ -931,12 +883,12 @@ describe('WebSearchCardController', () => {
 
     credentials.describe.mockImplementation(() => Promise.resolve({
       ok: true as const,
-      value: { ANYSEARCH_API_KEY: { configured: true, writable: true } },
+      value: { DEEPSEEK_API_KEY: { configured: true, writable: true } },
     }))
     face.save()
     await vi.waitFor(() => { expect(credentials.set).toHaveBeenCalled() })
 
-    expect(credentials.set).toHaveBeenCalledWith('ANYSEARCH_API_KEY', 'ds-secret')
+    expect(credentials.set).toHaveBeenCalledWith('DEEPSEEK_API_KEY', 'ds-secret')
     expect(host.set).not.toHaveBeenCalled()
     await vi.waitFor(() => {
       expect(face.hooks.webSearchCard.getSnapshot()).toMatchObject({ dirty: false, apiKeyConfigured: true })
@@ -946,7 +898,7 @@ describe('WebSearchCardController', () => {
   it('keeps the stored key when the draft is left blank', () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     const face = controller.inject()
 
@@ -961,7 +913,7 @@ describe('WebSearchCardController', () => {
   it('re-reads when the Host reports the watched reference changed', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     await vi.waitFor(() => { expect(credentials.describe).toHaveBeenCalled() })
     credentials.describe.mockClear()
@@ -973,9 +925,9 @@ describe('WebSearchCardController', () => {
     // A key written on another surface reaches this card only through this signal.
     credentials.describe.mockImplementation(() => Promise.resolve({
       ok: true as const,
-      value: { ANYSEARCH_API_KEY: { configured: true, writable: true } },
+      value: { DEEPSEEK_API_KEY: { configured: true, writable: true } },
     }))
-    controller.refreshCredential('ANYSEARCH_API_KEY')
+    controller.refreshCredential('DEEPSEEK_API_KEY')
 
     await vi.waitFor(() => {
       expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(true)
@@ -985,8 +937,8 @@ describe('WebSearchCardController', () => {
   it('addresses the reference the tab declares rather than the default', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
-    host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: ' SEARCH_KEY ' }, user: {} })
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
+    host.publish({ status: 'ready', writable: true, value: { apiKeyEnv: 'SEARCH_KEY' }, user: {} })
     const face = controller.inject()
 
     face.edit('apiKey', 'ds-secret')
@@ -999,7 +951,7 @@ describe('WebSearchCardController', () => {
   it('reports a key the Host did not store as a failed save', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const credentials = credentialsApi(false)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     host.publish({ status: 'ready', writable: true, value: {}, user: {} })
     const face = controller.inject()
 
@@ -1011,11 +963,15 @@ describe('WebSearchCardController', () => {
     })
   })
 
-  it('keeps the card usable when the credential read fails', async () => {
+  it('keeps the card usable when the credential read is refused', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
-    const describe = vi.fn(() => Promise.reject(new Error('offline')))
-    const set = vi.fn(() => Promise.reject(new Error('offline')))
-    const controller = new WebSearchCardController(host.scope, { describe, set })
+    const refusal = () => Promise.resolve({
+      ok: false as const,
+      error: new RemoteError('credential/rejected', 'offline', { ref: 'DEEPSEEK_API_KEY' }),
+    })
+    const describe = vi.fn(refusal)
+    const set = vi.fn(refusal)
+    const controller = new WebSearchCardController(host.scope, ctxWith({ credentials: { describe, set } }))
     const face = controller.inject()
     await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
 
@@ -1035,31 +991,30 @@ describe('WebSearchCardController', () => {
     const host = stubSettingsScope<WebSearchSettings>()
     const describe = vi.fn(() => Promise.resolve({
       ok: false as const,
-      error: { code: 'internal', message: 'no credential provider', details: {} },
+      error: new RemoteError('gateway/internal', 'no credential provider', {}),
     }))
-    const controller = new WebSearchCardController(host.scope, { describe, set: vi.fn() })
+    const controller = new WebSearchCardController(host.scope, ctxWith({
+      credentials: { describe, set: vi.fn() },
+    }))
     await vi.waitFor(() => { expect(describe).toHaveBeenCalled() })
 
     expect(controller.inject().hooks.webSearchCard.getSnapshot().apiKeyConfigured).toBe(false)
   })
 
-  it('saves the result cap and endpoint through the AnySearch settings section', async () => {
+  it('saves the endpoint and the search budget together', async () => {
     const host = stubSettingsScope<WebSearchSettings>()
     acceptWrites(host)
     const credentials = credentialsApi(true)
-    const controller = new WebSearchCardController(host.scope, credentials.api)
+    const controller = new WebSearchCardController(host.scope, credentials.ctx)
     host.publish({ status: 'ready', writable: true, value: {}, base: {}, user: {} })
     const face = controller.inject()
 
-    face.edit('maxResults', '5')
     face.edit('baseURL', 'https://other.test')
+    face.edit('maxUses', '3')
     face.save()
     await vi.waitFor(() => { expect(host.set).toHaveBeenCalledTimes(2) })
 
-    expect(host.set.mock.calls).toEqual([
-      ['maxResults', 5],
-      ['baseURL', 'https://other.test'],
-    ])
+    expect(host.set.mock.calls).toEqual([['baseURL', 'https://other.test'], ['maxUses', 3]])
     expect(credentials.set).not.toHaveBeenCalled()
   })
 })
@@ -1076,7 +1031,7 @@ describe('ConfigurablePluginsTabController', () => {
         })),
       },
     }))
-    return { mirror: new SettingsDescribeMirror({ settings: { describe } } as never), describe }
+    return { mirror: new SettingsDescribeMirror(ctxWith({ settings: { describe } })), describe }
   }
 
   /** Slot ledger stand-in: one stored entry per registered card key. */
@@ -1099,7 +1054,7 @@ describe('ConfigurablePluginsTabController', () => {
 
   it('never dispatches a card whose namespace this deployment does not serve', async () => {
     const settings = settingsApi(['bash'])
-    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash', 'web-search-anysearch'))
+    const controller = new ConfigurablePluginsTabController(settings.mirror, () => ledger('bash', 'web-search-deepseek'))
 
     await settings.mirror.ensure()
 

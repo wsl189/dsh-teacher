@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-model-capacity-selects.md
-2026-09-09-model-capacity-selects.md: de4f199f39c4c16799cfda81504bd4fa6ef9115d
-2026-09-09-model-capacity-selects.zh.md: 501d7c5b8595e6f718ea692e85aa8ac763ba21f8
+2026-09-09-model-capacity-selects.md: 9fa8c0b66a6fe84c506462754e41d7b3190d4e4c
+2026-09-09-model-capacity-selects.zh.md: 8f1e1963e254b5bd411868fe63613ba8727799c9

@@ -4,7 +4,6 @@ import { mkdir, readFile } from 'node:fs/promises'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { packChunkRuns } from '@deepseek-ai/dsh-session'
 import type { ModelCheckResult } from '@deepseek-ai/dsh-api-session-controller/types'
 import {
   formatSystemPromptSnapshot, formatToolSchemasSnapshot, normalizeSessionSnapshots,
@@ -38,12 +37,12 @@ describe.skipIf(MODE === 'record' && !process.env.DEEPSEEK_API_KEY)('saved model
     }
     expect(body.result.ok, JSON.stringify(body.result)).toBe(true)
     if (!body.result.ok) throw new Error(body.result.error.message)
-    const persisted = await scaffold.ctx.sessionPersistence.load(body.result.value.sessionId)
+    const persisted = await scaffold.ctx.sessionController.inspect(body.result.value.sessionId)
     expect(persisted.meta.origin).toBe('subagent')
     expect(scaffold.ctx.sessions.get(body.result.value.sessionId)).toBeUndefined()
     const request = persisted.events.find(event => event.type === 'request/header')
     if (request?.type !== 'request/header') throw new Error('The diagnostic session did not log a request')
-    expect(request.data.header.system).toBeUndefined()
+    expect(persisted.events.some(event => event.type === 'system/message')).toBe(false)
     expect(request.data.header.tools).toBeUndefined()
     expect(request.data.header.config.maxTokens).toBe(16)
     expect(persisted.events.filter(event => event.type === 'user/message').map(event => event.data.content))
@@ -52,7 +51,7 @@ describe.skipIf(MODE === 'record' && !process.env.DEEPSEEK_API_KEY)('saved model
 
     const raw = [
       JSON.stringify({ type: 'session', ...persisted.meta }),
-      ...packChunkRuns(persisted.events).map(record => JSON.stringify(record)), '',
+      ...persisted.events.map(record => JSON.stringify(record)), '',
     ].join('\n')
     const normalizeContext = { cwd: scaffold.workspaceCwd, sessionIds: [] }
     const actual = normalizeSessionSnapshots([raw], normalizeContext)[0]!

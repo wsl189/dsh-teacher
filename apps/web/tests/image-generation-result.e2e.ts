@@ -52,6 +52,7 @@ function imageGenerationFixture(image: ImageAttachmentRef): string {
   session.append('step/start', { turn: 1, step: 1 })
   const callId = ToolCallId('image-generation-call')
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 1,
     message: createAssistantMessage({
@@ -91,6 +92,7 @@ function imageGenerationFixture(image: ImageAttachmentRef): string {
   session.append('step/end', { turn: 1, step: 1 })
   session.append('step/start', { turn: 1, step: 2 })
   session.append('assistant/message', {
+    stream: [],
     turn: 1,
     step: 2,
     message: createAssistantMessage({
@@ -106,7 +108,7 @@ function imageGenerationFixture(image: ImageAttachmentRef): string {
       type: 'session', version: SESSION_FORMAT_VERSION, id: '{{sessionId}}',
       createdAt: 0, cwd: '{{cwd}}',
     }),
-    ...session.events.map(event => JSON.stringify({
+    ...session.snapshotEvents().map(event => JSON.stringify({
       ...event, time: eventTimeOrigin + event.seq * 1_000,
     })),
     '',

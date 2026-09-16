@@ -17,17 +17,25 @@
   - img
 - button "在新对话中分支":
   - img
-- text: {{clock}} 用时 {{duration}} 首 token {{duration}} {{throughput}} tok/s
-- textbox "发消息或做任务… / 调用指令 @ 文件或对话"
-- button "指令":
+- button "用时 {{duration}}":
+  - img
+  - text: 用时 {{duration}}
+- text: {{clock}}
+- textbox "发消息或创建任务, / 调用指令, @ 文件或对话"
+- button "添加文件或调用指令":
   - img
 - button "上传文件并用 MinerU OCR 识别"
 - button "Choose File"
 - button "语音输入（也可长按空格）"
-- button "访问模式，当前：Workspace Write": Workspace Write
+- button "访问模式，当前：工作区内修改": 工作区内修改
 - button "选择模型，当前 DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "上下文已用 0%"
 - button "发送消息" [disabled]
-- text: 1 轮 · 1 步 LLM {{duration}} 首 token 平均 {{duration}} · {{throughput}} tok/s 缓存命中 0% 输入 24 tok · 输出 8 tok
+- button "1 轮 1 步 · {{throughput}} tok/s":
+  - img
+  - text: 1 轮 1 步{{throughput}} tok/s
+- button "32 tok · 缓存命中 0%":
+  - img
+  - text: 32 tok缓存命中 0%

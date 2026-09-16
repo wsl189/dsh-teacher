@@ -1,4 +1,5 @@
-:global(.katex .textrm) { font-family: 'DSH Math Symbols', KaTeX_Main; }
+:global(.katex .text), :global(.katex .textrm) { font-family: 'DSH Math Symbols', KaTeX_Main; }
+:global(.katex .amsrm) { font-family: 'DSH Math Symbols', KaTeX_AMS; }
 .equation { position: relative; display: inline-block; }
 .equation :global(.katex) { font-size: 1em; }
 .equation :global(.katex-display) { margin: 0; }

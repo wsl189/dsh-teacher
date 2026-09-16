@@ -1,7 +1,7 @@
 /** Host registration for teacher-workbench preferences. */
 
 import type { Context } from '@deepseek-ai/cordis'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
   TeacherWorkbenchSettingsSchema,
@@ -24,7 +24,7 @@ export {
 export function apply(ctx: Context): void {
   ctx.inject(['settings'], (settingsCtx) => {
     settingsCtx.settings.register(
-      settingsNamespace(TEACHER_WORKBENCH_SETTINGS_NAMESPACE),
+      TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
       TeacherWorkbenchSettingsSchema,
       { validate: validateTeacherWorkbenchSettings },
     )

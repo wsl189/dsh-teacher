@@ -31,12 +31,11 @@ async function openQqSettings(page: Page): Promise<void> {
   await page.getByRole('button', { name: '设置', exact: true }).click()
   const settings = page.getByRole('dialog', { name: '设置' })
   await settings.waitFor({ timeout: 10_000 })
-  await settings.getByRole('button', { name: '插件', exact: true }).click()
-  const connected = settings.getByRole('tab', { name: '连接平台', exact: true })
-  await connected.click()
-  await settings.getByRole('tab', { name: '连接平台', exact: true, selected: true }).waitFor({ timeout: 5_000 })
+  await settings.getByRole('button', { name: 'IM机器人', exact: true }).click()
   await settings.getByRole('tab', { name: 'QQ', exact: true }).click()
   await settings.getByRole('heading', { name: '已绑定的 QQ 机器人' }).waitFor({ timeout: 10_000 })
+  await settings.locator('.dim-botCard').first().waitFor()
+  for (const card of await settings.locator('.dim-botCard').all()) await card.locator('.dim-collapsibleHead').click()
 }
 
 describe('web e2e: QQ bot workspace defaults and directory picker', () => {
@@ -107,8 +106,8 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
     const existingWorkspace = page.locator(`[data-bot-id="${savedBotId}"] .dim-workspacePath`)
     await expect.poll(() => newWorkspace.textContent()).toBe(desktop)
     expect(await existingWorkspace.textContent()).toBe(savedWorkspace)
-    expect(JSON.parse(await readFile(workspacesPath, 'utf8'))).toEqual({
-      version: 1,
+    expect(JSON.parse(await readFile(workspacesPath, 'utf8'))).toMatchObject({
+      version: 2,
       workspaces: { [newBotId]: desktop, [savedBotId]: savedWorkspace },
     })
     await compareOrRefreshGolden(
@@ -118,28 +117,8 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
     )
   })
 
-  it('lists Host directories instead of invoking an operating-system dialog', async () => {
+  it('lists Host directories and accepts an absolute Windows drive path', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-qq-workspace-picker'))
-    let rootRequests = 0
-    await page.route('**/api/directoryPicker/listRoots', async (route) => {
-      const envelope = route.request().postDataJSON() as { rpcId: string }
-      rootRequests += 1
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({
-          type: 'server-response',
-          rpcId: envelope.rpcId,
-          result: {
-            ok: true,
-            value: [
-              { name: 'C:\\', path: 'C:\\', hidden: false },
-              { name: 'D:\\', path: 'D:\\', hidden: false },
-            ],
-          },
-        }),
-      })
-    })
     await page.route('**/api/directoryPicker/list', async (route) => {
       const envelope = route.request().postDataJSON() as {
         rpcId: string
@@ -173,17 +152,17 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
     const picker = page.getByRole('dialog', { name: '选择机器人工作区目录' })
     await picker.getByRole('button', { name: '选择此目录' }).waitFor({ timeout: 10_000 })
     await picker.getByRole('button', { name: '课程资料' }).waitFor({ timeout: 10_000 })
-    const drive = picker.getByRole('combobox', { name: '选择磁盘' })
-    await drive.waitFor({ timeout: 10_000 })
+    const pathInput = picker.getByRole('textbox', { name: '工作区绝对路径' })
+    await pathInput.waitFor({ timeout: 10_000 })
     await compareOrRefreshGolden(
       PICKER_EXPECTED,
       await captureStableAria(page, '.dim-directoryPicker', harnessHome),
       MODE,
     )
-    await drive.selectOption('D:\\')
+    await pathInput.fill('D:\\')
+    await picker.getByRole('button', { name: '前往', exact: true }).click()
     await picker.getByRole('button', { name: '跨盘课程' }).waitFor({ timeout: 10_000 })
-    expect(await drive.inputValue()).toBe('D:\\')
-    expect(rootRequests).toBe(1)
+    expect(await pathInput.inputValue()).toBe('D:\\')
     expect(tripwire.pageErrors).toEqual([])
     await picker.getByRole('button', { name: '取消', exact: true }).click()
   }, 60_000)
@@ -198,8 +177,8 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
     await picker.getByRole('navigation', { name: '当前目录' }).getByRole('button', { name: '课程资料' }).waitFor()
     await picker.getByRole('button', { name: '选择此目录', exact: true }).click()
     await expect.poll(() => bot.locator('.dim-workspacePath').textContent()).toBe(selected)
-    expect(JSON.parse(await readFile(workspacesPath, 'utf8'))).toEqual({
-      version: 1,
+    expect(JSON.parse(await readFile(workspacesPath, 'utf8'))).toMatchObject({
+      version: 2,
       workspaces: { [newBotId]: selected, [savedBotId]: savedWorkspace },
     })
 

@@ -10,19 +10,16 @@
     - button "Plugins":
       - img
       - text: Plugins
-    - button "Skills"
-    - button "MCP"
     - button "Agent presets":
       - img
       - text: Agent presets
-    - button "Side card"
+    - button "Archived sessions":
+      - img
+      - text: Archived sessions
+  - button "Open configuration file"
   - button "Close":
     - img
     - text: Close
-  - text: Agent preset Applies to sessions you start from now on. Running sessions keep the preset they began with.
-  - button "Standard mode":
-    - text: Standard mode
-    - img
   - text: Permission Choose the default permission mode for new sessions
   - button "Workspace Write":
     - text: Workspace Write
@@ -50,37 +47,7 @@
   - button "Compact":
     - text: Compact
     - img
-  - text: Enter behavior while busy Busy only; Cmd/Ctrl+Enter uses the other behavior
+  - text: Send behavior while busy What Enter and the Send button do while the agent is running; Cmd/Ctrl+Enter uses the other behavior
   - button "Queue":
     - text: Queue
     - img
-  - text: Teacher workbench Teacher identity, daily features, score thresholds, and question-cutting settings
-  - region "Basic information":
-    - heading "Basic information" [level=3]
-    - text: Current academic year
-    - textbox "Current academic year":
-      - /placeholder: "2026"
-      - text: "2026"
-    - text: Teacher name
-    - textbox "Teacher name"
-    - text: School name
-    - textbox "School name"
-    - text: Default subject
-    - textbox "Default subject"
-    - text: Weather location
-    - textbox "Weather location"
-  - region "Score thresholds":
-    - heading "Score thresholds" [level=3]
-    - text: Full mark
-    - spinbutton "Full mark": "100"
-    - text: Excellent score
-    - spinbutton "Excellent score": "85"
-    - text: Pass score
-    - spinbutton "Pass score": "60"
-  - region "Question cutting":
-    - heading "Question cutting" [level=3]
-    - paragraph: The quality scale controls PDF raster and crop resolution; padding expands the layout area around question content.
-    - text: Crop quality scale
-    - spinbutton "Crop quality scale": "2"
-    - text: Crop padding
-    - spinbutton "Crop padding": "4"

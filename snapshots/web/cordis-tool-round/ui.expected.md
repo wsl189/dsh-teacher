@@ -3,6 +3,10 @@
     - button "Use only Cordis tools. First" [disabled]
   - img
   - text: Standard mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -24,10 +28,6 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - button "Think I will inspect the current Session's dynamic Cordis Plugins before defining the snapshot Package.":
   - img
   - img
@@ -73,7 +73,10 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}}
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}}
 - button "Thought for a while":
   - text: Thought for a while
   - img
@@ -86,7 +89,10 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}} Use only Cordis tools. Call cordis_stop with pluginId "snap-1". After it succeeds, reply exactly CORDIS_UI_DONE and stop. {{clock}}
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}} Use only Cordis tools. Call cordis_stop with pluginId "snap-1". After it succeeds, reply exactly CORDIS_UI_DONE and stop. {{clock}}
 - button "Copy":
   - img
 - button "1 tool call" [expanded]:
@@ -105,17 +111,22 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}}
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- button "Ran for {{duration}}":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
+  - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "0% of context used"
 - button "Send message" [disabled]
-- text: 3 turns · 7 steps LLM {{duration}} · Tool call {{duration}} Cache hit 77% Input 66.5K tok · Output 321 tok
+- button "3 turns 7 steps":
+  - img
+  - text: 3 turns 7 steps
+- button "66.8K tok · Cache hit 77%":
+  - img
+  - text: 66.8K tokCache hit 77%

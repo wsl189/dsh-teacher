@@ -1,0 +1,184 @@
+diff --git a/lib/index.js b/lib/index.js
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -4707,11 +4707,12 @@
+ }
+ function unitContentWorkerEnvironment() {
+   const env = Object.fromEntries(
+-    ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR"].flatMap((key) => {
++    ["HOME", "LANG", "LC_ALL", "PATH", "TMPDIR", "NODE_COMPILE_CACHE", "NODE_DISABLE_COMPILE_CACHE", "UNIVER_LICENSE"].flatMap((key) => {
+       const value = process.env[key];
+       return value === void 0 ? [] : [[key, value]];
+     })
+   );
++  env.NODE_COMPILE_CACHE ??= join2(resolveDshHome(), "cache", "dsh-univer-office", "node");
+   env.NODE_PATH = [PLUGIN_NODE_MODULES, process.env.NODE_PATH].filter((value) => value !== void 0 && value.length > 0).join(delimiter2);
+   return spawnEnvironment(env);
+ }
+@@ -9447,7 +9448,7 @@
+ }
+ 
+ // src/workers/unit-content/license.ts
+-var UNIVER_LICENSE = "2088168239728517120-1-eyJpIjoiMjA4ODE2ODIzOTcyODUxNzEyMCIsInYiOiIxIiwicCI6ImtPN3hWUG5mZVFYSlY2ZjRiSk03MFk5NHdOZTZkR3VRTDNxdklqRFpZblU9IiwiZG0iOlsibG9jYWxob3N0Il0sInJ0IjozLCJmdCI6eyJ1ZiI6eyJtdSI6MjE0NzQ4MzY0NiwiZXQiOjE3OTQ3NTg0MDAsIm1tIjoyMTQ3NDgzNjQ2LCJjdSI6MjE0NzQ4MzY0Nn0sInNmIjp7ImV0IjoxNzk0NzU4NDAwLCJydiI6dHJ1ZSwicHRuIjoyMTQ3NDgzNjQ2LCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwibmMiOjIxNDc0ODM2NDYsImllYyI6MCwiZmNjIjowfSwiZGYiOnsiZXQiOjE3OTQ3NTg0MDAsInJ2Ijp0cnVlLCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwiaWVjIjowfSwid3NmIjp7ImV0IjoxNzk0NzU4NDAwLCJobiI6MjE0NzQ4MzY0Nn19LCJ1ZCI6MTc5NDc1ODQwMCwiYXQiOjE3ODY2OTMxMTAsImUiOiJkZXZlbG9wZXJAdW5pdmVyLmFpIiwiZCI6OCwibiI6MTl9-ZidzNthAEZRZ13xLQUagdaUsjaMjrr5BDf4JGx9Zzsw1PgmNLak8wuZWQ1le9eMYUyubIa5YI4JpExgdHhN1BA==-1794758400";
++var UNIVER_LICENSE = "";
+ 
+ // src/host/provider/render-operations.ts
+ var RenderOperations = class {
+@@ -12961,6 +12962,10 @@
+       fail(403);
+       return;
+     }
++    const upstreamTarget = new URL(target, "http://localhost");
++    for (const [key, value] of url.searchParams) {
++      if (key !== "target") upstreamTarget.searchParams.append(key, value);
++    }
+     const fileKey = fileKeyOfUfPath(target);
+     const sessionIds = readScopeCookie(req);
+     if (fileKey === null || sessionIds.length === 0) {
+@@ -12970,7 +12975,7 @@
+     void (async () => {
+       for (const sessionId of sessionIds) {
+         if (await isFileInSessionScope(decodeFileKey(fileKey), sessionId, sessions)) {
+-          bridgeTunnel(req, socket, head, target, gatewayOrigin, sessionIds);
++          bridgeTunnel(req, socket, head, `${upstreamTarget.pathname}${upstreamTarget.search}`, gatewayOrigin, sessionIds);
+           return;
+         }
+       }
+@@ -13007,17 +13012,17 @@
+           }
+         };
+         bridges.add(close);
+-        client.on("message", (data) => {
+-          if (upstream.readyState === import_websocket.default.OPEN) upstream.send(data);
+-          else if (upstream.readyState === import_websocket.default.CONNECTING) pending.push(toBuffer(data));
++        client.on("message", (data, isBinary) => {
++          if (upstream.readyState === import_websocket.default.OPEN) upstream.send(data, { binary: isBinary });
++          else if (upstream.readyState === import_websocket.default.CONNECTING) pending.push({ data: toBuffer(data), binary: isBinary });
+         });
+         client.on("close", close);
+         client.on("error", close);
+         upstream.on("open", () => {
+-          for (const frame of pending.splice(0)) upstream.send(frame);
++          for (const frame of pending.splice(0)) upstream.send(frame.data, { binary: frame.binary });
+         });
+-        upstream.on("message", (data) => {
+-          client.send(data);
++        upstream.on("message", (data, isBinary) => {
++          client.send(data, { binary: isBinary });
+         });
+         upstream.on("close", close);
+         upstream.on("error", close);
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -92,7 +92,9 @@
+     "@puppeteer/browsers": "^3.2.0",
+     "@univerjs-pro/cli-assets": "0.1.0",
+     "libsql": "^0.5.29",
+-    "puppeteer-core": "^25.7.0"
++    "puppeteer-core": "^25.7.0",
++    "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260910-22fe9c7",
++    "@univerjs-pro/exchange-node-binding": "0.1.2"
+   },
+   "peerDependencies": {
+     "@deepseek-ai/cordis": "^4.0.2",
+diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
+--- a/skills/univer-doc/SKILL.md
++++ b/skills/univer-doc/SKILL.md
+@@ -19,6 +19,8 @@
+ - Native charts use the direct `doc.newChart()`, `doc.insertChart()`, `doc.getCharts()`, and
+   `doc.getChart()` methods.
+ - Colors must use `#RRGGBB`. Docs do not support formulas or recalculation.
++
++Write planned paragraphs, their text styles, and related document formatting in one `univer_execute` authoring batch. Use `codeFile` for the complete multiline script, retain paragraph IDs needed later, and await asynchronous image or chart mutations before returning. Split batches when the next edit depends on inspecting the preceding result.
+ 
+ ## Data stream
+ 
+@@ -139,7 +141,7 @@
+ 
+ ## Inspect and verify
+ 
+-After each mutation:
++After each completed authoring batch, perform all checks below. Repeat the checks for content affected by further edits, and finish verification before export or handoff. Readback must be independent of the writing execution.
+ 
+ 1. Call `univer_inspect` for the document overview and relevant paragraph/range when supported.
+ 2. Use a fresh read-only `univer_execute` to confirm full paragraph text/order, stable IDs, styles, lists/tasks, table dimensions, image identities, chart descriptions, document flavor, section breaks, headers, footers, and page setup required by the task.
+diff --git a/skills/univer-sheet/SKILL.md b/skills/univer-sheet/SKILL.md
+--- a/skills/univer-sheet/SKILL.md
++++ b/skills/univer-sheet/SKILL.md
+@@ -54,6 +54,8 @@
+ - Style: use explicit xlsx-safe colors in `#RRGGBB` or `rgb(r,g,b)` form.
+ 
+ `setValues()` merges cell data. `{}` or `{ s }` does not clear existing `v/f/p`. To replace a region, call `clearContent()` first, then `setValues()`. To clear one cell explicitly, set `{ v: null, f: null, p: null, si: null, custom: null }`.
++
++Build each rectangular data region as an explicit `ICellData` grid and write it with one `setValues(grid)` call. Apply shared formatting to ranges and group related writes to the same Unit in one `univer_execute` authoring batch. Use `codeFile` for the multiline script. Keep every required value, type, formula, and style; split batches when later edits depend on inspecting earlier results. Await the required calculation before checking computed values or exporting.
+ 
+ ## Over-grid images
+ 
+@@ -125,7 +127,7 @@
+ 
+ ## Verification
+ 
+-After every mutation:
++After each completed authoring batch, perform all checks below. Read every task-required field independently of the writing execution. Repeat verification for content affected by further edits, and complete it before export or handoff.
+ 
+ 1. Call `univer_inspect` with the exact `unitId`, worktree, and a range such as `Sheet1!A1:D20`.
+ 2. Verify stored values, types, formulas, display values, row order, and task-specific calculations.
+diff --git a/skills/univer-slide/SKILL.md b/skills/univer-slide/SKILL.md
+--- a/skills/univer-slide/SKILL.md
++++ b/skills/univer-slide/SKILL.md
+@@ -9,10 +9,12 @@
+ 
+ Facade page indexes are zero-based (`getSlideByIndex`, `getSlides()[i]`). Tool page numbers are one-based: `univer_compile_svg.page` and numeric `univer_lint.pages` use `1` for the first page. Prefer stable page IDs when carrying a page from inspection into Facade code.
+ 
++Query the exact known Facade members, parameter types, and enums needed for the next operation together in one `univer_api` request. Follow the `univer` focused lookup rules for unfamiliar APIs and reuse signatures already read for this plugin version.
++
+ ## Route the task
+ 
+ - Create or redesign a page: author SVG and call `univer_compile_svg`. Do not hand-write Facade drawing calls for generated page content.
+-- Edit existing content: use `univer_execute` with live Facade handles.
++- Edit existing content: group related Facade edits to the same Unit in one `univer_execute` call with live handles. Use `codeFile` for multiline edits, await asynchronous mutations, and retain stable element IDs for the independent readback. Split batches when a later edit depends on inspecting an earlier result.
+ - Insert or update native charts: reserve the rectangle in the page SVG, then use the direct
+   `FSlide` chart methods through `univer_execute`.
+ - Verify every changed page: `univer_inspect`, then `univer_lint`, then `univer_screenshot` and inspect the returned PNG.
+diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
+--- a/skills/univer/SKILL.md
++++ b/skills/univer/SKILL.md
+@@ -38,11 +38,13 @@
+ 
+ ## Facade API lookup
+ 
+-- No relevant class or API label is known: use `find` with API-name keywords or identifier fragments.
+-- A class is known: use `show` on the class to inspect its APIs.
+-- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples.
++- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples. Put the known labels needed for the next operation together in one `queries` array.
++- The required member is unknown: use `find` with API-name keywords or identifier fragments, the relevant `unit` filter, and `limit: 5` or `10`. Refine or expand the query when those matches do not identify the required API.
++- Show a whole class only when its complete API inventory is needed. Knowing a class name alone does not require fetching every member.
+ 
+ `find` is case-insensitive. Each query is searched independently and returns its own matches; queries are not combined as AND, and `find` does not interpret intent. Pass a useful returned label to `show` instead of searching that label again.
++
++Reuse signatures already read for this plugin version. Follow referenced parameter types and enums when needed; focused lookup never permits guessing an unfamiliar API.
+ 
+ ## Required workflow
+ 
+@@ -103,6 +105,8 @@
+ 
+ Do not redeclare injected variables. Use `code` only for a small snippet. For multi-line or reusable Facade logic, write a workspace JavaScript body file and pass it as `codeFile`; provide exactly one of `code` or `codeFile`.
+ 
++Group related mutations to the same Unit into one `univer_execute` call when their complete result can be checked together. Retain returned object IDs and await every asynchronous mutation. After each completed authoring batch, perform the required independent readback and Unit-specific visual checks; values returned by the writing execution do not replace them. Further edits require verification of the affected content before export or handoff.
++
+ Execution is Node ESM: `require` is unavailable, while dynamic `import()` and `Buffer` are available. For an explicit local workspace image, generate its data URI inside the execution instead of putting Base64 in the conversation:
+ 
+ ```js
+diff --git a/artifacts/unit-content-worker.mjs b/artifacts/unit-content-worker.mjs
+--- a/artifacts/unit-content-worker.mjs
++++ b/artifacts/unit-content-worker.mjs
+@@ -329388,7 +329388,7 @@
+ }
+ 
+ // src/workers/unit-content/license.ts
+-var UNIVER_LICENSE = "2088168239728517120-1-eyJpIjoiMjA4ODE2ODIzOTcyODUxNzEyMCIsInYiOiIxIiwicCI6ImtPN3hWUG5mZVFYSlY2ZjRiSk03MFk5NHdOZTZkR3VRTDNxdklqRFpZblU9IiwiZG0iOlsibG9jYWxob3N0Il0sInJ0IjozLCJmdCI6eyJ1ZiI6eyJtdSI6MjE0NzQ4MzY0NiwiZXQiOjE3OTQ3NTg0MDAsIm1tIjoyMTQ3NDgzNjQ2LCJjdSI6MjE0NzQ4MzY0Nn0sInNmIjp7ImV0IjoxNzk0NzU4NDAwLCJydiI6dHJ1ZSwicHRuIjoyMTQ3NDgzNjQ2LCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwibmMiOjIxNDc0ODM2NDYsImllYyI6MCwiZmNjIjowfSwiZGYiOnsiZXQiOjE3OTQ3NTg0MDAsInJ2Ijp0cnVlLCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwiaWVjIjowfSwid3NmIjp7ImV0IjoxNzk0NzU4NDAwLCJobiI6MjE0NzQ4MzY0Nn19LCJ1ZCI6MTc5NDc1ODQwMCwiYXQiOjE3ODY2OTMxMTAsImUiOiJkZXZlbG9wZXJAdW5pdmVyLmFpIiwiZCI6OCwibiI6MTl9-ZidzNthAEZRZ13xLQUagdaUsjaMjrr5BDf4JGx9Zzsw1PgmNLak8wuZWQ1le9eMYUyubIa5YI4JpExgdHhN1BA==-1794758400";
++var UNIVER_LICENSE = "";
+ 
+ // src/workers/unit-content/runtime/local-referenced-unit-provider.ts
+ var LOCAL_REFERENCED_UNIT_PROVIDER_ID = "local-referenced-unit-provider";

@@ -10,7 +10,6 @@ import {
   TeacherWorkbenchSettingsSchema,
   validateTeacherWorkbenchSettings,
 } from '../src/index.ts'
-import * as invariant from '../src/invariant.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { createTeacherWorkbenchViewStore } from '../src/client/view-store.ts'
 
@@ -73,19 +72,6 @@ describe('teacher-workbench node wiring', () => {
         questionRenderScale: 2, questionCropPadding: 12,
       })
     }).not.toThrow()
-  })
-
-  it('registers the package-owned empty invariant installer', async () => {
-    const dispose = vi.fn()
-    const register = vi.fn((_name: string, _installer: () => void) => dispose)
-    const result = await invariant.apply({ invariants: { register } } as never)
-    expect(register).toHaveBeenCalledWith(
-      '@deepseek-ai/dsh-client-ui-teacher-workbench',
-      expect.any(Function),
-    )
-    const installer = register.mock.calls[0]![1]
-    installer()
-    expect(result).toBe(dispose)
   })
 })
 

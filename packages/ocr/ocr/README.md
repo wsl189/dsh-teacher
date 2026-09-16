@@ -85,4 +85,6 @@ No direct invalidation; the Consumer that submits extracted text owns request-pr
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; each extraction request validates provider selection.
+
 Keep domain segmentation out of this package; providers normalize extraction evidence and Consumers own every domain interpretation.

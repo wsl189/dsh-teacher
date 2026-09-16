@@ -4,15 +4,13 @@
 // No browser and no model call — these are composition facts, and the browser
 // scenarios in this lane cover the surface itself.
 import { readFileSync } from 'node:fs'
-import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
+import { afterEach, expect, it } from 'vitest'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { canonicalPath, writableRoots } from '@deepseek-ai/dsh-sandbox'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 // Empty type imports carry the tools/sandboxPolicy/approval Context merges.
 import type {} from '@deepseek-ai/dsh-tools'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
@@ -49,7 +47,7 @@ const EXPECTED_TOOLS = [
   'job_list',
   'job_output',
   'list_agents',
-  'ralph',
+  'present',
   'read',
   'read_image',
   'send_message',
@@ -85,10 +83,10 @@ const EXPECTED_GLOBAL_TOOLS = [
   'cron_list',
   'cron_remove',
   'cron_run',
+  'dsh_im_return_file',
   'edit_image',
   'generate_image',
   'get_image_generation_task',
-  'qq_send_local_file',
   'teacher_daily_management',
   'teacher_question_image_read',
   'teacher_question_workbench',
@@ -104,6 +102,7 @@ const EXPECTED_GLOBAL_TOOLS = [
   'univer_inspect',
   'univer_lint',
   'univer_new',
+  'univer_print_pdf',
   'univer_resources',
   'univer_screenshot',
   'univer_status',
@@ -123,56 +122,10 @@ const EXPECTED_BUNDLED_CLIENT_MODULES = [
 ]
 
 let scaffold: WebScaffold | undefined
-let windowsHarnessHome: string | undefined
-
-beforeEach(() => {
-  vi.stubEnv('DSH_WINDOWS_MCP_COMMAND', undefined)
-  vi.stubEnv('DSH_WINDOWS_MCP_RUNTIME_ROOT', undefined)
-})
-
 afterEach(async () => {
-  try {
-    await scaffold?.close()
-  } finally {
-    scaffold = undefined
-    vi.unstubAllEnvs()
-    if (windowsHarnessHome !== undefined) await rm(windowsHarnessHome, { recursive: true, force: true })
-    windowsHarnessHome = undefined
-  }
-})
-
-it.skipIf(process.platform === 'win32')('starts the supplied desktop runtime by default and preserves a saved disable across launches', async () => {
-  const command = fileURLToPath(new URL('../../../packages/mcp/windows-mcp/tests/fixtures/desktop-server.mjs', import.meta.url))
-  vi.stubEnv('DSH_WINDOWS_MCP_COMMAND', command)
-  vi.stubEnv('DSH_WINDOWS_MCP_RUNTIME_ROOT', tmpdir())
-  windowsHarnessHome = await mkdtemp(join(tmpdir(), 'dsh-windows-mcp-home-'))
-  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, harnessHome: windowsHarnessHome })
-  const { ctx } = scaffold
-  const namespace = settingsNamespace('windows-mcp')
-  expect(ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
-    base: { enabled: true, runtimeCommand: command },
-    value: { enabled: true },
-  })
-  expect(ctx.tools.get('mcp__windows__Snapshot')).toBeDefined()
-  expect(ctx.tools.get('mcp__windows__PowerShell')).toBeDefined()
-
-  await ctx.settings.update(namespace, { enabled: false })
-  await vi.waitFor(() => { expect(ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined() })
-  expect(ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
-    value: { enabled: false },
-    user: { enabled: false },
-  })
-  await scaffold.close()
+  await scaffold?.close()
   scaffold = undefined
-  scaffold = await launchWebScaffold({ deepSeekMissingCredential: true, harnessHome: windowsHarnessHome })
-  expect(scaffold.ctx.settings.describe().find(row => row.ns === namespace)).toMatchObject({
-    base: { enabled: true },
-    value: { enabled: false },
-    user: { enabled: false },
-  })
-  expect(scaffold.ctx.tools.get('mcp__windows__Snapshot')).toBeUndefined()
-  expect(scaffold.ctx.tools.get('mcp__windows__PowerShell')).toBeUndefined()
-}, 60_000)
+})
 
 it('assembles the shipped Web transport, catalog, guidance, and defaults', async () => {
   scaffold = await launchWebScaffold({ deepSeekMissingCredential: true })
@@ -186,16 +139,14 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   expect(ctx.clientModules.graph().entries.map(entry => entry.id)).toEqual(
     expect.arrayContaining(EXPECTED_BUNDLED_CLIENT_MODULES),
   )
-  expect(ctx.settings.describe().find(row => String(row.ns) === 'windows-mcp')).toMatchObject({
-    base: {
-      enabled: false,
-      runtimeCommand: '',
-      runtimeCwd: '',
-      toolCallTimeoutMs: 180_000,
-    },
-  })
-  expect(ctx.tools.schemas().map(schema => schema.name).some(name => name.startsWith('mcp__windows__')))
-    .toBe(false)
+  expect(ctx.settings.describe().some(row => row.ns === 'windows-mcp')).toBe(false)
+  expect(ctx.clientModules.graph().entries.map(entry => entry.id)).toEqual(expect.arrayContaining([
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
+    '@deepseek-ai/dsh-client-ui-sidebar-files',
+    '@deepseek-ai/dsh-client-ui-sidebar-documentpreview',
+    '@deepseek-ai/dsh-client-ui-sidebar-terminal',
+  ]))
+  expect(ctx.clientModules.graph().entries.some(entry => entry.id === 'dsh-better-sidebar')).toBe(false)
   expect(await ctx.skills.list()).toContainEqual(expect.objectContaining({
     name: 'ppt-master',
     provider: 'ppt-master',
@@ -218,7 +169,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       ],
     }
   `)
-  await ctx.settings.update(settingsNamespace('llm-deepseek'), {
+  await ctx.settings.update('llm-deepseek', {
     retryPolicy: { mode: 'always', maxRetries: 5 },
   })
   expect(ctx.llm.providerRetryPolicy('deepseek-official')).toMatchInlineSnapshot(`
@@ -229,7 +180,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
       "mode": "always",
     }
   `)
-  await ctx.settings.update(settingsNamespace('llm-pi-ai'), {
+  await ctx.settings.update('llm-pi-ai', {
     providers: {
       openai: {},
       anthropic: { retryPolicy: { mode: 'always' } },
@@ -280,7 +231,7 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     const pptMaster = await ctx.skills.get('ppt-master', { scope: handle.agent })
     expect(pptMaster).toMatchObject({
       name: 'ppt-master',
-      metadata: { version: '6.1.0', license: 'MIT' },
+      metadata: { version: '6.4.0', license: 'MIT' },
       resourceBase: { kind: 'directory' },
     })
     expect(pptMaster?.content).toContain('# PPT Master Skill')
@@ -310,7 +261,8 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
   try {
     expect(scaffold.ctx.commands.list(commandHandle.agent)).toContainEqual({
       name: 'feedback',
-      description: 'record feedback about this session',
+      definitionId: '@deepseek-ai/dsh-command-feedback',
+      description: 'Record feedback about this session',
       input: { hint: '<text>' },
     })
   } finally {

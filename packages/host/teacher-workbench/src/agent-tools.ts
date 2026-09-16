@@ -11,7 +11,7 @@ import type { FileSystem } from '@deepseek-ai/dsh-fs'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import type { ToolExecution } from '@deepseek-ai/dsh-tools'
 import type { ContentBlock } from '@deepseek-ai/dsh-llm'
-import type { JsonValue } from '@deepseek-ai/dsh-session'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
 import sharp from 'sharp'
 import { saveGeneratedArtifact } from './source-documents.ts'
 import { readFolderDocumentRequest } from './folder-document.ts'
@@ -777,7 +777,8 @@ function dailyCreationRoute(
 }
 
 function currentTurnUserText(agent: Agent): string {
-  const events = agent.session.events
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing current-turn read; projection migration deferred.
+  const events = agent.session.snapshotEvents()
   const turnStart = events.findLastIndex(event => event.type === 'turn/start')
   const text = events.slice(turnStart + 1).flatMap((event) => {
     if (event.type !== 'user/message' || event.data.source.kind !== 'user') return []
@@ -789,7 +790,8 @@ function currentTurnUserText(agent: Agent): string {
 
 async function removeCurrentTurnQuestionExtractionSidecar(agent: Agent, sourceName: string): Promise<void> {
   const cwd = agent.session.header.cwd
-  const turnStart = agent.session.events.findLast(event => event.type === 'turn/start')
+  // oxlint-disable-next-line typescript/no-deprecated -- Existing sidecar timestamp read; projection migration deferred.
+  const turnStart = agent.session.snapshotEvents().findLast(event => event.type === 'turn/start')
   const fileName = basename(sourceName)
   if (cwd === undefined || turnStart === undefined || !/\.pdf$/iu.test(fileName)) return
   const stem = fileName.slice(0, -4)

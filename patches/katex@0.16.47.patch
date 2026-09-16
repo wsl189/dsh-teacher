@@ -1,22 +1,31 @@
 diff --git a/dist/katex.js b/dist/katex.js
-index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff132b936b3 100644
+index 2de2003251a8e5dda149c3b707eaf28f42b459f2..1e907dfd832639c7d5a2731f297030b64c008478 100644
 --- a/dist/katex.js
 +++ b/dist/katex.js
-@@ -3853,6 +3853,13 @@ function setFontMetrics(fontName, metrics) {
+@@ -3853,12 +3853,22 @@ function setFontMetrics(fontName, metrics) {
   * Note: the `width` property may be undefined if fontMetricsData.js wasn't
   * built using `Make extended_metrics`.
   */
 +const textbookSymbolMetrics = {
 +  8421: [0.16, 0.678, 0, 0, 0],
 +  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.327, 0.734, 0, 0, 0.72],
-+  10956: [0.327, 0.734, 0, 0, 0.72],
++  10955: [0.079, 0.664, 0, 0, 0.504],
++  10956: [0.079, 0.664, 0, 0, 0.504],
 +  11005: [0.228, 0.727, 0, 0, 0.726],
 +};
  function getCharacterMetrics(character, font, mode) {
    if (!fontMetricsData[font]) {
      throw new Error("Font metrics not found for font: " + font + ".");
-@@ -4967,6 +4974,10 @@ const makeSymbol = function (value, fontName, mode, options, classes) {
+   }
+   let ch = character.charCodeAt(0);
+   let metrics = fontMetricsData[font][ch];
++  if (font === "AMS-Regular" || (mode === "text" && font.startsWith("Main-"))) {
++    metrics = textbookSymbolMetrics[ch] || metrics;
++  }
+   if (!metrics && character[0] in extraCharacterMap) {
+     ch = extraCharacterMap[character[0]].charCodeAt(0);
+     metrics = fontMetricsData[font][ch];
+@@ -4967,6 +4977,10 @@ const makeSymbol = function (value, fontName, mode, options, classes) {
    }
    if (options) {
      symbolNode.maxFontSize = options.sizeMultiplier;
@@ -27,7 +36,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      if (options.style.isTight()) {
        symbolNode.classes.push("mtight");
      }
-@@ -4993,7 +5004,7 @@ const mathsym = function (value, mode, options, classes) {
+@@ -4993,7 +5007,7 @@ const mathsym = function (value, mode, options, classes) {
    // text ordinal and is therefore not present as a symbol in the symbols
    // table for text, as well as a special case for boldsymbol because it
    // can be used for bold + and -
@@ -36,7 +45,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
    } else if (value === "\\" || src_symbols[mode][value].font === "main") {
      return makeSymbol(value, "Main-Regular", mode, options, classes);
-@@ -5083,7 +5094,7 @@ const makeOrd = function (group, options, type) {
+@@ -5083,7 +5097,7 @@ const makeOrd = function (group, options, type) {
    } else if (type === "textord") {
      const font = src_symbols[mode][text] && src_symbols[mode][text].font;
      if (font === "ams") {
@@ -45,7 +54,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
        return makeSymbol(text, fontName, mode, options, classes.concat("amsrm", fontWeight, fontShape));
      } else if (font === "main" || !font) {
        const fontName = retrieveTextFontName("textrm", fontWeight, fontShape);
-@@ -7746,16 +7757,16 @@ function mclass_mathmlBuilder(group, options) {
+@@ -7746,16 +7760,16 @@ function mclass_mathmlBuilder(group, options) {
    } else if (group.mclass === "mord") {
      if (group.isCharacterBox) {
        node = inner[0];
@@ -66,7 +75,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      }
  
      // Set spacing based on what is the most likely adjacent atom type.
-@@ -11320,13 +11331,19 @@ defineFunction({
+@@ -11320,13 +11334,19 @@ defineFunction({
  
  const font_htmlBuilder = (group, options) => {
    const font = group.font;
@@ -89,7 +98,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
  };
  const fontAliases = {
    "\\Bbb": "\\mathbb",
-@@ -11337,7 +11354,7 @@ defineFunction({
+@@ -11337,7 +11357,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -98,7 +107,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -11359,7 +11376,7 @@ defineFunction({
+@@ -11359,7 +11379,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -107,7 +116,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
        body
      };
    },
-@@ -12881,9 +12898,11 @@ const op_htmlBuilder = (grp, options) => {
+@@ -12881,9 +12901,11 @@ const op_htmlBuilder = (grp, options) => {
  };
  const op_mathmlBuilder = (group, options) => {
    let node;
@@ -119,7 +128,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      if (noSuccessor.has(group.name)) {
        node.setAttribute("largeop", "false");
      }
-@@ -12894,6 +12913,7 @@ const op_mathmlBuilder = (group, options) => {
+@@ -12894,6 +12916,7 @@ const op_mathmlBuilder = (group, options) => {
      // This is a text operator. Add all the characters from the
      // operator's name.
      node = new MathNode("mi", [new TextNode(group.name.slice(1))]);
@@ -127,7 +136,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      // Append an <mo>&ApplyFunction;</mo>.
      // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
      const operator = new MathNode("mo", [makeText("\u2061", "text")]);
-@@ -14140,12 +14160,11 @@ defineFunctionBuilders({
+@@ -14140,12 +14163,11 @@ defineFunctionBuilders({
    },
    mathmlBuilder(group, options) {
      const node = new MathNode("mo", [makeText(group.text, group.mode)]);
@@ -146,18 +155,18 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..850f96668b3b87581a9f91c4e7a53ff1
      } else if (group.family === "open" || group.family === "close") {
        // Delims built here should not stretch vertically.
 diff --git a/dist/katex.mjs b/dist/katex.mjs
-index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2b303043b 100644
+index b4a83b4b7b9b31064413fa7eb5447823110d7305..d972b8499ac429de8e38575de650900f7c797284 100644
 --- a/dist/katex.mjs
 +++ b/dist/katex.mjs
-@@ -3682,12 +3682,20 @@ function setFontMetrics(fontName, metrics) {
+@@ -3682,12 +3682,22 @@ function setFontMetrics(fontName, metrics) {
   * Note: the `width` property may be undefined if fontMetricsData.js wasn't
   * built using `Make extended_metrics`.
   */
 +const textbookSymbolMetrics = {
 +  8421: [0.16, 0.678, 0, 0, 0],
 +  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.327, 0.734, 0, 0, 0.72],
-+  10956: [0.327, 0.734, 0, 0, 0.72],
++  10955: [0.079, 0.664, 0, 0, 0.504],
++  10956: [0.079, 0.664, 0, 0, 0.504],
 +  11005: [0.228, 0.727, 0, 0, 0.726],
 +};
  function getCharacterMetrics(character, font, mode) {
@@ -166,11 +175,13 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
    }
    var ch = character.charCodeAt(0);
    var metrics = fontMetricsData[font][ch];
-+  if (!metrics && mode === "text" && font.startsWith("Main-")) metrics = textbookSymbolMetrics[ch];
++  if (font === "AMS-Regular" || (mode === "text" && font.startsWith("Main-"))) {
++    metrics = textbookSymbolMetrics[ch] || metrics;
++  }
    if (!metrics && character[0] in extraCharacterMap) {
      ch = extraCharacterMap[character[0]].charCodeAt(0);
      metrics = fontMetricsData[font][ch];
-@@ -4740,6 +4748,10 @@ var makeSymbol = function makeSymbol(value, fontName, mode, options, classes) {
+@@ -4740,6 +4750,10 @@ var makeSymbol = function makeSymbol(value, fontName, mode, options, classes) {
    }
    if (options) {
      symbolNode.maxFontSize = options.sizeMultiplier;
@@ -181,7 +192,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
      if (options.style.isTight()) {
        symbolNode.classes.push("mtight");
      }
-@@ -4765,7 +4777,7 @@ var mathsym = function mathsym(value, mode, options, classes) {
+@@ -4765,7 +4779,7 @@ var mathsym = function mathsym(value, mode, options, classes) {
    // text ordinal and is therefore not present as a symbol in the symbols
    // table for text, as well as a special case for boldsymbol because it
    // can be used for bold + and -
@@ -190,7 +201,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
      return makeSymbol(value, "Main-Bold", mode, options, classes.concat(["mathbf"]));
    } else if (value === "\\" || symbols[mode][value].font === "main") {
      return makeSymbol(value, "Main-Regular", mode, options, classes);
-@@ -4851,7 +4863,7 @@ var makeOrd = function makeOrd(group, options, type) {
+@@ -4851,7 +4865,7 @@ var makeOrd = function makeOrd(group, options, type) {
    } else if (type === "textord") {
      var _font = symbols[mode][text] && symbols[mode][text].font;
      if (_font === "ams") {
@@ -199,7 +210,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
        return makeSymbol(text, _fontName, mode, options, classes.concat("amsrm", fontWeight, fontShape));
      } else if (_font === "main" || !_font) {
        var _fontName2 = retrieveTextFontName("textrm", fontWeight, fontShape);
-@@ -7251,16 +7263,16 @@ function mathmlBuilder$8(group, options) {
+@@ -7251,16 +7265,16 @@ function mathmlBuilder$8(group, options) {
    } else if (group.mclass === "mord") {
      if (group.isCharacterBox) {
        node = inner[0];
@@ -220,7 +231,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
      }
      // Set spacing based on what is the most likely adjacent atom type.
      // See TeXbook p170.
-@@ -10538,13 +10550,19 @@ defineFunction({
+@@ -10538,13 +10552,19 @@ defineFunction({
  // TODO(kevinb): implement \\sl and \\sc
  var htmlBuilder$5 = (group, options) => {
    var font = group.font;
@@ -243,7 +254,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
  };
  var fontAliases = {
    "\\Bbb": "\\mathbb",
-@@ -10555,7 +10573,7 @@ defineFunction({
+@@ -10555,7 +10575,7 @@ defineFunction({
    type: "font",
    names: [
    // styles, except \boldsymbol defined below
@@ -252,7 +263,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
    // families
    "\\mathbb", "\\mathcal", "\\mathfrak", "\\mathscr", "\\mathsf", "\\mathtt",
    // aliases, except \bm defined below
-@@ -10577,7 +10595,7 @@ defineFunction({
+@@ -10577,7 +10597,7 @@ defineFunction({
      return {
        type: "font",
        mode: parser.mode,
@@ -261,7 +272,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
        body
      };
    },
-@@ -11990,9 +12008,11 @@ var htmlBuilder$2 = (grp, options) => {
+@@ -11990,9 +12010,11 @@ var htmlBuilder$2 = (grp, options) => {
  };
  var mathmlBuilder$1 = (group, options) => {
    var node;
@@ -273,7 +284,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
      if (noSuccessor.has(group.name)) {
        node.setAttribute("largeop", "false");
      }
-@@ -12003,6 +12023,7 @@ var mathmlBuilder$1 = (group, options) => {
+@@ -12003,6 +12025,7 @@ var mathmlBuilder$1 = (group, options) => {
      // This is a text operator. Add all the characters from the
      // operator's name.
      node = new MathNode("mi", [new TextNode(group.name.slice(1))]);
@@ -281,7 +292,7 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..06334928601afe4c01b7a9dc20f8ebc2
      // Append an <mo>&ApplyFunction;</mo>.
      // ref: https://www.w3.org/TR/REC-MathML/chap3_2.html#sec3.2.4
      var operator = new MathNode("mo", [makeText("\u2061", "text")]);
-@@ -13122,12 +13143,11 @@ defineFunctionBuilders({
+@@ -13122,12 +13145,11 @@ defineFunctionBuilders({
    },
    mathmlBuilder(group, options) {
      var node = new MathNode("mo", [makeText(group.text, group.mode)]);
@@ -346,7 +357,7 @@ index 50d79dfdce10a17aa0f455b07461c8ca7cf37740..9f3dc63c0aca066362bc2d291da497d3
      left: string;
      margin: string;
 diff --git a/src/fontMetrics.ts b/src/fontMetrics.ts
-index acd75c207de14fa7eb97e25ccd1d999584f6b917..8ff688c380d16ff4ba80b4e98db55f227ea0269d 100644
+index acd75c207de14fa7eb97e25ccd1d999584f6b917..96fe47c4312cf8f21125b8f0b0ddbb7e614e5c1b 100644
 --- a/src/fontMetrics.ts
 +++ b/src/fontMetrics.ts
 @@ -191,6 +191,15 @@ export function setFontMetrics(
@@ -357,19 +368,21 @@ index acd75c207de14fa7eb97e25ccd1d999584f6b917..8ff688c380d16ff4ba80b4e98db55f22
 +const textbookSymbolMetrics: Record<number, CharacterMetricsTuple> = {
 +  8421: [0.16, 0.678, 0, 0, 0],
 +  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.327, 0.734, 0, 0, 0.72],
-+  10956: [0.327, 0.734, 0, 0, 0.72],
++  10955: [0.079, 0.664, 0, 0, 0.504],
++  10956: [0.079, 0.664, 0, 0, 0.504],
 +  11005: [0.228, 0.727, 0, 0, 0.726],
 +};
 +
  /**
   * This function is a convenience function for looking up information in the
   * metricMap table. It takes a character as a string, and a font.
-@@ -208,6 +217,7 @@ export function getCharacterMetrics(
+@@ -208,6 +217,9 @@ export function getCharacterMetrics(
      }
      let ch = character.charCodeAt(0);
      let metrics = metricMap[font][ch];
-+    if (!metrics && mode === "text" && font.startsWith("Main-")) metrics = textbookSymbolMetrics[ch];
++    if (font === "AMS-Regular" || (mode === "text" && font.startsWith("Main-"))) {
++        metrics = textbookSymbolMetrics[ch] || metrics;
++    }
      if (!metrics && character[0] in extraCharacterMap) {
          ch = extraCharacterMap[character[0]].charCodeAt(0);
          metrics = metricMap[font][ch];

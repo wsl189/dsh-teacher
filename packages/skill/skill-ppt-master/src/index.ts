@@ -28,7 +28,7 @@ const LOOSE_RESOURCE_PATH = fileURLToPath(new URL('../assets/ppt-master/', impor
 const INVOCATION = { modelInvocable: true, userInvocable: true } as const
 const DESCRIPTION = 'AI-driven presentation workflow for generating editable PPTX decks and slides, reconstructing page visuals, creating reusable Brand/Style/Layout/Deck workspaces, filling native PPTX templates, and enhancing finished PPTX files. Use when the user asks to create, generate, reconstruct, regenerate, beautify, redesign, template, fill, or enhance a presentation, PPT, PPTX, slide deck, or courseware — including adding narration or animation to one — requests a presentation-authored narrated/self-running video, or mentions ppt-master.'
 const METADATA = {
-  version: '6.1.0',
+  version: '6.4.0',
   copyright: 'Copyright (c) 2025-2026 Hugo He',
   license: 'MIT',
   official_repository: 'https://github.com/hugohe3/ppt-master',

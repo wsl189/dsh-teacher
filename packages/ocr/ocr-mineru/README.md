@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files to a deployment-controlled MinerU synchronous `/file_parse` endpoint. Ordinary extraction requests Markdown with formula and table recognition enabled. When `includeDiscardedText` is set, the same request also asks for `middle_json` and prepends unique discarded lines that are absent from the Markdown. This text-only metadata path accepts Office worksheet pages without `page_size`; PDF geometry is required only by structured extraction. When a Consumer requests `enhanceImageDetail` for a raster image, the provider sequentially extracts an enhanced whole image and coordinate-labelled detail regions, then returns every pass for downstream reconciliation. Large regular ruled tables retain column headings and complete merged row labels in each crop; vertically stacked label glyphs are arranged horizontally without replacing their pixels with recognized text. Images without a dependable grid use six overlapping regions. Structured extraction requests MinerU `middle_json`, then normalizes page sizes, reading-order lines, content families, and bounding boxes for source-document cropping.
+This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files to a deployment-controlled MinerU synchronous `/file_parse` endpoint.
 
 ## Table of Contents
 
@@ -24,6 +24,8 @@ This plugin registers provider id `mineru` on `ctx.ocr` and sends uploaded files
 
 <a id="use-this-package"></a>
 ## Use this package
+
+Ordinary extraction requests Markdown with formula and table recognition enabled. When `includeDiscardedText` is set, the same request also asks for `middle_json` and prepends unique discarded lines that are absent from the Markdown. This text-only metadata path accepts Office worksheet pages without `page_size`; PDF geometry is required only by structured extraction. When a Consumer requests `enhanceImageDetail` for a raster image, the provider sequentially extracts an enhanced whole image and coordinate-labelled detail regions, then returns every pass for downstream reconciliation. Large regular ruled tables retain column headings and complete merged row labels in each crop; vertically stacked label glyphs are arranged horizontally without replacing their pixels with recognized text. Images without a dependable grid use six overlapping regions. Structured extraction requests MinerU `middle_json`, then normalizes page sizes, reading-order lines, content families, and bounding boxes for source-document cropping.
 
 Mount this provider with `dsh-ocr` when the Host can reach a compatible MinerU synchronous endpoint and the deployment accepts sending each complete request file to that service.
 
@@ -99,5 +101,7 @@ No direct invalidation; the Consumer owns any request containing the returned Ma
 
 <a id="dev-note"></a>
 ### Dev Note
+
+No runtime invariant companion is published; each provider call validates network responses and upload limits.
 
 Keep endpoint-specific response handling in this provider and preserve the provider-neutral OCR types exposed by `dsh-ocr`.

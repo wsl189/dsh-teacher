@@ -1,11 +1,10 @@
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import {
   Config,
   assertModelServiceSettings,
   findModelServiceRoute,
   type ModelServiceSettings,
 } from '../src/index.ts'
-import * as invariant from '../src/invariant.ts'
 
 const settings = (): ModelServiceSettings => ({
   providers: {
@@ -51,15 +50,5 @@ describe('model-service settings', () => {
       models: [{ id: 'glm-asr-2512' }],
     }
     expect(() => { assertModelServiceSettings(duplicate) }).toThrow(/repeats model/)
-  })
-
-  it('registers its explained empty invariant companion', async () => {
-    const dispose = vi.fn()
-    const register = vi.fn((_packageName: string, installer: () => void) => {
-      installer()
-      return dispose
-    })
-    await expect(invariant.apply({ invariants: { register } } as never)).resolves.toBe(dispose)
-    expect(register).toHaveBeenCalledWith('@deepseek-ai/dsh-model-service-settings', expect.any(Function))
   })
 })

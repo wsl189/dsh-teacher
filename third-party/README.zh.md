@@ -1,55 +1,49 @@
-# 第三方来源产物
+# 第三方来源包
 
 [English](README.md) | 中文
 
-本目录固定 dsh-teacher 发行版使用且已经审阅的第三方插件产物。它们是项目构建输入，不再是每台机器分别安装的文件：`@deepseek-ai/dsh-web-app` 已将其声明为依赖并挂载到发行 profile，因此从源码启动或使用 Windows EXE 都不需要另行执行 `dsh plugin add`。
+此目录固定 dsh-teacher Web 和 Windows 发行版内置的第三方插件。[版本清单](plugin-release-manifest.json)记录了 2026-09-16 核实的上游版本和完整性摘要。Web profile 直接加载这些包，无需在用户 profile 中重复安装。
 
 ## 清单
 
-| 目录 | 产物 | 版本 | 上游 | 发行版作用 |
-|---|---|---:|---|---|
-| `anysearch-dsh/` | `anysearch-anysearch-dsh-0.1.4.tgz` | 0.1.4 | [anysearch-team/anysearch-dsh](https://github.com/anysearch-team/anysearch-dsh) | Web 默认搜索与正文提取提供方、能力发现、垂直搜索和批量搜索。 |
-| `dsh-imagegen/` | `dickpy-dsh-imagegen-1.5.1-dsh.1.tgz` | 1.5.1，DSH 运行时重打包 1 | [dickpy/dsh-imagegen](https://github.com/dickpy/dsh-imagegen) | AI 生图工作室、文生图与图生图工具、画廊和提示词模板。 |
-| `dsh-im/` | `xmanrui-dsh-im-4.11.0.tgz` | 4.11.0 | [xmanrui/dsh-im](https://github.com/xmanrui/dsh-im) | 九种 IM 平台、现代 Host 同进程集成、QQ 文件发送、手机提醒，以及把 QQ 语音转交共享语音运行时。 |
-| `dsh-plugin-cron/` | `dsh-plugin-cron-0.1.3.tgz` | 0.1.3 | [abiaoa1314/dsh-plugin-cron](https://github.com/abiaoa1314/dsh-plugin-cron) | 持久 cron 任务、模型工具与浏览器管理页。 |
-| `dsh-skill-mcp-panel/` | `dsh-skill-mcp-panel-2.0.1.tgz` | 2.0.1 | [Fishquito7/dsh-skill-mcp-panel](https://github.com/Fishquito7/dsh-skill-mcp-panel) | 通过 Web 与 CLI 管理全局／工作区技能和 profile MCP 服务器。 |
-| `dsh-univer-office/` | `dsh-univer-office-0.2.12-dsh.2.tgz` | 0.2.12，DSH 重构建 2 | [dream-num/dsh-univer-office](https://github.com/dream-num/dsh-univer-office) | 由 agent 创建 Sheets、Docs、Slides、Bases 与 Boards，并通过隔离草稿审阅和导入／导出 Office 文件。 |
-| `windows-mcp/` | 嵌入式 CPython、固定源码压缩包与哈希固定的 wheel 输入 | CPython 3.14.7；Windows-MCP 0.8.5 | [python/cpython](https://github.com/python/cpython)、[CursorTouch/Windows-MCP](https://github.com/CursorTouch/Windows-MCP) | 装配进 x64 桌面安装包、可用时默认开启的 Windows 桌面自动化运行时。 |
+| 包 | 版本 | 发行版用途 |
+|---|---:|---|
+| `@anysearch/anysearch-dsh` | 0.1.4 | Web 搜索、内容提取、能力发现和批量搜索。 |
+| `@dickpy/dsh-imagegen` | 1.5.12 | 生图工作室、画布、图库、模板和生图工具。 |
+| `@xmanrui/dsh-im` | 4.21.1 | 十一个 IM 平台、文件发送、提醒及共用的 QQ 语音输入。 |
+| `dsh-plugin-cron` | 0.1.3 | 持久化定时任务、模型工具和浏览器管理。 |
+| `dsh-skill-mcp-panel` | 2.0.4 | 技能与 profile MCP 管理。 |
+| `dsh-univer-office` | 0.3.0，DSH 重打包 4 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
+| `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
 
-Web 组合还从 npm 固定 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2。该 AGPL-3.0 包把 DOCX、XLSX 与 PPTX 查看器注册到内置 better-sidebar 文件注册表。
+Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
+
+[PPT Master 提供方](../packages/skill/skill-ppt-master/README.zh.md)另行内置上游 v6.4.0 的完整技能目录。执行具体工作流仍需满足外部 Python 和工具前置条件。
 
 <a id="configuration-and-migration"></a>
 ## 配置与迁移
 
-AnySearch 无需密钥即可使用，但受远程服务的匿名限制。[Web 组合包](../packages/bundle/web-app/README.zh.md#built-in-web-search)说明可选凭据、服务地址与单次搜索结果上限配置、提供方选择，以及向外发送的查询与正文提取 URL。安装器包含插件，不包含搜索服务或注册账户。
+在**设置 → 模型 → 服务接入**配置供应商线路，在**使用场景**分配对话、工具、生图和语音模型。生图、浏览器语音输入、工作台语音输入和 QQ 共用这些分配与凭据存储。上游插件自带模型表单时，兼容补丁仍保留这一配置归属。
 
-可执行代码会随仓库和 EXE 发布，本机专属状态不会进入安装包。机器人凭据、QQ 设置、cron 任务、技能文件、MCP 配置、Univer 文档、工作树与下载资源缓存仍保存在 `DSH_HOME` 或所选工作区下。机器人通过**设置 → 插件 → 连接平台**配置。请在**设置 → 模型 → 服务接入**配置语音识别与图像生成线路，再于**使用场景**分别分配受支持的模型；浏览器语音输入、QQ 语音消息与生图工具会使用这些分配。提供方 API 密钥使用凭据存储，生成历史、画廊与模板缓存使用 `~/.dsh/dsh-imagegen`；录音、参考图和提示词会发送给所选提供方。技能在**设置 → 技能**中管理，MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理。在 Windows 安装版中，机器人的「选择目录」操作使用应用内 Host 目录浏览器，不依赖 Windows 系统文件夹对话框。`dsh-im/cordis.patch.yml.example` 只作为需要显式覆盖 `qq.outboundMediaRoots` 的部署参考。
+在**设置 → IM机器人**配置机器人，在**设置 → 技能**管理技能，在**设置 → MCP**或 `dsh-panel mcp` 中管理 profile 服务器。AnySearch 可在服务限制内匿名使用；[Web 搜索参考](../packages/bundle/web-app/README.zh.md#built-in-web-search)说明其端点、凭据和结果上限配置。
 
-内置 Univer 配置项设置了 `telemetry: false`。未设置 `UNIVER_LICENSE` 时，Univer Viewer 会按上游的受限试用模式打开，并保留水印和功能限制。需要授权功能时，通过 `UNIVER_LICENSE` 提供有效许可证；产物中没有开发许可证回退值。部分 Slide 布局检查、SVG 文本测量与截图操作还需要本机 Chrome 或 Chromium；自动发现无效时可用 `UNIVER_RENDER_BROWSER` 显式指定。
+可执行来源包不包含用户凭据或文档。机器人状态、cron 任务、技能、MCP 设置、Univer 文件和工作树仍保存在原有用户目录中。生图历史与缓存仍位于 `~/.dsh/dsh-imagegen`。迁移应用时，另行迁移所需的 `DSH_HOME`、生图历史及工作区数据。
 
-Windows 桌面控制在运行时可用时默认启动；已持久化的用户值仍然生效，但通用**插件配置**标签页不展示该内置集成。安装后的 x64 桌面版会提供私有运行时，因此用户无需安装 Python、Windows-MCP 或另建 MCP 配置项。Full access 会开放全部二十项固定工具，不额外请求桌面操作批准；其他模式提供十三项桌面工具并逐次请求批准。[Windows-MCP 包](../packages/mcp/windows-mcp/README.zh.md)拥有完整工具目录和会话权限规则。
+Univer profile 关闭遥测，并将运行时的 `UNIVER_LICENSE` 转发给内容 worker；重打包移除了内嵌的开发许可证兜底值。授权功能仍受上游条款约束。浏览器渲染操作可能需要 Chrome 或 Chromium，可通过 `UNIVER_RENDER_BROWSER` 指定。Office 预览包保留 AGPL-3.0 许可证，Univer 包含的独立授权模块记录在[第三方声明](../THIRD_PARTY_NOTICES.md)中。
 
-迁移电脑时，在新机器安装 EXE 或克隆并构建仓库，再单独复制所需的 `DSH_HOME`、`~/.dsh/dsh-imagegen` 与工作区数据。不要把内置集成重复安装到生成的用户 profile；首次启动内置版本前应移除单独安装的生图或 Windows-MCP 配置项，否则重复配置项可能重复注册工具和侧边栏入口。
+Univer 每次内容操作均在独立的 Node 进程中运行，并共用 `<DSH_HOME>/cache/dsh-univer-office/node` 中的编译缓存。可设置 `NODE_COMPILE_CACHE` 指定其他目录，或设置 `NODE_DISABLE_COMPILE_CACHE=1` 关闭缓存。代码或运行时版本变化时，Node 会使对应的编译缓存失效；该缓存不替代已保存的 Office 文档或工作树。
 
-## 机器人工作区
+## 机器人工作目录
 
-**设置 → 插件 → 连接平台**中全部九个平台的新建机器人都默认使用 Host 用户的桌面。Electron 通过 `DSH_DESKTOP_DIR` 提供操作系统的桌面路径，包括 OneDrive 和迁移后的桌面。源码与独立 Web 启动在未通过 `DSH_DESKTOP_DIR` 提供其他绝对路径时使用 `<home>/Desktop`。各平台 IM 配置中显式指定的 `workspace` 优先于默认值。已有机器人保存的工作区保持不变；**选择目录**会为该机器人保存替换路径。
+新机器人默认使用 Host 用户的桌面。Electron 通过 `DSH_DESKTOP_DIR` 提供系统桌面路径；其他启动方式使用该绝对路径覆盖值或 `<home>/Desktop`。显式配置与已保存的机器人工作目录优先。应用内目录选择器只替换所选机器人的目录。[工作目录决策](../.agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.zh.md)规定这一保留规则。
 
-[IM 补丁](../patches/xmanrui-dsh-im@4.11.0.patch)通过 `desktop-workspace.mjs` Host 入口拥有这项发行版默认值。上游控制器仍负责工作区持久化和机器人生命周期；Office 配置保持不变。[决策记录](../.agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.zh.md)说明路径归属和已保存值的保留规则。
+<a id="artifact-notes"></a>
+## 来源包说明
+
+npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.4.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
+
+Univer 重打包补齐[上游 0.3.0 锁文件](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml)指定版本的 `@univerjs-pro/engine-formula-rust-binding`（`1.0.0-insiders.20260910-22fe9c7`）和 `@univerjs-pro/exchange-node-binding`（`0.1.2`）。技能将相关写入合为批次，并精确查询 API 成员，同时保留独立读回与视觉检查。[Office 生成决策](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.zh.md)记录了 worker 测量结果与验证范围。
 
 ## 验证
 
-真实发行组合的浏览器测试会断言所有客户端模块均进入模块图，并固定四项生图工具、Host 级 `cron_*`、`qq_send_local_file`、十三项 `univer_*` 工具，以及 Windows-MCP 按运行时可用性确定的默认值和已保存的关闭选择。模型测试会拒绝单独的生图与语音模型卡片、配置供应商线路，并在「使用场景」中保存生图和语音分配。语音输入测试会把浏览器录音经该供应商分配发送到本地转写服务。QQ 工作区选择测试会打开一个预置机器人的目录操作、确认 QQ 页面不再包含语音设置，并固定真实 Host 后端返回的应用内目录列表快照；Host 集成测试还要求 QQ WAV 附件委托给共享语音运行时。桌面载荷门禁还会单独要求已打包依赖闭包包含生图 Host 与 Client bundle、内置模板快照与许可证；Univer Viewer、Gateway、worker、技能、商业资源 manifest 与 Windows x64 原生 binding；以及嵌入式 CPython 可执行文件、Windows-MCP 元数据和代表性的 Python 原生模块。
-
-<a id="artifact-notes"></a>
-## 产物说明
-
-AnySearch 压缩包使用固定 lockfile 从用户提供的 0.1.4 源码编译，保留 MIT 许可证、编译模块、类型声明、组合补丁、双语 README 与文档链接资源。其 SHA-256 为 `08d583857ec3b9307157f45c68bfbc91f7863a54c143a0f3e34079afff578079`。[兼容补丁](../patches/anysearch-anysearch-dsh@0.1.4.patch)移除上游全局 `web_fetch` 回退注册，因为该工具由 DSH 会话 preset 持有；补丁还通过实时 DSH settings 分节投影凭据引用、服务地址与单次搜索结果上限，并在每次操作时对这些配置取一次快照。限定范围的依赖覆盖把其 1.0 之前的 peer 声明绑定到当前 workspace 服务。发行组合与 AnySearch 集成测试会执行这些 API，搜索会话快照固定模型可见结果，桌面载荷门禁则要求许可证与全部运行模块存在。
-
-生图压缩包是上游 npm 1.5.1 发行版的仅运行时重打包。它保留未经修改的 Host 与 Client 编译 bundle、内置 441 案例模板快照、包元数据、组合补丁、README 与 Apache-2.0 许可证；上游 50 MB 发行包中的截图、演示视频、非运行时 TypeScript 源码与 Source Map 不进入安装包。[生图兼容补丁](../patches/dickpy-dsh-imagegen@1.5.1.patch)会移除单独的模型卡片、为每项任务读取生图分配与准确的服务接入线路、通过共享存储解析凭据、分发 OpenAI Images、DashScope 或 MiniMax 格式，并把 Host 与 Client 配置指引更新到统一位置。官方 npm tarball 的 SHA-256 为 `f95c6ac0099d2dc958e07efb2a4a35dd036c832db30d6e3d37fb63b916bda820`；经过审阅的运行时重打包 SHA-256 为 `dc0877229e38fbd19d716654460a0f0a4346992e37318fb8e48853f34a29ec51`。
-
-dsh-im 官方 npm 压缩包包含源码与 MIT 许可证，SHA-256 为 `0a5b6e1018d238b4fba39be9c27b6d6acad177b496f4ee8699bbc8526c74c603`。发行补丁保留桌面工作区与 QQ 共享语音行为，使用该版本的现代 Host 同进程适配层，并把已过期的微信扫码令牌报告为可操作的重新扫码错误。cron 压缩包包含编译后的 `lib/`、组合补丁、README 与 MIT 许可证。技能／MCP 压缩包是上游 MIT 发行产物；仓库兼容补丁会为当前 DSH 版本更新其客户端注入项与会话查询。其 SHA-256 为 `5e8523cfea0c4ca2cf7a71600f6eaa67655258b1ddce317e5c06f0658620737a`。
-
-Windows 运行时装配会在 `windows-mcp/runtime.json` 中按 SHA-256 固定官方 CPython 3.14.7 AMD64 嵌入式压缩包、Windows-MCP 0.8.5 wheel，以及用户提供项目的完整 Python 源码压缩包。wheel 提供 distribution 元数据；`windows-mcp/source.py` 会安装已审阅源码以覆盖 wheel 源码，并校验全部二十项工具签名。完整且仅含二进制 wheel 的闭包在 `windows-mcp/requirements.lock` 中逐项固定哈希。已审阅补丁把 `fuzzywuzzy` 替换为兼容的 MIT `TheFuzz` API，并将 Scrape 采样关联到发起调用的 DSH 工具。`fuzzywuzzy`、`Levenshtein` 与 `python-Levenshtein` 保持排除。打包必须通过真实 stdio 发现与 `Wait`，以及 FastMCP 采样、DOM、关闭采样和失败回退冒烟。[源码对齐决策](../.agents/notes/implemented/feature/2026-09-01-windows-mcp-source-parity.zh.md)拥有源码与补丁规则。
-
-Univer 压缩包从用户提供的 0.2.12 源码重新构建。该重构建移除了源码中内嵌的开发许可证回退值，并且只把运行时 `UNIVER_LICENSE` 值传给 Viewer、Gateway、渲染进程与 unit-content worker。[Viewer 源码补丁](dsh-univer-office/viewer-license.patch)接受空的运行时许可证字符串，并将许可证校验和试用限制交由 Univer 处理；格式错误的配置仍会失败。其 SHA-256 为 `c1ee7a6911aa0099a4dd9c84d158b4d57d75255b78a64369a89aa87239ef4498`。封装层声明 Apache-2.0，但其可执行依赖闭包含有三个外部 `@univerjs-pro/*` runtime 根包，以及构建脚本内联到产物中的 90 个分别许可的构建期模块，其中 79 个属于 `@univerjs-pro/*`，11 个属于 `@univer-cli/*`。编译后的压缩包没有携带这些模块各自的 manifest 或声明，因此生成的第三方声明会列出全部已声明包身份并固定其声明摘要。构建或分发本仓库前必须取得适当的 [Univer Pro 许可证与分发权](https://docs.univer.ai/guides/pro/license)，包括这些内联模块的授权。更新任一固定压缩包时，必须同时审阅其可执行依赖闭包、出处、许可证、本地兼容改动、原生载荷与发行组合行为。
+发行组合测试要求官方侧边栏模块、保留的插件模块和工具均存在，并确认不加载 better-sidebar 与 Windows-MCP。模型测试验证所配置的生图和语音线路。浏览器场景覆盖工作台行为、模型设置、Office 展示和机器人工作目录；桌面产物检查要求官方电脑操控 SDK 与各保留插件的运行时文件齐全。原生 Windows 操作需要 Windows 桌面环境。

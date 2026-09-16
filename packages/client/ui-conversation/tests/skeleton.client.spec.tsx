@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import type { GlobalStandardProps } from '@deepseek-ai/dsh-client-ui-slots'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { ComponentProps, ReactNode } from 'react'
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
@@ -7,7 +8,7 @@ import type { SessionListState, SessionSnapshot } from '@deepseek-ai/dsh-api-ses
 import type { WorkspaceSnapshot, WorkspaceView } from '@deepseek-ai/dsh-api-workspace-controller/client'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
 import {
-  bindSnapshotSelector, makeTranslate, sessionSnapshot as sessionFixture,
+  bindSnapshotSelector, makeTranslate, RemoteError, sessionSnapshot as sessionFixture,
 } from '@deepseek-ai/dsh-client-test-runtime'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import type { SessionPendingInteractionSnapshot } from '@deepseek-ai/dsh-client-ui-session/client'
@@ -32,15 +33,19 @@ import type {
 } from '../src/client/contract/slots.ts'
 import type { ViewTab } from '../src/client/contract/views.ts'
 
+// Every session-scope fixture carries the resource hook the resources plugin merges into GlobalStandardProps.
+const useResource = (() => ({ status: 'none' as const, value: undefined, failure: undefined })) as GlobalStandardProps['useResource']
+
 // jsdom implements no Range geometry (Lexical's scroll-into-view measures the
 // caret with one once the surface is genuinely contenteditable).
 Range.prototype.getBoundingClientRect = () => ({
   top: 0, bottom: 0, left: 0, right: 0, width: 0, height: 0, x: 0, y: 0, toJSON: () => ({}),
 })
 
+
 function fakeWiring() {
   const sink = vi.fn(() => Promise.resolve({ kind: 'success' as const }))
-  const shell = new SessionInputShell({ actx: {} as Context, defaultSink: sink, commandImages: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} images-unsupported` } })
+  const shell = new SessionInputShell({ actx: {} as Context, defaultSink: sink, commandAttachments: { serialize: () => Promise.resolve([]), release: () => {}, unsupportedNotice: (token: string) => `${token.trim()} attachments-unsupported` } })
   return { wiring: shell, sink, shell }
 }
 
@@ -194,6 +199,8 @@ function mount(
           useChat={useChat}
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
+          usePanelInfo={props.usePanelInfo}
+          useResource={useResource}
           useSessionPendingInteraction={useSessionPendingInteraction}
           useWorkspaces={props.useWorkspaces}
           useProjection={(() => undefined)}
@@ -203,6 +210,7 @@ function mount(
           actions={store.actions}
           renderSlot={renderSlot as never}
           open={open}
+          selectView={(view) => { store.actions.setView(view) }}
           t={t}
         />
       )
@@ -218,6 +226,8 @@ function mount(
           useChat={useChat}
           useTrajectory={useTrajectory}
           useSessions={props.useSessions}
+          usePanelInfo={props.usePanelInfo}
+          useResource={useResource}
           useSessionPendingInteraction={useSessionPendingInteraction}
           useWorkspaces={props.useWorkspaces}
           useProjection={(() => undefined)}
@@ -227,6 +237,7 @@ function mount(
           actions={store.actions}
           renderSlot={renderSlot as never}
           bindDraftMirror={write => wiring.bindMirror(write)}
+          openView={(view, focus) => { store.actions.openView(view, focus) }}
         />
       )
     }
@@ -238,36 +249,32 @@ function mount(
         <InputBar
           sessionId={SID}
           SessionProvider={({ children }) => children}
+          useResource={useResource}
           useSession={useSession}
           useConversation={useConversation}
           useSessions={props.useSessions}
+          usePanelInfo={props.usePanelInfo}
           useSessionPendingInteraction={useSessionPendingInteraction}
           useWorkspaces={props.useWorkspaces}
           useProjection={(() => undefined)}
           useInput={useInput}
           inputActions={inputActions}
           keyboard={wiring}
-          addImages={() => null}
-          removeImage={() => {}}
-          draftImages={() => []}
-          addDocuments={vi.fn()}
-          removeDocument={vi.fn()}
-          draftDocumentFile={() => undefined}
+          addFiles={() => null}
+          useFileUploads={bindSnapshotSelector(createSnapshotStore({}))}
+          retryFileUpload={undefined}
+          addDocuments={undefined}
+          removeDocument={undefined}
           transcribeVoice={undefined}
-          resolveSubmitMode={() => 'queue'}
+          useDocuments={bindSnapshotSelector(createSnapshotStore([]))}
+          removeAttachment={() => {}}
+          resolveDraftAttachments={() => []}
           toggleCommandMenu={vi.fn()}
+          useBusyEnter={bindSnapshotSelector(createSnapshotStore<'queue' | 'steer'>('queue'))}
           useNotices={bindSnapshotSelector(wiring.notices)}
           useLexicon={bindSnapshotSelector(wiring.lexicon)}
           useMenuLauncher={bindSnapshotSelector(createSnapshotStore<string | null>(null))}
-          useDocuments={bindSnapshotSelector(createSnapshotStore([]))}
-          useFullAccessConfirmation={bindSnapshotSelector(createSnapshotStore({
-            status: 'ready' as const,
-            value: { defaultPreset: 'workspace-write', confirmFullAccess: true },
-            base: {}, user: {}, revision: 0, writable: true, mode: 'host' as const,
-          }))}
           stop={stop}
-          command={() => Promise.resolve(true)}
-          setConfirmFullAccess={() => Promise.resolve()}
           t={t}
           renderSlot={((key: string, seatOwner: object) => {
             // The bar's own seats: recorded so a case can assert what share
@@ -294,12 +301,14 @@ function mount(
       : (opts?.fallback ?? null)
   )) as ConversationRootProps['renderSlotChain']
   const props: ConversationRootProps = {
+    usePanelInfo: selector => selector({ activePanelId: null }),
     sessionId: SID,
     SessionProvider: ({ children }) => children,
     useSession,
     useConversation,
     useSessions: bindSnapshotSelector(sessions),
     useSessionPendingInteraction,
+    useResource,
     useWorkspaces: bindSnapshotSelector(workspaces),
     useProjection: (() => undefined),
     useComposerBlock: select => select(options.composerBlock),
@@ -319,10 +328,11 @@ function mount(
 }
 
 describe('Hero chrome', () => {
-  it('renders the localized headline and brand mark', () => {
+  it('renders the English preview badge through the hero locale seat', () => {
     const renderSlot = vi.fn<HeroShellProps['renderSlot']>(() => null)
     const view = render(<HeroShell t={makeTranslate(en, commonEn)} renderSlot={renderSlot} />)
     expect(view.getByText('Into the Unknown')).toBeTruthy()
+    expect(view.getByText('Preview')).toBeTruthy()
     expect(renderSlot).toHaveBeenCalledOnce()
     expect(renderSlot.mock.calls[0]?.[0]).toBe('conversation.hero.brand.mark')
     const brandMarkOwner = renderSlot.mock.calls[0]?.[1]
@@ -336,6 +346,25 @@ describe('Hero chrome', () => {
 })
 
 describe('ConversationRoot resident composer', () => {
+  it('does not redispatch composer child slots for an unrelated Session publication', () => {
+    const b = mount(sessionSnapshotOf())
+    const childKeys = new Set([
+      'conversation.input.overlay',
+      'conversation.input.left',
+      'conversation.input.right',
+      'conversation.composer.dock',
+    ])
+    const dispatchCount = () => b.slotCalls.filter(key => childKeys.has(key)).length
+    const before = dispatchCount()
+
+    act(() => {
+      const current = b.session.getSnapshot()
+      b.session.set({ ...current, hasMore: !current.hasMore })
+    })
+
+    expect(dispatchCount()).toBe(before)
+  })
+
   it('renders the composer inert with the blocker\u2019s own reason', () => {
     const b = mount(sessionSnapshotOf(), undefined, undefined, {
       composerBlock: { reason: 'select a model first' },
@@ -424,6 +453,7 @@ describe('ConversationRoot resident composer', () => {
     expect(b.slotCalls).toContain('conversation.session.header.lineage')
     expect(b.slotCalls).toContain('conversation.session.header.actions')
     expect(b.slotCalls).toContain('conversation.session.header.utilities')
+    expect(b.slotCalls).toContain('conversation.session.header.corner')
   })
 
   it('sticky composer seat wraps the whole overlay chain, not only the fallback stack', () => {
@@ -443,13 +473,13 @@ describe('ConversationRoot resident composer', () => {
         { ...workspace('second'), title: 'Selected Folder' },
       ],
     )
-    // Hero chrome present, view ring absent; scroll host already wraps the
-    // resident composer so the blank → active flip does not remount it.
+    // Hero chrome is present and the selected View slot remains absent.
     const host = b.view.container.querySelector('[data-conversation-scroll]')
     const header = b.view.container.querySelector('header')
     expect(host).not.toBeNull()
     expect(header?.getAttribute('aria-hidden')).toBe('true')
     expect(b.view.getByText('探索未至之境')).toBeTruthy()
+    expect(b.view.getByText('预览版')).toBeTruthy()
     expect(b.view.queryByTestId('view-chat')).toBeNull()
     // The same machine-backed textarea is live in the hero, and the
     // persistence mirror stays bound (ConversationSession mounts chrome-hidden
@@ -475,7 +505,7 @@ describe('ConversationRoot resident composer', () => {
       awaitingFirstTurn: true,
       promptError: {
         op: 'send',
-        error: { code: 'agent-busy', message: 'busy', details: { reason: 'busy' } },
+        error: new RemoteError('session/agent-busy', 'busy', { reason: 'busy' }),
       },
     })
 
@@ -489,7 +519,7 @@ describe('ConversationRoot resident composer', () => {
     const b = mount(sessionSnapshotOf({ blank: true, openState: 'loading' }))
     const root = b.view.container.querySelector('[data-phase]')
     expect(root?.getAttribute('data-phase')).toBe('settling')
-    expect(b.view.queryByText('探索未至之境')).toBeNull()
+    expect(b.view.queryByTestId('hero-headline')).toBeNull()
   })
 
   it('settling phase: a session the list has no row for settles conservatively', () => {
@@ -532,7 +562,7 @@ describe('ConversationRoot resident composer', () => {
     expect(b.wiring.snapshot.draft).toBe('kept across flip')
     expect(b.store.store.getSnapshot().draft).toBe('kept across flip')
     expect(b.view.container.querySelector('[data-conversation-scroll]')?.contains(after)).toBe(true)
-    expect(b.view.queryByText('探索未至之境')).toBeNull()
+    expect(b.view.queryByTestId('hero-headline')).toBeNull()
     expect(b.view.getByTestId('view-chat')).toBeTruthy()
   })
 

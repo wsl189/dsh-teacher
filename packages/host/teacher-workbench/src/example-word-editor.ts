@@ -3,7 +3,7 @@
 import { DOMParser, XMLSerializer, type Element as XmlElement } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { MathMLToLaTeX } from 'mathml-to-latex'
-import { exampleLatexToOffice, exampleMathmlToOffice, formatExampleOfficeMath } from './example-word-math.ts'
+import { exampleLatexToOffice, exampleMathmlToOffice, exampleOfficeMathSize, formatExampleOfficeMath } from './example-word-math.ts'
 import { z } from 'zod'
 import { removeExampleHeading } from './example-word-heading.ts'
 import type { TeacherExampleTextFormat, TeacherExampleWordEditor, TeacherExampleWordInline, TeacherExampleWordParagraph } from './example-types.ts'
@@ -114,6 +114,7 @@ export function saveExampleWordEditor(bytes: Uint8Array, paragraphs: readonly Te
         if (native === undefined) throw new Error('Equation XML is missing')
         const preview = parser.parseFromString(mathml, 'application/xml').documentElement
         if (preview === null) throw new Error('Equation preview is missing')
+        const currentSize = exampleOfficeMathSize(native, preview)
         const boldChanged = equationBold(preview) !== inline.bold
         if (boldChanged) {
           // Intrinsic letter styles stay in MathML when whole-equation bold is removed.
@@ -121,7 +122,6 @@ export function saveExampleWordEditor(bytes: Uint8Array, paragraphs: readonly Te
           native = exampleMathmlToOffice(serializer.serializeToString(preview))
         }
         const clone = document.importNode(native, true)
-        const currentSize = Number(native.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val') ?? '24') / 2
         if (currentSize !== inline.size || boldChanged) {
           formatExampleOfficeMath(clone, inline.size, inline.bold)
           preview.setAttribute('style', `font-size:${String(inline.size)}pt;font-weight:${inline.bold ? 'bold' : 'normal'}`)
@@ -181,7 +181,7 @@ function openWord(bytes: Uint8Array) {
         if (equation === undefined) throw new Error('Equation preview is missing')
         const math = preview.getElementsByTagNameNS(ML, 'math').item(original)
         if (math === null) throw new Error('Equation preview is missing')
-        content.push({ kind: 'equation', original, latex: equation.latex, size: Number(node.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val') ?? '24') / 2, bold: equationBold(math) })
+        content.push({ kind: 'equation', original, latex: equation.latex, size: exampleOfficeMathSize(node, math), bold: equationBold(math) })
       } else if (node.namespaceURI === W && node.localName === 'r') {
         const runPr = children(node).find(child => child.localName === 'rPr')
         const format = readFormat(runPr)

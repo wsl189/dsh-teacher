@@ -25,11 +25,11 @@ kind: "package-reference"
 <a id="use-this-package"></a>
 ## 使用本包
 
-当工作区目录必须在没有 OS 选择器的情况下被选中时——远程浏览器、SSH 转发会话或无人值守宿主——组合此后端。工作区流程驱动 `directoryPicker/listRoots`、`directoryPicker/list` 与 `directoryPicker/createDirectory`；三个原语都从宿主文件系统作答。
+在远程浏览器、SSH 转发会话或无人值守宿主等无法使用 OS 选择器的场景中，如果必须选择工作区目录，请组合此后端。工作区流程驱动 `directoryPicker/listRoots`、`directoryPicker/list` 与 `directoryPicker/createDirectory`；三个原语都基于宿主文件系统返回结果。
 
 ### 发现文件系统根目录
 
-`listRoots(signal)` 返回浏览器可以切换的绝对根目录。POSIX 返回 `/`。Windows 并发探测从 `A:\` 到 `Z:\` 的盘符限定根目录，略过不存在或不可访问的磁盘，并保留主目录所在根目录作为已知的列举锚点；若主目录位于 UNC 路径，则在盘符后加入该共享根目录。发现按需执行且可取消，因此客户端在每次打开对话框时调用一次，同时独立渲染初始主目录列举。
+`listRoots(signal)` 返回浏览器可以跳转的绝对根路径。POSIX 返回 `/`。Windows 并发探测 `A:\` 到 `Z:\` 的盘符根，忽略不存在或不可访问的盘符，并保留主目录所在根作为已知列举锚点；UNC 主目录会将其共享根添加到盘符之后。发现操作按需执行且可取消；客户端每次打开对话框时调用一次，初始主目录列举独立渲染。
 
 ### 列举目录
 
@@ -41,7 +41,7 @@ kind: "package-reference"
 
 ### 可观察的失败
 
-列举与创建原语都拒绝非完全限定的路径——相对形态，以及 Windows 上 `isAbsolute` 会放行的无盘符有根形态（`\foo`、`/foo`）与不完整的 UNC 前缀——报 `directory-unreadable` 或 `directory-create-failed`，而不是把它解析到宿主进程工作目录之下。创建已存在的子目录回答 `directory-exists`。调用方的 `AbortSignal` 会及时拒绝进行中的层级或根目录请求；不可用的根目录探测会被略过，而不会让整个根目录列表失败。
+两个原语都拒绝非完全限定的路径——相对形态，以及 Windows 上 `isAbsolute` 会放行的无盘符有根形态（`\foo`、`/foo`）与不完整的 UNC 前缀——报 `directory-unreadable` 或 `directory-create-failed`，而不是把它解析到宿主进程工作目录之下。创建已存在的子目录时返回 `directory-exists`。调用方的 `AbortSignal` 会立即拒绝进行中的目录层级或根目录请求；无法访问的根探测会被忽略，不会使整个根列表失败。
 
 ### 配置
 
@@ -65,18 +65,18 @@ kind: "package-reference"
 
 ### 完全限定栅栏
 
-`fullyQualified` 拒绝任何不指向一个与进程状态无关的固定文件系统位置的路径：POSIX 上要求 POSIX 绝对路径；Windows 上只接受盘符限定（`C:\…`）或完整 UNC（`\\server\share…`）形态。无盘符有根形态与不完整 UNC 前缀能通过 `isAbsolute`，却仍会解析到进程的当前盘符，因此后端拒绝它们，而不是重定位一个 wire 值。
+`fullyQualified` 拒绝任何不指向一个与进程状态无关的固定文件系统位置的路径：POSIX 上要求 POSIX 绝对路径；Windows 上只接受盘符限定（`C:\…`）或完整 UNC（`\\server\share…`）形态。无盘符有根形态与不完整 UNC 前缀能通过 `isAbsolute`，却仍会解析到进程的当前盘符，因此后端会拒绝它们，而不是重新定位协议传入的值。
 
 ### 中止与探测
 
-每个文件系统 await 都与调用方的信号竞争（`raceAbort`），因此停滞的网络文件系统不能让已离开的调用方请求继续存活；被弃读的迟到结算会被吞掉。根目录发现对 Windows 盘符使用同一套可竞争的 `stat` 探测。符号链接的可进入性也由 `stat` 决定——失败即不可进入——窗口内的断链符号链接不会从窗口外回填，因为发生过驱逐本身已把层级标记为截断。
+每次等待文件系统操作时，都会通过 `raceAbort` 与调用方的信号竞争，因此停滞的网络文件系统无法让已离开的调用方请求继续存活；已放弃的读取操作即使稍后结束，其结果也会被忽略。根目录发现也使用相同的带信号竞争的 `stat` 探测来检查 Windows 盘符。符号链接的可进入性同样由 `stat` 探测决定——失败即不可进入——窗口内的断链符号链接不会从窗口外回填，因为发生过驱逐本身已把层级标记为截断。
 
 ### 源码地图
 
 | 文件 | 职责 |
 |---|---|
 | [`src/index.ts`](src/index.ts) | `BrowseDirectoryPicker` 服务：列举、创建、有界窗口、错误映射 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件（无运行时不变式；文件系统是权威） |
+| — | 不发布运行时不变式伴生入口；每次列举或创建都是一次无状态的文件系统往返；文件系统本身保存的状态具有权威性。 |
 
 </details>
 
@@ -88,7 +88,7 @@ kind: "package-reference"
 当后端约定不够用时阅读以下内容：先看 seam 定义，再看决策记录与原生替代方案。
 
 - [目录选择 seam](../directory-picker/README.zh.md)——`browse` 能力约定与类型化错误词汇。
-- [目录选择能力 seam 决策](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.zh.md)——列举与创建背后的策略裁决。
+- [目录选择能力 seam 决策](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md)——列举与创建背后的策略裁决。
 - [原生后端](../directory-picker-native/README.zh.md)——面向本地操作者的 OS 选择器替代方案。
 - [自适应选择器](../directory-picker-auto/README.zh.md)——两个后端之间的启动时判定。
 - [生成配置目录](../../../docs/config-catalog.zh.md#deepseek-aidsh-host-directory-picker-browse)——每个受支持配置字段及其源声明。
@@ -112,7 +112,7 @@ kind: "package-reference"
 这些限制说明浏览交互在何处不完整或有意不限定范围。它们是当前包约束，不是任务积压。
 
 - **不读取 Windows 隐藏属性**——Node 的 dirent 不暴露 `FILE_ATTRIBUTE_HIDDEN`，因此在所有平台上 `hidden` 都意味着点前缀，直到原生探测值得付出相应成本为止。
-- **不发现任意网络共享**——Windows 发现覆盖盘符与 UNC 主目录共享；若没有配置式来源，它无法枚举无关的 UNC 服务器或共享。
+- **不发现任意网络共享**——Windows 发现范围包含盘符和 UNC 主目录共享；没有配置来源时，无法枚举其他 UNC 服务器或共享。
 - **全盘可浏览**——没有按部署限定的浏览根；`workspace.create` 接受任意路径，因此这里的根会限定 UX 范围，而不是安全边界。
 
 <a id="dev-note"></a>

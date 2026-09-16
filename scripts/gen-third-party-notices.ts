@@ -14,20 +14,15 @@ import { dirname, resolve } from 'node:path'
 import * as yaml from 'js-yaml'
 import { parse as parseToml, type TomlTableWithoutBigInt, type TomlValueWithoutBigInt } from 'smol-toml'
 import parseSpdx from 'spdx-expression-parse'
+import { browserBundledExternals } from './browser-bundled-externals.ts'
 
 const root = resolve(import.meta.dirname, '..')
 const OUT = 'THIRD_PARTY_NOTICES.md'
 const PPT_MASTER_ROOT = 'packages/skill/skill-ppt-master/assets/ppt-master'
-const PPT_MASTER_VERSION = '6.1.0'
+const PPT_MASTER_VERSION = '6.4.0'
 const PPT_MASTER_LICENSE_SHA256 = '80cefc234c1ec12a8cece4344f16300c634fa03df7891686fcf979e3828f0921'
-const PPT_MASTER_FILE_COUNT = 12_939
-const PPT_MASTER_BYTE_COUNT = 79_496_215
-const WINDOWS_MCP_RUNTIME_ROOT = 'third-party/windows-mcp'
-const WINDOWS_MCP_FORBIDDEN_DISTRIBUTIONS = new Set([
-  'fuzzywuzzy',
-  'levenshtein',
-  'python-levenshtein',
-])
+const PPT_MASTER_FILE_COUNT = 12_981
+const PPT_MASTER_BYTE_COUNT = 83_654_741
 
 /** Dependency-declaration kinds a consumer resolves at runtime. */
 const RUNTIME_KINDS = ['dependencies', 'optionalDependencies'] as const
@@ -52,9 +47,11 @@ const DEV_ONLY_AREAS = [
 
 /** First-party public native packages: reachable at runtime but not third-party. */
 const FIRST_PARTY = new Set([
-  '@deepseek-ai/node-addon-landlock-run',
-  '@deepseek-ai/node-addon-landlock-run-linux-arm64',
-  '@deepseek-ai/node-addon-landlock-run-linux-x64',
+  '@deepseek-ai/node-addon-system',
+  '@deepseek-ai/node-addon-system-darwin-arm64',
+  '@deepseek-ai/node-addon-system-darwin-x64',
+  '@deepseek-ai/node-addon-system-linux-arm64',
+  '@deepseek-ai/node-addon-system-linux-x64',
 ])
 
 /** Official SDK identity covered by the project's narrow owner authorization. */
@@ -83,8 +80,8 @@ export const UNIVER_PRO_RUNTIME_PACKAGES = [
 ] as const
 /** Namespaces whose build-time modules the Univer build script inlines into shipped artifacts. */
 export const UNIVER_BUNDLED_REVIEW_PREFIXES = ['@univer-cli/', '@univerjs-pro/'] as const
-/** Reviewed identity-and-version digest for the bundled modules declared by Univer 0.2.12. */
-export const UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256 = 'd3745a5594ae357ef0a5acbff58ad729e6691d36f9a541217667cd650edfc588'
+/** Reviewed identity-and-version digest for the bundled modules declared by Univer 0.3.0. */
+export const UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256 = '035a1f565386bb26a3031ea592c09cb7a7d4041cfe02cf7c2566d5b6d87d3c22'
 const CLAUDE_PLATFORM_PACKAGE_PREFIX = `${CLAUDE_AGENT_SDK_PACKAGE}-`
 const CLAUDE_PLATFORM_DECLARED_LICENSE = 'SEE LICENSE IN LICENSE.md'
 const UNIVER_COMMERCIAL_LICENSE = 'Univer Commercial License'
@@ -142,17 +139,6 @@ const PYTHON_METADATA: Record<string, { license: string; repo: string; role: str
 
 type PythonMetadata = typeof PYTHON_METADATA
 
-/** Tools fetched by scripts at build time, keyed by the pin the script owns. */
-const BUILD_TIME_TOOLS = [
-  {
-    name: '@yao-pkg/pkg',
-    license: 'MIT',
-    repo: 'https://github.com/yao-pkg/pkg',
-    role: 'invoked by `scripts/build-exe-for-python-sdk.ts` to assemble the single-file SDK runtime executable',
-    pinSource: 'scripts/build-exe-for-python-sdk.ts',
-  },
-]
-
 /** The `package.json` fields this generator reads. */
 export interface Manifest {
   name?: string
@@ -182,135 +168,6 @@ interface BundledSkillDistribution {
   repository: string
   fileCount: number
   byteCount: number
-}
-
-/** Reviewed identity and patch state for the Windows desktop MCP runtime. */
-interface WindowsMcpRuntimeDistribution {
-  pythonVersion: string
-  pythonSha256: string
-  windowsMcpVersion: string
-  windowsMcpWheelSha256: string
-  sourcePath: string
-  sourceSha256: string
-  patchPath: string
-}
-
-/** One patch declaration read from the Windows-MCP runtime manifest. */
-interface WindowsMcpPatch {
-  path: string
-  target: string
-  before: string
-  after: string
-  sha256: string
-}
-
-/** The fields consumed from `third-party/windows-mcp/runtime.json`. */
-interface WindowsMcpRuntimeManifest {
-  python: {
-    version: string
-    url: string
-    sha256: string
-  }
-  windowsMcp: {
-    version: string
-    repository: string
-    sourceCommit: string
-    wheelUrl: string
-    wheelSha256: string
-    sourceSha256: string
-  }
-  patches: WindowsMcpPatch[]
-  source: {
-    archive: string
-    sha256: string
-    toolSignatures: string
-    toolSignaturesSha256: string
-  }
-}
-
-/**
- * Parse exact distribution pins from a pip requirements lock.
- * @param source - complete requirements file text.
- * @returns normalized distribution names mapped to exact versions.
- */
-export function parseHashedRequirementPins(source: string): Map<string, string> {
-  const pins = new Map<string, string>()
-  for (const line of source.split(/\r?\n/u)) {
-    const match = /^([A-Za-z0-9][A-Za-z0-9._-]*)==([^\s\\]+)(?:\s+\\)?$/u.exec(line)
-    if (match === null) continue
-    const rawName = match[1]
-    const version = match[2]
-    if (rawName === undefined || version === undefined) {
-      throw new Error('gen-third-party-notices: malformed Windows-MCP requirement pin.')
-    }
-    const name = rawName.toLowerCase().replace(/[._]+/gu, '-')
-    if (pins.has(name)) {
-      throw new Error(`gen-third-party-notices: duplicate Windows-MCP requirement ${name}.`)
-    }
-    pins.set(name, version)
-  }
-  return pins
-}
-
-/** Read and validate the pinned Windows-MCP runtime inputs and local patch. */
-function collectWindowsMcpRuntimeDistribution(): WindowsMcpRuntimeDistribution {
-  const runtimeRoot = resolve(root, WINDOWS_MCP_RUNTIME_ROOT)
-  const manifest = JSON.parse(
-    readFileSync(resolve(runtimeRoot, 'runtime.json'), 'utf8'),
-  ) as WindowsMcpRuntimeManifest
-  const requirements = readFileSync(resolve(runtimeRoot, 'requirements.lock'), 'utf8')
-  const pins = parseHashedRequirementPins(requirements)
-  if (pins.get('windows-mcp') !== manifest.windowsMcp.version) {
-    throw new Error('gen-third-party-notices: Windows-MCP runtime manifest and requirements lock disagree.')
-  }
-  if (!requirements.includes(`sha256:${manifest.windowsMcp.wheelSha256}`)) {
-    throw new Error('gen-third-party-notices: Windows-MCP wheel digest is absent from the requirements lock.')
-  }
-  if (!pins.has('thefuzz')) {
-    throw new Error('gen-third-party-notices: patched Windows-MCP runtime must include TheFuzz.')
-  }
-  const forbidden = [...WINDOWS_MCP_FORBIDDEN_DISTRIBUTIONS].filter(name => pins.has(name))
-  if (forbidden.length > 0) {
-    throw new Error(`gen-third-party-notices: Windows-MCP runtime includes forbidden GPL distributions: ${forbidden.join(', ')}.`)
-  }
-  for (const [path, digest] of [
-    [manifest.source.archive, manifest.source.sha256],
-    [manifest.source.toolSignatures, manifest.source.toolSignaturesSha256],
-  ]) {
-    if (path === undefined || digest === undefined
-      || createHash('sha256').update(readFileSync(resolve(root, path))).digest('hex') !== digest) {
-      throw new Error('gen-third-party-notices: Windows-MCP reviewed source or signature digest changed.')
-    }
-  }
-  const patch = manifest.patches.find(item => item.target === 'windows_mcp/desktop/service.py'
-    && item.before === 'from fuzzywuzzy import process' && item.after === 'from thefuzz import process')
-  if (patch === undefined) {
-    throw new Error('gen-third-party-notices: Windows-MCP TheFuzz patch is missing.')
-  }
-  for (const item of manifest.patches) {
-    const patchSource = readFileSync(resolve(root, item.path), 'utf8')
-    const patchHash = createHash('sha256').update(patchSource).digest('hex')
-    if (patchHash !== item.sha256
-      || !item.before.split('\n').every(line => patchSource.includes(`-${line}`))
-      || !item.after.split('\n').every(line => patchSource.includes(`+${line}`))) {
-      throw new Error('gen-third-party-notices: Windows-MCP patch content or digest changed.')
-    }
-  }
-  const buildScript = readFileSync(resolve(root, 'scripts/build-windows-mcp-runtime.ps1'), 'utf8')
-  for (const required of ['$SourceScript verify', '$SourceScript install', '--require-hashes', '--no-deps', '$EmbeddedPython $SmokePath']) {
-    if (!buildScript.includes(required)) {
-      throw new Error(`gen-third-party-notices: Windows-MCP build script no longer proves ${required}.`)
-    }
-  }
-  return {
-    pythonVersion: manifest.python.version,
-    pythonSha256: manifest.python.sha256,
-    windowsMcpVersion: manifest.windowsMcp.version,
-    windowsMcpWheelSha256: manifest.windowsMcp.wheelSha256,
-    sourcePath: manifest.source.archive,
-    sourceSha256: manifest.source.sha256,
-    patchPath: patch.path,
-  }
 }
 
 /** Read and validate the pinned PPT Master distribution carried by the package. */
@@ -530,9 +387,6 @@ export function univerCommercialDistributionFromManifests(
     }
     packages.push({ name, version, role: 'runtime dependency' })
     const optionals = Object.entries(manifest.optionalDependencies ?? {})
-    if (name !== UNIVER_PRO_RUNTIME_PACKAGES[0] && optionals.length === 0) {
-      throw new Error(`gen-third-party-notices: ${name} declares no optional platform payloads.`)
-    }
     for (const [payloadName, payloadVersion] of optionals) {
       if (!payloadName.startsWith(`${name}-`)) {
         throw new Error(
@@ -632,11 +486,13 @@ const workspaceLinkedManifestCache = new Map<string, VirtualManifest | undefined
  * Resolve the package version selected for a declaring workspace instead of an
  * unrelated historical version that still occupies the shared virtual store.
  * @param name - external package identity.
+ * @param manifests - workspace manifests already loaded by the caller, so one
+ *   load serves every dependency instead of a full re-read per name.
  * @returns the first current workspace link for that package, when installed.
  */
-function workspaceLinkedManifest(name: string): VirtualManifest | undefined {
+function workspaceLinkedManifest(name: string, manifests: Map<string, Manifest>): VirtualManifest | undefined {
   if (workspaceLinkedManifestCache.has(name)) return workspaceLinkedManifestCache.get(name)
-  for (const [path, manifest] of loadWorkspaceManifests().manifests) {
+  for (const [path, manifest] of manifests) {
     if (!ALL_KINDS.some(kind => name in (manifest[kind] ?? {}))) continue
     const linked = resolve(root, dirname(path), 'node_modules', name, 'package.json')
     if (!existsSync(linked)) continue
@@ -649,13 +505,13 @@ function workspaceLinkedManifest(name: string): VirtualManifest | undefined {
 }
 
 /** Resolve one installed external package manifest from either pnpm store. */
-function installedManifest(name: string, expectedVersion?: string): VirtualManifest | undefined {
-  const linked = workspaceLinkedManifest(name)
+function installedManifest(name: string, manifests: Map<string, Manifest>, expectedVersion?: string): VirtualManifest | undefined {
+  const linked = workspaceLinkedManifest(name, manifests)
   if (linked !== undefined && (expectedVersion === undefined || linked.version === expectedVersion)) return linked
   let manifest: (Manifest & { license?: string; repository?: string | { url?: string }; homepage?: string }) | undefined
   // Workspace-local link farms can expose a dependency that is not linked at
   // the repository root; both are backed by the root workspace's lockfile.
-  for (const store of ['node_modules', 'native/landlock-run/node_modules']) {
+  for (const store of ['node_modules', 'native/system/node_modules']) {
     const direct = resolve(root, store, name, 'package.json')
     if (existsSync(direct)) {
       const candidate = JSON.parse(readFileSync(direct, 'utf8')) as typeof manifest
@@ -673,9 +529,9 @@ function installedManifest(name: string, expectedVersion?: string): VirtualManif
 }
 
 /** License and repository URL for an installed external package, from the pnpm store. */
-function installedMetadata(name: string): { license: string; repo: string } {
+function installedMetadata(name: string, manifests: Map<string, Manifest>): { license: string; repo: string } {
   const override = OVERRIDES[name]
-  const manifest = installedManifest(name)
+  const manifest = installedManifest(name, manifests)
   const license = override?.license ?? manifest?.license
   const rawRepo = typeof manifest?.repository === 'string' ? manifest.repository : manifest?.repository?.url ?? manifest?.homepage
   const repo = override?.repo ?? normalizeRepo(rawRepo)
@@ -685,8 +541,8 @@ function installedMetadata(name: string): { license: string; repo: string } {
   return { license, repo }
 }
 
-function collectClaudeDistribution(): ClaudeDistribution {
-  const manifest = installedManifest(CLAUDE_AGENT_SDK_PACKAGE)
+function collectClaudeDistribution(manifests: Map<string, Manifest>): ClaudeDistribution {
+  const manifest = installedManifest(CLAUDE_AGENT_SDK_PACKAGE, manifests)
   if (manifest === undefined) {
     throw new Error(
       `gen-third-party-notices: cannot resolve ${CLAUDE_AGENT_SDK_PACKAGE}; run \`pnpm install\`.`,
@@ -695,7 +551,7 @@ function collectClaudeDistribution(): ClaudeDistribution {
   const distribution = claudeDistributionFromManifest(manifest)
   let installedPayloads = 0
   for (const payload of distribution.payloads) {
-    const installed = installedManifest(payload.name, payload.version)
+    const installed = installedManifest(payload.name, manifests, payload.version)
     if (installed === undefined) continue
     installedPayloads += 1
     if (
@@ -717,8 +573,8 @@ function collectClaudeDistribution(): ClaudeDistribution {
 }
 
 /** Resolve and verify the installed commercial Univer dependency closure. */
-function collectUniverCommercialDistribution(): UniverCommercialDistribution {
-  const plugin = installedManifest(UNIVER_OFFICE_PACKAGE)
+function collectUniverCommercialDistribution(manifests: Map<string, Manifest>): UniverCommercialDistribution {
+  const plugin = installedManifest(UNIVER_OFFICE_PACKAGE, manifests)
   if (plugin === undefined) {
     throw new Error(
       `gen-third-party-notices: cannot resolve ${UNIVER_OFFICE_PACKAGE}; run \`pnpm install\`.`,
@@ -731,7 +587,7 @@ function collectUniverCommercialDistribution(): UniverCommercialDistribution {
     )
   }
   const roots = univerCommercialRootDependencies(plugin).map(([name, version]) => {
-    const manifest = installedManifest(name, version)
+    const manifest = installedManifest(name, manifests, version)
     if (manifest === undefined) {
       throw new Error(
         `gen-third-party-notices: cannot resolve ${name}@${version}; run \`pnpm install\`.`,
@@ -741,7 +597,7 @@ function collectUniverCommercialDistribution(): UniverCommercialDistribution {
   })
   const distribution = univerCommercialDistributionFromManifests(plugin, roots)
   const payloads = distribution.packages.filter(entry => entry.role === 'optional platform payload')
-  if (!payloads.some(payload => installedManifest(payload.name, payload.version) !== undefined)) {
+  if (payloads.length > 0 && !payloads.some(payload => installedManifest(payload.name, manifests, payload.version) !== undefined)) {
     throw new Error(
       'gen-third-party-notices: no Univer binding platform payload is installed; install optional dependencies before regenerating.',
     )
@@ -763,27 +619,26 @@ function normalizeRepo(raw: string | undefined): string | undefined {
 }
 
 /**
- * External npm dependencies, tiered by which workspace area declares them at
- * runtime: a package is runtime when any manifest outside `DEV_ONLY_AREAS`
- * names it in `dependencies`/`optionalDependencies`. A package declared only
- * by tooling, test infrastructure, the website, or the demo leaves — whatever
- * the declaring section is called — is development-only.
+ * Direct npm dependencies distributed through installed runtime libraries or
+ * browser builds. Tooling declarations alone do not imply distribution.
  */
-function collectNpmDeps(): ExternalDep[] {
-  const { manifests, names } = loadWorkspaceManifests()
-  return [...tierExternalDeps(manifests, names)]
+function collectNpmDeps(manifests: Map<string, Manifest>, names: Set<string>, browser: ReadonlySet<string>): ExternalDep[] {
+  return [...tierExternalDeps(manifests, names, browser)]
     .filter(([name]) => !FIRST_PARTY.has(name))
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([name, runtime]) => ({ name, ...installedMetadata(name), runtime }))
+    .map(([name, runtime]) => ({ name, ...installedMetadata(name, manifests), runtime }))
 }
 
 /**
  * Tier every external dependency the workspace declares.
  * @param manifests - workspace manifests keyed by repository-relative path.
  * @param names - every workspace package name, which never counts as external.
+ * @param browser - Direct third-party packages resolved by the browser builds.
  * @returns each external package mapped to whether it is a runtime dependency.
  */
-export function tierExternalDeps(manifests: Map<string, Manifest>, names: Set<string>): Map<string, boolean> {
+export function tierExternalDeps(
+  manifests: Map<string, Manifest>, names: Set<string>, browser: ReadonlySet<string> = new Set(),
+): Map<string, boolean> {
   const tiers = new Map<string, boolean>()
   // `tsx` is runtime by fiat: the root source-run scripts execute through its ESM hook.
   tiers.set('tsx', true)
@@ -792,10 +647,13 @@ export function tierExternalDeps(manifests: Map<string, Manifest>, names: Set<st
     for (const kind of ALL_KINDS) {
       for (const [dep, range] of Object.entries(manifest[kind] ?? {})) {
         if (names.has(dep) || range.startsWith('workspace:')) continue
-        const runtime = !devOnly && (RUNTIME_KINDS as readonly string[]).includes(kind)
+        const runtime = browser.has(dep) || !devOnly && (RUNTIME_KINDS as readonly string[]).includes(kind)
         tiers.set(dep, (tiers.get(dep) ?? false) || runtime)
       }
     }
+  }
+  for (const name of browser) {
+    if (!names.has(name) && !tiers.has(name)) throw new Error(`gen-third-party-notices: browser package ${name} has no workspace dependency declaration`)
   }
   return tiers
 }
@@ -832,7 +690,7 @@ export function parseVendoredRows(text: string): VendoredRow[] {
  * disclosed, so a row that stops matching the table format is a hard error
  * rather than a package that quietly vanishes from the notices.
  */
-function collectVendored(): VendoredRow[] {
+function collectVendored(): (VendoredRow & { sourceDirectory: string })[] {
   const rows = parseVendoredRows(readFileSync(resolve(root, 'vendor/README.md'), 'utf8'))
   const onDisk = new Map<string, string>()
   for (const entry of readdirSync(resolve(root, 'vendor'), { withFileTypes: true })) {
@@ -846,15 +704,15 @@ function collectVendored(): VendoredRow[] {
   if (missing.length > 0) {
     throw new Error(`gen-third-party-notices: vendor/README.md has no manifest-table row for ${missing.join(', ')}; its table format changed or the sync is incomplete.`)
   }
-  for (const row of rows) {
+  return rows.map((row) => {
     const dir = onDisk.get(row.npmName)
     if (dir === undefined) throw new Error(`gen-third-party-notices: vendored package ${row.npmName} from vendor/README.md has no vendor/ directory.`)
     const license = readManifest(`vendor/${dir}/package.json`).license
     if (license !== 'MIT') {
       throw new Error(`gen-third-party-notices: vendored ${row.npmName} declares license ${JSON.stringify(license)}; the vendored section assumes MIT throughout.`)
     }
-  }
-  return rows
+    return { ...row, sourceDirectory: `vendor/${dir}` }
+  })
 }
 
 /** Whether a parsed TOML value is a table rather than an array or scalar. */
@@ -987,16 +845,6 @@ function collectPatched(): { spec: string; patch: string }[] {
   return Object.entries(workspace.patchedDependencies ?? {}).map(([spec, patch]) => ({ spec, patch }))
 }
 
-/** Verify each build-time tool pin still appears in its owning script. */
-function verifyBuildTimePins(): void {
-  for (const tool of BUILD_TIME_TOOLS) {
-    const text = readFileSync(resolve(root, tool.pinSource), 'utf8')
-    if (!text.includes(tool.name)) {
-      throw new Error(`gen-third-party-notices: ${tool.pinSource} no longer references ${tool.name}; update BUILD_TIME_TOOLS.`)
-    }
-  }
-}
-
 /** SPDX identifiers this project may ship without further review. */
 const PERMISSIVE_LICENSES = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0'])
 
@@ -1029,6 +877,18 @@ export function isPermissive(license: string): boolean {
     return isPermissiveSpdx(parseSpdx(normalized))
   } catch {
     return false
+  }
+}
+
+/**
+ * Reject unapproved non-permissive licenses on installed or browser-bundled code.
+ * @param dependencies - Disclosed runtime package identities and declared licenses.
+ * @throws When a runtime package has no permissive license or exact owner authorization.
+ */
+export function assertRuntimeLicenses(dependencies: readonly { name: string; license: string }[]): void {
+  const rejected = dependencies.filter(dep => !isPermissive(dep.license) && !isOwnerAuthorizedRuntime(dep.name))
+  if (rejected.length > 0) {
+    throw new Error(`gen-third-party-notices: runtime ${rejected.map(dep => `${dep.name} (${dep.license})`).join(', ')} is not a permissive license; review the distribution terms and record the decision before regenerating.`)
   }
 }
 
@@ -1103,9 +963,9 @@ export function verifyMathmlDistribution(manifest: Manifest, distributionRoot: s
 }
 
 /** Render the pinned LGPL distribution and its corresponding-source location. */
-function renderMathmlDistribution(deps: ExternalDep[]): string {
+function renderMathmlDistribution(deps: ExternalDep[], manifests: Map<string, Manifest>): string {
   if (!deps.some(dep => dep.name === MATHML_PACKAGE)) return ''
-  const manifest = installedManifest(MATHML_PACKAGE)
+  const manifest = installedManifest(MATHML_PACKAGE, manifests)
   if (manifest === undefined) throw new Error('gen-third-party-notices: cannot resolve mathml2omml; run `pnpm install`.')
   verifyMathmlDistribution(manifest, resolve(root, MATHML_DISTRIBUTION_ROOT))
   return `
@@ -1115,7 +975,7 @@ The teacher workbench uses [\`mathml2omml\`](https://github.com/fiduswriter/math
 
 Every teacher-workbench package includes [the notice and replacement instructions](${MATHML_DISTRIBUTION_ROOT}/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](${MATHML_DISTRIBUTION_ROOT}/mathml2omml-0.5.0-source.tar.gz) from upstream commit \`0ddeb8b59ff1a97796b25d8f682dfb410febde1d\`. The accompanying [equation-formatting source patch](${MATHML_DISTRIBUTION_ROOT}/colors.patch) supplies the local changes and is applied before rebuilding. The packet also contains the bundled \`entities\` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from \`html-parse-stringify\`. The Windows installer includes the same packet under \`resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml\`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
 
-The formula palette embeds five unchanged glyphs from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
+The formula palette embeds five glyphs derived from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The DSH Math Symbols subset scales and raises the two proper-set relations. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
 `
 }
 
@@ -1130,19 +990,6 @@ function renderBundledSkillDistributions(
 `
 }
 
-/** Render the pinned Python runtime and patched Windows-MCP distribution. */
-function renderWindowsMcpRuntime(
-  distribution: WindowsMcpRuntimeDistribution,
-): string {
-  return `
-## Bundled Windows-MCP desktop runtime
-
-The Windows desktop installer embeds [CPython](https://www.python.org/) ${distribution.pythonVersion} under the Python Software Foundation License and [Windows-MCP](https://github.com/CursorTouch/Windows-MCP) ${distribution.windowsMcpVersion} under MIT. The CPython embedded archive is pinned to SHA-256 \`${distribution.pythonSha256}\`; the dependency-base Windows-MCP wheel is pinned to SHA-256 \`${distribution.windowsMcpWheelSha256}\`. The executable Python package is replaced with the reviewed [source snapshot](${distribution.sourcePath}), pinned to SHA-256 \`${distribution.sourceSha256}\`.
-
-DSH applies [\`${distribution.patchPath}\`](${distribution.patchPath}) while assembling the runtime, replacing Windows-MCP's sole \`fuzzywuzzy\` import with the MIT-licensed \`TheFuzz\` API. The [sampling patch](${WINDOWS_MCP_RUNTIME_ROOT}/patches/correlated-sampling.patch) echoes the initiating tool call's private correlation token when Scrape requests a model completion. The GPL \`fuzzywuzzy\`, \`Levenshtein\`, and \`python-Levenshtein\` distributions are excluded. The complete binary-only Python distribution closure is hash-pinned in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock), and its source identities, download URLs, digests, and patch digests are recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json\`](${WINDOWS_MCP_RUNTIME_ROOT}/runtime.json). The installed wheel \`.dist-info\` trees remain inside the packaged \`resources/windows-mcp/Lib/site-packages\` tree, including their metadata and any packaged license files; downstream distributors must preserve and comply with those terms.
-`
-}
-
 /** Render the installed and artifact-bundled Univer closure and its downstream obligation. */
 function renderUniverCommercialDistribution(
   distribution: UniverCommercialDistribution | undefined,
@@ -1154,7 +1001,7 @@ function renderUniverCommercialDistribution(
   return `
 ## Univer installed and artifact-bundled closure
 
-\`${UNIVER_OFFICE_PACKAGE}\` ${distribution.pluginVersion} is Apache-2.0, but its executable closure also contains the packages below. Its three external \`@univerjs-pro/*\` runtime roots select native payloads at install time. Its build script inlines the listed \`@univerjs-pro/*\` and \`@univer-cli/*\` build-time modules into the shipped Host, Viewer, Gateway, worker, and render artifacts. Those modules retain their own terms; the wrapper's Apache-2.0 declaration does not relicense them, and the compiled tarball does not carry their individual package manifests or notices. [Univer's licensing guide](${UNIVER_COMMERCIAL_TERMS}) requires a valid Univer Pro commercial license for production use. Inclusion in this repository or an installer does not grant that license; every distributor and production operator must obtain all production and distribution rights required by Univer. A package identity, version, bundled-declaration digest, or platform-payload change requires another dependency, compatibility, terms, and notices review.
+\`${UNIVER_OFFICE_PACKAGE}\` ${distribution.pluginVersion} is Apache-2.0, but its executable closure also contains the packages below. Its external \`@univerjs-pro/cli-assets\` dependency supplies the commercial resource catalog. Its build script inlines the listed \`@univerjs-pro/*\` and \`@univer-cli/*\` build-time modules into the shipped Host, Viewer, Gateway, worker, and render artifacts. Those modules retain their own terms; the wrapper's Apache-2.0 declaration does not relicense them, and the compiled tarball does not carry their individual package manifests or notices. [Univer's licensing guide](${UNIVER_COMMERCIAL_TERMS}) requires a valid Univer Pro commercial license for production use. Inclusion in this repository or an installer does not grant that license; every distributor and production operator must obtain all production and distribution rights required by Univer. A package identity, version, bundled-declaration digest, or platform-payload change requires another dependency, compatibility, terms, and notices review.
 
 | Univer package | Version | Role |
 | --- | --- | --- |
@@ -1164,38 +1011,33 @@ ${rows.join('\n')}
 
 /**
  * Render the complete notices document.
- * @returns the exact bytes `THIRD_PARTY_NOTICES.md` must hold.
+ * @returns The exact bytes THIRD_PARTY_NOTICES.md must hold after resolving browser inputs.
  */
-export function render(): string {
-  verifyBuildTimePins()
-  const npm = collectNpmDeps()
+export async function render(): Promise<string> {
+  const browser = await browserBundledExternals(root)
+  // The linked-manifest cache is keyed by name only, so it must not outlive
+  // the manifests map it was resolved from; render() owns that single load.
+  workspaceLinkedManifestCache.clear()
+  const { manifests, names } = loadWorkspaceManifests()
+  const npm = collectNpmDeps(manifests, names, browser)
   const runtimeDeps = npm.filter(dep => dep.runtime)
   const devDeps = npm.filter(dep => !dep.runtime)
   const vendored = collectVendored()
   const pptMaster = collectPptMasterDistribution()
-  const windowsMcpRuntime = collectWindowsMcpRuntimeDistribution()
   const python = collectPython()
   const patched = collectPatched()
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
   )
-    ? collectClaudeDistribution()
+    ? collectClaudeDistribution(manifests)
     : undefined
   const univerDistribution = runtimeDeps.some(
     dep => dep.name === UNIVER_OFFICE_PACKAGE,
   )
-    ? collectUniverCommercialDistribution()
+    ? collectUniverCommercialDistribution(manifests)
     : undefined
   const nonPermissiveDev = devDeps.filter(dep => !isPermissive(dep.license))
-  // A copyleft license reaching a shipped surface is a distribution decision,
-  // not a rendering detail; the notices cannot quietly absorb it.
-  const nonPermissiveRuntime = runtimeDeps.filter(dep =>
-    !isPermissive(dep.license)
-    && !isOwnerAuthorizedRuntime(dep.name),
-  )
-  if (nonPermissiveRuntime.length > 0) {
-    throw new Error(`gen-third-party-notices: runtime ${nonPermissiveRuntime.map(dep => `${dep.name} (${dep.license})`).join(', ')} is not a permissive license; review the distribution terms and record the decision before regenerating.`)
-  }
+  assertRuntimeLicenses(runtimeDeps)
   const patchedLines = patched.map(({ spec, patch }) => `- \`${spec}\` — [\`${patch}\`](${patch})`)
 
   return `<!-- Generated by scripts/gen-third-party-notices.ts — do not edit by hand.
@@ -1207,26 +1049,25 @@ DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party
 
 This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the bundled Windows-MCP desktop runtime, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
 
-The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock), and the Windows-MCP desktop runtime closure is recorded in [\`${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock\`](${WINDOWS_MCP_RUNTIME_ROOT}/requirements.lock).
+The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
 
 ## Vendored source (\`vendor/\`)
 
 The Cordis framework and its foundation libraries are source-vendored into this repository rather than consumed from npm, and republished under the \`@deepseek-ai\` scope. All are MIT-licensed; each directory preserves its upstream \`LICENSE\` file. Exact upstream commits and local modifications are recorded in [\`vendor/README.md\`](vendor/README.md).
 
-| Package | Upstream name | Upstream | License |
+| Package | Upstream name | Source | License |
 | --- | --- | --- | --- |
-${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.upstream.replace('https://', '')}](${row.upstream}) | MIT |`).join('\n')}
+${vendored.map(row => `| \`${row.npmName}\` | \`${row.upstreamName}\` | [${row.sourceDirectory}](${row.sourceDirectory}/) | MIT |`).join('\n')}
 
 ${renderBundledSkillDistributions(pptMaster)}
-${renderWindowsMcpRuntime(windowsMcpRuntime)}
 
 ## Runtime npm dependencies
 
-External packages that a workspace package resolves at runtime. The tier covers every plugin a user can mount from \`cordis.yml\` — not only what the \`dsh\` CLI, Web UI, and Python SDK runtime load by default.
+External packages installed for runtime use or distributed inside the prebuilt browser artifacts. Browser inputs are resolved through the shipping tsdown and Vite configurations, independently of npm dependency sections. The tier covers every plugin a user can mount from \`cordis.yml\` — not only what the \`dsh\` CLI, Web UI, and Python SDK runtime load by default.
 
 ${renderNpmTable(runtimeDeps)}
 ${renderOfficeDistribution(runtimeDeps)}
-${renderMathmlDistribution(runtimeDeps)}
+${renderMathmlDistribution(runtimeDeps, manifests)}
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
@@ -1236,7 +1077,7 @@ ${renderUniverCommercialDistribution(univerDistribution)}
 
 ## Development-only npm dependencies
 
-External packages **directly declared** only by repository tooling, test infrastructure, the documentation site, the demo leaves, or the native launcher's build workspace. No shipped surface names them itself. A package here may still be pulled in transitively by a runtime dependency — \`pnpm-lock.yaml\` is the authority on the full closure — so this tier records who declares a package, not what a build ultimately bundles.
+External packages **directly declared** for development, tests, types, or tooling, without a runtime installation or browser-build relationship. A package here may still be pulled in transitively by a runtime dependency — \`pnpm-lock.yaml\` is the authority on that full closure.
 
 ${renderNpmTable(devDeps)}
 ${renderNonPermissiveNote(nonPermissiveDev)}
@@ -1249,23 +1090,17 @@ Direct dependencies of the \`pyproject.toml\` manifests, plus \`uv\` as the deve
 ${python.map(dep => `| [\`${dep.name}\`](${dep.repo}) | ${dep.license} | ${dep.role} |`).join('\n')}
 | [\`uv\`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
 
-## Fetched at build time
-
-| Package | License | Role |
-| --- | --- | --- |
-${BUILD_TIME_TOOLS.map(tool => `| [\`${tool.name}\`](${tool.repo}) | ${tool.license} | ${tool.role} |`).join('\n')}
-
 ## First-party native packages
 
-\`@deepseek-ai/node-addon-landlock-run\` (and its platform packages) is built and released from this repository under BSD 3-Clause. It is listed here for completeness; it is first-party, not third-party.
+\`@deepseek-ai/node-addon-system\` (and its platform packages) is built and released from this repository under BSD 3-Clause. It is listed here for completeness; it is first-party, not third-party.
 `
 }
 
 /** CLI entry: default writes the notices, `--check` fails if the committed copy
  * is stale. Guarded behind an entry-point check so importing this module for
  * tests neither regenerates the committed file nor calls process.exit. */
-function main(): void {
-  const content = render()
+async function main(): Promise<void> {
+  const content = await render()
   if (process.argv.includes('--check')) {
     let committed: string | null = null
     try {
@@ -1288,5 +1123,5 @@ function main(): void {
 }
 
 if (process.argv[1] !== undefined && import.meta.filename === resolve(process.argv[1])) {
-  main()
+  await main()
 }

@@ -13,8 +13,11 @@ import type {
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import { createSnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { SettingsDescribeFace, SettingsRemote } from '@deepseek-ai/dsh-client-ui-settings/client'
+import type { SettingsDescribeFace } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
+
+/** Settings methods supplied by the generated Host Remote. */
+export type SettingsRemote = Pick<ClientRemote['settings'], 'describe' | 'update' | 'replace' | 'mutate'>
 
 /**
  * Any route key walks a dict schema to the same profile node, so the lookup

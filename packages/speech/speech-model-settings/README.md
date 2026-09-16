@@ -77,4 +77,6 @@ None until a user or IM workflow submits the resulting text through an ordinary 
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; each request validates model selection, credentials, uploads, and responses.
+
 Add a speech protocol only with its request encoding, response parser, resource limit, and focused tests. Keep provider URLs and model ids in `model-service-settings`.

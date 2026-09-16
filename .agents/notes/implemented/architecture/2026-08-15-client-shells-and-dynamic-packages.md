@@ -51,17 +51,17 @@ The modules Node half injects the startup protocol into the served HTML in this 
 4. Assign `window.__DSH_BOOT__`, including all scheduling descriptors and every row's one-resource HMR combo URL.
 5. Execute the Vite main module.
 
-The bootstrap combo currently registers only the modules factory. The startup kernel passes the raw graph and shell seeds to `__ModuleLoader__.create()`. The facade removes the modules registration, materializes it with a `require` function that rejects every external, and invokes its `createClientModuleSystem` export. The modules bundle parses the graph, constructs `ClientModuleSystem`, caches its own exports as the modules row, retains the system in a module closure, and switches the same facade to live mode. The modules client face consequently has a zero-external bootstrap requirement.
+The bootstrap combo currently registers only the modules factory. The startup kernel passes the raw graph and shell seeds to `__ModuleLoader__.create()`. The facade removes the modules registration, materializes it with a `require` function that rejects every external, and invokes its `createClientModuleSystem` export. The modules bundle parses the graph, constructs and returns `ClientModuleSystem`, caches its own exports as the modules row, and switches the same facade to live mode. The kernel installs that instance as its Loader's `internal`, and the modules plugin reads it there when it provides `ctx.modules`. The modules client face consequently has a zero-external bootstrap requirement and no module-global system identity.
 
 After the `immediately` tier has registered its factories, the kernel creates all Loader entries, awaits Cordis quiescence, and requires every fiber to be ACTIVE. It then calls `ctx.uiRenderer.mount(container)`. The dynamic `ui-renderer` package owns React, slot rendering, hydration of the existing boot DOM, and the React root lifecycle; the startup kernel and failure page remain React-free.
 
 ### Dependency declarations
 
-Every client package keeps Cordis in matching `peerDependencies` and `devDependencies`. A dynamic package that imports, re-exports, augments, or names an internal dynamic package in `dsh.client.inject` keeps that package as matching peer and development dependencies. Static client inputs and React modules are development-only inputs for a dynamic package because the shell supplies their runtime identities.
+Every Client package keeps Cordis in matching `peerDependencies` and `devDependencies`; Cordis is its only peer. Browser imports, type references, module augmentations, and `dsh.client.inject` are development inputs because the Client build and shipped profile supply their runtime identities. A package that also publishes a Host entry keeps that entry's runtime value imports in `dependencies`. [Published dependency faces](../process/2026-08-26-published-dependency-faces.md) owns package discovery, exceptions, and the explicit Host roster.
 
 Ordinary installed libraries remain `dependencies`: a dynamic build may bundle a private implementation, while a `staticLinked` library retains its bare import for the final host. Each build face decides externality independently from npm sections. Published file lists cover every runtime entry, relative asset, and declaration file reached by the artifact.
 
-`verify-client-packages` enforces these classifications, dependency sections, build forms, parser-preload alignment, shared-module requests, and module-graph acyclicity. The repository publint pass enforces publication closure. The verifier's `--fix` mode repairs only unambiguous manifest drift.
+`verify-package-dependencies` enforces and repairs dependency sections. `verify-client-packages` enforces build forms, parser-preload alignment, shared-module requests, and module-graph acyclicity. The repository publint pass enforces publication closure.
 
 ## Alternatives considered
 
@@ -77,7 +77,7 @@ Ordinary installed libraries remain `dependencies`: a dynamic build may bundle a
 
 ## Consequences
 
-Bundle contents stay stable when an npm dependency moves between peer and development sections, because each build face declares externality directly. Static libraries remain host-assembled, while dynamic packages retain uniform artifacts and lifecycle governance.
+Bundle contents stay stable when an internal DSH relationship is development-only, because each build face declares externality directly. Static libraries remain host-assembled, while dynamic packages retain uniform artifacts and lifecycle governance. The shipped profile owns the complete Client package roster, so individual Client packages do not ask npm to solve the same graph again through peer placement.
 
 The startup protocol depends on the modules package id, and modules must remain self-contained at runtime. Combo generation preserves its ordinary package artifact and gives every other row one shared initial transport; HMR uses the same route with that row as its sole resource. A missing bootstrap registration fails before Cordis starts; later plugin import, apply, and service-wait failures remain visible through the boot page's ACTIVE scan.
 

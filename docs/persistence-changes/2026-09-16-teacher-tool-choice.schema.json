@@ -1,0 +1,252 @@
+{
+  "formatVersion": 1,
+  "roots": [
+    {
+      "key": "event:request/header",
+      "kind": "event",
+      "event": "request/header",
+      "surface": false,
+      "digest": "d1c3f0c4a0dd526c4558e19f5b75d61cd30a2f0d2169de63d26ad698a2cac1dc",
+      "schema": {
+        "root": 0,
+        "nodes": [
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "data",
+                "type": 1,
+                "optional": false
+              },
+              {
+                "name": "ignorable",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "seq",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "time",
+                "type": 6,
+                "optional": false
+              },
+              {
+                "name": "type",
+                "type": 22,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "header",
+                "type": 2,
+                "optional": false
+              },
+              {
+                "name": "reason",
+                "type": 17,
+                "optional": false
+              },
+              {
+                "name": "startsSeries",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "adapterDefaults",
+                "type": 3,
+                "optional": true
+              },
+              {
+                "name": "config",
+                "type": 5,
+                "optional": false
+              },
+              {
+                "name": "tools",
+                "type": 13,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "maxTokens",
+                "type": 4,
+                "optional": true
+              },
+              {
+                "name": "reasoningEffort",
+                "type": 4,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "literal",
+            "value": true
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "maxTokens",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "model",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "provider",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "reasoningEffort",
+                "type": 7,
+                "optional": true
+              },
+              {
+                "name": "stop",
+                "type": 8,
+                "optional": true
+              },
+              {
+                "name": "temperature",
+                "type": 6,
+                "optional": true
+              },
+              {
+                "name": "toolChoice",
+                "type": 9,
+                "optional": true
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "primitive",
+            "type": "number"
+          },
+          {
+            "kind": "primitive",
+            "type": "string"
+          },
+          {
+            "kind": "array",
+            "element": 7
+          },
+          {
+            "kind": "union",
+            "types": [
+              10,
+              11,
+              12
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "none"
+          },
+          {
+            "kind": "literal",
+            "value": "required"
+          },
+          {
+            "kind": "literal",
+            "value": "auto"
+          },
+          {
+            "kind": "array",
+            "element": 14
+          },
+          {
+            "kind": "object",
+            "properties": [
+              {
+                "name": "description",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "name",
+                "type": 7,
+                "optional": false
+              },
+              {
+                "name": "parameters",
+                "type": 15,
+                "optional": false
+              }
+            ],
+            "indices": []
+          },
+          {
+            "kind": "object",
+            "properties": [],
+            "indices": [
+              {
+                "key": 7,
+                "value": 16
+              }
+            ]
+          },
+          {
+            "kind": "opaque",
+            "reason": "unknown"
+          },
+          {
+            "kind": "union",
+            "types": [
+              18,
+              19,
+              20,
+              21
+            ]
+          },
+          {
+            "kind": "literal",
+            "value": "change"
+          },
+          {
+            "kind": "literal",
+            "value": "initial"
+          },
+          {
+            "kind": "literal",
+            "value": "resume"
+          },
+          {
+            "kind": "literal",
+            "value": "series"
+          },
+          {
+            "kind": "literal",
+            "value": "request/header"
+          }
+        ]
+      }
+    }
+  ],
+  "types": []
+}

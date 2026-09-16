@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import SpeechRuntime, { SpeechError, type SpeechProvider } from '../src/index.ts'
-import * as invariant from '../src/invariant.ts'
 
 const contexts: Context[] = []
 
@@ -103,15 +102,5 @@ describe('SpeechRuntime', () => {
       ok: false,
       error: { code: 'provider-unavailable' },
     })
-  })
-
-  it('registers its explained empty invariant companion', async () => {
-    const dispose = vi.fn()
-    const register = vi.fn((_packageName: string, installer: () => void) => {
-      installer()
-      return dispose
-    })
-    await expect(invariant.apply({ invariants: { register } } as never)).resolves.toBe(dispose)
-    expect(register).toHaveBeenCalledWith('@deepseek-ai/dsh-speech', expect.any(Function))
   })
 })

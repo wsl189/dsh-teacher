@@ -18,7 +18,7 @@ DeepSeek Harness 处于 _开发者预览_ 阶段，正在快速迭代。**未来
 
 ## 运行
 
-> **本 fork 包含 npm 官方发布的 `@deepseek-ai/dsh` 所没有的定制功能**——内置 better-sidebar 工作台、IM 连接、cron 管理、技能／MCP 管理、Office 预览与 Univer 创作、教师工作台（试题切割、学生目录）、与 QQ 共用供应商模型的语音输入、输入框上传文件的右侧预览，以及 overlay 挂载时隐藏右上角收起按钮的规则。`npx @deepseek-ai/dsh web` 安装的是官方 npm 包，**不会有这些功能**。请始终从本仓库运行。
+> 本教师发行版包含教师工作台、统一供应商模型设置、共用语音输入和[内置第三方插件](third-party/README.zh.md)。请从本仓库运行这些功能。
 
 ### Windows 安装包
 
@@ -68,11 +68,11 @@ pnpm run build
 pnpm dsh web
 ```
 
-**不要**使用 `npx @deepseek-ai/dsh web`——它会安装官方 npm 包，不含本 fork 的定制功能（教师工作台、内置 better-sidebar、上传预览、overlay 收起规则）。
+`npx @deepseek-ai/dsh web` 安装的是上游发行版。教师发行版请使用上方的仓库命令。
 
 ### 2. 内置生图、IM、cron、技能／MCP 管理与 Office
 
-Web 组合与 Windows EXE 已包含经过审阅的 `@dickpy/dsh-imagegen` 1.5.1 运行时重打包、`@xmanrui/dsh-im` 4.11.0、`dsh-plugin-cron` 0.1.3、`dsh-skill-mcp-panel` 2.0.1、`dsh-univer-office` 0.2.12 DSH 重构建版与 `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2，新电脑上不要再为它们运行 `dsh plugin add`；首次启动该内置版本前，应移除单独安装的生图配置项。OpenAI 兼容生图渠道在**设置 → 模型 → 生图模型**中配置；只向普通提供方列表添加生图模型并不会创建生图工具。机器人在**设置 → 插件 → 连接平台**中配置。请先在**设置 → 模型 → 服务接入**中配置供应商线路，再于**使用场景**分配语音识别模型；输入框、QQ 与日常管理共用该分配。技能在**设置 → 技能**中管理，profile MCP 服务器则在**设置 → MCP**中或通过 `dsh-panel mcp` 管理；生图、cron、Office 预览与 Univer 审阅界面由发行 profile 直接加载。固定的来源包及其出处记录仍保存在 [`third-party/`](third-party/README.zh.md)。
+[内置插件参考](third-party/README.zh.md)列出固定版本、配置位置和迁移规则。在**设置 → 模型 → 服务接入**配置生图与语音线路，再在**使用场景**分配模型。工作台功能与这些设置继续使用教师发行版的现有数据。
 
 Univer 封装层采用 Apache-2.0，但其可执行依赖闭包含有商业 `@univerjs-pro/*` 组件。启动前必须通过 `UNIVER_LICENSE` 提供有效许可证，分发安装器前还要取得所需分发权；内置配置项已关闭产品遥测。部分 Slide 布局、SVG 测量与截图操作还需要本机 Chrome 或 Chromium，可用 `UNIVER_RENDER_BROWSER` 指定其可执行文件。
 
@@ -115,7 +115,7 @@ QQ 机器人、主输入框和工作台「日常管理」的麦克风控件会�
 
 ### 6. 验证
 
-- 右侧出现 better-sidebar 手柄（内置工作台）。
+- 官方右侧栏可以打开文件、文档与终端。
 - 侧边栏出现教师工作台入口，可打开日常管理、课表、试题切割。
 - 点击输入框上传的文件卡片，会在右侧栏打开预览标签页（PDF、DOCX、XLSX、PPTX、图片）。
 - QQ 机器人可收发消息；`qq_send_local_file` 可发送图片/文件；开启 ASR 后语音消息可转写。
@@ -155,6 +155,18 @@ QQ 机器人、主输入框和工作台「日常管理」的麦克风控件会�
 请先阅读[开发指南](docs/development.zh.md)与[架构文档](docs/architecture.zh.md)。
 
 面向 agent：请遵循 [AGENTS.md](AGENTS.md)。
+
+## 引用
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
 
 ## 许可证
 

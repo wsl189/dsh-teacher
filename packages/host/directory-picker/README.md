@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The web GUI host lets an operator choose a workspace directory through one contract: a single service whose one method reports which interaction the composed backend provides. Backends differ in interaction shape, not just mechanism — the native backend opens an OS chooser on the host display, while the browse backend serves root discovery, listing, and creation primitives for an in-app browser that also works for remote clients. Consumers switch on the reported capability kind; a new backend extends the capability vocabulary without editing this package. This seam is GUI-host only and never reaches the agent loop; the backends and the wire mapping live beside it.
+The web GUI lets an operator choose a workspace directory with either an OS chooser or an in-app browser. Use the native option when the operator can reach the host display; use the browser option for remote clients or when directory listing and creation must stay in the app. Consumers receive the interaction kind and can present the matching workflow. Directory picking is limited to the GUI host and never affects the agent loop. The browser workflow exposes one directory tree at a time; multiple roots are unsupported.
 
 ## Table of Contents
 
@@ -33,11 +33,11 @@ The [native backend](../directory-picker-native/README.md) is the right choice w
 
 ### The capability contract
 
-`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for the OS chooser, or `{ kind: 'browse', listRoots(signal), list(path?), createDirectory(path, name) }` for the in-app browser. `listRoots` returns absolute filesystem jump targets, including available Windows drive roots. Consumers switch on `kind`; a capability kind no composition implements means the UI hides the picking affordance rather than failing. Browse failures throw the typed `DirectoryPickerError` with a closed code set — `directory-unreadable`, `directory-exists`, or `directory-create-failed` — each carrying the subject path, which the picking Remote controller maps onto wire failure codes.
+`capability()` returns a discriminated union describing how an operator selects a directory: `{ kind: 'native', pick(signal) }` for the OS chooser, or `{ kind: 'browse', list(path?), createDirectory(path, name) }` for the in-app browser. Consumers switch on `kind`; a capability kind no composition implements means the UI hides the picking affordance rather than failing. Browse failures throw the typed `DirectoryPickerError` with a closed code set — `directory-unreadable`, `directory-exists`, or `directory-create-failed` — each carrying the subject path, which the picking Remote controller maps 1:1 onto wire failure codes.
 
 ### What rows carry
 
-`DirectoryEntry` rows expose the absolute `path` and a host-owned `hidden` flag (dot-prefixed on POSIX) so display policy stays client-side; clients never join path segments themselves. `listRoots` uses the same row type for filesystem jump targets. `DirectoryListing.crumbs` is the ancestor chain from the filesystem root to the listed directory — every crumb is a jump target, and the root crumb is labeled by its full path.
+`DirectoryEntry` rows expose the absolute `path` and a host-owned `hidden` flag (dot-prefixed on POSIX) so display policy stays client-side; clients never join path segments themselves. `DirectoryListing.crumbs` is the ancestor chain from the filesystem root to the listed directory — every crumb is a jump target, and the root crumb is labeled by its full path.
 
 -----
 
@@ -74,7 +74,7 @@ The seam is built on one separation: the interaction shape a backend provides is
 
 Read these when the seam contract is not enough: the decision record first, then the two backends and the adaptive chooser that compose it.
 
-- [Directory-picker capability seam decision](../../../.agents/notes/implemented/architecture/2026-07-28-directory-picker-capability-seam.md) — design rationale, the `ctx.fs` separation, and the policy decisions.
+- [Directory-picker capability seam decision](../../../.agents/notes/archived/architecture/2026-07-28-directory-picker-capability-seam.md) — design rationale, the `ctx.fs` separation, and the policy decisions.
 - [Native backend](../directory-picker-native/README.md) — the OS-chooser interaction and its platform tooling.
 - [Browse backend](../directory-picker-browse/README.md) — the in-app listing and creation interaction for remote clients.
 - [Adaptive chooser](../directory-picker-auto/README.md) — boot-time resolution between the two backends.
@@ -96,9 +96,9 @@ None; this package neither assembles nor sends a provider request.
 <a id="known-limitations-and-deferred-work"></a>
 
 
-These limits define when the seam contract leaves scoping to the deployment. They are current package constraints, not a task backlog.
+These limits define when the seam contract leaves a decision to a future consumer. They are current package constraints, not a task backlog.
 
-- **No configured browse boundary** — `listRoots` discovers host filesystem roots for navigation; it does not define virtual roots or restrict which fully qualified path a consumer may request.
+- **No multi-root support** — the browse contract exposes one ancestry chain per listing; per-deployment root scoping (and Windows drive-root enumeration above a drive) waits for a consumer that needs it, per the DirectoryPicker Agent Note.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -109,3 +109,5 @@ These limits define when the seam contract leaves scoping to the deployment. The
 None.
 
 </details>
+
+**Runtime invariant:** No companion is published. This stateless Service Definition owns the capability vocabulary, while backends and the Remote controller own observations.

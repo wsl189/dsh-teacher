@@ -3,7 +3,8 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
-import type { JsonValue, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
 import { DeepSeekOnboardingDialog } from '../src/client/DeepSeekOnboardingDialog.tsx'
 import type { DeepSeekOnboardingDialogProps } from '../src/client/DeepSeekOnboardingDialog.tsx'
@@ -130,7 +131,7 @@ function harness(options: {
       set,
     },
   }
-  const controller = new ModelsSettingsStore(face as never, settingsSchema, new SettingsDescribeMirror(face as never))
+  const controller = new ModelsSettingsStore(face as never, settingsSchema, new SettingsDescribeMirror({ remote: face } as never))
   const openSection = vi.fn()
   const complete = vi.fn()
   const unusedHook = (() => { throw new Error('unused standard hook') }) as never
@@ -140,6 +141,8 @@ function harness(options: {
     openSection,
     useSessions: unusedHook,
     useSessionPendingInteraction,
+    usePanelInfo: () => { throw new Error('unused panel hook') },
+    useResource: () => { throw new Error('unused resource hook') },
     useWorkspaces: unusedHook,
     controller,
     useModels: bindSnapshotSelector(controller.store),

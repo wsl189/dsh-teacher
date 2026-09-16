@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-The shipped Web and Windows desktop product exposes PPT Master 6.1.0 as the built-in `ppt-master` skill. Source and ordinary Node distributions read the complete `assets/ppt-master/` tree directly. The desktop installer carries the same tree as one archive and materializes a content-addressed directory under the DSH cache only when a caller loads the skill, so application installation and startup do not create or scan 12,939 separate resource files. The materialized scripts, references, layouts, images, sounds, license, and sponsor records remain subject to the upstream MIT license and attribution guard.
+The shipped Web and Windows desktop product exposes PPT Master 6.4.0 as the built-in `ppt-master` skill. Source and ordinary Node distributions read the complete `assets/ppt-master/` tree directly. The desktop installer carries the same tree as one archive and materializes a content-addressed directory under the DSH cache only when a caller loads the skill, so application installation and startup do not create or scan 12,981 separate resource files. The materialized scripts, references, layouts, images, sounds, license, and sponsor records remain subject to the upstream MIT license and attribution guard.
 
 ## Table of Contents
 
@@ -68,8 +68,7 @@ This package registers one immutable candidate at `BUNDLED_SKILL_RANK`. Its cand
 |---|---|
 | [`src/index.ts`](src/index.ts) | Immutable provider, catalog metadata, packaged path resolution, and body loading |
 | [`src/materialized.ts`](src/materialized.ts) | Archive validation, hashing, atomic materialization, and process-local request sharing |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion |
-| [`assets/ppt-master/`](assets/ppt-master/) | Unmodified upstream PPT Master 6.1.0 skill distribution |
+| [`assets/ppt-master/`](assets/ppt-master/) | Unmodified upstream PPT Master 6.4.0 skill distribution |
 | [`tests/skill-ppt-master.spec.ts`](tests/skill-ppt-master.spec.ts) | Registration, attribution, and complete-distribution inventory checks |
 
 </details>
@@ -101,11 +100,13 @@ The catalog summary changes the session-prefix skill list. Loading `ppt-master` 
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Python remains external** — the installer carries the Skill resources, not a dedicated Python environment or its optional packages.
-- **Pinned upstream release** — the package contains PPT Master 6.1.0; updating it requires importing and verifying a complete newer upstream distribution.
-- **First archived load writes the resource tree** — the desktop's first `ppt-master` load extracts 12,939 files and 79,496,215 logical bytes into the DSH cache; later loads reuse the content-addressed directory, and uninstalling the application does not remove it.
+- **Pinned upstream release** — the package contains PPT Master 6.4.0; updating it requires importing and verifying a complete newer upstream distribution.
+- **First archived load writes the resource tree** — the desktop's first `ppt-master` load extracts 12,981 files and 83,654,741 logical bytes into the DSH cache; later loads reuse the content-addressed directory, and uninstalling the application does not remove it.
 
 <a id="dev-note"></a>
 ### Dev Note
+
+No runtime invariant companion is published; its provider registration is immutable and archive validation runs during materialization.
 
 <details>
 <summary>Working context for maintainers — click to expand</summary>

@@ -30,7 +30,7 @@ async function harness(response: (options: GenerateOptions) => AsyncIterable<Str
   const adapter = new CheckAdapter(response)
   ctx.llm.registerAdapter(['test'], adapter)
   const logs: SessionEvent[][] = []
-  ctx.on('session/flush', (session) => { logs.push([...session.events]) })
+  ctx.on('session/flush', (session) => { logs.push([...session.snapshotEvents()]) })
   const disposed: Session[] = []
   ctx.on('session/disposed', (session) => { disposed.push(session) })
   return { ctx, adapter, logs, disposed }
@@ -55,7 +55,7 @@ describe('saved model connectivity checks', () => {
     expect(log.find(event => event.type === 'user/message')?.data).toEqual(call.messages[0])
     expect(log.map(event => event.type)).toEqual([
       'turn/start', 'step/start', 'request/header', 'user/message',
-      'assistant/chunk', 'assistant/chunk', 'assistant/message', 'step/end', 'turn/end',
+      'assistant/message', 'step/end', 'turn/end',
     ])
     expect(call.messages[0]?.content).toEqual([{ type: 'text', text: 'Reply with OK.' }])
   })

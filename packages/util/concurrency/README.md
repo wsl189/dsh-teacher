@@ -1,6 +1,6 @@
 ---
 description: "Zero-dependency bounded asynchronous mapping with source-order results and quiescent failure for model-backed and ordinary concurrent work."
-kind: "package-library"
+kind: "package-reference"
 ---
 
 # @deepseek-ai/dsh-concurrency
@@ -77,5 +77,7 @@ No direct invalidation; each consumer owns its model request and cache prefix.
 
 <a id="dev-note"></a>
 ### Dev Note
+
+No runtime invariant companion is published; mapper admission and settlement have no service-owned event relationship.
 
 Keep this library free of capability-specific cancellation, result unions, retries, and progress reporting; Consumers own those policies.

@@ -9,7 +9,7 @@ import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished } from 'vitest'
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   assertFixtureInventory,
   captureStableAria,
@@ -69,7 +69,7 @@ describe('web e2e: supplier-selected voice input', () => {
     scaffold = await launchWebScaffold({
       speechEndpoint: `http://127.0.0.1:${String(address.port)}/audio/transcriptions`,
     })
-    await scaffold.ctx.settings.update(settingsNamespace('llm-pi-ai'), {
+    await scaffold.ctx.settings.update('llm-pi-ai', {
       providers: {
         'zhipu-cn': {
           displayName: 'Zhipu GLM Standard API',

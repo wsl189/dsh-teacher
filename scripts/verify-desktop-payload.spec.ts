@@ -96,9 +96,10 @@ describe('desktop payload gate', () => {
     expect(REQUIRED_WINDOWS_RUNTIME_FILES)
       .toContain('node_modules/@joplin/turndown-plugin-gfm/lib/turndown-plugin-gfm.cjs.js')
     expect(REQUIRED_WINDOWS_RUNTIME_FILES).toContain('node_modules/@mixmark-io/domino/lib/index.js')
-    expect(REQUIRED_WINDOWS_RUNTIME_FILES).toContain('../windows-mcp/python.exe')
     expect(REQUIRED_WINDOWS_RUNTIME_FILES)
-      .toContain('../windows-mcp/Lib/site-packages/windows_mcp/__main__.py')
+      .toContain('node_modules/@trycua/cua-driver-win32-x64-msvc/package.json')
+    expect(REQUIRED_WINDOWS_RUNTIME_FILES)
+      .toContain('node_modules/@deepseek-ai/dsh-experimental-computer-use-cua-driver-native/lib/index.js')
     const [missing, ...present] = REQUIRED_WINDOWS_RUNTIME_FILES
     const root = createPayload(present)
 
@@ -125,7 +126,7 @@ describe('desktop payload gate', () => {
       .filter(failure => failure.startsWith('../ppt-master.tgz:'))
     expect(failures).toContain('../ppt-master.tgz:LICENSE: required skill file is absent from archive')
     expect(failures).toContain(
-      '../ppt-master.tgz: packaged skill inventory is 1 files and 7 bytes; expected 12939 files and 79496215 bytes',
+      '../ppt-master.tgz: packaged skill inventory is 1 files and 7 bytes; expected 12981 files and 83654741 bytes',
     )
   })
 
@@ -145,6 +146,19 @@ describe('desktop payload gate', () => {
     const requiredFiles = REQUIRED_WINDOWS_RUNTIME_FILES.filter(path =>
       path.includes('turndown') || path.includes('/domino/'))
     expect(requiredFiles).toHaveLength(6)
+    expect((await inspectDesktopPayload(createPayload(requiredFiles), { requiredFiles })).failures).toEqual([])
+    for (const missing of requiredFiles) {
+      const root = createPayload(requiredFiles.filter(path => path !== missing))
+      expect((await inspectDesktopPayload(root, { requiredFiles })).failures).toEqual([
+        `${missing}: required product runtime file is absent from payload`,
+      ])
+    }
+  })
+
+  it('requires both Univer native loaders and their Windows binaries', async () => {
+    const requiredFiles = REQUIRED_WINDOWS_RUNTIME_FILES.filter(path =>
+      path.includes('/@univerjs-pro/') && path.includes('binding'))
+    expect(requiredFiles).toHaveLength(8)
     expect((await inspectDesktopPayload(createPayload(requiredFiles), { requiredFiles })).failures).toEqual([])
     for (const missing of requiredFiles) {
       const root = createPayload(requiredFiles.filter(path => path !== missing))

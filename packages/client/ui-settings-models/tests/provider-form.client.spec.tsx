@@ -4,7 +4,8 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import Schema from '@deepseek-ai/schemastery'
 import { bindSnapshotSelector } from '@deepseek-ai/dsh-client-test-runtime'
-import type { JsonValue, SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
+import type { JsonValue } from '@deepseek-ai/dsh-util-values'
+import type { SettingsNamespaceView } from '@deepseek-ai/dsh-api-remotes/client'
 import { ModelsSection, providerCopy } from '../src/client/ModelsSection.tsx'
 import type { ModelsSectionInjected, ModelsSectionProps } from '../src/client/ModelsSection.tsx'
 import { CustomProviderCard } from '../src/client/CustomProviderCard.tsx'
@@ -180,7 +181,7 @@ function firstMutate(mutate: ReturnType<typeof vi.fn>): MutateCall {
 async function mountSection(options: Parameters<typeof scriptedFace>[0] = {}) {
   const scripted = scriptedFace(options)
   const controller = new ModelsSettingsStore(
-    scripted.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(scripted.face as never))
+    scripted.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror({ remote: scripted.face } as never))
   await controller.load()
   const injected: ModelsSectionProps = {
     controller,
@@ -728,7 +729,7 @@ describe('provider rows', () => {
       settingsPath: ['providers', 'openai'],
     }]))) as never
     const controller = new ModelsSettingsStore(
-      scripted.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror(scripted.face as never))
+      scripted.face as unknown as WireFace, settingsSchema, new SettingsDescribeMirror({ remote: scripted.face } as never))
     await controller.load()
     render(<ModelsSection
       controller={controller}
@@ -1258,7 +1259,7 @@ describe('hand-declared providers', () => {
   })
 
   it('surfaces a refused write and a rejected transport without closing', async () => {
-    const refused = vi.fn(() => Promise.resolve(remoteFail('read-only settings', 'settings-rejected')))
+    const refused = vi.fn(() => Promise.resolve(remoteFail('read-only settings', 'settings/rejected')))
     const { onClose } = mountCard({ api: { ...scriptedFace({ mutate: refused }).face } as never })
 
     fireEvent.change(screen.getByLabelText(en.customRoute), { target: { value: 'acme' } })

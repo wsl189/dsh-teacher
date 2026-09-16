@@ -78,4 +78,6 @@ Stable names, descriptions, and schemas form a reusable request prefix until the
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; the Host document schema owns the authoritative workbench relationships.
+
 Keep semantic validation and persistence in the Host service; tool handlers translate model intent into those authoritative operations and report committed results.

@@ -8,10 +8,17 @@
     "src"
   ],
   "references": [
-    { "path": "../../../vendor/cordis" },
-    { "path": "../../../vendor/schemastery" },
-    { "path": "../ocr" },
-    { "path": "../../settings/settings" },
-    { "path": "../../runtime-diagnostics/invariants" }
+    {
+      "path": "../../../vendor/cordis"
+    },
+    {
+      "path": "../../../vendor/schemastery"
+    },
+    {
+      "path": "../ocr"
+    },
+    {
+      "path": "../../settings/settings"
+    }
   ]
 }

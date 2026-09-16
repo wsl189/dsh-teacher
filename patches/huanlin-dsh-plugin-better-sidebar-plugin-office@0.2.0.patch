@@ -1,0 +1,117 @@
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -55,6 +55,7 @@
+ 		//#region src/client/urls.ts
+ 		/** Absolute URL of the media route for one path (raw bytes). */
+ 		function mediaUrl(scope, path) {
++            if (path.startsWith("blob:")) return path;
+ 			return fileUrl(scope, path, false);
+ 		}
+ 		/** Absolute URL of the download route (Content-Disposition: attachment). */
+@@ -426061,7 +426062,7 @@
+ 		*/
+ 		/** Services required before mounting: better-sidebar's client service + the
+ 		*  DSH locale service (the viewer copy follows its active locale). */
+-		const inject = ["betterSidebar", "locale"];
++		const inject = ["documentPreviews", "slots", "locale"];
+ 		/** The three Office viewer descriptors (id / exts match the former built-ins). */
+ 		function officeViewers() {
+ 			return [
+@@ -426114,26 +426115,30 @@
+ 				zh: zh$1,
+ 				en: en$1
+ 			}), "dsh-better-sidebar-plugin-office: dictionaries");
+-			ctx.effect(() => {
+-				let dispose;
+-				const sync = () => {
+-					dispose?.();
+-					dispose = void 0;
+-					const store = ctx.get("betterLocale");
+-					attachBetterLocale(store);
+-					if (store !== void 0) dispose = store.register(NS, dicts);
+-				};
+-				sync();
+-				const unsubscribe = locale.subscribe(sync);
+-				return () => {
+-					unsubscribe();
+-					dispose?.();
+-					attachBetterLocale(void 0);
+-				};
+-			}, "dsh-better-sidebar-plugin-office: better-locale lazy integration");
+-			const betterSidebar = ctx.betterSidebar;
+-			if (betterSidebar === void 0) return;
+-			for (const viewer of officeViewers()) ctx.effect(() => betterSidebar.registerFileViewer(viewer), `dsh-better-sidebar-plugin-office: viewer ${viewer.id}`);
++			for (const viewer of officeViewers()) {
++                const id = `office/${viewer.id}`;
++                ctx.effect(() => ctx.documentPreviews.register({
++                    id, title: viewer.title, extensions: viewer.exts,
++                    binaryExtensions: viewer.exts, loading: "bytes-complete"
++                }));
++                const Body = ({ content, resourceAddress }) => {
++                    const [url, setUrl] = react$1.useState("");
++                    react$1.useEffect(() => {
++                        if (content.kind !== "bytes") return;
++                        const next = URL.createObjectURL(new Blob([content.data]));
++                        setUrl(next);
++                        return () => URL.revokeObjectURL(next);
++                    }, [content]);
++                    if (url === "") return null;
++                    return react$1.createElement(viewer.component, {
++                        scope: { sessionId: "", cwd: "" }, path: url,
++                        title: decodeURIComponent(resourceAddress.split("/").pop() ?? viewer.id)
++                    });
++                };
++                ctx.effect(() => ctx.slots.inject("sidebar.right.tab.document", () => ctx.slots.register({
++                    name: "sidebar.right.tab.document", key: id
++                }, Body)));
++            }
+ 		}
+ 		//#endregion
+ 		exports.apply = apply;
+diff --git a/package.json b/package.json
+--- a/package.json
++++ b/package.json
+@@ -31,7 +31,11 @@
+       "patch": "./cordis.patch.yml"
+     },
+     "client": {
+-      "inject": [],
++      "inject": [
++        "@deepseek-ai/dsh-client-ui-sidebar-documentpreview",
++        "@deepseek-ai/dsh-client-ui-renderer",
++        "@deepseek-ai/dsh-client-locale"
++      ],
+       "platform": "web"
+     }
+   },
+@@ -45,14 +49,10 @@
+   },
+   "peerDependencies": {
+     "@deepseek-ai/cordis": "^4.0.1",
+-    "dsh-better-sidebar": "^0.17.0",
+     "react": "^18.2.0"
+   },
+   "peerDependenciesMeta": {
+     "@deepseek-ai/cordis": {
+-      "optional": true
+-    },
+-    "dsh-better-sidebar": {
+       "optional": true
+     },
+     "react": {
+@@ -63,7 +63,6 @@
+     "@types/node": "^24.0.0",
+     "@types/react": "~18.3.1",
+     "@types/react-dom": "~18.3.1",
+-    "dsh-better-sidebar": "link:D:/Projects/deepseek-harness/DSH-better-sidebar",
+     "react": "^18.2.0",
+     "react-dom": "18.2.0",
+     "tsdown": "^0.22.2",
+@@ -80,4 +79,4 @@
+     "bundle:client": "tsdown --config tsdown.config.ts",
+     "watch": "tsdown --config tsdown.config.ts --watch"
+   }
+-}
+\ No newline at end of file
++}

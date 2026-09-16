@@ -10,7 +10,7 @@ A process launch directory can be a repository, an installation folder, or anoth
 
 ## Decision
 
-The [IM distribution patch](../../../../patches/xmanrui-dsh-im@4.11.0.patch) supplies desktop defaults through a small Host entry that passes explicit workspace settings to the unchanged upstream plugin. All nine bot platforms share the rule; Office retains its own configuration. [Electron](../../../../apps/desktop/src/main.ts) obtains the system desktop through `app.getPath('desktop')` and supplies it as `DSH_DESKTOP_DIR`. Other Host launches use that absolute override or `<home>/Desktop`.
+The [IM distribution patch](../../../../patches/xmanrui-dsh-im@4.21.1.patch) supplies desktop defaults through a small Host entry that passes explicit workspace settings to the unchanged upstream plugin. All nine bot platforms share the rule; Office retains its own configuration. [Electron](../../../../apps/desktop/src/main.ts) obtains the system desktop through `app.getPath('desktop')` and supplies it as `DSH_DESKTOP_DIR`. Other Host launches use that absolute override or `<home>/Desktop`.
 
 An explicit per-platform workspace overrides the desktop default. The upstream workspace store only initializes missing assignments, so saved bot paths and subsequent user selections remain authoritative. The adapter does not rewrite configuration files, create desktop directories, or change the application's working directory.
 
@@ -28,4 +28,4 @@ New bot workspaces are independent of the launch directory, while saved assignme
 
 ## Testing
 
-The [IM entry tests](../../../../packages/bundle/web-app/tests/im-workspaces.spec.ts) cover all nine platforms, explicit overrides, Office settings, the home-directory fallback, and invalid desktop paths. [Desktop environment tests](../../../../apps/desktop/tests/runtime-environment.spec.ts) cover system-path forwarding. The [assembled QQ browser scenario](../../../../apps/web/tests/qq-workspace-picker.e2e.ts) initializes an unassigned offline bot, preserves another bot's saved workspace, snapshots both paths, and verifies user-selected paths against persisted data and a page reload without contacting an IM service.
+The [IM entry tests](../../../../packages/bundle/web-app/tests/im-workspaces.spec.ts) cover all eleven platforms, explicit overrides, Office settings, the home-directory fallback, and invalid desktop paths. [Desktop environment tests](../../../../apps/desktop/tests/runtime-environment.spec.ts) cover system-path forwarding. The [assembled QQ browser scenario](../../../../apps/web/tests/qq-workspace-picker.e2e.ts) initializes an unassigned offline bot, preserves another bot's saved workspace, snapshots both paths, and verifies user-selected paths against persisted data and a page reload without contacting an IM service.

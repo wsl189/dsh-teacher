@@ -10,19 +10,19 @@
     - button "插件":
       - img
       - text: 插件
-    - button "技能"
-    - button "MCP"
     - button "Agent 预设":
       - img
       - text: Agent 预设
-    - button "侧边卡片"
+    - button "已归档会话":
+      - img
+      - text: 已归档会话
+  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭
   - heading "插件" [level=2]
   - paragraph: 配置和查看本部署已安装的插件。
   - tablist "插件视图":
-    - tab "连接平台"
     - tab "插件配置" [selected]
     - tab "插件列表"
   - tabpanel "插件配置":
@@ -40,31 +40,6 @@
           - text: Subagent 控制 Agent 为 Subagent 选择模型的权限。
           - img
       - listitem:
-        - 'button "收起设置: 网页搜索" [expanded]':
-          - text: 网页搜索 使用 AnySearch 进行网页搜索和正文提取。
+        - 'button "展开设置: 网页搜索"':
+          - text: 网页搜索 DeepSeek 搜索提供方。
           - img
-        - text: API Key（可选） 未配置密钥；当前使用匿名访问。
-        - textbox "API Key（可选）"
-        - paragraph: 不写入设置文件。留空表示保持当前密钥；未配置时使用匿名访问。
-        - text: 单次搜索结果上限
-        - textbox "单次搜索结果上限":
-          - /placeholder: "8"
-          - text: "8"
-        - paragraph: 每次 AnySearch 请求最多返回 1–20 条；工具请求的更小值仍会生效。
-        - text: 接口地址
-        - textbox "接口地址":
-          - /placeholder: ""
-          - text: https://api.anysearch.com
-        - paragraph: 恢复默认后使用 AnySearch 公共接口。
-        - button "放弃修改" [disabled]
-        - button "保存" [disabled]
-      - listitem:
-        - 'button "展开设置: 文档提取"':
-          - text: 文档提取 用于可复用文档解析的自托管 MinerU 提取器。
-          - img
-      - listitem:
-        - 'button "展开设置: 试题切割工作区"':
-          - text: 试题切割工作区 设置切题试卷和学生试题副本的存储策略。
-          - img
-      - listitem:
-        - 'button "展开: Univer Office"': Univer Office 控制文档编辑期间的实时预览体验。

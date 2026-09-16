@@ -1,6 +1,10 @@
 - banner:
   - navigation "Session hierarchy":
     - button "CJK strong emphasis" [disabled]
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -41,16 +45,18 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}}
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- button "Ran for {{duration}}":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
+  - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps LLM {{duration}}
+- button "1 turns 1 steps":
+  - img
+  - text: 1 turns 1 steps

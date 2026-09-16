@@ -11,8 +11,8 @@ interface PackageManifest {
 }
 
 const PPT_MASTER_ARCHIVE_PATH = '../ppt-master.tgz'
-const PPT_MASTER_RUNTIME_FILES = 12_939
-const PPT_MASTER_RUNTIME_BYTES = 79_496_215
+const PPT_MASTER_RUNTIME_FILES = 12_981
+const PPT_MASTER_RUNTIME_BYTES = 83_654_741
 const REQUIRED_PPT_MASTER_FILES = [
   'SKILL.md',
   'LICENSE',
@@ -28,6 +28,10 @@ const REQUIRED_PPT_MASTER_FILES = [
 /** Product runtime files whose omission would leave a successful but incomplete Windows build. */
 export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   '../THIRD_PARTY_NOTICES.md',
+  'node_modules/@deepseek-ai/dsh-computer-use/lib/index.js',
+  'node_modules/@deepseek-ai/dsh-experimental-computer-use-cua-driver-native/lib/index.js',
+  'node_modules/@trycua/cua-driver/package.json',
+  'node_modules/@trycua/cua-driver-win32-x64-msvc/package.json',
   '../licenses/mathml2omml/NOTICE.txt',
   '../licenses/mathml2omml/colors.patch',
   '../licenses/mathml2omml/COPYING.GPL-3',
@@ -85,20 +89,15 @@ export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   'node_modules/dsh-univer-office/artifacts/viewer/index.html',
   'node_modules/dsh-univer-office/skills/univer/SKILL.md',
   'node_modules/@univerjs-pro/cli-assets/resource-manifest.json',
-  'node_modules/@libsql/win32-x64-msvc/index.node',
+  'node_modules/@univerjs-pro/engine-formula-rust-binding/package.json',
+  'node_modules/@univerjs-pro/engine-formula-rust-binding/index.js',
+  'node_modules/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/package.json',
   'node_modules/@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc/univer-formula.win32-x64-msvc.node',
+  'node_modules/@univerjs-pro/exchange-node-binding/package.json',
+  'node_modules/@univerjs-pro/exchange-node-binding/index.js',
+  'node_modules/@univerjs-pro/exchange-node-binding-win32-x64-msvc/package.json',
   'node_modules/@univerjs-pro/exchange-node-binding-win32-x64-msvc/univer-exchange-node.win32-x64-msvc.node',
-  '../windows-mcp/python.exe',
-  '../windows-mcp/python314.dll',
-  '../windows-mcp/python314.zip',
-  '../windows-mcp/python314._pth',
-  '../windows-mcp/LICENSE.txt',
-  '../windows-mcp/Lib/site-packages/windows_mcp/__main__.py',
-  '../windows-mcp/Lib/site-packages/windows_mcp-0.8.5.dist-info/METADATA',
-  '../windows-mcp/Lib/site-packages/comtypes/__init__.py',
-  '../windows-mcp/Lib/site-packages/dxcam/__init__.py',
-  '../windows-mcp/Lib/site-packages/fastmcp/__init__.py',
-  '../windows-mcp/Lib/site-packages/win32/win32api.pyd',
+  'node_modules/@libsql/win32-x64-msvc/index.node',
 ] as const
 
 /** Optional inspection inputs used by platform-neutral unit fixtures. */

@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 import { SlotRegistry } from '@deepseek-ai/dsh-client-ui-renderer/client'
 import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
-import { TestRemote, scriptedSettingsRemote } from '@deepseek-ai/dsh-client-test-runtime'
+import { TestRemote } from '@deepseek-ai/dsh-client-test-runtime'
 import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/dsh-client-ui-settings/client'
 import { apply, inject, refreshIfLoaded } from '@deepseek-ai/dsh-client-ui-settings-models/client'
 import { ModelsSection } from '../src/client/ModelsSection.tsx'
@@ -38,7 +38,7 @@ async function bench(isLoopback = true, settings?: object, services: object = {}
     // Without a settings face the mirror's reads fail and stay contained; the
     // Models join itself never fetches until a section actually loads. The real
     // ui-settings apply also provides the settingsSchema service.
-    settings: settings ?? scriptedSettingsRemote().settings,
+    settings: settings ?? { describe: async () => ({ ok: true, value: { writable: true, hasDocument: false, namespaces: [] } }) },
   })
   ctx.provide('connection', { api: services, isLoopback } as never)
   await ctx.plugin({ inject: [...settingsInject], apply: settingsApply }).await()

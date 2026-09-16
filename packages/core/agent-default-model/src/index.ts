@@ -8,7 +8,7 @@ import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -18,7 +18,7 @@ declare module '@deepseek-ai/cordis' {
 }
 
 /** Settings namespace carrying the default model selection for future Agents. */
-export const AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE = settingsNamespace('agent-default-model')
+export const AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE = 'agent-default-model'
 
 /** Stored and composed default model selection. */
 export interface AgentDefaultModelSettings {
@@ -101,22 +101,24 @@ export class AgentDefaultModelConfig extends Service {
     super(ctx, 'agentDefaultModel')
     const entry: AgentDefaultModelSettings = { provider: config.provider, model: config.model }
     this.source = () => entry
-    installSettingsSection(ctx, AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, AGENT_DEFAULT_MODEL_SETTINGS_SCHEMA, entry, {
-      setSource: (current) => { this.source = current },
-      // Every consumer reads through currentSelection(), so no registration-level fact
-      // needs rebuilding when the settings document changes.
-      onChange: () => {},
-      validate: (current) => {
-        if ((current.toolProvider === undefined) !== (current.toolModel === undefined)) {
-          throw new Error('agent-default-model: toolProvider and toolModel must be set together')
-        }
-        if ((current.imageProvider === undefined) !== (current.imageModel === undefined)) {
-          throw new Error('agent-default-model: imageProvider and imageModel must be set together')
-        }
-        if ((current.speechProvider === undefined) !== (current.speechModel === undefined)) {
-          throw new Error('agent-default-model: speechProvider and speechModel must be set together')
-        }
-      },
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, AGENT_DEFAULT_MODEL_SETTINGS_SCHEMA, entry, {
+        setSource: (current) => { this.source = current },
+        // Every consumer reads through currentSelection(), so no registration-level fact
+        // needs rebuilding when the settings document changes.
+        onChange: () => {},
+        validate: (current) => {
+          if ((current.toolProvider === undefined) !== (current.toolModel === undefined)) {
+            throw new Error('agent-default-model: toolProvider and toolModel must be set together')
+          }
+          if ((current.imageProvider === undefined) !== (current.imageModel === undefined)) {
+            throw new Error('agent-default-model: imageProvider and imageModel must be set together')
+          }
+          if ((current.speechProvider === undefined) !== (current.speechModel === undefined)) {
+            throw new Error('agent-default-model: speechProvider and speechModel must be set together')
+          }
+        },
+      })
     })
   }
 

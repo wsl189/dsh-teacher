@@ -1,6 +1,10 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Use the ask_user_question tool to" [disabled]
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -15,10 +19,6 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - button "Think The user wants me to use the ask_user_question tool with specific parameters. Let me do exactly that.":
   - img
   - img
@@ -30,16 +30,18 @@
 - list:
   - listitem: Which color do you prefer?
 - button "Inspect"
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "3% of context used"
 - button "Send message" [disabled]
-- text: 1 turns · 1 steps LLM {{duration}} · Tool call {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 97% Input 4.2K tok · Output 158 tok
+- button "1 turns 1 steps · {{throughput}} tok/s":
+  - img
+  - text: 1 turns 1 steps{{throughput}} tok/s
+- button "4.4K tok · Cache hit 97%":
+  - img
+  - text: 4.4K tokCache hit 97%

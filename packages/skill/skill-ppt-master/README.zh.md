@@ -9,7 +9,7 @@ kind: "package-reference"
 
 ## 概述
 
-随附 Web 与 Windows 桌面产品把 PPT Master 6.1.0 作为内置 `ppt-master` skill（技能）公开。源码与普通 Node 分发会直接读取完整的 `assets/ppt-master/` 目录。桌面安装器把同一目录存为一个归档，并且只在调用方加载该 skill 时才把按内容寻址的目录实体化到 DSH 缓存下，因此应用安装与启动不会创建或扫描 12,939 个独立资源文件。实体化后的脚本、参考资料、布局、图片、声音、许可证和赞助记录仍受上游 MIT 许可证与归属门禁约束。
+随附 Web 与 Windows 桌面产品把 PPT Master 6.4.0 作为内置 `ppt-master` skill（技能）公开。源码与普通 Node 分发会直接读取完整的 `assets/ppt-master/` 目录。桌面安装器把同一目录存为一个归档，并且只在调用方加载该 skill 时才把按内容寻址的目录实体化到 DSH 缓存下，因此应用安装与启动不会创建或扫描 12,981 个独立资源文件。实体化后的脚本、参考资料、布局、图片、声音、许可证和赞助记录仍受上游 MIT 许可证与归属门禁约束。
 
 ## 目录
 
@@ -68,8 +68,7 @@ kind: "package-reference"
 |---|---|
 | [`src/index.ts`](src/index.ts) | 不可变提供方、目录元数据、随包路径解析与正文加载 |
 | [`src/materialized.ts`](src/materialized.ts) | 归档校验、哈希、原子实体化与进程内请求共享 |
-| [`src/invariant.ts`](src/invariant.ts) | 不变式伴生插件 |
-| [`assets/ppt-master/`](assets/ppt-master/) | 未修改的上游 PPT Master 6.1.0 skill 完整分发 |
+| [`assets/ppt-master/`](assets/ppt-master/) | 未修改的上游 PPT Master 6.4.0 skill 完整分发 |
 | [`tests/skill-ppt-master.spec.ts`](tests/skill-ppt-master.spec.ts) | 注册、归属与完整分发清单检查 |
 
 </details>
@@ -101,11 +100,13 @@ kind: "package-reference"
 <a id="known-limitations-and-deferred-work"></a>
 
 - **Python 仍在安装包外部**——安装器携带 Skill 资源，但不携带专用 Python 环境或其可选软件包。
-- **固定上游版本**——本包包含 PPT Master 6.1.0；升级时必须重新导入并验证完整的新版上游分发。
-- **首次归档加载会写入资源树**——桌面版首次加载 `ppt-master` 时会向 DSH 缓存解压 12,939 个文件，共 79,496,215 个逻辑字节；后续加载复用按内容寻址的目录，卸载应用不会删除该目录。
+- **固定上游版本**——本包包含 PPT Master 6.4.0；升级时必须重新导入并验证完整的新版上游分发。
+- **首次归档加载会写入资源树**——桌面版首次加载 `ppt-master` 时会向 DSH 缓存解压 12,981 个文件，共 83,654,741 个逻辑字节；后续加载复用按内容寻址的目录，卸载应用不会删除该目录。
 
 <a id="dev-note"></a>
 ### 开发备注
+
+不发布运行时 invariant 配套插件；提供方注册不可变，归档验证在文件物化时执行。
 
 <details>
 <summary>维护者的工作上下文——点击展开</summary>

@@ -1,4 +1,4 @@
-# Agent Note: Univer Viewer accepts an absent runtime license
+# Agent Note: Univer uses upstream evaluation and runtime licenses
 
 Status: implemented
 
@@ -6,22 +6,18 @@ English | [中文](2026-09-01-univer-viewer-evaluation.zh.md)
 
 ## Problem
 
-The bundled Univer Viewer rejects an empty runtime license before creating its editor. A default installation therefore reports `Univer Office requires a valid UNIVER_LICENSE environment variable` instead of displaying the Sheet. [Univer's licensing guide](https://docs.univer.ai/guides/pro/license) permits evaluation without a license, subject to upstream watermarks and feature limits; the additional Viewer check prevents that supported mode.
+The distribution must open supported evaluation documents without shipping an embedded development license. The plugin bundles separately licensed Univer modules whose validation and feature limits remain authoritative.
 
 ## Decision
 
-The Viewer accepts every string returned in the Gateway's runtime `license` field, including an empty string, and trims it before passing it to Univer. The Viewer still rejects malformed configuration and unsuccessful HTTP responses. Univer retains all license validation, watermarks, and feature restrictions. No embedded development license or replacement entitlement is supplied.
-
-The [source patch](../../../../third-party/dsh-univer-office/viewer-license.patch) records the Viewer change and package README updates. DSH rebuild 2 contains the rebuilt Viewer and unchanged Host, Gateway, render, worker, and native dependency declarations. The [bundled-extension decision](../feature/2026-08-25-bundled-extensions-and-qq-speech.md) continues to own artifact distribution, telemetry, and secret exclusion; this note replaces only its requirement for a license before Viewer startup.
+The published Viewer provides its evaluation interface. The [runtime patch](../../../../third-party/dsh-univer-office/runtime.patch) removes development-license fallbacks from the Host and document worker; explicit `UNIVER_LICENSE` values remain runtime inputs. DSH supplies no replacement entitlement and preserves upstream validation, watermarks, and feature limits. The [bundled-extension decision](../feature/2026-08-25-bundled-extensions-and-qq-speech.md) owns artifact distribution, telemetry, and secret ownership.
 
 ## Alternatives considered
 
-**Require a license before opening any document.** This blocks upstream evaluation and makes the default installation fail after the agent has created a document.
+**Require a license before opening any document.** This prevents evaluation supported by the published Viewer.
 
-**Restore the embedded development license.** The Viewer can use upstream evaluation without shipping a credential. An embedded license adds expiration and distribution obligations unrelated to opening a document.
-
-**Remove Univer's license enforcement.** DSH does not grant product entitlements. Its wrapper must preserve upstream validation and limits.
+**Ship a development license or disable enforcement.** A bundled credential introduces expiration and distribution obligations; disabling validation would grant entitlements DSH does not own.
 
 ## Consequences
 
-Users can open Sheets without configuring `UNIVER_LICENSE`; licensed features still require an appropriate valid license. Runtime environment delivery and commercial distribution obligations remain unchanged. The [recorded Web scenario](../../../../snapshots/web/univer-viewer/snapshot.yml) and its [browser test](../../../../apps/web/tests/univer-viewer.e2e.ts) exercise the real packaged Gateway and Viewer, require the Sheet grid, compare the persisted tool round and accessible interface, reject a non-string runtime value, and verify forwarding of an explicit environment value. The scenario uses authored model replay and a synthetic Sheet fixture; it does not establish a live model round or validate a commercial license.
+The [recorded Web scenario](../../../../snapshots/web/univer-viewer/snapshot.yml) and [browser test](../../../../apps/web/tests/univer-viewer.e2e.ts) open the packaged Gateway and Viewer, require the Sheet grid and a synchronized Gateway connection, and compare the persisted tool round and accessible interface. They use model replay and a synthetic Sheet, and do not validate a commercial license.

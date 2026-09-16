@@ -94,7 +94,7 @@ OpenRouter 提供对话与视觉（`/api/v1/chat/completions`）、图像生成�
 - [settings](../../settings/README.zh.md)——持久化用户设置 seam 及其文件提供方。
 - [credentials](../../credentials/README.zh.md)——本页写入密钥所经的凭据引用 seam。
 - [llm](../../llm/README.zh.md)——本页所配置提供方所在的适配器注册表。
-- [Web 配置平面](../../../.agents/notes/implemented/architecture/2026-07-30-web-config-plane.zh.md)——手写编辑器的设计依据。
+- [Web 配置平面](../../../.agents/notes/archived/architecture/2026-07-30-web-config-plane.md)——手写编辑器的设计依据。
 
 -----
 
@@ -123,6 +123,8 @@ OpenRouter 提供对话与视觉（`/api/v1/chat/completions`）、图像生成�
 
 <a id="dev-note"></a>
 ### 开发备注
+
+不发布运行时 invariant 配套插件；设置验证负责保存的模型值，设置外壳负责导航。
 
 <details>
 <summary>维护者的工作上下文——点击展开</summary>

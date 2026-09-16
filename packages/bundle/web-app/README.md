@@ -9,7 +9,7 @@ English | [中文](README.zh.md)
 
 ## Summary
 
-Run `dsh --profile web` and the interface opens in your default browser, ready for interactive chat with the agent. You get the conversation view, model and settings management, and session history, backed by the same model access, tools, and safety defaults as every other surface. The command prints a tokenized startup URL; the browser exchanges that token for a signed session cookie and redirects to the clean root URL. You can change the port, suppress the browser handoff, and allow extra hosts from the command line; binding all network interfaces is intentionally not supported. Choose it for interactive work in the browser; `dsh-headless` is the one-shot command-line sibling.
+Run `dsh --profile web` to open an interactive browser GUI with chat, model and settings management, and session history. It uses the same model access, tools, and safety defaults as other dsh surfaces. Startup prints an authenticated URL and normally opens it in the default browser; SSH sessions and `--no-open` leave the URL for manual opening. You can change the port and allow extra hosts, but cannot bind all network interfaces. Choose this package for interactive browser work; use `dsh-headless` for one-shot command-line tasks.
 
 ## Table of Contents
 
@@ -36,6 +36,10 @@ dsh --profile web --no-open --port 8080
 
 After startup you see a `dsh web:` line whose root URL carries a fresh process token. Unless `--no-open` or an SSH session suppresses it, the default browser opens that URL, receives a signed cookie, and redirects to the clean root page. You know it worked when the page loads and you can chat with the agent. Two failures to expect: if the frontend is not built, startup stops with a build hint (`pnpm run build` in a checkout); if the browser cannot be opened, a credential-free diagnostic prints to stderr while the server keeps running — open the printed startup URL yourself.
 
+**Settings → Models** retains supplier Service access and Use cases for conversation, tool, image, and speech assignments. Saved endpoints, protocols, models, credentials, and selections retain their values. See the [Models reference](../../client/ui-settings-models/README.md).
+
+Saved model selections override the composition default. Both protocols share `deepseek-official` and `llm-deepseek` settings, so switching preserves model selections and credential references. Endpoint overrides retain their values; the settings card lets users supply a compatible API address.
+
 ### Configuration
 
 Most users never set these; the command-line flags feed the four settings below — `--host`, `--port`, and `--trusted-host` come from the invocation, and `--no-open` turns the browser handoff off for that invocation:
@@ -49,7 +53,7 @@ Most users never set these; the command-line flags feed the four settings below 
 
 The generated [configuration catalog](../../../docs/config-catalog.md#deepseek-aidsh-web-app) is the exhaustive source for every accepted field and its JSDoc.
 
-The bundled sidebar's **Tasks** tab is disabled by default. Enable it under **Settings → Side card**. Saved tab choices override the default, including after an upgrade; this switch only controls the sidebar tab, not background subagent execution.
+The official right sidebar provides Files, Documents, and Terminal. The retained Office viewer adds DOCX, XLSX, and PPTX previews through the official preview registry.
 
 Example collection uses the bundled SQLite backend at `$DSH_HOME/teacher-workbench/examples.sqlite`; only the `teacher_example_collection` domain selects that route. Other storage domains keep the base JSON backend. The [Host reference](../../host/teacher-workbench/README.md#example-collection) owns the saved question and file semantics.
 
@@ -69,7 +73,7 @@ The bundled [Univer Office](../../../third-party/README.md#configuration-and-mig
 
 ### Built-in Windows desktop control
 
-The Windows desktop launcher supplies a private Windows-MCP runtime. This profile starts it by default when that command is present; without it, Windows desktop control stays disabled. A persisted user choice still overrides the default, but the generic **Plugin configuration** tab does not expose this built-in integration. Activation does not change the session permission preset; [Windows-MCP permissions](../../mcp/windows-mcp/README.md#tools-and-permission-modes) determine which tools each session can use and which calls require approval.
+The Windows profile mounts the official [native Cua Driver provider](../../experimental/computer-use-cua-driver-native/README.md). The npm SDK supplies native platform binaries; desktop permissions remain owned by the launching application. Windows-MCP and its private Python runtime are not bundled.
 
 <a id="built-in-web-search"></a>
 ### Built-in web search
@@ -90,11 +94,11 @@ The bundle is one patch plus one runtime glue plugin. The storage stack and proj
 
 ### Patch semantics
 
-A patch replaces the targeted row's whole `config`, so each web row restates every key it owns: the persona, the `DSH_TOOLS_MODE` PTC mode opt-in, and the `session-query-sqlite` values on the base rows, then `insert` adds the web host rows, transport, and browser roster. The per-agent tool rows the base mounts process-wide are disabled here and the preset roster takes over; the reasoning for each host-plane versus preset-plane decision is inline in the patch.
+A patch replaces the targeted row's whole `config`, so each web row restates every key it owns: the persona prefix and suffix templates, the `DSH_TOOLS_MODE` PTC mode opt-in, and the `session-query-sqlite` values on the base rows, then `insert` adds the web host rows, transport, and browser roster. The per-agent tool rows the base mounts process-wide are disabled here and the preset roster takes over; the reasoning for each host-plane versus preset-plane decision is inline in the patch.
 
 ### Readiness
 
-The URL line and browser handoff are readiness signals: supervisors RPC as soon as they observe the line, and a browser requests the page as soon as it opens, so both run only after the Loader tree settles and Connection authentication is available — or immediately in a hand-built tree without a Loader. A tree disposed mid-boot announces nothing.
+The URL line and browser handoff are readiness signals: supervisors RPC as soon as they observe the line, and a browser requests the page as soon as it opens, so both run only after the Loader tree settles, the required-startup audit passes, and Connection authentication is available — or immediately in a hand-built tree without a Loader. Optional plugin failures do not suppress readiness; a required startup failure or a tree disposed mid-boot announces nothing.
 
 ### LAN trust sampling
 
@@ -107,7 +111,7 @@ The URL line and browser handoff are readiness signals: supervisors RPC as soon 
 | [`src/index.ts`](src/index.ts) | The `web-app` glue plugin: dist resolution, LAN trust sampling, prompt sections, bash variable, URL line, browser handoff |
 | [`src/startup.ts`](src/startup.ts) | The `web-startup` provider: `--host`, `--port`, `--trusted-host`, `--no-open`, `--help` |
 | [`cordis.patch.yml`](cordis.patch.yml) | The web patch: restated base values, web host rows, browser roster, agent plane behind presets |
-| [`src/invariant.ts`](src/invariant.ts) | Invariant companion: no runtime invariant; every contribution is registry-disposed |
+| — | No runtime invariant companion is published; every contribution (frontend-static child plugin, prompt section, bashEnv registration) is registry-disposed with the fiber, and each owning registry's package carries that relation's invariant; the package holds no mutable state of its own to audit. |
 | [`tests/web-app.spec.ts`](tests/web-app.spec.ts) | Dist resolution, fallback seat, prompt sections, readiness |
 | [`tests/startup.spec.ts`](tests/startup.spec.ts) | Command-line parsing over a real Loader tree |
 | [`tests/trusted-hosts.spec.ts`](tests/trusted-hosts.spec.ts) | LAN-trust sampling |
@@ -115,7 +119,7 @@ The URL line and browser handoff are readiness signals: supervisors RPC as soon 
 
 ### Invariant ownership
 
-The invariant companion registers an empty installer because every contribution — the frontend-static child plugin, the prompt sections, and the bash variable registration — is registry-disposed with the fiber, and each owning registry's package carries that relation's invariant.
+No invariant companion is published because every contribution — the frontend-static child plugin, the prompt sections, and the bash variable registration — is registry-disposed with the fiber, and each owning registry package carries that relation's invariant.
 
 AnySearch is a direct production dependency. Its [reviewed artifact and compatibility patch](../../../third-party/README.md#artifact-notes) preserve the session presets' ownership of `web_search` and `web_fetch`; the plugin registers the providers and its three advanced tools at Host scope.
 
@@ -143,7 +147,7 @@ Read these pages when you want to go deeper into the shared core, the browser re
 
 #### What the model sees
 
-When `surfaceContext` is true, the `harness:source` section identifies the on-disk Harness implementation without claiming it is the working directory, and the `app:web-surface` global section (first-party order −800) orients the model to the GUI: the canonical local URL, the "this page" referent, the update contract (the reload receiver is always on; no-refresh reloads additionally need the `pnpm run dev:web` watcher), and the instruction not to start replacement servers. `DSH_WEB_URL` additionally appears in the managed bash environment with its description, resolved per invocation from the live server. When it is false, neither section nor the variable is registered.
+When `surfaceContext` is true, the `harness:source` section identifies the on-disk Harness implementation without claiming it is the working directory, and the `app:web-surface` global section (first-party order 10100, after reusable instructions) orients the model to the GUI: the canonical local URL, the "this page" referent, the update contract (the reload receiver is always on; no-refresh reloads additionally need the `pnpm run dev:web` watcher), and the instruction not to start replacement servers. `DSH_WEB_URL` additionally appears in the managed bash environment with its description, resolved per invocation from the live server. When it is false, neither section nor the variable is registered.
 
 #### Token effect
 
@@ -151,7 +155,7 @@ One source line and one prompt paragraph per session plus two managed-environmen
 
 #### KV Cache effect
 
-The prompt section sits near the system prompt's head and is stable for the life of the process (the port is a boot fact), so it does not invalidate the cache across turns.
+Source and Web sections follow first-party reusable instructions. Different checkout paths or local ports leave that preceding prefix unchanged when tools and configuration match; provider cache reuse is not guaranteed.
 
 ## Known Limitations and Deferred Work
 

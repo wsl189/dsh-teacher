@@ -9,6 +9,17 @@ const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 
 /**
+ * Read the equation size independently of compact relation runs.
+ * @param equation - native equation used when the preview has no explicit size.
+ * @param preview - saved MathML with the equation's point size.
+ * @returns equation font size in points.
+ */
+export function exampleOfficeMathSize(equation: XmlElement, preview: XmlElement): number {
+  const size = /font-size\s*:\s*([\d.]+)pt/u.exec(preview.getAttribute('style') ?? '')?.[1]
+  return size === undefined ? Number(equation.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val') ?? '24') / 2 : Number(size)
+}
+
+/**
  * Convert one complete TeX equation, including MathLive bold italics, without Markdown delimiters.
  * @param latex - formula content; malformed or unsupported TeX throws.
  * @param display - whether to use display-math layout.

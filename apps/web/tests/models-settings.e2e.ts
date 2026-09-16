@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
   assertFixtureInventory, captureStableAria, compareOrRefreshGolden,
@@ -300,7 +300,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
-  it('selects and clears the discovered model catalog in one action', async () => {
+  it('selects and clears the discovered model catalog without saving cancelled choices', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-models-picker'))
     const settingsDialog = page.getByRole('dialog', { name: '设置' })
     await settingsDialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).click()
@@ -319,7 +319,9 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))).toEqual(
       Array.from({ length: count }, () => false),
     )
+
     await picker.getByRole('button', { name: '全选' }).waitFor()
+    await picker.getByRole('button', { name: '全选' }).click()
     const snapshot = await captureStableAria(
       page,
       '[role="dialog"][aria-label="选择要添加的模型"]',
@@ -327,7 +329,6 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     )
     await compareOrRefreshGolden(MODEL_PICKER_EXPECTED, snapshot, MODE)
 
-    await picker.getByRole('button', { name: '全选' }).click()
     expect(await boxes.evaluateAll(nodes => nodes.map(node => (node as HTMLInputElement).checked))).toEqual(
       Array.from({ length: count }, () => true),
     )
@@ -565,7 +566,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await expect.poll(() => checkedModels).toContain('opencode-go/glm-5.2')
     await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     expect(checkedModels.filter(model => model.startsWith('opencode-go/'))).toEqual(['opencode-go/glm-5.2'])
-    const settings = scaffold.ctx.settings.get(settingsNamespace('llm-pi-ai'))
+    const settings = scaffold.ctx.settings.get('llm-pi-ai')
     expect(settings).toMatchObject({ providers: { 'opencode-go': { models: [
       { id: 'glm-5.2' }, { id: 'minimax-m3', input: ['text', 'image'] },
     ] } } })

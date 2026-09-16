@@ -18,7 +18,10 @@
     - button "IM机器人":
       - img
       - text: IM机器人
-    - button "侧边卡片"
+    - button "已归档会话":
+      - img
+      - text: 已归档会话
+  - button "打开配置文件"
   - button "关闭":
     - img
     - text: 关闭

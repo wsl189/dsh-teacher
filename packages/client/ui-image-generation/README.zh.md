@@ -87,6 +87,8 @@ keyed `image-generation-result` renderer 使用现有 `conversation` 图片文�
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；对话服务负责结果节点注册和附件生命周期。
+
 <details>
 <summary>维护者的工作上下文——点击展开</summary>
 

@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-05-im-modern-host-connection.md
-2026-09-05-im-modern-host-connection.md: a2b744f7a51fccb36c8aa8e0819642aca9fff453
-2026-09-05-im-modern-host-connection.zh.md: 6b3e9b92c093d61f2422c29006b7f41eb1b97ce4
+2026-09-05-im-modern-host-connection.md: be67fc7fc1f40e8198936b236372c48240a2f5b6
+2026-09-05-im-modern-host-connection.zh.md: 1d14c5c08cac50219e5f74b63e7ad508c5f78b79

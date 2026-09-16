@@ -5,7 +5,7 @@
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type { DomainGlobal } from '@deepseek-ai/dsh-storage-domain'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
@@ -134,7 +134,7 @@ import type {
   TeacherWeatherResult,
 } from './types.ts'
 
-const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbench')
+const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = 'teacher-workbench'
 const DEFAULT_QUESTION_IMAGE_BYTES = 25 * 1024 * 1024
 const DEFAULT_QUESTION_BATCH_BYTES = 96 * 1024 * 1024
 const DEFAULT_TIMETABLE_SOURCE_CHARACTERS = 500_000
@@ -448,13 +448,15 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       occurrence => this.markReminderDelivered(occurrence),
       config.reminderRetryMs ?? DEFAULT_REMINDER_RETRY_MS,
     )
-    installSettingsSection(ctx, TEACHER_WORKBENCH_SETTINGS_NAMESPACE, TeacherWorkbenchService.Config, config, {
-      setSource: (source) => { this.configSource = source },
-      onChange: () => {
-        this.questionMediaSettingsRevision += 1
-        this.discoveredQuestionFiles = new Map()
-        this.discoveredQuestionDirectories = new Map()
-      },
+    ctx.inject(['settings'], (settingsCtx) => {
+      settingsCtx.settings.installSection(ctx, TEACHER_WORKBENCH_SETTINGS_NAMESPACE, TeacherWorkbenchService.Config, config, {
+        setSource: (source) => { this.configSource = source },
+        onChange: () => {
+          this.questionMediaSettingsRevision += 1
+          this.discoveredQuestionFiles = new Map()
+          this.discoveredQuestionDirectories = new Map()
+        },
+      })
     })
     registerQuestionSegmentationSkill(ctx)
   }

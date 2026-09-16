@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { Context } from '@deepseek-ai/cordis'
 import { DirectoryPicker, DirectoryPickerError } from '@deepseek-ai/dsh-host-directory-picker'
 import type { DirectoryPickerCapability } from '@deepseek-ai/dsh-host-directory-picker'
-import { TypertRemoteFailure } from '@deepseek-ai/dsh-typert-protocol'
+import { remoteErrorOf } from '@deepseek-ai/dsh-typert-protocol'
 import { DirectoryPickerController } from '../src/directory-picker.ts'
 
 const roots: Context[] = []
@@ -64,8 +64,9 @@ async function refused(call: Promise<unknown>): Promise<{ code: string; message:
   try {
     await call
   } catch (error: unknown) {
-    if (!(error instanceof TypertRemoteFailure)) throw error
-    return { ...error.failure }
+    const failure = remoteErrorOf(error)
+    if (failure === undefined) throw error
+    return { code: failure.code, message: failure.message, details: failure.details }
   }
   throw new Error('the call was expected to be refused')
 }
@@ -89,18 +90,18 @@ describe('directoryPicker pick Remote', () => {
     const abort = new AbortController()
     const pending = refused(picker.pick(abort.signal))
     abort.abort()
-    expect((await pending).code).toBe('cancelled')
+    expect((await pending).code).toBe('gateway/cancelled')
 
     const broken = await harness({ kind: 'native', pick: async () => { throw new Error('no chooser installed') } })
     const failure = await refused(broken.pick(new AbortController().signal))
-    expect(failure.code).toBe('internal')
+    expect(failure.code).toBe('gateway/internal')
     expect(failure.message).toContain('no chooser installed')
   })
 
   it('refuses the native verb under a browse composition', async () => {
     const picker = await harness(BROWSE_STUB)
     const failure = await refused(picker.pick(new AbortController().signal))
-    expect(failure.code).toBe('directory-picker-unavailable')
+    expect(failure.code).toBe('directory-picker/unavailable')
     expect(failure.message).toContain('needs the native capability')
     expect(failure.details).toEqual({ capability: 'browse' })
   })
@@ -123,12 +124,12 @@ describe('directoryPicker browse Remotes', () => {
   it('maps the seam\'s typed failures and folds unknown throws to internal', async () => {
     const picker = await harness(BROWSE_STUB)
     expect(await refused(picker.list('/denied', new AbortController().signal)))
-      .toMatchObject({ code: 'directory-unreadable', details: { path: '/denied' } })
-    expect((await refused(picker.createDirectory('/home/user', 'taken'))).code).toBe('directory-exists')
-    expect((await refused(picker.createDirectory('/home/user', 'unwritable'))).code).toBe('internal')
+      .toMatchObject({ code: 'directory-picker/unreadable', details: { path: '/denied' } })
+    expect((await refused(picker.createDirectory('/home/user', 'taken'))).code).toBe('directory-picker/exists')
+    expect((await refused(picker.createDirectory('/home/user', 'unwritable'))).code).toBe('gateway/internal')
 
     const thrown = await refused(picker.createDirectory('/home/user', 'gone'))
-    expect(thrown).toMatchObject({ code: 'internal', message: 'the volume vanished' })
+    expect(thrown).toMatchObject({ code: 'gateway/internal', message: 'the volume vanished' })
   })
 
   it('rejects invalid child names before capability dispatch', async () => {
@@ -143,7 +144,7 @@ describe('directoryPicker browse Remotes', () => {
     for (const name of ['', ' ', '.', '..', 'a/b', 'a\\b']) {
       const failure = await refused(picker.createDirectory('/home/user', name))
       expect(failure).toMatchObject({
-        code: 'bad-request',
+        code: 'gateway/bad-request',
         message: 'invalid payload for host.createDirectory',
       })
       expect(Array.isArray(Reflect.get(failure.details, 'issues'))).toBe(true)
@@ -163,7 +164,7 @@ describe('directoryPicker browse Remotes', () => {
     const abort = new AbortController()
     const pending = refused(picker.list(undefined, abort.signal))
     abort.abort()
-    expect((await pending).code).toBe('cancelled')
+    expect((await pending).code).toBe('gateway/cancelled')
   })
 
   it('reports aborted root discovery as cancelled and other failures as internal', async () => {
@@ -195,8 +196,8 @@ describe('directoryPicker browse Remotes', () => {
     expect(await refused(picker.listRoots(new AbortController().signal)))
       .toMatchObject({ code: 'directory-picker-unavailable', details: { capability: 'native' } })
     expect(await refused(picker.list(undefined, new AbortController().signal)))
-      .toMatchObject({ code: 'directory-picker-unavailable', details: { capability: 'native' } })
+      .toMatchObject({ code: 'directory-picker/unavailable', details: { capability: 'native' } })
     expect(await refused(picker.createDirectory('/x', 'y')))
-      .toMatchObject({ code: 'directory-picker-unavailable', details: { capability: 'native' } })
+      .toMatchObject({ code: 'directory-picker/unavailable', details: { capability: 'native' } })
   })
 })

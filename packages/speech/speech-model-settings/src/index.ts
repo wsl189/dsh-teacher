@@ -23,7 +23,6 @@ import {
   type SpeechTranscribeRequest,
 } from '@deepseek-ai/dsh-speech'
 import {
-  settingsNamespace,
   type SettingsProvider,
 } from '@deepseek-ai/dsh-settings'
 import z from '@deepseek-ai/schemastery'
@@ -33,7 +32,7 @@ const DEFAULT_TIMEOUT_MS = 120_000
 const DEFAULT_MAX_AUDIO_BYTES = 25 * 1024 * 1024
 const DEFAULT_MAX_RESPONSE_BYTES = 64 * 1024
 const QWEN_MAX_AUDIO_BYTES = 10 * 1024 * 1024
-const PI_AI_SETTINGS_NAMESPACE = settingsNamespace('llm-pi-ai')
+const PI_AI_SETTINGS_NAMESPACE = 'llm-pi-ai'
 
 const EXTENSION_BY_MEDIA_TYPE: Readonly<Record<string, string>> = Object.freeze({
   'audio/webm': '.webm',

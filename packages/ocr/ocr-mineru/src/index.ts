@@ -19,7 +19,7 @@ import {
   type OcrProvider,
 } from '@deepseek-ai/dsh-ocr'
 import z from '@deepseek-ai/schemastery'
-import { installSettingsSection, settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import { PDFDocument } from 'pdf-lib'
 import sharp from 'sharp'
 import { z as validation } from 'zod'
@@ -45,7 +45,7 @@ const DEFAULT_MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 const DEFAULT_LAYOUT_BATCH_PAGES = 4
 
 /** User-settings namespace for the MinerU provider. */
-export const OCR_MINERU_SETTINGS_NAMESPACE = settingsNamespace('ocr-mineru')
+export const OCR_MINERU_SETTINGS_NAMESPACE = 'ocr-mineru'
 
 const EXTENSION_BY_MEDIA_TYPE: Readonly<Record<string, string>> = Object.freeze({
   'application/pdf': '.pdf',
@@ -351,13 +351,15 @@ export const inject = ['ocr']
  */
 export function apply(ctx: Context, config: Config): void {
   let current: () => Config = () => config
-  installSettingsSection(ctx, OCR_MINERU_SETTINGS_NAMESPACE, Config, config, {
-    setSource: (source) => {
-      current = source
-    },
-    // Each extraction snapshots the current section before validating bytes
-    // or starting its request, so there is no derived state to rebuild.
-    onChange: () => {},
+  ctx.inject(['settings'], (settingsCtx) => {
+    settingsCtx.settings.installSection(ctx, OCR_MINERU_SETTINGS_NAMESPACE, Config, config, {
+      setSource: (source) => {
+        current = source
+      },
+      // Each extraction snapshots the current section before validating bytes
+      // or starting its request, so there is no derived state to rebuild.
+      onChange: () => {},
+    })
   })
   const provider = new MinerUProvider(() => current())
   ctx.effect(() => ctx.ocr.registerProvider(provider), 'ocr-mineru: provider')

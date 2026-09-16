@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-[IM 发行补丁](../../../../patches/xmanrui-dsh-im@4.11.0.patch)通过一个小型 Host 入口提供桌面默认值，并将明确的工作区设置传给未修改的上游插件。全部九个机器人平台共用这项规则；Office 保留自己的配置。[Electron](../../../../apps/desktop/src/main.ts)通过 `app.getPath('desktop')` 获取系统桌面，并通过 `DSH_DESKTOP_DIR` 提供该路径。其他 Host 启动方式使用这个绝对路径覆盖值或 `<home>/Desktop`。
+[IM 发行补丁](../../../../patches/xmanrui-dsh-im@4.21.1.patch)通过一个小型 Host 入口提供桌面默认值，并将明确的工作区设置传给未修改的上游插件。全部十一个机器人平台共用这项规则；Office 保留自己的配置。[Electron](../../../../apps/desktop/src/main.ts)通过 `app.getPath('desktop')` 获取系统桌面，并通过 `DSH_DESKTOP_DIR` 提供该路径。其他 Host 启动方式使用这个绝对路径覆盖值或 `<home>/Desktop`。
 
 显式指定的平台工作区优先于桌面默认值。上游工作区存储只初始化缺失的分配，因此已保存的机器人路径和后续用户选择保持权威。适配入口不会重写配置文件、创建桌面目录或改变应用的工作目录。
 
@@ -28,4 +28,4 @@ Status: implemented
 
 ## Testing
 
-[IM 入口测试](../../../../packages/bundle/web-app/tests/im-workspaces.spec.ts)覆盖全部九个平台、显式覆盖、Office 设置、主目录默认路径和无效桌面路径。[桌面环境测试](../../../../apps/desktop/tests/runtime-environment.spec.ts)覆盖系统路径传递。[完整组合的 QQ 浏览器场景](../../../../apps/web/tests/qq-workspace-picker.e2e.ts)初始化一个未分配工作区的离线机器人，保留另一个机器人的已保存工作区，为两条路径生成快照，并通过持久数据与页面刷新验证用户选择的路径，全程不连接 IM 服务。
+[IM 入口测试](../../../../packages/bundle/web-app/tests/im-workspaces.spec.ts)覆盖全部十一个平台、显式覆盖、Office 设置、主目录默认路径和无效桌面路径。[桌面环境测试](../../../../apps/desktop/tests/runtime-environment.spec.ts)覆盖系统路径传递。[完整组合的 QQ 浏览器场景](../../../../apps/web/tests/qq-workspace-picker.e2e.ts)初始化一个未分配工作区的离线机器人，保留另一个机器人的已保存工作区，为两条路径生成快照，并通过持久数据与页面刷新验证用户选择的路径，全程不连接 IM 服务。

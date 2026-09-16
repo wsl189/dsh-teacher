@@ -50,7 +50,7 @@ export function spawnSandboxed(
 export function spawnSandboxedInherited(
   api: Win32Bindings,
   token: NativePtr,
-  options: { command: string; args: readonly string[]; cwd: string },
+  options: { command: string; args: readonly string[]; cwd: string; controlFileDescriptor?: 7 },
 ): SpawnedInherited {
   return spawnInheritedJobProcess(api, { ...options, token, hideWindow: hideChildWindow(api) })
 }

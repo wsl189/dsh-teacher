@@ -70,9 +70,9 @@ function mount(
       mutate,
     },
   }
-  const mirror = new SettingsDescribeMirror(api as never)
+  const mirror = new SettingsDescribeMirror({ remote: api } as never)
   const scope = new SettingsScopeController<WelcomeSection>(
-    api as never,
+    { remote: api } as never,
     { namespace: WELCOME_NOTICE_SETTINGS_NAMESPACE, decode: decodeWelcomeSection },
     mirror,
     'host',
@@ -88,6 +88,8 @@ function mount(
     openSection: vi.fn(),
     useSessions: unusedHook,
     useSessionPendingInteraction,
+    usePanelInfo: () => { throw new Error('unused panel hook') },
+    useResource: () => { throw new Error('unused resource hook') },
     useWorkspaces: unusedHook,
     controller,
     useWelcome: bindSnapshotSelector(controller.store),
@@ -157,7 +159,7 @@ describe('WelcomeNotice', () => {
       result: {
         ok: false,
         error: {
-          code: 'settings-rejected',
+          code: 'settings/rejected',
           message: 'read only',
           details: { ns: WELCOME_NOTICE_SETTINGS_NAMESPACE },
         },

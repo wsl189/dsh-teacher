@@ -2,7 +2,7 @@ import type { UserConfig } from 'tsdown'
 import { staticLinked } from '../../client/tsdown.client.ts'
 
 const PACKAGE_NAME = '@deepseek-ai/dsh-concurrency'
-const ENTRIES = ['lib/types/index.js', 'lib/types/invariant.js'] as const
+const ENTRIES = ['lib/types/index.js'] as const
 const browser = staticLinked(PACKAGE_NAME, ENTRIES)
 
 /**

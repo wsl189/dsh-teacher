@@ -35,7 +35,13 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
   expect(await page.evaluate(() => [...document.fonts].some(font => font.family.includes('DSH Math Symbols') && font.status === 'loaded'))).toBe(true)
   await dialog.screenshot({ path: join(root, 'all-symbols-palette.png') })
   const labels = await dialog.getByRole('group').getByRole('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')!))
-  const results: { label: string; regular: string; bold: string }[] = []
+  const results: {
+    label: string
+    regular: string
+    bold: string
+    wordFont?: string
+    glyph?: { ascent: number; descent: number; width: number }
+  }[] = []
   let activeLabel = ''
   const read = async () => {
     const result = await scaffold.ctx.teacherWorkbench.readExampleWordEditor(request)
@@ -56,7 +62,7 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     activeLabel = label
     if (index > 0) await editor.locator('[data-equation]').last().dblclick()
     await field.press('ControlOrMeta+a')
-    await field.pressSequentially('x')
+    await field.pressSequentially(label === '补集' ? 'A' : 'x')
     await field.press('ControlOrMeta+a')
     const inheritedBold = await field.evaluate((element) => {
       const input = element as HTMLElement & { queryStyle(style: { fontSeries?: string; variantStyle?: string }): string }
@@ -66,19 +72,42 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     if (inheritedBold) await toggleBold()
     await dialog.getByRole('button', { name: label, exact: true }).click()
     for (let count = 0; count < 8 && (await value()).includes('\\placeholder'); count++) {
-      await field.pressSequentially('2')
+      await field.pressSequentially(label === '补集' ? 'U' : '2')
       await field.press('Tab')
     }
     expect(await value(), label).not.toContain('\\placeholder')
     if (['补集', '真子集 ⫋', '不平行'].some(name => label.startsWith(name))) await field.screenshot({ path: join(root, `palette-${index}.png`) })
     const regular = await save()
+    if (label === '补集') {
+      const applied = editor.locator('[data-equation]').last()
+      const typography = await applied.evaluate(root => [...root.querySelectorAll('.katex-html span')]
+        .filter(node => node.childElementCount === 0 && ['∁', 'U', 'A'].includes(node.textContent ?? ''))
+        .map(node => ({ text: node.textContent, font: getComputedStyle(node).fontFamily, style: getComputedStyle(node).fontStyle })))
+      expect(typography.map(node => node.text)).toEqual(['∁', 'U', 'A'])
+      expect(typography[0]!.font).toContain('DSH Math Symbols')
+      expect(typography.map(node => node.style)).toEqual(['normal', 'italic', 'italic'])
+      await applied.screenshot({ path: join(root, 'complement-applied.png') })
+    }
     await editor.locator('[data-equation]').last().dblclick()
     await field.press('ControlOrMeta+a')
     await toggleBold()
     const boldInput = await value()
     const bold = await save()
     expect(bold, `${label}: ${boldInput}`).not.toBe(regular)
-    results.push({ label, regular, bold })
+    const result: typeof results[number] = { label, regular, bold }
+    if (label === '真子集 ⫋' || label === '真包含 ⫌') {
+      const glyph = label.endsWith('⫋') ? '⫋' : '⫌'
+      result.glyph = await page.evaluate((text) => {
+        const canvas = document.createElement('canvas').getContext('2d')!
+        canvas.font = '1000px "DSH Math Symbols"'
+        const metrics = canvas.measureText(text)
+        return { ascent: Math.round(metrics.actualBoundingBoxAscent), descent: Math.round(metrics.actualBoundingBoxDescent),
+          width: Math.round(metrics.width) }
+      }, glyph)
+      expect(result.glyph.ascent + result.glyph.descent).toBeLessThan(800)
+      expect(result.glyph.descent).toBeLessThan(100)
+    }
+    results.push(result)
     await writeFile(join(root, 'all-symbols-progress.json'), JSON.stringify(results, null, 2) + '\n')
   }
   const model = await read()
@@ -112,6 +141,16 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
   const download = await scaffold.ctx.teacherWorkbench.readExampleFile({ ...request, kind: 'word' })
   if (!download.ok) throw new Error(download.error.code)
   const bytes = Buffer.from(download.value.contentBase64, 'base64')
+  expect(unzipSync(bytes)['word/fonts/dsh-complement.odttf']).toBeUndefined()
+  const complement = results.find(result => result.label === '补集')!
+  complement.wordFont = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, 'application/xml')
+    const math = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+    const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+    const run = [...document.getElementsByTagNameNS(math, 'r')].find(run => run.textContent === '∁')!
+    return run.getElementsByTagNameNS(word, 'rFonts')[0]!.getAttributeNS(word, 'ascii')!
+  }, strFromU8(unzipSync(bytes)['word/document.xml']!))
+  expect(complement.wordFont).toBe('Cambria Math')
   await writeFile(join(root, 'all-symbols-download.docx'), bytes)
   const native = async (content: Uint8Array) => page.evaluate((source) => {
     const document = new DOMParser().parseFromString(source, 'application/xml')
@@ -122,6 +161,13 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     for (const element of document.getElementsByTagNameNS(namespace, '*')) {
       if (element.localName !== 't' && [...element.childNodes].some(node => node.nodeType === 3 && node.textContent?.trim())) {
         throw new Error('Native equation text must be inside a text run')
+      }
+    }
+    for (const run of document.getElementsByTagNameNS(namespace, 'r')) {
+      if (run.textContent !== '∁') continue
+      const fonts = run.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'rFonts')[0]!
+      if (fonts.getAttribute('w:ascii') !== 'Cambria Math' || run.getElementsByTagNameNS(namespace, 'nor').length !== 0) {
+        throw new Error('Word complement must use an upright native math run')
       }
     }
     return [...document.getElementsByTagNameNS(namespace, 'oMath')].map(equation => new XMLSerializer().serializeToString(equation))
@@ -156,6 +202,7 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     if (!exported.ok) throw new Error(exported.error.code)
     const content = Buffer.from(exported.value.contentBase64, 'base64')
     await writeFile(join(root, `all-symbols-${layout}.docx`), content)
+    expect(unzipSync(content)['word/fonts/dsh-complement.odttf']).toBeUndefined()
     expect((await native(content)).slice(-expected.length)).toEqual(expected)
   }
   await writeFile(join(root, 'all-symbols.json'), JSON.stringify(results, null, 2) + '\n')

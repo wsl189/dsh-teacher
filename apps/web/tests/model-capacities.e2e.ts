@@ -9,7 +9,7 @@ import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import { chromium } from 'playwright'
 import { credentialRef } from '@deepseek-ai/dsh-credentials'
 import { createUserMessage, ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   PROVIDER_SUPPLIERS, joinRequestURL,
   type ProviderAccessPreset,
@@ -31,7 +31,7 @@ const INPUT = createUserMessage({
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/model-capacities', import.meta.url))
 
 async function saveProfile(scaffold: WebScaffold, plan: ProviderAccessPreset, profile: object): Promise<void> {
-  await scaffold.ctx.settings.update(settingsNamespace(plan.settingsNs),
+  await scaffold.ctx.settings.update(plan.settingsNs,
     plan.settingsNs === 'llm-deepseek' ? profile : { providers: { [plan.provider]: profile } })
 }
 
@@ -152,7 +152,7 @@ describe('preset model capacity settings over real HTTP serializers', () => {
       { id: 'minimax-m3', path: '/zen/go/v1/messages' },
       { id: 'gpt-5.6-luna', path: '/zen/go/v1/responses' },
     ]
-    await scaffold.ctx.settings.mutate(settingsNamespace('llm-pi-ai'), [
+    await scaffold.ctx.settings.mutate('llm-pi-ai', [
       { op: 'unset', path: ['providers', 'opencode-go', 'api'] },
       { op: 'unset', path: ['providers', 'opencode-go', 'baseURL'] },
       { op: 'set', path: ['providers', 'opencode-go', 'models'], value: models.map(model => ({ id: model.id, contextWindow: 256_000, maxTokens: 32_000 })) },
@@ -169,7 +169,7 @@ describe('preset model capacity settings over real HTTP serializers', () => {
   })
 
   it('fits the output ceiling inside remaining context on catalog-backed models', async () => {
-    await scaffold.ctx.settings.mutate(settingsNamespace('llm-pi-ai'), [{
+    await scaffold.ctx.settings.mutate('llm-pi-ai', [{
       op: 'set', path: ['providers', 'zhipu-cn', 'models'],
       value: [{ id: 'glm-5.2', contextWindow: 32_000, maxTokens: 64_000 }],
     }])

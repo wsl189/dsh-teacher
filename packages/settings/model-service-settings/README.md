@@ -70,4 +70,6 @@ None directly.
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; the namespace validator checks every stored provider route before commit.
+
 Add a protocol only with a type assignment, request Consumer, response parser, and focused tests. Keep supplier defaults in composition; do not embed them in the namespace validator.

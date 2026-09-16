@@ -13,7 +13,7 @@ import { Session, SessionId } from '@deepseek-ai/dsh-session'
 import SystemPrompt from '@deepseek-ai/dsh-system-prompt'
 import ToolRuntime from '@deepseek-ai/dsh-tools'
 import LocalFileSystem from '@deepseek-ai/dsh-fs-local'
-import { SettingsProvider, settingsNamespace, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
+import { SettingsProvider, type SettingsNamespace } from '@deepseek-ai/dsh-settings'
 import Storage from '@deepseek-ai/dsh-storage'
 import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
 import * as ToolTeacherWorkbench from '../../tool-teacher-workbench/src/index.ts'
@@ -180,7 +180,7 @@ function promptAgent(text: string, cwd?: string): Agent {
   const id = SessionId(`teacher-prompt-${String(randomCallId)}`)
   const session = cwd === undefined
     ? Session.create(id)
-    : Session.create(id, [], { version: 0, id, createdAt: Date.now(), cwd })
+    : Session.create(id, [], { version: 3, isSeeded: false, id, createdAt: Date.now(), cwd })
   session.append('turn/start', { turn: 1 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text }],
@@ -2139,7 +2139,7 @@ describe('TeacherWorkbenchService', () => {
     await mkdir(selectedDirectory, { recursive: true })
     const bytes = await sharp({ create: { width: 12, height: 8, channels: 3, background: '#336699' } }).png().toBuffer()
     await writeFile(join(selectedDirectory, '第1题.png'), bytes)
-    await b.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot })
+    await b.ctx.settings.update('teacher-workbench', { segmentsRoot })
     const browsed = await b.service.browseQuestionMedia({})
     if (!browsed.ok) throw new Error(browsed.error.message)
     const folder = browsed.value.questionLibraryFolders.find(item => item.name === name)!
@@ -2417,7 +2417,7 @@ describe('TeacherWorkbenchService', () => {
       writeFile(directoryStudentPath, nextBytes),
     ])
 
-    await b.ctx.settings.update(settingsNamespace('teacher-workbench'), {
+    await b.ctx.settings.update('teacher-workbench', {
       segmentsRoot: nextSegments,
       studentsRoot: nextStudents,
     })

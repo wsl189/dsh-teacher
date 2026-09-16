@@ -5,10 +5,12 @@ Licensed under the SIL Open Font License 1.1; see OFL.txt.
 Source: https://github.com/stipub/stixfonts/tree/v2.13b171
 Original: fonts/static_ttf/STIXTwoMath-Regular.ttf
 
-The application embeds a WOFF2 subset with unchanged outlines for U+20E5,
-U+2201, U+2ACB, U+2ACC, and U+2AFD. Its CSS alias is DSH Math Symbols.
-Rebuild with fontTools and Brotli from the upstream TrueType font:
+The application embeds a WOFF2 subset named DSH Math Symbols for U+20E5,
+U+2201, U+2ACB, U+2ACC, and U+2AFD. U+2ACB and U+2ACC use 70% of their
+original size and a 150-unit baseline lift in the 1000-unit em. The other
+outlines are unchanged. Rebuild with fontTools and Brotli from the upstream
+TrueType font using the adjacent build-subset.py:
 
-python -m fontTools.subset STIXTwoMath-Regular.ttf --unicodes=U+20E5,U+2201,U+2ACB,U+2ACC,U+2AFD --flavor=woff2 --output-file=STIXTwoMath-Symbols.woff2 --layout-features='*' --name-IDs='*' --name-legacy --name-languages='*'
+python build-subset.py STIXTwoMath-Regular.ttf STIXTwoMath-Symbols.woff2
 
-Subset SHA-256: 0dc23f48488a980651c6f546cc021bccb6d413a3b80e67a1516507d6731fce99
+Subset SHA-256: 3c4878212467e96121fb39d8ee42eed54940ae8c902893b7d6b5b9d897e2dacc

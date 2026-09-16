@@ -37,6 +37,8 @@ describe('TeacherWorkbenchSettingsRow layout', () => {
         useTeacherSettings={selector => selector(snapshot)}
         useSessions={() => { throw new Error('unused') }}
         useSessionPendingInteraction={useSessionPendingInteraction}
+        usePanelInfo={() => { throw new Error('unused') }}
+        useResource={() => { throw new Error('unused') }}
         useWorkspaces={() => { throw new Error('unused') }}
         setSetting={setSetting}
         t={t}

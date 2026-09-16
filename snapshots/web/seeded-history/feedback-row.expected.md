@@ -1,6 +1,10 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Use the read tool twice" [disabled]
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -11,12 +15,30 @@
   - img
   - img
   - text: System prompt
-- text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. 7/25 {{clock}}"
+- text: "Use the read tool twice in one assistant message: read a.txt and b.txt. Then reply with the single word DONE and stop. {{clock}}"
 - button "Copy":
   - img
-- button "2 tool calls":
+- button "2 tool calls" [expanded]:
   - text: 2 tool calls
   - img
+- button "Think The user wants me to read a.txt and b.txt, then reply with \"DONE\". Let me do both reads in parallel.":
+  - img
+  - img
+  - text: Think The user wants me to read a.txt and b.txt, then reply with "DONE". Let me do both reads in parallel.
+- button "Read a.txt":
+  - img
+  - img
+  - text: Read
+  - button "a.txt"
+- button "Read b.txt":
+  - img
+  - img
+  - text: Read
+  - button "b.txt"
+- button "Think Both files have been read. a.txt contains \"alpha\" and b.txt contains \"beta\". I'll now reply with DONE as instructed.":
+  - img
+  - img
+  - text: Think Both files have been read. a.txt contains "alpha" and b.txt contains "beta". I'll now reply with DONE as instructed.
 - paragraph: DONE
 - button "Copy":
   - img
@@ -26,7 +48,10 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: 7/25 {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
+- button "Ran for {{duration}}":
+  - img
+  - text: Ran for {{duration}}
+- text: {{clock}}
 - button "compact Compacted 5 history items (~{{tokens}} tokens)"
 - button "Context injection AGENTS.md":
   - img
@@ -34,19 +59,21 @@
   - text: Context injection AGENTS.md
 - img
 - text: permission preset read-only
-- 'button "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured." [expanded]':
+- 'button "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}." [expanded]':
   - img
-  - text: "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured."
-- text: "Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}. Session sharing is not configured."
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+  - text: "feedback Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}."
+- text: "Feedback recorded for session {{seededId}} Anonymous user: {{uuid}}."
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Read Only"': Read Only
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "Send message" [disabled]
-- text: 1 turns · 2 steps LLM {{duration}} · Tool call {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 98% Input 15.8K tok · Output 135 tok
+- button "1 turns 2 steps · {{throughput}} tok/s":
+  - img
+  - text: 1 turns 2 steps{{throughput}} tok/s
+- button "16K tok · Cache hit 98%":
+  - img
+  - text: 16K tokCache hit 98%

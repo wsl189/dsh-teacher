@@ -79,4 +79,6 @@ kind: "package-reference"
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；每次请求都会验证模型选择、凭据、上传内容和响应。
+
 增加语音协议时，必须同时加入请求编码、响应解析、资源上限与聚焦测试。提供方 URL 与模型 ID 放在 `model-service-settings` 中。

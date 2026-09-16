@@ -162,12 +162,22 @@
   {
     "label": "真子集 ⫋",
     "regular": "\\text{ ⫋ }",
-    "bold": "\\text{ } \\textbf{⫋} \\text{ }"
+    "bold": "\\text{ } \\textbf{⫋} \\text{ }",
+    "glyph": {
+      "ascent": 672,
+      "descent": 94,
+      "width": 504
+    }
   },
   {
     "label": "真包含 ⫌",
     "regular": "\\text{ ⫌ }",
-    "bold": "\\text{ } \\textbf{⫌} \\text{ }"
+    "bold": "\\text{ } \\textbf{⫌} \\text{ }",
+    "glyph": {
+      "ascent": 672,
+      "descent": 94,
+      "width": 504
+    }
   },
   {
     "label": "子集 ⊆",
@@ -196,8 +206,9 @@
   },
   {
     "label": "补集",
-    "regular": "\\text{∁}_{2} x",
-    "bold": "\\textbf{∁} _{\\mathbf{2}} \\mathbfit{x}"
+    "regular": "\\text{∁}_{U} A",
+    "bold": "\\textbf{∁} _{\\mathbfit{U}} \\mathbfit{A}",
+    "wordFont": "Cambria Math"
   },
   {
     "label": "任意 ∀",

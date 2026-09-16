@@ -12,9 +12,9 @@ Status: implemented
 
 原生 DeepSeek 与通用模型编辑器共用一个容量选择器。上下文选项覆盖 32K 至 1M，输出选项覆盖 8K 至 64K。计数沿用编辑器的十进制 K/M 约定。选择模型默认值会移除覆盖。目录或已保存配置中超出档位的计数保留为明确的当前值选项；打开模型行或重命名模型不会对其取整。
 
-上下文仍是供历史压缩使用的适配器元数据。输出仍是每个模型的请求默认值，显式调用预算优先。选择更大的上下文不会提高上游容量，剩余上下文的限制也可能缩小实际发送的输出上限。[适配器持有默认值的决策](../architecture/2026-07-30-adapter-owned-max-token-defaults.zh.md)继续持有这些语义。
+上下文仍是供历史压缩使用的适配器元数据。输出仍是每个模型的请求默认值，显式调用预算优先。选择更大的上下文不会提高上游容量，剩余上下文的限制也可能缩小实际发送的输出上限。[适配器持有默认值的决策](../../archived/architecture/2026-07-30-adapter-owned-max-token-defaults.md)继续持有这些语义。
 
-这会修改[提供方声明决策](../architecture/2026-08-04-declaring-a-provider-from-the-models-page.zh.md)中的容量控件；模型发现、字段保留和设置归属仍由原文持有。
+这会修改[提供方声明决策](../../archived/architecture/2026-08-04-declaring-a-provider-from-the-models-page.md)中的容量控件；模型发现、字段保留和设置归属仍由原文持有。
 
 ## 考虑过的替代方案
 

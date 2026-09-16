@@ -71,6 +71,8 @@ None; update metadata and actions stay outside sessions and provider requests.
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; the preload bridge is browser-local and exposes no Host event stream.
+
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 

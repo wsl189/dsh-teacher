@@ -10,7 +10,7 @@ The bundled dsh-im 1.0.3 client sent legacy HTTP RPC envelopes to the Web server
 
 ## Decision
 
-The Web bundle pins dsh-im 4.11.0 and uses its modern same-process Host adapter for all nine bot platforms and Office. Local channels call the current Host services directly; an explicitly configured external `harnessBaseUrl` continues to use HTTP. The distribution patch retains the desktop workspace default and shared QQ speech route. It validates the Weixin start response and preserves `stale-token` with instructions to remove the account and scan again.
+The Web bundle pins dsh-im 4.21.1 and uses its modern same-process Host adapter for all eleven bot platforms and Office. Local channels call the current Host services directly; an explicitly configured external `harnessBaseUrl` continues to use HTTP. The distribution patch retains the desktop workspace default and shared QQ speech route. It validates the Weixin start response and preserves `stale-token` with instructions to remove the account and scan again.
 
 Saved bot configuration, credentials, workspaces, and channel state remain outside the package archive and keep their existing formats. The upgrade does not copy browser credentials into the plugin, weaken Web route authentication, or rewrite saved platform data.
 
@@ -24,7 +24,7 @@ Saved bot configuration, credentials, workspaces, and channel state remain outsi
 
 ## Consequences
 
-All bundled channels share one current Host integration instead of nine protocol shims. A platform can still be offline because its own token or secret is invalid; the Weixin page now distinguishes an expired scan token from a Host connection failure. Re-scanning is a user action because replacing a saved account credential is not safe to automate.
+All bundled channels share one current Host integration instead of eleven protocol shims. A platform can still be offline because its own token or secret is invalid; the Weixin page now distinguishes an expired scan token from a Host connection failure. Re-scanning is a user action because replacing a saved account credential is not safe to automate.
 
 ## Testing
 

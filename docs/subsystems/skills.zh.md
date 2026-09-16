@@ -78,7 +78,7 @@ interface SkillProviderControl {
 
 `dsh-skill-badge` 在 `BUNDLED_SKILL_RANK` 注册一个不可变的 `bundled` 候选项，并通过 `resourceBase` 公开其随包资产目录。交付的 CLI（命令行界面）将该插件声明为禁用，因此启用其组合配置行即为显式选择加入。
 
-`dsh-skill-ppt-master` 以相同 rank 注册不可变的 `ppt-master` 6.1.0 候选项，并通过 `resourceBase` 公开完整上游分发。随附 Web 组合启用该提供方，Windows 桌面载荷携带同一份包资源；Python 与工作流专用依赖仍属于外部运行环境要求。
+`dsh-skill-ppt-master` 以相同 rank 注册不可变的 `ppt-master` 6.4.0 候选项，并通过 `resourceBase` 公开完整上游分发。随附 Web 组合启用该提供方，Windows 桌面载荷携带同一份包资源；Python 与工作流专用依赖仍属于外部运行环境要求。
 
 Chokidar 会监视现有根目录中直属 bundle 和平铺条目的添加与移除，以及直属 skill 条目的变更。缺失的根目录会从最近的现有祖先开始，逐个跟踪缺失路径段，直至 Chokidar 可以附加。bundle 下的资源文件变更不属于目录变更。面向模型的 `write` 和 `edit` 观测会在目标路径与目录相关时同步使提供方目录失效，而宿主 watcher 覆盖 IDE、Git、shell 和外部进程产生的变更。watcher 失败会使当前观测不完整，但不会在直接加载时隐藏可读候选项；项目作用域 watcher 使用按配置设限的 LRU。
 
@@ -108,6 +108,8 @@ interface SkillInvocationPolicy {
 ```ts type-equiv
 /** Invocation-neutral skill metadata returned by `ctx.skills.list()`. */
 interface SkillSummary {
+  /** Absolute instruction file path when supplied by the provider; absent for virtual skills. */
+  readonly path?: string
   /** Kebab-case identifier used to address the skill. */
   readonly name: string
   /** Short routing description shown by discovery consumers. */
@@ -148,8 +150,6 @@ interface SkillCandidate extends SkillSummary {
   readonly rank: number
   /** Opaque provider-owned handle passed back to `provider.get()`. */
   readonly locator: unknown
-  /** Absolute file path when the provider has one. */
-  readonly path?: string
   /** Parsed optional metadata object from provider-specific skill frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -170,8 +170,6 @@ type SkillResourceBase =
 interface SkillDefinition extends SkillSummary {
   /** Markdown instruction body after any provider-specific metadata removal. */
   readonly content: string
-  /** Absolute file path when the skill came from disk. */
-  readonly path?: string
   /** Parsed optional metadata object from frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -260,7 +258,7 @@ Host service backing `ctx.remote.skills` without activating a cold Agent.
  * @param request - Session identity whose cwd and preset select the catalog view.
  * @param signal - caller lifetime carried by the Remote transport; admitted catalog reads retain their existing completion semantics.
  * @returns user-invocable skill metadata without loading skill bodies.
- * @throws TypertRemoteFailure when the Session cannot be inspected or no registry can serve it.
+ * @throws RemoteError when the Session cannot be inspected or no registry can serve it.
  */
 @Remote async list(request: SkillListRequest, signal: AbortSignal): Promise<SkillListValue>
 ```

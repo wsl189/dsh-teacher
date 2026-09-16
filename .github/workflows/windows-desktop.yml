@@ -67,10 +67,6 @@ jobs:
             throw "Desktop release tag must be $expected, received $env:GITHUB_REF_NAME"
           }
 
-      - name: Build and smoke bundled Windows-MCP runtime
-        shell: pwsh
-        run: ./scripts/build-windows-mcp-runtime.ps1
-
       - name: Build NSIS installer
         shell: pwsh
         env:

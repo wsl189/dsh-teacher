@@ -9,7 +9,7 @@ import {
   type LlmProviderInfo, type LlmResolvedModelInfo, type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import type { TeacherQuestionCropReviewRequest, TeacherQuestionLayoutElementId } from '@deepseek-ai/dsh-host-teacher-workbench/types'
 import {
   compareOrRefreshGolden, launchWebScaffold, webSnapshotMode, type WebScaffold,
@@ -18,7 +18,7 @@ import {
 const MODE = webSnapshotMode()
 const PROVIDER = 'question-segmentation-web-test'
 const MODEL = 'layout-reader'
-const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = settingsNamespace('teacher-workbench')
+const TEACHER_WORKBENCH_SETTINGS_NAMESPACE = 'teacher-workbench'
 const SNAPSHOT_DIR = fileURLToPath(new URL('./snapshots/question-segmentation', import.meta.url))
 const RESULT_EXPECTED = join(SNAPSHOT_DIR, 'result.expected.json')
 const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='

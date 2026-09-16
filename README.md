@@ -16,7 +16,7 @@ Review the [safety notice](SAFETY.md) before running the project.
 
 ## Run
 
-> **This fork ships custom features that the npm-published `@deepseek-ai/dsh` does not include** — the built-in better-sidebar workbench, IM connector, cron manager, skill/MCP manager, Office preview and Univer authoring, teacher workbench (question cutting, student folders), supplier-model voice input shared with QQ, composer upload preview in the right sidebar, and the overlay rules for the top-right collapse button. `npx @deepseek-ai/dsh web` installs the official npm package and will NOT provide these. Always run from this repository.
+> This teacher distribution includes the teacher workbench, unified supplier-model settings, shared speech input, and the [bundled third-party plugins](third-party/README.md). Run this repository to use those features.
 
 ### Windows installer
 
@@ -66,11 +66,11 @@ pnpm run build
 pnpm dsh web
 ```
 
-Do NOT use `npx @deepseek-ai/dsh web` — it installs the official npm package without the fork's custom features (teacher workbench, built-in better-sidebar, upload preview, overlay collapse rules).
+`npx @deepseek-ai/dsh web` installs the upstream distribution. Use the repository commands above for the teacher distribution.
 
 ### 2. Built-in image generation, IM, cron, skill/MCP management, and Office
 
-The Web composition and Windows EXE already contain the reviewed `@dickpy/dsh-imagegen` 1.5.1 runtime repack, `@xmanrui/dsh-im` 4.11.0, `dsh-plugin-cron` 0.1.3, `dsh-skill-mcp-panel` 2.0.1, `dsh-univer-office` 0.2.12 DSH rebuild, and `@huanlin/dsh-plugin-better-sidebar-plugin-office` 0.1.2 packages. Do not run `dsh plugin add` for them on a new machine, and remove a separately installed image-generation row before starting this built-in version. Configure OpenAI-compatible image-provider channels under **Settings → Models → Image generation model**; adding an image model to the ordinary provider list alone does not create image-generation tools. Configure bots under **Settings → Plugins → Connected Platforms**. Configure supplier access under **Settings → Models → Service access**, then assign speech recognition under **Use cases**; the composer, QQ, and Daily Management share that assignment. Manage skills under **Settings → Skills**, and manage profile servers under **Settings → MCP** or through `dsh-panel mcp`; image generation, cron, Office preview, and Univer review surfaces load from the shipped profile. The pinned source artifacts and their provenance remain documented in [`third-party/`](third-party/README.md).
+The [bundled-plugin reference](third-party/README.md) lists pinned releases, configuration locations, and migration rules. Configure image and speech routes under **Settings → Models → Service access**, then assign models under **Use cases**. Workbench features and these settings use the teacher distribution’s existing data.
 
 The Univer wrapper is Apache-2.0, but its executable closure includes commercial `@univerjs-pro/*` components. Supply a valid license through `UNIVER_LICENSE` before launch and obtain the required distribution rights before shipping an installer; the built-in row disables product telemetry. Some Slide layout, SVG measurement, and screenshot operations also need local Chrome or Chromium, with `UNIVER_RENDER_BROWSER` available to select its executable.
 
@@ -113,7 +113,7 @@ The steps below need adjustment on Windows; everything else (repository or EXE l
 
 ### 6. Verify
 
-- Right-side better-sidebar handle appears (built-in workbench).
+- The official right sidebar opens files, documents, and terminals.
 - Teacher workbench sidebar entry opens daily management, timetable, and question cutting.
 - Selecting a composer upload card opens its preview tab in the right sidebar (PDF, DOCX, XLSX, PPTX, images).
 - QQ bot replies; `qq_send_local_file` sends images/files; voice messages transcribe when ASR is enabled.
@@ -136,6 +136,18 @@ See [CONTRIBUTING.md](CONTRIBUTING.md).
 Start with the [development guide](docs/development.md) and [architecture documentation](docs/architecture.md).
 
 For agents, follow [AGENTS.md](AGENTS.md).
+
+## Citation
+
+```bibtex
+@misc{deepseek-harness2026,
+  title={DeepSeek Harness: Everything is a Plugin},
+  author={DeepSeek-AI},
+  year={2026},
+  publisher={GitHub},
+  howpublished={\url{https://github.com/deepseek-ai/deepseek-harness}},
+}
+```
 
 ## License
 

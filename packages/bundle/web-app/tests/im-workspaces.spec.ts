@@ -65,7 +65,7 @@ const { WeixinRuntime } = await import(weixinRuntimeModule) as {
   }
 }
 
-const channels = ['Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'Qq', 'Slack', 'Telegram', 'Discord', 'Whatsapp']
+const channels = ['Feishu', 'Weixin', 'Dingtalk', 'Wecom', 'WecomApp', 'IMessage', 'Qq', 'Slack', 'Telegram', 'Discord', 'Whatsapp']
 
 function channelCallbacks() {
   return Object.fromEntries([...channels, 'Office'].map(channel => [
@@ -80,7 +80,7 @@ describe('bundled IM bot workspace defaults', () => {
     expect(inject).toContain('speech')
   })
 
-  it('passes the system desktop to all nine platforms while leaving Office settings intact', async () => {
+  it('passes the system desktop to all eleven platforms while leaving Office settings intact', async () => {
     const desktop = join(homedir(), 'OneDrive', '课程资料', '桌面')
     vi.stubEnv('DSH_DESKTOP_DIR', desktop)
     const callbacks = channelCallbacks()
@@ -113,14 +113,14 @@ describe('bundled IM bot workspace defaults', () => {
     vi.stubEnv('DSH_DESKTOP_DIR', join(homedir(), 'Desktop'))
     const callbacks = channelCallbacks()
     const configs = Object.freeze(Object.fromEntries(channels.map(channel => [
-      channel.toLowerCase(), Object.freeze({ workspace: join(homedir(), channel), agentPreset: 'standard' }),
+      channel === 'WecomApp' ? 'wecomApp' : channel.toLowerCase(), Object.freeze({ workspace: join(homedir(), channel), agentPreset: 'standard' }),
     ])))
     await createImHostPlugin(callbacks).apply({}, configs)
 
     for (const channel of channels) {
       expect(callbacks[`apply${channel}`]).toHaveBeenCalledWith(
         {},
-        expect.objectContaining(configs[channel.toLowerCase()]),
+        expect.objectContaining(configs[channel === 'WecomApp' ? 'wecomApp' : channel.toLowerCase()]),
       )
     }
   })

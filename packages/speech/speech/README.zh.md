@@ -68,4 +68,6 @@ kind: "package-reference"
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；每次转写请求都会验证提供方选择。
+
 录音与转写文本在本包中保持临时状态；只有 Consumer 接受编辑后草稿时才开始持久化。

@@ -6,69 +6,75 @@
   - tab "View"
 - status "Synced"
 - toolbar "Start":
-  - button [disabled]:
+  - button "Undo" [disabled]:
     - img
-  - button [disabled]:
+  - button "Redo" [disabled]:
     - img
-  - button "Paint format" [disabled]:
+  - button "Paint format":
     - img
     - text: Paint format
-  - button "Clear All" [disabled]:
+  - button "Clear All":
     - img
     - text: Clear All
-  - textbox [disabled]: Arial
+  - textbox: Arial
   - img
-  - textbox [disabled]: "11"
+  - textbox: "11"
   - img
-  - button [disabled]:
+  - button "Increase font size":
     - img
-  - button [disabled]:
+  - button "Decrease font size":
     - img
-  - button [disabled]:
+  - button "Bold":
     - img
-  - button [disabled]:
+  - button "Italic":
     - img
-  - button [disabled]:
+  - button "Underline":
     - img
-  - button [disabled]:
-    - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - img
-  - button [disabled]:
+  - button "Strikethrough":
     - img
   - img
   - img
   - img
   - img
+  - img
+  - img
+  - button "Horizontal align":
+    - img
+    - img
+  - button "Vertical align":
+    - img
+    - img
+  - button "Text wrap":
+    - img
+    - img
+  - button "Shrink to fit":
+    - img
+  - button "Text rotate":
+    - img
+    - img
+  - button "Merge cells":
+    - img
+    - img
   - text: General
   - img
-  - button [disabled]:
+  - button "Percentage":
     - img
-  - button [disabled]:
+  - button "Currency":
     - img
-  - button [disabled]:
+  - button "Increase decimal places":
     - img
-  - button [disabled]:
+  - button "Decreasing decimal places":
     - img
-  - button "Protection" [disabled]:
+  - button "Protection":
     - img
     - text: Protection
-  - img
-  - text: Print
-  - img
-  - button:
+  - button "Print":
     - img
-  - button:
+    - text: Print
+    - img
+  - button "Toggle Shortcut Panel":
+    - img
+  - button "Search features":
     - img
 - complementary
 - textbox: A1
@@ -77,11 +83,8 @@
 - img
 - img
 - img
-- complementary:
-  - complementary "Sidebar panel":
-    - button "Close sidebar":
-      - img
-- button [disabled]:
+- complementary
+- button:
   - img
 - button:
   - img
@@ -89,25 +92,28 @@
   - tab "Sheet1" [selected]
 - img
 - img
-- button [disabled]:
+- button "Toggle Gridlines":
   - img
-- button:
+- button "Zoom out":
   - img
-- button
-- slider
-- button:
+- button "Reset zoom"
+- slider "Zoom"
+- button "Zoom in":
   - img
-- textbox: 100%
-- button:
+- textbox "Zoom": 100%
+- button "Menu":
   - img
 - region "Notifications alt+T"
 - region "Notifications alt+T"
 - button "Delete" [disabled]
-- button "Copy" [disabled]
-- button "Rename" [disabled]
+- button "Copy"
+- button "Rename"
+- button "Change color":
+  - text: Change color
+  - img
 - button "Hide" [disabled]
 - button "Unhide" [disabled]
-- button "Protect Worksheet" [disabled]
+- button "Protect Worksheet"
 - button "Unprotect Worksheet" [disabled]
 - button "Change Worksheet Permissions" [disabled]
 - button "View All Protection Ranges"

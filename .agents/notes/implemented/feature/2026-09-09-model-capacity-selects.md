@@ -12,9 +12,9 @@ Free-form context and output fields require users to type token counts and can l
 
 The native DeepSeek and generic model editors share one capacity selector. Context choices span 32K to 1M; output choices span 8K to 64K. Counts retain the editor's decimal K/M convention. Selecting the model default removes the override. Existing catalog or saved counts outside the choices remain explicit current-value options; opening a row or renaming a model never rounds them.
 
-Context remains adapter metadata consumed by history compaction. Output remains a per-model request default, with explicit caller budgets taking precedence. Choosing a larger context does not increase upstream capacity, and remaining-context restrictions can reduce the transmitted output ceiling. The [adapter-owned defaults decision](../architecture/2026-07-30-adapter-owned-max-token-defaults.md) continues to own those semantics.
+Context remains adapter metadata consumed by history compaction. Output remains a per-model request default, with explicit caller budgets taking precedence. Choosing a larger context does not increase upstream capacity, and remaining-context restrictions can reduce the transmitted output ceiling. The [adapter-owned defaults decision](../../archived/architecture/2026-07-30-adapter-owned-max-token-defaults.md) continues to own those semantics.
 
-This changes the capacity controls in the [provider-declaration decision](../architecture/2026-08-04-declaring-a-provider-from-the-models-page.md); model discovery, field preservation, and settings ownership remain there.
+This changes the capacity controls in the [provider-declaration decision](../../archived/architecture/2026-08-04-declaring-a-provider-from-the-models-page.md); model discovery, field preservation, and settings ownership remain there.
 
 ## Alternatives considered
 

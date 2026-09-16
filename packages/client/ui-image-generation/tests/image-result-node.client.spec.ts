@@ -1,3 +1,4 @@
+import { SessionSeq } from '@deepseek-ai/dsh-session'
 import { describe, expect, it } from 'vitest'
 import type { SessionLiveEventEntry } from '@deepseek-ai/dsh-api-session-controller/client'
 import type {
@@ -195,7 +196,7 @@ describe('generated-image result Conversation Definition', () => {
       turn: 1, step: 1,
       message: { source: { callId: 'image' }, content: [{ type: 'text', text: '{}' }] },
       meta: { images: [firstImage] },
-    }, { op: 'replace', start: 3, end: 3 })
+    }, { op: 'replace', startSeq: SessionSeq(3), endSeq: SessionSeq(3) })
     expect(imageNode(assembler([...base, imageCall, replacement]))).toBeUndefined()
   })
 

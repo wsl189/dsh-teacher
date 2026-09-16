@@ -87,4 +87,6 @@ Typert 命名空间为 `ocr`，通过 `extract`、`layout` 与 `layoutLimits` �
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；每次提取请求都会验证提供方选择。
+
 领域分割不得进入本包；提供方只归一化提取证据，各 Consumer 负责全部领域解释。

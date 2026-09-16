@@ -11,8 +11,8 @@ import {
   IconChevronDownOutline14, Menu, RiskConfirmation,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PermissionSettingsState } from './settings-store.ts'
-import type { PermissionAccessKey, PermissionSettingsKey } from './locales.ts'
-import { FULL_ACCESS_PRESET, permissionPresetCopy } from './presentation.ts'
+import type { PermissionSettingsKey } from './locales.ts'
+import { displayPermissionPreset, FULL_ACCESS_PRESET } from './presentation.ts'
 import css from './PermissionRow.module.css'
 
 /** Registration-side business face for the host-backed preference. */
@@ -23,8 +23,8 @@ export interface PermissionRowInjected {
   }
   /** Load the descriptor when the row first renders. */
   load: () => Promise<void>
-  /** Persist one advertised preset and an optional confirmed suppression choice. */
-  select: (preset: string, suppressFuture?: boolean) => Promise<void>
+  /** Persist one advertised preset. */
+  select: (preset: string) => Promise<void>
 }
 
 /** Full component props. */
@@ -43,7 +43,6 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
   const [open, setOpen] = useState(false)
   const [confirmingFullAccess, setConfirmingFullAccess] = useState(false)
   const [acknowledged, setAcknowledged] = useState(false)
-  const [suppressFuture, setSuppressFuture] = useState(false)
 
   useEffect(() => {
     void load()
@@ -53,20 +52,15 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
     if (state.writable && state.status !== 'unavailable') return
     setOpen(false)
     setAcknowledged(false)
-    setSuppressFuture(false)
     setConfirmingFullAccess(false)
   }, [state.status, state.writable])
 
   if (state.status === 'unavailable') return null
   const selected = state.options.find(option => option.id === state.currentValue)
   const busy = state.status === 'loading' || state.status === 'saving' || confirmingFullAccess
-  const label = selected === undefined ? undefined : permissionPresetCopy(selected.id, selected.label, undefined, t).label
-  const displayOptions = state.options.map(option => ({
-    id: option.id,
-    label: permissionPresetCopy(option.id, option.label, undefined, t).label,
-  }))
-  const selectedLabel = label
-    ?? (busy ? t('loading') : t('unavailable'))
+  const optionLabel = (option: PermissionSettingsState['options'][number]): string =>
+    displayPermissionPreset(option.id, option.label, t)
+  const label = selected !== undefined ? optionLabel(selected) : (busy ? t('loading') : t('unavailable'))
   const description: string = state.error ?? t('description')
 
   return (
@@ -79,18 +73,13 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
         <Menu
           open={open}
           onClose={() => { setOpen(false) }}
-          items={displayOptions}
+          items={state.options.map(option => ({ id: option.id, label: optionLabel(option) }))}
           selectedId={state.currentValue}
           onSelect={(id) => {
             setOpen(false)
             if (id === state.currentValue) return
             if (id === FULL_ACCESS_PRESET) {
-              if (!state.confirmFullAccess) {
-                void select(id)
-                return
-              }
               setAcknowledged(false)
-              setSuppressFuture(false)
               setConfirmingFullAccess(true)
               return
             }
@@ -107,7 +96,7 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
               disabled={busy || !state.writable || state.options.length === 0}
               onClick={() => { setOpen(value => !value) }}
             >
-              {selectedLabel}
+              {label}
               <IconChevronDownOutline14 className={css.chevron} />
             </button>
           )}
@@ -122,26 +111,16 @@ export function PermissionRow({ load, select, usePermission, t }: PermissionRowP
         closeLabel={t('close')}
         confirmLabel={t('confirm.enable')}
         acknowledged={acknowledged}
-        {...state.writable
-          ? {
-            suppressFutureLabel: t('confirm.dontRemind'),
-            suppressFuture,
-            onSuppressFutureChange: setSuppressFuture,
-          }
-          : {}}
         disabled={!state.writable || state.status === 'saving'}
         onAcknowledgedChange={setAcknowledged}
         onCancel={() => {
           setAcknowledged(false)
-          setSuppressFuture(false)
           setConfirmingFullAccess(false)
         }}
         onConfirm={() => {
-          const suppress = suppressFuture
           setAcknowledged(false)
-          setSuppressFuture(false)
           setConfirmingFullAccess(false)
-          void select(FULL_ACCESS_PRESET, suppress)
+          void select(FULL_ACCESS_PRESET)
         }}
       />
     </>
@@ -152,7 +131,5 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
     /** Permission row copy. */
     'settings.permission': PermissionSettingsKey
-    /** Current-session permission popup copy. */
-    'permission.access': PermissionAccessKey
   }
 }

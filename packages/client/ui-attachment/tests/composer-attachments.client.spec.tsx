@@ -3,13 +3,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import type {
-  ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps, DraftDocument,
+  ComposerAttachment, ComposerAttachmentsOwnerProps, ComposerAttachmentsProps,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import type { SessionId } from '@deepseek-ai/dsh-session/types'
-import {
-  ComposerAttachments, type ComposerAttachmentsInjected,
-} from '../src/client/ComposerAttachments.tsx'
-import type { DocumentSidebarController } from '../src/client/document-sidebar.tsx'
+import { ComposerAttachments } from '../src/client/ComposerAttachments.tsx'
 
 beforeEach(() => {
   vi.stubGlobal('ResizeObserver', class {
@@ -26,37 +22,37 @@ afterEach(() => {
 
 const t = ((key: string, params?: Readonly<Record<string, unknown>>): string => {
   const messages: Record<string, string> = {
+    'attachment.pending': '待发送附件',
+    'attachment.scrollLeft': '向左滚动附件',
+    'attachment.scrollRight': '向右滚动附件',
+    'file.pending': '待发送文件',
+    'file.uploading': '上传中…',
+    'file.uploadFailed': '上传失败，点击重试',
+    'file.label': '文件',
     'image.pending': '待发送图片',
     'image.original': '原图',
     'image.preview': '原图预览',
     'image.closePreview': '关闭原图预览',
     'image.openOriginal': '查看原图',
-    'image.scrollLeft': '向左滚动图片',
-    'image.scrollRight': '向右滚动图片',
-    'image.dropBlocked': '当前无法添加文件夹或图片',
-    'image.dropTitle': '将文件夹或图片拖到此处',
-    'document.pending': '待发送文件',
-    'document.extracting': 'MinerU 识别中…',
-    'document.ready': '已识别',
-    'document.readyTruncated': '已识别（内容已截断）',
-    'document.failed': '识别失败',
+    'attachment.dropBlocked': '当前无法添加文件或图片',
+    'attachment.dropTitle': '文件或图片拖动到此处即可添加',
+  }
+  if (key === 'file.remove') {
+    const name = params?.name
+    return `移除文件 ${typeof name === 'string' ? name : ''}`
+  }
+  if (key === 'file.retry') {
+    const name = params?.name
+    return `重试上传 ${typeof name === 'string' ? name : ''}`
   }
   if (key === 'image.remove') {
     const name = params?.name
     return `移除图片 ${typeof name === 'string' ? name : ''}`
   }
-  if (key === 'image.dropDesc') {
+  if (key === 'attachment.dropDesc') {
     const count = params?.count
     const size = params?.size
-    return `文件夹仅添加路径；图片最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
-  }
-  if (key === 'document.remove') {
-    const name = params?.name
-    return `移除文件 ${typeof name === 'string' ? name : ''}`
-  }
-  if (key === 'document.openPreview') {
-    const name = params?.name
-    return `在右侧栏预览文件 ${typeof name === 'string' ? name : ''}`
+    return `图片限制：最多 ${typeof count === 'number' ? String(count) : ''} 张，每张 ${typeof size === 'string' ? size : ''}`
   }
   return messages[key] ?? key
 }) as ComposerAttachmentsProps['t']
@@ -70,30 +66,32 @@ function attachment(id: string, name = `${id}.png`): ComposerAttachment {
   }
 }
 
-function props(
-  overrides: Partial<ComposerAttachmentsOwnerProps & ComposerAttachmentsInjected> & { sessionId?: SessionId } = {},
-): ComposerAttachmentsProps & ComposerAttachmentsInjected {
+function fileDraft(id: string, name = `${id}.pdf`): ComposerAttachment {
+  return {
+    kind: 'file',
+    id: id as ComposerAttachment['id'],
+    file: new File([Uint8Array.of(1, 2, 3)], name, { type: 'application/pdf' }),
+  }
+}
+
+function props(overrides: Partial<ComposerAttachmentsOwnerProps> = {}): ComposerAttachmentsProps {
   return {
     attachments: [],
-    documents: [],
     canAcceptDrop: true,
-    canRemoveDocuments: true,
-    onAddImages: () => {},
-    onAddDirectories: () => {},
-    onRemoveImage: () => {},
-    resolveDocumentFile: () => undefined,
-    onRemoveDocument: () => {},
-    documentSidebar: () => undefined,
+    onAddFiles: () => {},
+    onRemoveAttachment: () => {},
+    uploads: {},
+    onRetryFile: () => {},
     t,
     ...overrides,
-  } as unknown as ComposerAttachmentsProps & ComposerAttachmentsInjected
+  } as unknown as ComposerAttachmentsProps
 }
 
 describe('ComposerAttachments', () => {
   it('accepts file drops anywhere on the document and keeps non-file drags native', () => {
-    const onAddImages = vi.fn()
+    const onAddFiles = vi.fn()
     const view = render(<ComposerAttachments {...props({
-      onAddImages,
+      onAddFiles,
       dropLimits: { count: 20, size: '5MB' },
     })} />)
 
@@ -105,110 +103,15 @@ describe('ComposerAttachments', () => {
     expect(view.queryByRole('status')).toBeNull()
 
     const image = attachment('dropped').file
-    const dataTransfer = { types: ['Files'], files: [image], items: [], dropEffect: 'none' }
+    const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'none' }
     expect(fireEvent.dragEnter(document.body, { dataTransfer })).toBe(false)
-    expect(view.getByRole('status').textContent).toContain('将文件夹或图片拖到此处')
-    expect(view.getByRole('status').textContent).toContain('文件夹仅添加路径；图片最多 20 张，每张 5MB')
+    expect(view.getByRole('status').textContent).toContain('文件或图片拖动到此处即可添加')
+    expect(view.getByRole('status').textContent).toContain('图片限制：最多 20 张，每张 5MB')
     expect(fireEvent.dragOver(document.body, { dataTransfer })).toBe(false)
     expect(dataTransfer.dropEffect).toBe('copy')
     expect(fireEvent.drop(document.body, { dataTransfer })).toBe(false)
-    expect(onAddImages).toHaveBeenCalledWith([image])
+    expect(onAddFiles).toHaveBeenCalledWith([image])
     expect(view.queryByRole('status')).toBeNull()
-  })
-
-  it('routes directory paths without enumerating their contents and keeps mixed images separate', () => {
-    const onAddDirectories = vi.fn()
-    const onAddImages = vi.fn()
-    const createReader = vi.fn()
-    render(<ComposerAttachments {...props({ onAddDirectories, onAddImages })} />)
-    const image = attachment('mixed').file
-    const dataTransfer = {
-      types: ['Files'],
-      files: [image],
-      items: [
-        {
-          kind: 'file',
-          getAsFile: () => null,
-          webkitGetAsEntry: () => ({
-            isDirectory: true,
-            name: 'design notes',
-            fullPath: '/workspace/design notes',
-            createReader,
-          }),
-        },
-        {
-          kind: 'file',
-          getAsFile: () => image,
-          webkitGetAsEntry: () => ({ isDirectory: false, name: image.name, fullPath: `/${image.name}` }),
-        },
-      ],
-      dropEffect: 'none',
-    }
-
-    fireEvent.drop(document.body, { dataTransfer })
-    expect(onAddDirectories).toHaveBeenCalledWith(['workspace/design notes'])
-    expect(onAddImages).toHaveBeenCalledWith([image])
-    expect(createReader).not.toHaveBeenCalled()
-  })
-
-  it('prefers a native dropped directory path when the client exposes one', () => {
-    const onAddDirectories = vi.fn()
-    render(<ComposerAttachments {...props({ onAddDirectories })} />)
-    const directory = new File([], 'source')
-    Object.defineProperty(directory, 'path', { value: 'C:\\work\\source' })
-    fireEvent.drop(document.body, {
-      dataTransfer: {
-        types: ['Files'],
-        files: [],
-        items: [{
-          kind: 'file',
-          getAsFile: () => directory,
-          webkitGetAsEntry: () => ({ isDirectory: true, name: 'source', fullPath: '/source' }),
-        }],
-      },
-    })
-    expect(onAddDirectories).toHaveBeenCalledWith(['C:/work/source'])
-  })
-
-  it('drops unusable entries and falls back to a directory entry name', () => {
-    const onAddDirectories = vi.fn()
-    const onAddImages = vi.fn()
-    render(<ComposerAttachments {...props({ onAddDirectories, onAddImages })} />)
-    const image = attachment('entry-without-metadata').file
-    const emptyNativePath = new File([], 'named folder')
-    Object.defineProperty(emptyNativePath, 'path', { value: '' })
-    fireEvent.drop(document.body, {
-      dataTransfer: {
-        types: ['Files'],
-        files: [],
-        items: [
-          { kind: 'string' },
-          {
-            kind: 'file',
-            getAsFile: () => emptyNativePath,
-            webkitGetAsEntry: () => ({ isDirectory: true, name: 'named folder' }),
-          },
-          {
-            kind: 'file',
-            getAsFile: () => null,
-            webkitGetAsEntry: () => ({ isDirectory: true, name: 'empty', fullPath: '///' }),
-          },
-          {
-            kind: 'file',
-            getAsFile: () => null,
-            webkitGetAsEntry: () => ({ isDirectory: false, name: 'missing' }),
-          },
-          {
-            kind: 'file',
-            getAsFile: () => image,
-            webkitGetAsEntry: () => null,
-          },
-        ],
-      },
-    })
-
-    expect(onAddDirectories).toHaveBeenCalledWith(['named folder'])
-    expect(onAddImages).toHaveBeenCalledWith([image])
   })
 
   it('tracks nested file drags and clears an aborted drag', () => {
@@ -238,38 +141,54 @@ describe('ComposerAttachments', () => {
   })
 
   it('shows a blocked drop without forwarding its files', () => {
-    const onAddImages = vi.fn()
-    const onAddDirectories = vi.fn()
-    const view = render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddImages, onAddDirectories })} />)
+    const onAddFiles = vi.fn()
+    const view = render(<ComposerAttachments {...props({ canAcceptDrop: false, onAddFiles })} />)
     const image = attachment('blocked').file
     const dataTransfer = { types: ['Files'], files: [image], dropEffect: 'copy' }
     fireEvent.dragEnter(document.body, { dataTransfer })
-    expect(view.getByRole('status').textContent).toBe('当前无法添加文件夹或图片')
+    expect(view.getByRole('status').textContent).toBe('当前无法添加文件或图片')
     fireEvent.dragOver(document.body, { dataTransfer })
     expect(dataTransfer.dropEffect).toBe('none')
     fireEvent.drop(document.body, { dataTransfer })
-    expect(onAddImages).not.toHaveBeenCalled()
-    expect(onAddDirectories).not.toHaveBeenCalled()
+    expect(onAddFiles).not.toHaveBeenCalled()
     expect(view.queryByRole('status')).toBeNull()
   })
 
   it('routes rail removal and closes previews on Escape or attachment removal', () => {
-    const onRemoveImage = vi.fn()
+    const onRemoveAttachment = vi.fn()
     const image = attachment('draft-1', 'pixel.png')
-    const initial = props({ attachments: [image], onRemoveImage })
+    const initial = props({ attachments: [image], onRemoveAttachment })
     const view = render(<ComposerAttachments {...initial} />)
 
     fireEvent.click(view.getByRole('button', { name: '移除图片 pixel.png' }))
-    expect(onRemoveImage).toHaveBeenCalledWith(image.id)
+    expect(onRemoveAttachment).toHaveBeenCalledWith(image.id)
     fireEvent.click(view.getByTitle('查看原图'))
     expect(view.getByRole('dialog', { name: '原图预览' })).toBeTruthy()
-    view.rerender(<ComposerAttachments {...props({ attachments: [], onRemoveImage })} />)
+    view.rerender(<ComposerAttachments {...props({ attachments: [], onRemoveAttachment })} />)
     expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
 
     view.rerender(<ComposerAttachments {...initial} />)
     fireEvent.click(view.getByTitle('查看原图'))
     fireEvent.keyDown(window, { key: 'Escape' })
     expect(view.queryByRole('dialog', { name: '原图预览' })).toBeNull()
+  })
+
+  it('keeps images and files in pick order inside one attachment rail', () => {
+    const view = render(<ComposerAttachments {...props({
+      attachments: [attachment('first'), fileDraft('middle'), attachment('last')],
+      uploads: {
+        middle: {
+          status: 'ready', receiptId: 'receipt-middle' as never,
+          file: { attachmentId: 'file-middle' as never, name: 'middle.pdf', bytes: 3 },
+        },
+      },
+    })} />)
+    const rail = view.getByRole('group', { name: '待发送附件' })
+    expect([...rail.children].map((child) => {
+      const image = child.querySelector('img')
+      return image?.getAttribute('alt') ?? child.querySelector('[title]')?.getAttribute('title')
+    })).toEqual(['first.png', 'middle.pdf', 'last.png'])
+    expect(view.queryByRole('group', { name: '待发送文件' })).toBeNull()
   })
 
   it('labels an unnamed attachment and its original-image preview', () => {
@@ -279,90 +198,82 @@ describe('ComposerAttachments', () => {
     fireEvent.click(view.getByTitle('查看原图'))
     expect(view.getByAltText('原图')).toBeTruthy()
   })
+})
 
-  it('opens uploaded documents in the sidebar and closes their tabs before removal', () => {
-    const document: DraftDocument = {
-      id: 'document-1' as DraftDocument['id'],
-      name: 'lesson.docx',
-      status: 'extracting',
-    }
-    const file = new File([Uint8Array.of(1)], document.name)
-    const open = vi.fn()
-    const close = vi.fn()
-    const reconcile = vi.fn()
-    const sidebar: DocumentSidebarController = {
-      open,
-      close,
-      reconcile,
-      dispose: vi.fn(),
-    }
-    const onRemoveDocument = vi.fn()
-    const sessionId = 'session-1' as SessionId
+describe('ComposerAttachments file drafts', () => {
+  it('renders uploading, ready, and failed cards with remove and retry affordances', () => {
+    const onRemoveAttachment = vi.fn()
+    const onRetryFile = vi.fn()
     const view = render(<ComposerAttachments {...props({
-      sessionId,
-      documents: [document],
-      resolveDocumentFile: () => file,
-      onRemoveDocument,
-      documentSidebar: () => sidebar,
+      attachments: [fileDraft('up'), fileDraft('ok'), fileDraft('bad')],
+      uploads: {
+        up: { status: 'uploading', loaded: 1, total: 4 },
+        ok: {
+          status: 'ready', receiptId: 'receipt-ok' as never,
+          file: { attachmentId: 'file-ok' as never, name: 'ok.pdf', bytes: 3 },
+        },
+        bad: { status: 'error', message: 'boom' },
+      },
+      onRemoveAttachment,
+      onRetryFile,
     })} />)
-
-    fireEvent.click(view.getByRole('button', { name: '在右侧栏预览文件 lesson.docx' }))
-    expect(open).toHaveBeenCalledWith(sessionId, document, file, t)
-    fireEvent.click(view.getByRole('button', { name: '移除文件 lesson.docx' }))
-    expect(close).toHaveBeenCalledWith(sessionId, document.id)
-    expect(onRemoveDocument).toHaveBeenCalledWith(document.id)
-    expect(reconcile).toHaveBeenCalledWith(sessionId, [document])
+    const group = view.getByRole('group', { name: '待发送附件' })
+    expect(group.textContent).toContain('上传中…')
+    expect(view.container.querySelector('[style="width: 25%;"]')).toBeTruthy()
+    expect(group.textContent).toContain('ok.pdf')
+    expect(group.textContent).toContain('PDF 3B')
+    expect(group.textContent).toContain('上传失败，点击重试')
+    fireEvent.click(view.getByRole('button', { name: '重试上传 bad.pdf' }))
+    expect(onRetryFile).toHaveBeenCalledWith('bad')
+    fireEvent.click(view.getByRole('button', { name: '移除文件 ok.pdf' }))
+    expect(onRemoveAttachment).toHaveBeenCalledWith('ok')
   })
 
-  it('renders every document state and keeps cards static without a complete sidebar target', () => {
-    const documents: DraftDocument[] = [
-      { id: 'extracting' as DraftDocument['id'], name: 'extracting.pdf', status: 'extracting' },
-      { id: 'failed' as DraftDocument['id'], name: 'failed.pdf', status: 'error', error: 'OCR failed' },
-      { id: 'ready' as DraftDocument['id'], name: 'ready.pdf', status: 'ready' },
-      { id: 'truncated' as DraftDocument['id'], name: 'truncated.pdf', status: 'ready', truncated: true },
-    ]
-    const open = vi.fn()
-    const close = vi.fn()
-    const sidebar: DocumentSidebarController = {
-      open,
-      close,
-      reconcile: vi.fn(),
-      dispose: vi.fn(),
-    }
-    const onRemoveDocument = vi.fn()
+  it('treats a draft without upload state as uploading and keeps retry separate from remove', () => {
+    const onRetryFile = vi.fn()
+    const onRemoveAttachment = vi.fn()
     const view = render(<ComposerAttachments {...props({
-      documents,
-      documentSidebar: () => sidebar,
-      onRemoveDocument,
+      attachments: [fileDraft('pending'), fileDraft('bad')],
+      uploads: { bad: { status: 'error', message: 'boom' } },
+      onRetryFile,
+      onRemoveAttachment,
     })} />)
+    expect(view.getByRole('group', { name: '待发送附件' }).textContent).toContain('上传中…')
+    const retry = view.getByRole('button', { name: '重试上传 bad.pdf' })
+    const remove = view.getByRole('button', { name: '移除文件 bad.pdf' })
+    expect(retry.contains(remove)).toBe(false)
+    fireEvent.click(remove)
+    expect(onRemoveAttachment).toHaveBeenCalledWith('bad')
+    expect(onRetryFile).not.toHaveBeenCalled()
+    fireEvent.click(retry)
+    expect(onRetryFile).toHaveBeenCalledWith('bad')
+  })
 
-    expect(view.getByText('MinerU 识别中…')).toBeTruthy()
-    expect(view.getByText('识别失败')).toBeTruthy()
-    expect(view.getByText('已识别')).toBeTruthy()
-    expect(view.getByText('已识别（内容已截断）')).toBeTruthy()
-    expect(view.queryByRole('button', { name: '在右侧栏预览文件 ready.pdf' })).toBeNull()
-    fireEvent.click(view.getByRole('button', { name: '移除文件 ready.pdf' }))
-    expect(close).not.toHaveBeenCalled()
-    expect(onRemoveDocument).toHaveBeenCalledWith(documents[2]?.id)
-
-    const sessionId = 'static-session' as SessionId
-    view.rerender(<ComposerAttachments {...props({
-      sessionId,
-      documents: [documents[2]!],
-      resolveDocumentFile: () => undefined,
-      documentSidebar: () => sidebar,
-      onRemoveDocument,
+  it('uses the localized file label when the browser supplies no name', () => {
+    const view = render(<ComposerAttachments {...props({
+      attachments: [fileDraft('unnamed', '')],
+      uploads: {
+        unnamed: {
+          status: 'ready', receiptId: 'receipt-unnamed' as never,
+          file: { attachmentId: 'file-unnamed' as never, name: 'file', bytes: 3 },
+        },
+      },
     })} />)
-    fireEvent.click(view.getByRole('button', { name: '在右侧栏预览文件 ready.pdf' }))
-    expect(open).not.toHaveBeenCalled()
+    const group = view.getByRole('group', { name: '待发送附件' })
+    expect(group.textContent).toContain('文件')
+    expect(group.textContent).toContain('3B')
+  })
 
-    view.rerender(<ComposerAttachments {...props({
-      sessionId,
-      documents: [documents[2]!],
-      documentSidebar: () => undefined,
-      onRemoveDocument,
+  it('uses the shared leading-dot suffix in ready-file metadata', () => {
+    const view = render(<ComposerAttachments {...props({
+      attachments: [fileDraft('env', '.env')],
+      uploads: {
+        env: {
+          status: 'ready', receiptId: 'receipt-env' as never,
+          file: { attachmentId: 'file-env' as never, name: '.env', bytes: 3 },
+        },
+      },
     })} />)
-    fireEvent.click(view.getByRole('button', { name: '移除文件 ready.pdf' }))
-    expect(onRemoveDocument).toHaveBeenCalledTimes(2)
+    expect(view.getByTitle('.env').textContent).toContain('ENV 3B')
   })
 })

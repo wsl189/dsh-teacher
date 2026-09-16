@@ -21,6 +21,8 @@ function setup(state: DesktopUpdateState, wide = true) {
     wide,
     useSessions: neverHook,
     useSessionPendingInteraction: neverHook,
+    usePanelInfo: () => { throw new Error('unused panel hook') },
+    useResource: () => { throw new Error('unused resource hook') },
     useWorkspaces: neverHook,
     useUpdate: bindSnapshotSelector(store),
     download,

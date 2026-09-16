@@ -17,10 +17,6 @@ extraResources:
       - '**/*'
   - from: build/icon.ico
     to: icon.ico
-  - from: runtime/windows-mcp
-    to: windows-mcp
-    filter:
-      - '**/*'
 npmRebuild: true
 afterPack: ./scripts/after-pack.mjs
 generateUpdatesFilesForAllChannels: true

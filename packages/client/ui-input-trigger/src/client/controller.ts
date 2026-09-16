@@ -10,15 +10,15 @@
 import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { createSnapshotStore, type SnapshotStore } from '@deepseek-ai/dsh-client-store'
 import type {
-  ArbitrateKey, ArbitrateOutcome, PickOutcome,
+  ArbitrateKey, ArbitrateOutcome, PickOutcome, ReferenceInsert,
 } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { detectTrigger } from '../core/detect.ts'
 import { MENU_CLOSED, menuReduce, seedGroups } from '../core/menu.ts'
 import type { MenuEvent, MenuState, TriggerHit } from '../core/contract.ts'
 import type {
-  ClientSessionContext, InputTriggerCandidate, InputTriggerCrumb, InputTriggerLauncherCandidate,
-  InputTriggerSource, PickAction, SubmitEnvelope, TriggerChar, TriggerGuard,
+  ClientSessionContext, InputTriggerCandidate, InputTriggerCrumb, InputTriggerSource, PickAction,
+  SubmitEnvelope, TriggerChar, TriggerGuard,
 } from '../types.ts'
 
 /** Roster access the controller borrows from the root service (registration order preserved). */
@@ -61,7 +61,7 @@ export class InputTriggerController {
     createSnapshotStore<ReadonlyMap<string, readonly InputTriggerCrumb[]>>(new Map())
   /**
    * Aggregated hot reference lexicon, grouped by trigger (plain-text-reference decision;
-   * see .agents/notes/implemented/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md):
+   * see .agents/notes/archived/architecture/2026-07-25-web-input-machine-and-slash-pipeline.md):
    * sources implementing the lexicon hook are polled with the session
    * projection; undefined answers (roll not hot yet) are skipped; multiple
    * sources on one trigger concatenate in registration order. A snapshot
@@ -141,9 +141,8 @@ export class InputTriggerController {
    * mutation pipeline.
    * @param source - registered source name under `hit.trigger`.
    * @param hit - synthetic hit carrying position and pick-time draft CAS.
-   * @param candidates - optional ordered allowlist with launcher-only labels and descriptions.
    */
-  toggleSource(source: string, hit: TriggerHit, candidates?: readonly InputTriggerLauncherCandidate[]): void {
+  toggleSource(source: string, hit: TriggerHit): void {
     if (this.disposed) return
     if (this.launcher.getSnapshot() === source && this.menu.getSnapshot().open) {
       this.dismiss()
@@ -157,13 +156,10 @@ export class InputTriggerController {
     this.stopFetch()
     this.hit = hit
     this.launcher.set(source)
-    const seeded = seedGroups(this.menu.getSnapshot(), [match])
-    this.menu.set(candidates === undefined
-      ? seeded
-      : { ...seeded, groups: seeded.groups.map(group => ({ ...group, showGroupTitle: false })) })
+    this.menu.set(seedGroups(this.menu.getSnapshot(), [match]))
     this.reduce({ type: 'hit', hit })
     this.refreshHeaders(hit, [match])
-    this.fetchCandidates(hit, [match], candidates)
+    this.fetchCandidates(hit, [match])
   }
 
   /**
@@ -218,7 +214,11 @@ export class InputTriggerController {
    * Keyboard arbitration while the menu is open.
    * @param key - intercepted key.
    * @param composing - inside IME composition: everything passes.
-   * @returns consumed / pick-highlighted / pass.
+   * @returns `pass` when the browser keeps the key (closed menu, no
+   * highlight, or a vanished candidate), `consumed` when the menu handled
+   * the key without a settling pick (move, close, drill descent, or a
+   * pending-refinement no-op), or `pick-highlighted` when the highlighted
+   * candidate settled and the menu closed.
    */
   arbitrate(key: ArbitrateKey, composing: boolean): ArbitrateOutcome {
     if (composing || this.disposed) return 'pass'
@@ -240,20 +240,28 @@ export class InputTriggerController {
       }
       case 'enter': {
         if (state.highlight === null) return 'pass'
+        // Refinement keeps the previous rows and highlight visible while the
+        // next fetch is pending; Enter then neither picks the stale row nor
+        // falls through to submit — an explicit no-op until the group is ready.
+        const group = state.groups.find(g => g.source === state.highlight?.source)
+        if (group === undefined || group.status !== 'ready') return 'consumed'
         this.pick(state.highlight.source, state.highlight.index)
         return 'pick-highlighted'
       }
       case 'tab': {
-        // Tab drills into the highlighted candidate when it offers descent;
-        // otherwise the key passes so native focus behavior is untouched.
         if (state.highlight === null) return 'pass'
         const group = state.groups.find(g => g.source === state.highlight?.source)
-        const item = group !== undefined && group.status === 'ready'
-          ? group.items[state.highlight.index]
-          : undefined
-        if (item?.drill !== true) return 'pass'
-        this.pick(state.highlight.source, state.highlight.index, 'drill')
-        return 'consumed'
+        // Pending refinement keeps the stale highlight visible: consume the
+        // gesture rather than pick a stale row or let Tab move focus away.
+        if (group === undefined || group.status !== 'ready') return 'consumed'
+        const item = group.items[state.highlight.index]
+        if (item === undefined) return 'pass'
+        if (item.drill === true) {
+          this.pick(state.highlight.source, state.highlight.index, 'drill')
+          return 'consumed'
+        }
+        this.pick(state.highlight.source, state.highlight.index)
+        return 'pick-highlighted'
       }
     }
   }
@@ -295,6 +303,27 @@ export class InputTriggerController {
       return Promise.reject(new Error(`slash: no serializer for reference source "${source}"`))
     }
     return owner.codec.serialize(ref, signal)
+  }
+
+  /**
+   * Route a chip to its owner or an editable token to its current lexicon owner.
+   * @param source - chip source name; undefined for editable text.
+   * @param reference - source-owned id and optional chip glyph.
+   * @returns whether an owner accepted the preview, possibly awaiting its catalog.
+   */
+  openReference(source: string | undefined, reference: Pick<ReferenceInsert, 'ref' | 'appearance'>): boolean {
+    if (this.disposed) return false
+    const session = this.project()
+    for (const owner of this.deps.roster.all()) {
+      const matches = source === undefined
+        ? reference.ref.startsWith(owner.trigger) && owner.lexicon?.(session)?.includes(reference.ref.slice(1))
+        : owner.name === source
+      if (matches && owner.openReference?.(session, reference)) {
+        this.dismiss()
+        return true
+      }
+    }
+    return false
   }
 
   /**
@@ -354,6 +383,16 @@ export class InputTriggerController {
     if (this.disposed) return
     this.stopFetch()
     this.reduce({ type: 'close' })
+  }
+
+  /** Re-fetch the currently open menu without changing its hit or visible rows. */
+  refreshOpenMenu(): void {
+    if (this.disposed || !this.menu.getSnapshot().open || this.hit === null) return
+    const launched = this.launcher.getSnapshot()
+    const roster = this.deps.roster.sources(this.hit.trigger)
+      .filter(source => launched === null || source.name === launched)
+    if (roster.length === 0) return
+    this.fetchCandidates(this.hit, roster)
   }
 
   /** Scope teardown: close and abort (the service deletes the map entry). */
@@ -428,11 +467,7 @@ export class InputTriggerController {
   }
 
   /** Launch the candidate fetch for one hit generation, superseding the previous one. */
-  private fetchCandidates(
-    hit: TriggerHit,
-    roster: readonly InputTriggerSource[],
-    launcherCandidates?: readonly InputTriggerLauncherCandidate[],
-  ): void {
+  private fetchCandidates(hit: TriggerHit, roster: readonly InputTriggerSource[]): void {
     this.stopFetch()
     const controller = new AbortController()
     this.fetch = controller
@@ -450,13 +485,7 @@ export class InputTriggerController {
         .then(
           (items) => {
             if (controller.signal.aborted) return
-            const settled = launcherCandidates === undefined
-              ? items
-              : launcherCandidates.flatMap((presentation) => {
-                const item = items.find(candidate => candidate.name === presentation.name)
-                return item === undefined ? [] : [{ ...item, ...presentation }]
-              })
-            this.reduce({ type: 'source-settled', generation, source: source.name, items: settled })
+            this.reduce({ type: 'source-settled', generation, source: source.name, items })
           },
           (error: unknown) => {
             if (controller.signal.aborted) return
@@ -499,13 +528,16 @@ export class InputTriggerController {
     })
     this.stopFetch()
     this.reduce({ type: 'close' })
-    const applied = this.execute(outcome, hit.span)
-    // Set after the close above, so the reducer's own teardown cannot clear
-    // it, and only when the descent text actually landed: a refused edit
-    // (stale draft revision, or no listener) leaves the draft where it was,
-    // and a header over that draft would name a directory nobody descended
-    // into while hiding the locations its rows still need.
-    this.drilled = action === 'drill' && applied
+    // Claimed before the edit, and after the close above so the reducer's own
+    // teardown cannot clear it: the input may apply the descent through a
+    // synchronous editor commit that re-enters track(), and the header and
+    // candidate requests raised there read this flag. A refused edit (stale
+    // draft revision, or an unmappable span) mutates nothing and so reaches
+    // no re-entry, which is why withdrawing the claim afterwards still keeps
+    // a header off a draft nobody descended into — one that would name a
+    // directory while hiding the locations its rows still need.
+    this.drilled = action === 'drill'
+    if (!this.execute(outcome, hit.span)) this.drilled = false
   }
 
   /** Re-poll every header-bearing source in the hit roster and publish their crumbs. */

@@ -82,6 +82,8 @@ export class WelcomeNoticeStore {
     this.store.update((state) => { state.status = 'saving'; state.error = null })
     try {
       await this.scope.set(WELCOME_NOTICE_ACK_FIELD, WELCOME_NOTICE_VERSION)
+    } catch {
+      // Transport rejection leaves the last known value; a Host refusal recovers through the scope.
     } finally {
       this.saving = false
     }

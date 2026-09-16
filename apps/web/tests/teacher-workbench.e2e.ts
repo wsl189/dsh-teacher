@@ -10,7 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-host-teacher-workbench'
-import { settingsNamespace } from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   captureStableAria,
   compareOrRefreshGolden,
@@ -205,7 +205,7 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await newSession.count()).toBe(1)
     expect(await workbench.evaluate((button) => {
       const primary = button.closest('[class*="primarySections"]')
-      return primary?.previousElementSibling?.getAttribute('class')?.includes('logoRow') ?? false
+      return primary?.querySelector('button') === button
     })).toBe(true)
     await compareOrRefreshGolden(
       SIDEBAR_EXPECTED,
@@ -759,6 +759,93 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await questionWord.getByText('预览加载失败，请重新打开此题。', { exact: true }).count()).toBe(0)
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
+
+  it('preserves formula structures when an IME confirms set letters', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-formula-ime'))
+    await installExampleProofreader()
+    await openModule('典例收集')
+    const surface = page.getByRole('region', { name: '工作台', exact: true })
+    const directory = surface.getByRole('complementary', { name: '题目目录', exact: true })
+    await directory.getByRole('button', { name: '添加新题', exact: true }).click()
+    const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
+    if (!catalog.ok) throw new Error(catalog.error.code)
+    const created = catalog.value.questions.at(-1)!
+    const id = created.id
+    await directory.getByRole('button', { name: String(created.number), exact: true }).waitFor()
+    await directory.getByRole('button', { name: String(created.number), exact: true }).click()
+    onTestFinished(async () => {
+      await scaffold.ctx.teacherWorkbench.deleteExample({ id })
+      await page.reload({ waitUntil: 'load' })
+    })
+    minerUMarkdown = '补集：$A$'
+    minerUImages = {}
+    await surface.getByLabel('添加图片或 PDF', { exact: true }).filter({ visible: false }).setInputFiles({
+      name: 'formula-ime.png', mimeType: 'image/png', buffer: await readFile(RASTER_FIXTURE),
+    })
+    const word = surface.getByRole('region', { name: 'Word 预览', exact: true })
+    await word.getByText('补集：', { exact: true }).waitFor({ timeout: 30_000 })
+    await word.getByRole('button', { name: '放大Word 预览', exact: true }).click()
+    const expanded = page.getByRole('dialog', { name: 'Word 预览大窗口', exact: true })
+    const editor = expanded.getByLabel('编辑 Word 内容', { exact: true })
+    const dialog = page.getByRole('dialog', { name: '公式编辑器', exact: true })
+    const field = dialog.locator('math-field')
+    const value = () => field.evaluate(element => (element as HTMLElement & { value: string }).value)
+    const cdp = await page.context().newCDPSession(page)
+    onTestFinished(async () => { await cdp.detach() })
+    const results = []
+    for (const item of [
+      { name: '补集全集', symbol: '补集', seed: 'A', text: 'U', replace: false },
+      { name: '补集替换全集', symbol: '补集', seed: 'A', text: 'U', replace: true },
+      { name: '补集多个字母', symbol: '补集', seed: 'A', text: 'UV', replace: false },
+      { name: '下标', symbol: '下标', seed: 'A', text: 'n', replace: false },
+      { name: '乘方', symbol: '乘方', seed: 'A', text: 'n', replace: false },
+      { name: '分数', symbol: '分数', seed: 'A', text: 'n', replace: false },
+      { name: '平方根', symbol: '平方根', seed: '', text: 'x', replace: false },
+      { name: 'n 次根式', symbol: 'n 次根式', seed: 'A', text: 'n', replace: false },
+      { name: '绝对值', symbol: '绝对值', seed: '', text: 'x', replace: false },
+      { name: '帽号', symbol: '帽号', seed: '', text: 'U', replace: false },
+    ]) {
+      const variants = []
+      for (const input of ['keyboard', 'ime']) {
+        await editor.locator('[data-equation]').first().dblclick()
+        await field.press('ControlOrMeta+a')
+        if (item.seed) await field.pressSequentially(item.seed)
+        else await field.press('Backspace')
+        await field.press('ControlOrMeta+a')
+        await dialog.getByRole('button', { name: item.symbol, exact: true }).click()
+        if (item.replace) {
+          await field.pressSequentially('V')
+          await field.press('Shift+ArrowLeft')
+        }
+        const before = await value()
+        if (input === 'keyboard') await field.pressSequentially(item.text)
+        else {
+          await cdp.send('Input.imeSetComposition', { text: item.text, selectionStart: item.text.length, selectionEnd: item.text.length })
+          await page.keyboard.down('Enter')
+          await page.keyboard.insertText(item.text)
+          await page.keyboard.up('Enter')
+        }
+        const latex = await value()
+        expect(latex, item.name).not.toContain('\\placeholder')
+        if (item.replace) {
+          await field.press('ControlOrMeta+z')
+          expect(await value(), `${item.name}: undo ${input}`).toBe(before)
+          await field.press('ControlOrMeta+y')
+          expect(await value(), `${item.name}: redo ${input}`).toBe(latex)
+        }
+        await dialog.getByRole('button', { name: '应用公式', exact: true }).click()
+        const mathml = await editor.locator('[data-equation] math').first().innerHTML()
+        variants.push({ latex, mathml })
+      }
+      expect(variants[1], item.name).toEqual(variants[0])
+      results.push({ name: item.name, latex: variants[0]!.latex })
+    }
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/teacher-workbench/example-formula-ime.expected.json', import.meta.url)),
+      JSON.stringify(results, null, 2), MODE)
+    await expanded.getByRole('button', { name: '保存', exact: true }).click()
+    await expanded.getByText('已保存', { exact: true }).waitFor()
+    await expanded.getByRole('button', { name: '关闭预览', exact: true }).click()
+  }, 120_000)
 
   it('combines ordered question and explanation fragments and opens full document previews', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-example-fragments'))
@@ -2013,7 +2100,7 @@ describe('web e2e: durable teacher workbench', () => {
     const raster = await readFile(RASTER_FIXTURE)
     await mkdir(directory, { recursive: true })
     await writeFile(join(directory, '第1题.png'), raster)
-    await scaffold.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot })
+    await scaffold.ctx.settings.update('teacher-workbench', { segmentsRoot })
     const discovered = await scaffold.ctx.teacherWorkbench.browseQuestionMedia({})
     if (!discovered.ok) throw new Error(discovered.error.message)
     const folder = discovered.value.questionLibraryFolders.find(item => item.name === directoryName)!
@@ -2101,7 +2188,7 @@ describe('web e2e: durable teacher workbench', () => {
       await mkdir(join(classDirectory, ...segments.slice(0, -1)), { recursive: true })
       await writeFile(join(classDirectory, path), raster)
     }
-    await scaffold.ctx.settings.update(settingsNamespace('teacher-workbench'), { studentsRoot })
+    await scaffold.ctx.settings.update('teacher-workbench', { studentsRoot })
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })
     await openModule('试题切割')
@@ -2279,7 +2366,7 @@ describe('web e2e: durable teacher workbench', () => {
       utimes(join(segmentsRoot, '月考'), 2, 2),
       utimes(join(segmentsRoot, '空目录'), 3, 3),
     ])
-    await scaffold.ctx.settings.update(settingsNamespace('teacher-workbench'), { segmentsRoot, studentsRoot })
+    await scaffold.ctx.settings.update('teacher-workbench', { segmentsRoot, studentsRoot })
 
     await page.reload({ waitUntil: 'load' })
     await page.waitForSelector('[class*="frame"]', { timeout: 30_000 })

@@ -1,3 +1,4 @@
+import { installConversationRemoteStubs } from './conversation-remotes.client.ts'
 // @vitest-environment jsdom
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -7,7 +8,6 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 import { apply, inject, type ViewTab } from '@deepseek-ai/dsh-client-ui-conversation/client'
-import { installConversationRemoteStubs } from './conversation-remotes.client.ts'
 
 usePinnedBrowserLanguages('zh-CN')
 
@@ -15,25 +15,31 @@ const SID = 'session-1' as SessionId
 
 async function bench(options: { declareConversation?: boolean } = {}) {
   const runtime = await SlotTestRuntime.create()
-  installConversationRemoteStubs(runtime.ctx)
-  runtime.ctx.provide('uiWorkspace', { connectWorkspace: vi.fn(async () => SID) } as never)
+  runtime.ctx.provide('uiWorkspace', {
+    openWorkspace: vi.fn(async (_workspaceId: unknown, beforeOpen: (id: SessionId) => void) => {
+      beforeOpen(SID)
+      runtime.sessions.open(SID)
+    }),
+    openSession: (id: SessionId) => { runtime.sessions.open(id) },
+  } as never)
   runtime.ctx.provide('settingsScope', { bind: () => stubSettingsScope().scope } as never)
   const locale = new LocaleRuntime(runtime.ctx)
   runtime.ctx.provide('locale', locale)
   runtime.slots.installLocale(locale)
   if (options.declareConversation !== false) {
     await runtime.root.declare({
-      'conversation': { kind: 'single', scope: 'session-maybe' },
+      'main': { kind: 'keyed', scope: 'root' },
       'settings.general.item': { kind: 'list', scope: 'root' },
     }, (_props: { renderSlot?: unknown }) => null)
   }
+  installConversationRemoteStubs(runtime.ctx)
   const feature = await runtime.mount({ inject: [...inject], apply })
   return { runtime, feature }
 }
 
 function entry(
   runtime: SlotTestRuntime,
-  key: 'conversation' | 'conversation.session' | 'conversation.session.header',
+  key: 'main.conversation' | 'conversation.session' | 'conversation.session.header',
 ) {
   return runtime.slots.entries(key)[0] as { store?: unknown } | undefined
 }
@@ -41,14 +47,18 @@ function entry(
 describe('target-neutral Conversation apply wiring', () => {
   it('waits for the layout-owned conversation declaration before registering its subtree', async () => {
     const b = await bench({ declareConversation: false })
-    expect(b.runtime.slots.entries('conversation')).toHaveLength(0)
+    expect(b.runtime.slots.entries('main')).toHaveLength(0)
+    expect(b.runtime.slots.entries('main.conversation')).toHaveLength(0)
 
     await b.runtime.root.declare({
-      'conversation': { kind: 'single', scope: 'session-maybe' },
+      'main': { kind: 'keyed', scope: 'root' },
       'settings.general.item': { kind: 'list', scope: 'root' },
     }, (_props: { renderSlot?: unknown }) => null)
 
-    expect(b.runtime.slots.entries('conversation')).toHaveLength(1)
+    expect(b.runtime.slots.entries('main').map(row => row.options.key)).toEqual(['conversation'])
+    expect(b.runtime.slots.entries('main.conversation')).toHaveLength(1)
+    expect(b.runtime.slots.spec('main.conversation'))
+      .toEqual({ kind: 'single', scope: 'session-maybe' })
     expect(b.runtime.slots.entries('conversation.session')).toHaveLength(1)
     expect(b.runtime.slots.entries('conversation.session.header')).toHaveLength(1)
     expect(b.runtime.slots.entries('conversation.composer.bar')).toHaveLength(1)
@@ -67,7 +77,7 @@ describe('target-neutral Conversation apply wiring', () => {
     const b = await bench()
     const session = entry(b.runtime, 'conversation.session')
     const header = entry(b.runtime, 'conversation.session.header')
-    expect(entry(b.runtime, 'conversation')?.store).toBeUndefined()
+    expect(entry(b.runtime, 'main.conversation')?.store).toBeUndefined()
     expect(session?.store).toBeDefined()
     expect(header?.store).toBe(session?.store)
     expect(b.runtime.slots.spec('conversation.composer'))
@@ -112,7 +122,9 @@ describe('target-neutral Conversation apply wiring', () => {
     await b.feature.dispose()
     expect(b.runtime.ctx.get('conversation')).toBeUndefined()
     expect(b.runtime.ctx.get('uiConversation')).toBeUndefined()
-    expect(b.runtime.slots.entries('conversation')).toHaveLength(0)
+    expect(b.runtime.slots.entries('main')).toHaveLength(0)
+    expect(b.runtime.slots.entries('main.conversation')).toHaveLength(0)
+    expect(b.runtime.slots.spec('main.conversation')).toBeUndefined()
     expect(b.runtime.slots.spec('conversation.view')).toBeUndefined()
     await b.runtime.dispose()
   })

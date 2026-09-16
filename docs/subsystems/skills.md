@@ -78,7 +78,7 @@ The project root is the nearest ancestor containing `.git`; without one, the cur
 
 `dsh-skill-badge` registers one immutable `bundled` candidate at `BUNDLED_SKILL_RANK` and exposes its packaged asset directory through `resourceBase`. The shipped CLI declares the plugin disabled, so enabling its composition row is an explicit opt-in.
 
-`dsh-skill-ppt-master` registers the immutable `ppt-master` 6.1.0 candidate at the same rank and exposes the complete upstream distribution through `resourceBase`. The shipped Web composition enables this provider, and the Windows desktop payload carries the same package assets; Python and workflow-specific dependencies remain external runtime requirements.
+`dsh-skill-ppt-master` registers the immutable `ppt-master` 6.4.0 candidate at the same rank and exposes the complete upstream distribution through `resourceBase`. The shipped Web composition enables this provider, and the Windows desktop payload carries the same package assets; Python and workflow-specific dependencies remain external runtime requirements.
 
 Chokidar watches existing roots for direct bundle/flat-entry additions and removals plus direct skill-entry changes. A missing root is followed one absent path segment at a time from its nearest existing ancestor until Chokidar can attach. Resource files below a bundle are not catalog changes. Model-facing `write` and `edit` observations synchronously invalidate the provider when their target is catalog-relevant, while the host watcher covers IDE, Git, shell, and external-process mutations. Watcher failures make the current observation incomplete without hiding readable candidates from direct loads; project-scoped watchers use a configured bounded LRU.
 
@@ -108,6 +108,8 @@ interface SkillInvocationPolicy {
 ```ts type-equiv
 /** Invocation-neutral skill metadata returned by `ctx.skills.list()`. */
 interface SkillSummary {
+  /** Absolute instruction file path when supplied by the provider; absent for virtual skills. */
+  readonly path?: string
   /** Kebab-case identifier used to address the skill. */
   readonly name: string
   /** Short routing description shown by discovery consumers. */
@@ -148,8 +150,6 @@ interface SkillCandidate extends SkillSummary {
   readonly rank: number
   /** Opaque provider-owned handle passed back to `provider.get()`. */
   readonly locator: unknown
-  /** Absolute file path when the provider has one. */
-  readonly path?: string
   /** Parsed optional metadata object from provider-specific skill frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -170,8 +170,6 @@ type SkillResourceBase =
 interface SkillDefinition extends SkillSummary {
   /** Markdown instruction body after any provider-specific metadata removal. */
   readonly content: string
-  /** Absolute file path when the skill came from disk. */
-  readonly path?: string
   /** Parsed optional metadata object from frontmatter. */
   readonly metadata?: Readonly<Record<string, unknown>>
 }
@@ -260,7 +258,7 @@ Host service backing `ctx.remote.skills` without activating a cold Agent.
  * @param request - Session identity whose cwd and preset select the catalog view.
  * @param signal - caller lifetime carried by the Remote transport; admitted catalog reads retain their existing completion semantics.
  * @returns user-invocable skill metadata without loading skill bodies.
- * @throws TypertRemoteFailure when the Session cannot be inspected or no registry can serve it.
+ * @throws RemoteError when the Session cannot be inspected or no registry can serve it.
  */
 @Remote async list(request: SkillListRequest, signal: AbortSignal): Promise<SkillListValue>
 ```

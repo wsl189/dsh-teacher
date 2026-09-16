@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { RemoteError } from '@deepseek-ai/dsh-client-test-runtime'
 import { Context } from '@deepseek-ai/cordis'
 import { SettingsSchemaService } from '@deepseek-ai/dsh-client-ui-settings/src/client/schema.ts'
 import { SettingsDescribeMirror } from '@deepseek-ai/dsh-client-ui-settings/src/client/settings-mirror.ts'
@@ -36,9 +37,9 @@ function buildWelcome(
   persistence: 'host' | 'memory' = 'host',
 ) {
   const wire = { settings: api } as never
-  const mirror = new SettingsDescribeMirror(wire, persistence)
+  const mirror = new SettingsDescribeMirror({ remote: wire } as never, persistence)
   const scope = new SettingsScopeController(
-    wire,
+    { remote: wire } as never,
     { namespace: WELCOME_NOTICE_SETTINGS_NAMESPACE, decode: decodeWelcomeSection },
     mirror,
     persistence,
@@ -113,7 +114,7 @@ describe('WelcomeNoticeStore', () => {
     const describeCall = vi.fn(() => Promise.resolve(ok({
       writable: true, hasDocument: false, namespaces: [namespace()],
     })))
-    const mutate = vi.fn(() => Promise.reject(new Error('disk full')))
+    const mutate = vi.fn(() => Promise.resolve({ ok: false, error: new RemoteError('settings/rejected', 'disk full', { ns: WELCOME_NOTICE_SETTINGS_NAMESPACE }) }))
     const { mirror, controller } = buildWelcome({ describe: describeCall, mutate })
     await mirror.load()
     await controller.load()

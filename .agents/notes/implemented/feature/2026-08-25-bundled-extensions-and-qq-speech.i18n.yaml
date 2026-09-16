@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md
-2026-08-25-bundled-extensions-and-qq-speech.md: ede80be2713bca5847ff4b5b5262474612cae6ff
-2026-08-25-bundled-extensions-and-qq-speech.zh.md: a02f9e4f1d21601f2e52b10bc282df313fe7ee1b
+2026-08-25-bundled-extensions-and-qq-speech.md: 6dac5f2c7f2a87875b30924e245dc6dcfd36291c
+2026-08-25-bundled-extensions-and-qq-speech.zh.md: 3c514dfbb79b0e43a637e691b95c9bcf9696f694

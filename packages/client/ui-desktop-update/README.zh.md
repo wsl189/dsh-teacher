@@ -71,6 +71,8 @@ preload 公开同步快照、数字订阅和两个命令。插件会校验每份
 <a id="dev-note"></a>
 ### 开发备注
 
+不发布运行时 invariant 配套插件；预加载桥只存在于浏览器中，不提供 Host 事件流。
+
 <details>
 <summary>维护者工作上下文——点击展开</summary>
 

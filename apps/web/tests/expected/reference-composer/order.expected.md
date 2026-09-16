@@ -1,6 +1,10 @@
 - banner:
   - navigation "Session hierarchy":
     - button "Reference order target" [disabled]
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -10,12 +14,9 @@
 - button "Session recall Research notes":
   - img
   - text: Session recall Research notes
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash

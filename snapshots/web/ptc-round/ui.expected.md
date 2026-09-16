@@ -2,7 +2,11 @@
   - navigation "Session hierarchy":
     - 'button "Using ONE run_code program: run" [disabled]'
   - img
-  - text: Standard mode
+  - text: PTC mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -20,10 +24,6 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - 'button "Think The user wants me to write a single `run_code` program that:"':
   - img
   - img
@@ -32,8 +32,14 @@
   - img
   - img
   - text: Code Run bash echo and catch missing file read
-- img
-- text: Bash Echo CODE_ROUND_OK Failed
+- button "Bash Echo CODE_ROUND_OK" [expanded]:
+  - img
+  - text: Bash Echo CODE_ROUND_OK
+- text: Done workspace echo CODE_ROUND_OK
+- button "Copy"
+- text: CODE_ROUND_OK
+- button "Inspect"
+- text: Failed
 - 'button "Read Error: cannot read \"{{cwd}}/workspace/missing.txt\": not found"':
   - img
   - text: "Read Error: cannot read \"{{cwd}}/workspace/missing.txt\": not found"
@@ -50,17 +56,22 @@
   - img
 - button "Branch into a new conversation":
   - img
-- text: {{clock}} Ran for {{duration}} TTFT {{duration}} {{throughput}} tok/s
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- button "Ran for {{duration}}":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
+  - text: Ran for {{duration}}
+- text: {{clock}}
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
+  - img
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
 - button "7% of context used"
 - button "Send message" [disabled]
-- text: 1 turns · 2 steps LLM {{duration}} · Tool call {{duration}} TTFT avg {{duration}} · {{throughput}} tok/s Cache hit 52% Input 17.2K tok · Output 252 tok
+- button "1 turns 2 steps · {{throughput}} tok/s":
+  - img
+  - text: 1 turns 2 steps{{throughput}} tok/s
+- button "17.5K tok · Cache hit 52%":
+  - img
+  - text: 17.5K tokCache hit 52%

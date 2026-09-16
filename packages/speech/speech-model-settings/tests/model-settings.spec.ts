@@ -6,7 +6,6 @@ import {
   apply,
   type Config,
 } from '../src/index.ts'
-import * as invariant from '../src/invariant.ts'
 
 function config(overrides: Partial<Config> = {}): Config {
   return {
@@ -369,15 +368,5 @@ describe('ModelSettingsSpeechProvider', () => {
       credentials: services.credentials,
     } as never, config())
     expect(registerProvider).toHaveBeenCalledWith(expect.objectContaining({ id: 'model-settings' }))
-  })
-
-  it('registers its explained empty invariant companion', async () => {
-    const dispose = vi.fn()
-    const register = vi.fn((_packageName: string, installer: () => void) => {
-      installer()
-      return dispose
-    })
-    await expect(invariant.apply({ invariants: { register } } as never)).resolves.toBe(dispose)
-    expect(register).toHaveBeenCalledWith('@deepseek-ai/dsh-speech-model-settings', expect.any(Function))
   })
 })

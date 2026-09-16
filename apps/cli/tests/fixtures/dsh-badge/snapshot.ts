@@ -1,11 +1,11 @@
 import { fileURLToPath } from 'node:url'
-import { Context } from '@deepseek-ai/cordis'
-import { agentEvents, Inbox, type Agent } from '@deepseek-ai/dsh-agent'
+import { agentEvents, type Agent } from '@deepseek-ai/dsh-agent'
 import { ToolCallId } from '@deepseek-ai/dsh-llm'
 import { boot, loadOverlayPatches } from '@deepseek-ai/dsh-app-boot'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-skill'
 import type {} from '@deepseek-ai/dsh-tools'
+import { unsupportedInbox } from '@deepseek-ai/dsh-agent-loop-testkit'
 
 const overlayPath = process.argv[2]
 const skillName = process.argv[3] ?? 'dsh-badge'
@@ -22,11 +22,11 @@ try {
   const agentId = SessionId(appName)
   const session = ctx.sessions.create(agentId, { meta: { cwd: process.cwd() } })
   const agent: Agent = {
-    ctx: new Context(),
+    ctx,
     id: agentId,
     options: {},
     session,
-    inbox: new Inbox(session, { inserted: () => {}, discarded: () => {}, claimed: () => {} }),
+    inbox: unsupportedInbox(),
     status: 'idle',
     send: () => {},
     followup: () => {},

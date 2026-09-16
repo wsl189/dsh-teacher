@@ -3,6 +3,10 @@
     - button "Stream one TypeScript fence for" [disabled]
   - img
   - text: Standard mode
+  - button "More actions":
+    - img
+  - button "Open right sidebar":
+    - img
   - tablist:
     - tab "Chat" [selected]
     - tab "Trajectory"
@@ -17,20 +21,13 @@
   - img
   - img
   - text: Context injection @deepseek-ai/dsh-system-prompt
-- button "Context injection skill-catalog":
-  - img
-  - img
-  - text: Context injection skill-catalog
 - text: ts
 - button "Copy"
 - code: "const first: number = 1 const second = \"two\" let tail"
 - status: Deep diving...
-- textbox "Message or run a task... / commands, @ files or sessions"
-- button "Commands":
+- textbox "Message or run a task, / commands, @ files or sessions"
+- button "Add files or run commands":
   - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
 - button "Select model, current streaming-fence-highlight-test/streaming-fence":
   - text: streaming-fence-highlight-test/streaming-fence

@@ -87,6 +87,8 @@ These limits define the provider compatibility and actions of the final-answer p
 <a id="dev-note"></a>
 ### Dev Note
 
+No runtime invariant companion is published; the chat service owns the result node registration and attachment lifetime.
+
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
