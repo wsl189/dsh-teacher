@@ -27,6 +27,8 @@ Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容�
 
 在**设置 → IM机器人**配置机器人，在**设置 → 技能**管理技能，在**设置 → MCP**或 `dsh-panel mcp` 中管理 profile 服务器。AnySearch 可在服务限制内匿名使用；[Web 搜索参考](../packages/bundle/web-app/README.zh.md#built-in-web-search)说明其端点、凭据和结果上限配置。
 
+日常管理提醒从内置 IM 插件列出已配置机器人，包括标注连接状态的离线机器人。兼容补丁在上游主动投递功能之外提供工作台通知服务，保留机器人别名，并把私聊收件人与凭据留在 IM 内部。QQ 提醒使用最近记住的私聊会话；没有记住私聊时使用绑定的所有者。发送需要机器人已连接且存在可用的私聊收件人。
+
 可执行来源包不包含用户凭据或文档。机器人状态、cron 任务、技能、MCP 设置、Univer 文件和工作树仍保存在原有用户目录中。生图历史与缓存仍位于 `~/.dsh/dsh-imagegen`。迁移应用时，另行迁移所需的 `DSH_HOME`、生图历史及工作区数据。
 
 Univer profile 关闭遥测，并将运行时的 `UNIVER_LICENSE` 转发给内容 worker；重打包移除了内嵌的开发许可证兜底值。授权功能仍受上游条款约束。浏览器渲染操作可能需要 Chrome 或 Chromium，可通过 `UNIVER_RENDER_BROWSER` 指定。Office 预览包保留 AGPL-3.0 许可证，Univer 包含的独立授权模块记录在[第三方声明](../THIRD_PARTY_NOTICES.md)中。

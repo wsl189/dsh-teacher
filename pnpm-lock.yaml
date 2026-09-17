@@ -36,7 +36,7 @@ patchedDependencies:
   '@dickpy/dsh-imagegen@1.5.12': a0c7cf892dc9d16f528d937ec9e4f6726f74e31643a1455606e623a354488c07
   '@electron/osx-sign@1.3.3': 280e7b2816caf01423097d24e79107a66afeb563a348630ce9928ae8499a5861
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.2.0': 5f17472f16acb85f2c0faf92e68812d37cb68962debb2438f8129aca210a3d1f
-  '@xmanrui/dsh-im@4.21.1': 84594c765751dff17bf93b23386ab8c4d30cbceabf423b6ac9d70782d3b7bbf8
+  '@xmanrui/dsh-im@4.21.1': c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64
   '@yao-pkg/pkg@6.21.0': 07f08c630d0d3886d81fd4600116d07e4871ddcd57f92cb22746b6d246cdc337
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.4: 8e1851a170173ac71d1ec3a52aecc2a76fbf0969789b32030f3b0b9aae098064
@@ -2393,7 +2393,7 @@ importers:
         version: file:third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz(patch_hash=5f17472f16acb85f2c0faf92e68812d37cb68962debb2438f8129aca210a3d1f)(@deepseek-ai/cordis@vendor+cordis)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(pdfjs-dist@6.3.289)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz
-        version: file:third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz(patch_hash=84594c765751dff17bf93b23386ab8c4d30cbceabf423b6ac9d70782d3b7bbf8)(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)
+        version: file:third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz(patch_hash=c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64)(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)
       commander:
         specifier: ^15.0.0
         version: 15.0.0
@@ -27042,7 +27042,7 @@ snapshots:
     optionalDependencies:
       react: 18.3.1
 
-  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz(patch_hash=84594c765751dff17bf93b23386ab8c4d30cbceabf423b6ac9d70782d3b7bbf8)(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)':
+  '@xmanrui/dsh-im@file:third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz(patch_hash=c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64)(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)':
     dependencies:
       '@tencent-connect/qqbot-connector': 1.2.0
       '@tencent-connect/qqbot-nodejs': 1.0.4

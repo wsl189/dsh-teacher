@@ -1,7 +1,6 @@
 // Web e2e scenario: the shipped QQ settings surface preserves saved workspaces
-// and initializes unassigned bots on the desktop. Seeded bots stay offline
-// and no model call occurs; the real Host directory listing and third-party
-// client module still run through the shipped HTTP and browser composition.
+// and initializes unassigned bots on the desktop. Seeded bots stay offline;
+// reminder discovery uses a scripted model and the real bundled IM provider.
 
 import { createHash } from 'node:crypto'
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
@@ -10,12 +9,19 @@ import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
-import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vitest'
+import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished, vi } from 'vitest'
+import {
+  createUserMessage, LlmAdapter, ToolCallId,
+  type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk,
+} from '@deepseek-ai/dsh-llm'
+import { SessionId } from '@deepseek-ai/dsh-session'
 import {
   assertFixtureInventory,
   captureStableAria,
   compareOrRefreshGolden,
+  fixtureUserPrompts,
   launchWebScaffold,
+  recordFixture,
   watchConsole,
   webSnapshotMode,
   type WebScaffold,
@@ -26,6 +32,38 @@ const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/qq-workspace-picker', imp
 const PICKER_EXPECTED = join(SNAPSHOT_DIR, 'picker.expected.md')
 const WORKSPACES_EXPECTED = join(SNAPSHOT_DIR, 'workspaces.expected.md')
 const MODE = webSnapshotMode()
+const SESSION_DIR = fileURLToPath(new URL('../../../snapshots/web/qq-reminder-discovery', import.meta.url))
+const SESSION_FIXTURE = join(SESSION_DIR, 'session.v3.jsonl')
+const PROVIDER = 'qq-reminder-fixture'
+const PROMPT = 'Read Daily Management and list the configured reminder bots. Do not change data or send a message.'
+
+class ReminderDiscoveryAdapter extends LlmAdapter {
+  private called = false
+
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: 'Reminder discovery', context: { contextWindow: 128_000 } })
+  }
+
+  override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
+    options.signal?.throwIfAborted()
+    if (!this.called) {
+      this.called = true
+      const id = ToolCallId('read-reminder-bots')
+      const name = 'teacher_workbench_read'
+      const args = JSON.stringify({ section: 'daily' })
+      yield { type: 'block-start', index: 0, blockType: 'tool-call' }
+      yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }
+      yield { type: 'block-end', index: 0, block: { type: 'tool-call', id, name, arguments: args } }
+      yield { type: 'finish', reason: { kind: 'tool-calls' } }
+      return
+    }
+    const text = 'Two configured QQ bots are available for reminder selection; both are offline.'
+    yield { type: 'block-start', index: 0, blockType: 'text' }
+    yield { type: 'text-delta', index: 0, text }
+    yield { type: 'block-end', index: 0, block: { type: 'text', text } }
+    yield { type: 'finish', reason: { kind: 'stop' } }
+  }
+}
 
 async function openQqSettings(page: Page): Promise<void> {
   await page.getByRole('button', { name: '设置', exact: true }).click()
@@ -38,7 +76,7 @@ async function openQqSettings(page: Page): Promise<void> {
   for (const card of await settings.locator('.dim-botCard').all()) await card.locator('.dim-collapsibleHead').click()
 }
 
-describe('web e2e: QQ bot workspace defaults and directory picker', () => {
+describe.skipIf(MODE === 'record')('web e2e: QQ bot workspace defaults and directory picker', () => {
   let scaffold: WebScaffold
   let browser: Browser
   let page: Page
@@ -82,7 +120,22 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
       workspaces: { [savedBotId]: savedWorkspace },
     }, null, 2)}\n`)
 
-    scaffold = await launchWebScaffold({ harnessHome })
+    scaffold = await launchWebScaffold({
+      harnessHome,
+      ...(MODE === 'refresh' ? {} : {
+        replayFixture: SESSION_FIXTURE,
+        replayProviders: [{
+          id: PROVIDER, name: PROVIDER,
+          models: [{ id: 'discovery', name: 'Reminder discovery', contextWindow: 128_000 }],
+        }],
+      }),
+    })
+    if (MODE === 'refresh') {
+      scaffold.ctx.effect(
+        () => scaffold.ctx.llm.registerAdapter([PROVIDER], new ReminderDiscoveryAdapter()),
+        'scripted QQ reminder discovery',
+      )
+    }
     browser = await chromium.launch()
     page = await browser.newPage({ viewport: { width: 1680, height: 1000 }, locale: ZH_BROWSER_LOCALE })
     tripwire = watchConsole(page)
@@ -92,10 +145,21 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
   }, 120_000)
 
   afterAll(async () => {
-    await browser?.close()
-    await scaffold?.close()
-    if (harnessHome !== undefined) await rm(harnessHome, { recursive: true, force: true })
-    vi.unstubAllEnvs()
+    try {
+      await browser?.close()
+    } finally {
+      try {
+        const notifications = scaffold?.ctx.get('mobileNotifications')
+        await scaffold?.close()
+        if (notifications !== undefined) expect(await notifications.listTargets()).toEqual([])
+      } finally {
+        try {
+          if (harnessHome !== undefined) await rm(harnessHome, { recursive: true, force: true })
+        } finally {
+          vi.unstubAllEnvs()
+        }
+      }
+    }
   })
 
   it('initializes an unassigned bot on the desktop without replacing an existing workspace', async () => {
@@ -189,7 +253,77 @@ describe('web e2e: QQ bot workspace defaults and directory picker', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 
+  it('records configured QQ reminder bots through the real Daily Management tool', async () => {
+    const handle = await scaffold.ctx.agents.create({
+      sessionId: SessionId('qq-reminder-discovery'),
+      meta: { cwd: scaffold.workspaceCwd, agentPreset: 'standard' },
+      agentOptions: { provider: PROVIDER, model: 'discovery' },
+      setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx).then(() => undefined),
+    })
+    onTestFinished(() => handle.dispose())
+    const prompts = MODE === 'refresh' ? [PROMPT] : fixtureUserPrompts(await readFile(SESSION_FIXTURE, 'utf8'))
+    expect(prompts).toEqual([PROMPT])
+    handle.agent.followup(createUserMessage({ source: { kind: 'user' }, content: [{ type: 'text', text: prompts[0]! }] }))
+    await handle.agent.whenIdle()
+    await scaffold.ctx.sessions.flush(handle.agent.session)
+    const results = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
+    expect(results).toHaveLength(1)
+    const result = results[0]!.data.message.content[0]
+    if (result?.type !== 'tool-result') throw new Error('Missing Daily Management tool result')
+    expect(result.isError).not.toBe(true)
+    const content = result.content[0]
+    if (content?.type !== 'text') throw new Error('Missing Daily Management JSON')
+    expect(JSON.parse(content.text)).toMatchObject({
+      notificationTargets: [
+        { channel: 'qq', botId: newBotId, connected: false },
+        { channel: 'qq', botId: savedBotId, connected: false },
+      ],
+    })
+    if (MODE === 'refresh') await recordFixture(scaffold, handle.agent.session.id, SESSION_FIXTURE)
+  })
+
+  it('offers configured QQ bots in Daily Management and persists the selected reminder', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-qq-workbench-reminder'))
+    const targets = await scaffold.ctx.teacherWorkbench.listNotificationTargets({})
+    expect(targets.map(target => ({ channel: target.channel, botId: target.botId, connected: target.connected })))
+      .toEqual([
+        { channel: 'qq', botId: newBotId, connected: false },
+        { channel: 'qq', botId: savedBotId, connected: false },
+      ])
+    await page.keyboard.press('Escape')
+    await page.getByRole('button', { name: '打开工作台' }).click()
+    await page.getByRole('button', { name: '日常管理', exact: true }).first().click()
+    const today = page.locator('section[aria-labelledby="daily-todo-title"]')
+    await today.getByLabel('新增今日待办').fill('QQ 提醒回归检查')
+    const targetsLoaded = page.waitForResponse(response => response.url().endsWith('/api/teacherWorkbench/listNotificationTargets'))
+    await today.getByRole('button', { name: '截止时间', exact: true }).click()
+    expect((await targetsLoaded).ok()).toBe(true)
+    const editor = page.getByRole('dialog', { name: '设置截止时间与提醒' })
+    await editor.getByLabel('截止时间', { exact: true }).fill('2099-09-17T18:30')
+    await editor.getByRole('checkbox', { name: '发送手机机器人提醒' }).check()
+    expect(await editor.getByText('还没有可用机器人', { exact: false }).count()).toBe(0)
+    expect(await editor.getByRole('combobox', { name: '手机平台' }).inputValue()).toBe('qq')
+    await editor.getByRole('combobox', { name: '机器人' }).selectOption(savedBotId)
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'reminder.expected.md'),
+      await captureStableAria(page, '[role="dialog"]', harnessHome),
+      MODE,
+    )
+    await editor.getByRole('button', { name: '保存', exact: true }).click()
+    await editor.waitFor({ state: 'hidden' })
+    await today.getByRole('button', { name: '添加待办', exact: true }).click()
+    await expect.poll(async () => (await scaffold.ctx.teacherWorkbench.read({})).value.state.dailyTodos)
+      .toMatchObject([{
+        title: 'QQ 提醒回归检查',
+        reminder: { channel: 'qq', botId: savedBotId, rule: { kind: 'once', minutesBefore: 30 } },
+      }])
+    await page.reload({ waitUntil: 'load' })
+    expect((await scaffold.ctx.teacherWorkbench.read({})).value.state.dailyTodos[0]?.reminder?.botId).toBe(savedBotId)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
   it.skipIf(MODE === 'record')('keeps the fixture inventory closed', async () => {
-    await assertFixtureInventory(SNAPSHOT_DIR, ['picker.expected.md', 'workspaces.expected.md'])
+    await assertFixtureInventory(SNAPSHOT_DIR, ['picker.expected.md', 'workspaces.expected.md', 'reminder.expected.md'])
+    await assertFixtureInventory(SESSION_DIR, ['session.v3.jsonl'])
   })
 })

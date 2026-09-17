@@ -27,6 +27,8 @@ Configure supplier routes under **Settings → Models → Service access** and a
 
 Configure bots under **Settings → IM bots**, skills under **Settings → Skills**, and profile servers under **Settings → MCP** or `dsh-panel mcp`. AnySearch permits anonymous access within its service limits; the [Web search reference](../packages/bundle/web-app/README.md#built-in-web-search) owns its endpoint, credential, and result-cap settings.
 
+Daily Management reminders list configured bots from the bundled IM plugin, including offline bots with their connection state. The compatibility patch supplies the workbench notification service alongside upstream proactive delivery; it preserves bot aliases and keeps private recipients and credentials inside IM. QQ reminders use the most recently remembered private conversation, or the bound owner when no private conversation is remembered. Delivery requires a connected bot and an available private recipient.
+
 Executable artifacts contain no user credentials or documents. Bot state, cron jobs, skills, MCP settings, Univer files and worktrees remain under their existing user directories. Image history and caches remain under `~/.dsh/dsh-imagegen`. Migrate the required `DSH_HOME`, image history, and workspace data separately from the application.
 
 The Univer profile disables telemetry and forwards runtime `UNIVER_LICENSE` to content workers; the repack removes the embedded development-license fallback. Its licensed features remain subject to upstream terms. Browser-rendered operations may require Chrome or Chromium, selectable with `UNIVER_RENDER_BROWSER`. The Office preview package retains AGPL-3.0, while Univer includes separately licensed bundled modules recorded in [third-party notices](../THIRD_PARTY_NOTICES.md).
