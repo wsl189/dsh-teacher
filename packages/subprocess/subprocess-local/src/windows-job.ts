@@ -116,7 +116,7 @@ class WindowsJobOwner implements BoundProcessOwner {
 }
 
 /**
- * Launch one target through a runner that uniquely owns its Job handle.
+ * Launch one target through a hidden runner that uniquely owns its Job handle.
  * @param spec - ordinary target request.
  * @param targetEnv - validated complete target environment.
  * @param internals - optional runner launch seams used by tests.
@@ -139,6 +139,7 @@ export function launchWindowsJob(
     ], {
       cwd: process.cwd(),
       env: runnerEnvironment(WINDOWS_RUNNER_SELECTION, invocation),
+      windowsHide: true,
       stdio: runnerStdio(spec, true, ignoredStdinFd ?? 'pipe'),
     }) as RunnerProcess
   } finally {

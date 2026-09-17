@@ -57,6 +57,20 @@ jobs:
           DSH_BUILD_CLIENT_PROFILE: official
         run: pnpm run build:official
 
+      - name: Verify PowerShell window visibility and process lifecycle
+        shell: pwsh
+        env:
+          DSH_EXAMPLE_MODE: lib
+        run: >-
+          pnpm exec vitest run
+          --testTimeout 60000
+          packages/subprocess/subprocess-local/tests/windows-job.spec.ts
+          packages/subprocess/subprocess-local/tests/spawn-runner.spec.ts
+          packages/subprocess/subprocess-local/tests/native-windows.spec.ts
+          packages/subprocess/win32-process/tests
+          packages/shell/pwsh-local/tests/executor.spec.ts
+          packages/shell/tool-pwsh/tests/integration.spec.ts
+
       - name: Validate release tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
