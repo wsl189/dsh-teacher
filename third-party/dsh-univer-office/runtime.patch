@@ -1,3 +1,15 @@
+diff --git a/artifacts/unit-content-worker.mjs b/artifacts/unit-content-worker.mjs
+--- a/artifacts/unit-content-worker.mjs
++++ b/artifacts/unit-content-worker.mjs
+@@ -329388,7 +329388,7 @@
+ }
+ 
+ // src/workers/unit-content/license.ts
+-var UNIVER_LICENSE = "2088168239728517120-1-eyJpIjoiMjA4ODE2ODIzOTcyODUxNzEyMCIsInYiOiIxIiwicCI6ImtPN3hWUG5mZVFYSlY2ZjRiSk03MFk5NHdOZTZkR3VRTDNxdklqRFpZblU9IiwiZG0iOlsibG9jYWxob3N0Il0sInJ0IjozLCJmdCI6eyJ1ZiI6eyJtdSI6MjE0NzQ4MzY0NiwiZXQiOjE3OTQ3NTg0MDAsIm1tIjoyMTQ3NDgzNjQ2LCJjdSI6MjE0NzQ4MzY0Nn0sInNmIjp7ImV0IjoxNzk0NzU4NDAwLCJydiI6dHJ1ZSwicHRuIjoyMTQ3NDgzNjQ2LCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwibmMiOjIxNDc0ODM2NDYsImllYyI6MCwiZmNjIjowfSwiZGYiOnsiZXQiOjE3OTQ3NTg0MDAsInJ2Ijp0cnVlLCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwiaWVjIjowfSwid3NmIjp7ImV0IjoxNzk0NzU4NDAwLCJobiI6MjE0NzQ4MzY0Nn19LCJ1ZCI6MTc5NDc1ODQwMCwiYXQiOjE3ODY2OTMxMTAsImUiOiJkZXZlbG9wZXJAdW5pdmVyLmFpIiwiZCI6OCwibiI6MTl9-ZidzNthAEZRZ13xLQUagdaUsjaMjrr5BDf4JGx9Zzsw1PgmNLak8wuZWQ1le9eMYUyubIa5YI4JpExgdHhN1BA==-1794758400";
++var UNIVER_LICENSE = "";
+ 
+ // src/workers/unit-content/runtime/local-referenced-unit-provider.ts
+ var LOCAL_REFERENCED_UNIT_PROVIDER_ID = "local-referenced-unit-provider";
 diff --git a/lib/index.js b/lib/index.js
 --- a/lib/index.js
 +++ b/lib/index.js
@@ -24,6 +36,38 @@ diff --git a/lib/index.js b/lib/index.js
  
  // src/host/provider/render-operations.ts
  var RenderOperations = class {
+@@ -11533,19 +11534,19 @@
+ function apiTool(ctx) {
+   return defineTool({
+     name: "univer_api",
+-    description: "Look up the bundled, version-matched Univer Facade API. Use find when no relevant class or API label is known. Use show for a known class, type, or exact Class.member API label; to inspect APIs on a known class, show the class itself. Find is case-insensitive. Each query runs independently and returns its own matches: queries are never combined as AND, and find does not interpret intent.",
++    description: "Look up the bundled, version-matched Univer Facade API. Prefer show for exact Class.member labels and named types or enums. When a member is unknown, use find with API-name keywords or identifier fragments, a relevant unit, and limit 5 or 10. Show a whole class only when its complete API inventory is needed. Find is case-insensitive. Each query runs independently; queries are never combined as AND, and find does not interpret intent.",
+     parameters: {
+       action: {
+         type: "string",
+         required: true,
+         enum: ["find", "show"],
+-        description: "find discovers unknown class or API labels; show documents a known class, type, or exact Class.member label. Show a known class to inspect its APIs."
++        description: "find discovers API labels; show documents a known exact Class.member label, type, enum, or class. Prefer exact member or type lookups; show a class only for its complete API inventory."
+       },
+       queries: {
+         type: "array",
+         required: true,
+         items: { type: "string" },
+-        description: "For find, API-name keywords or identifier fragments such as conditionalFormat. For show, known class, type, or exact Class.member labels such as FRange or FRange.setValue. Find queries are case-insensitive and independent, not AND terms."
++        description: "For find, API-name keywords or identifier fragments such as newChart or conditionalFormat. For show, known exact labels such as FWorksheet.newChart or ChartTypeString; group labels needed for the next operation. If show returns not-found, use find rather than repeatedly guessing labels. Find queries are case-insensitive and independent, not AND terms."
+       },
+       unit: {
+         type: "string",
+@@ -11554,7 +11555,7 @@
+       },
+       limit: {
+         type: "integer",
+-        description: "Find-only maximum matches per query. Prefer 10 or fewer."
++        description: "Find-only maximum matches per query. Prefer 5 or 10. This does not limit show responses; use exact member or type labels for focused show queries."
+       }
+     },
+     output: apiOutput,
 @@ -12961,6 +12962,10 @@
        fail(403);
        return;
@@ -82,6 +126,46 @@ diff --git a/package.json b/package.json
    },
    "peerDependencies": {
      "@deepseek-ai/cordis": "^4.0.2",
+diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
+--- a/skills/univer/SKILL.md
++++ b/skills/univer/SKILL.md
+@@ -14,6 +14,8 @@
+ - Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create the target `.univer` and draft worktree, then call `univer_import`.
+ - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
+ - For an Embed or a Chart backed by another Unit's data, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
++
++Temporary directories such as `/tmp` may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the current session workspace; its parent directory is not part of the writable workspace.
+ 
+ ## Mental model
+ 
+@@ -38,11 +40,15 @@
+ 
+ ## Facade API lookup
+ 
+-- No relevant class or API label is known: use `find` with API-name keywords or identifier fragments.
+-- A class is known: use `show` on the class to inspect its APIs.
+-- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples.
++- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples. Put the known labels needed for the next operation together in one `queries` array.
++- The required member is unknown: use `find` with API-name keywords or identifier fragments, the relevant `unit` filter, and `limit: 5` or `10`. Refine or expand the query when those matches do not identify the required API.
++- Show a whole class only when its complete API inventory is needed. Knowing a class name alone does not require fetching every member.
+ 
+ `find` is case-insensitive. Each query is searched independently and returns its own matches; queries are not combined as AND, and `find` does not interpret intent. Pass a useful returned label to `show` instead of searching that label again.
++
++`show` returning `not-found` means the label is absent from the bundled catalog. Use `find` with a member keyword instead of repeating the failed label or inventing type-name variants. If discovery provides no documented operation for a required step, report that capability gap; external documentation for another version does not establish support in this runtime.
++
++Reuse signatures already read for this plugin version. Follow referenced parameter types and enums when needed; focused lookup never permits guessing an unfamiliar API.
+ 
+ ## Required workflow
+ 
+@@ -103,6 +109,8 @@
+ 
+ Do not redeclare injected variables. Use `code` only for a small snippet. For multi-line or reusable Facade logic, write a workspace JavaScript body file and pass it as `codeFile`; provide exactly one of `code` or `codeFile`.
+ 
++Group related mutations to the same Unit into one `univer_execute` call when their complete result can be checked together. Retain returned object IDs and await every asynchronous mutation. After each completed authoring batch, perform the required independent readback and Unit-specific visual checks; values returned by the writing execution do not replace them. Further edits require verification of the affected content before export or handoff.
++
+ Execution is Node ESM: `require` is unavailable, while dynamic `import()` and `Buffer` are available. For an explicit local workspace image, generate its data URI inside the execution instead of putting Base64 in the conversation:
+ 
+ ```js
 diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 --- a/skills/univer-doc/SKILL.md
 +++ b/skills/univer-doc/SKILL.md
@@ -141,44 +225,3 @@ diff --git a/skills/univer-slide/SKILL.md b/skills/univer-slide/SKILL.md
  - Insert or update native charts: reserve the rectangle in the page SVG, then use the direct
    `FSlide` chart methods through `univer_execute`.
  - Verify every changed page: `univer_inspect`, then `univer_lint`, then `univer_screenshot` and inspect the returned PNG.
-diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
---- a/skills/univer/SKILL.md
-+++ b/skills/univer/SKILL.md
-@@ -38,11 +38,13 @@
- 
- ## Facade API lookup
- 
--- No relevant class or API label is known: use `find` with API-name keywords or identifier fragments.
--- A class is known: use `show` on the class to inspect its APIs.
--- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples.
-+- A type or exact `Class.member` API label is known: use `show` on that label for signatures, documentation, and examples. Put the known labels needed for the next operation together in one `queries` array.
-+- The required member is unknown: use `find` with API-name keywords or identifier fragments, the relevant `unit` filter, and `limit: 5` or `10`. Refine or expand the query when those matches do not identify the required API.
-+- Show a whole class only when its complete API inventory is needed. Knowing a class name alone does not require fetching every member.
- 
- `find` is case-insensitive. Each query is searched independently and returns its own matches; queries are not combined as AND, and `find` does not interpret intent. Pass a useful returned label to `show` instead of searching that label again.
-+
-+Reuse signatures already read for this plugin version. Follow referenced parameter types and enums when needed; focused lookup never permits guessing an unfamiliar API.
- 
- ## Required workflow
- 
-@@ -103,6 +105,8 @@
- 
- Do not redeclare injected variables. Use `code` only for a small snippet. For multi-line or reusable Facade logic, write a workspace JavaScript body file and pass it as `codeFile`; provide exactly one of `code` or `codeFile`.
- 
-+Group related mutations to the same Unit into one `univer_execute` call when their complete result can be checked together. Retain returned object IDs and await every asynchronous mutation. After each completed authoring batch, perform the required independent readback and Unit-specific visual checks; values returned by the writing execution do not replace them. Further edits require verification of the affected content before export or handoff.
-+
- Execution is Node ESM: `require` is unavailable, while dynamic `import()` and `Buffer` are available. For an explicit local workspace image, generate its data URI inside the execution instead of putting Base64 in the conversation:
- 
- ```js
-diff --git a/artifacts/unit-content-worker.mjs b/artifacts/unit-content-worker.mjs
---- a/artifacts/unit-content-worker.mjs
-+++ b/artifacts/unit-content-worker.mjs
-@@ -329388,7 +329388,7 @@
- }
- 
- // src/workers/unit-content/license.ts
--var UNIVER_LICENSE = "2088168239728517120-1-eyJpIjoiMjA4ODE2ODIzOTcyODUxNzEyMCIsInYiOiIxIiwicCI6ImtPN3hWUG5mZVFYSlY2ZjRiSk03MFk5NHdOZTZkR3VRTDNxdklqRFpZblU9IiwiZG0iOlsibG9jYWxob3N0Il0sInJ0IjozLCJmdCI6eyJ1ZiI6eyJtdSI6MjE0NzQ4MzY0NiwiZXQiOjE3OTQ3NTg0MDAsIm1tIjoyMTQ3NDgzNjQ2LCJjdSI6MjE0NzQ4MzY0Nn0sInNmIjp7ImV0IjoxNzk0NzU4NDAwLCJydiI6dHJ1ZSwicHRuIjoyMTQ3NDgzNjQ2LCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwibmMiOjIxNDc0ODM2NDYsImllYyI6MCwiZmNjIjowfSwiZGYiOnsiZXQiOjE3OTQ3NTg0MDAsInJ2Ijp0cnVlLCJtaXMiOjIxNDc0ODM2NDYsIm1wbiI6MjE0NzQ4MzY0NiwiaWVjIjowfSwid3NmIjp7ImV0IjoxNzk0NzU4NDAwLCJobiI6MjE0NzQ4MzY0Nn19LCJ1ZCI6MTc5NDc1ODQwMCwiYXQiOjE3ODY2OTMxMTAsImUiOiJkZXZlbG9wZXJAdW5pdmVyLmFpIiwiZCI6OCwibiI6MTl9-ZidzNthAEZRZ13xLQUagdaUsjaMjrr5BDf4JGx9Zzsw1PgmNLak8wuZWQ1le9eMYUyubIa5YI4JpExgdHhN1BA==-1794758400";
-+var UNIVER_LICENSE = "";
- 
- // src/workers/unit-content/runtime/local-referenced-unit-provider.ts
- var LOCAL_REFERENCED_UNIT_PROVIDER_ID = "local-referenced-unit-provider";

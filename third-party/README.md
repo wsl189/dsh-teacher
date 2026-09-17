@@ -13,7 +13,7 @@ This directory pins third-party plugins in the dsh-teacher Web and Windows distr
 | `@xmanrui/dsh-im` | 4.21.1 | Eleven IM platforms, file delivery, reminders, and shared QQ speech input. |
 | `dsh-plugin-cron` | 0.1.3 | Durable schedules, model tools, and browser management. |
 | `dsh-skill-mcp-panel` | 2.0.4 | Skill and profile MCP management. |
-| `dsh-univer-office` | 0.3.0, DSH repack 4 | Sheets, Docs, Slides, Bases, Boards, review, and import/export. |
+| `dsh-univer-office` | 0.3.0, DSH repack 5 | Sheets, Docs, Slides, Bases, Boards, review, and import/export. |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | DOCX, XLSX, and PPTX previews in the official sidebar. |
 
 The Office viewer retains its upstream package name but has no dependency on `dsh-better-sidebar`. Its compatibility patch registers viewers with the official document-preview service. Sidebar files, documents, and terminals come from DSH. Windows desktop control uses the official [native Cua Driver provider](../packages/experimental/computer-use-cua-driver-native/README.md); Windows-MCP and its private Python runtime are absent.
@@ -40,9 +40,9 @@ New bots default to the Host user’s desktop. Electron supplies the system desk
 <a id="artifact-notes"></a>
 ## Artifact notes
 
-Published npm artifacts retain their licenses and source metadata. `pnpm-workspace.yaml` names each compatibility patch; `pnpm-lock.yaml` fixes the resolved closure. AnySearch remains the reviewed 0.1.4 source build. Univer additionally keeps the pristine npm archive beside `dsh-univer-office-0.3.0-dsh.4.tgz` and [runtime.patch](dsh-univer-office/runtime.patch), so the repack is reproducible. Its WebSocket proxy preserves text and binary frames and forwards the Viewer session ticket to the Gateway.
+Published npm artifacts retain their licenses and source metadata. `pnpm-workspace.yaml` names each compatibility patch; `pnpm-lock.yaml` fixes the resolved closure. AnySearch remains the reviewed 0.1.4 source build. Univer additionally keeps the pristine npm archive beside `dsh-univer-office-0.3.0-dsh.5.tgz` and [runtime.patch](dsh-univer-office/runtime.patch), so the repack is reproducible. Its WebSocket proxy preserves text and binary frames and forwards the Viewer session ticket to the Gateway.
 
-The Univer repack includes the [upstream 0.3.0 lockfile](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml) versions of `@univerjs-pro/engine-formula-rust-binding` (`1.0.0-insiders.20260910-22fe9c7`) and `@univerjs-pro/exchange-node-binding` (`0.1.2`). Its skills group related writes and query exact API members while retaining independent readback and visual checks. The [Office generation decision](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.md) records the worker measurements and validation scope.
+The Univer repack includes the [upstream 0.3.0 lockfile](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml) versions of `@univerjs-pro/engine-formula-rust-binding` (`1.0.0-insiders.20260910-22fe9c7`) and `@univerjs-pro/exchange-node-binding` (`0.1.2`). Its skills group related writes and retain independent readback and visual checks. The skills and API tool descriptions recommend exact member queries and distinguish the `find` result limit from complete `show` responses. The [Office generation decision](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.md) records the worker measurements and validation scope.
 
 ## Verification
 

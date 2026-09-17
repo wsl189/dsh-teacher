@@ -41,21 +41,33 @@ describe('archived PPT Master distribution', () => {
   it('keeps discovery cheap and materializes an immutable directory when loaded', async () => {
     const fixture = await archivedFixture()
     const ctx = new Context()
-    await ctx.plugin(SkillRegistry)
-    await ctx.plugin(SkillPptMaster, fixture)
+    try {
+      await ctx.plugin(SkillRegistry)
+      await ctx.plugin(SkillPptMaster, fixture)
 
-    const [summary] = await ctx.skills.list()
-    expect(summary?.resourceBase).toEqual({
-      kind: 'opaque',
-      description: 'packaged PPT Master resources materialized when this skill loads',
-    })
-    await expect(access(fixture.cacheRoot)).rejects.toMatchObject({ code: 'ENOENT' })
-    const loaded = await ctx.skills.get('ppt-master')
-    expect(loaded?.content).toContain('# PPT Master Skill')
-    expect(loaded?.resourceBase?.kind).toBe('directory')
-    if (loaded?.resourceBase?.kind !== 'directory') throw new Error('skill did not materialize a directory')
-    await expect(readFile(join(loaded.resourceBase.path, 'LICENSE'), 'utf8')).resolves.toBe('LICENSE\n')
-    expect(loaded.path).toBe(join(loaded.resourceBase.path, 'SKILL.md'))
+      const [summary] = await ctx.skills.list()
+      expect(summary?.resourceBase).toEqual({
+        kind: 'opaque',
+        description: 'packaged PPT Master resources materialized when this skill loads',
+      })
+      await expect(access(fixture.cacheRoot)).rejects.toMatchObject({ code: 'ENOENT' })
+      const loaded = await ctx.skills.get('ppt-master')
+      expect(loaded?.content).toBe('# PPT Master Skill\n')
+      expect(loaded?.resourceBase?.kind).toBe('directory')
+      if (loaded?.resourceBase?.kind !== 'directory') throw new Error('skill did not materialize a directory')
+      await expect(readFile(join(loaded.resourceBase.path, 'LICENSE'), 'utf8')).resolves.toBe('LICENSE\n')
+      expect(loaded.path).toBe(join(loaded.resourceBase.path, 'SKILL.md'))
+
+      const cwd = join(fixture.cacheRoot, '..', 'presentation workspace')
+      const scoped = await ctx.skills.get('ppt-master', { cwd })
+      expect(scoped?.content).toContain(`Current session workspace (JSON-encoded path): ${JSON.stringify(cwd)}.`)
+      expect(scoped?.resourceBase).toEqual(loaded.resourceBase)
+      await expect(readFile(join(loaded.resourceBase.path, 'SKILL.md'), 'utf8')).resolves.toBe(
+        '---\nname: ppt-master\n---\n# PPT Master Skill\n',
+      )
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('rejects relative archive and cache paths at plugin load', async () => {

@@ -27,6 +27,10 @@ The shipped Web and Windows desktop product exposes PPT Master 6.4.0 as the buil
 
 The default Web composition mounts this package with no configuration. `ppt-master` therefore appears in the session skill catalog and can be loaded by the model or invoked by the user. The desktop installer includes that Web composition and the complete packaged resource directory.
 
+When loaded for a session, the skill includes the current workspace and directs project initialization to pass `--dir` with that workspace or a subdirectory. Explicit user requests for another project or output location remain subject to the session's permissions. The skill retains the exporter's default project-local output and backups unless the user requests a different output path.
+
+Office generation guidance also directs reusable scripts, virtual environments, and files shared between calls or tools into the session workspace because temporary directories such as `/tmp` may be isolated. This guidance does not change sandbox permissions or temporary-directory behavior.
+
 ### Configuration
 
 Add the provider after `@deepseek-ai/dsh-skill`; no configuration is required for the normal package layout:
@@ -62,6 +66,8 @@ A successful composition lists one `bundled` skill named `ppt-master`, loads a b
 
 This package registers one immutable candidate at `BUNDLED_SKILL_RANK`. Its candidate metadata mirrors the pinned upstream frontmatter, while the loaded body excludes that frontmatter. Loose mode derives `resourceBase` and `path` from `import.meta.url`. Archive mode keeps discovery free of extraction work, shares concurrent materialization, extracts into a temporary sibling, and renames the completed content-addressed directory atomically; later loads reuse that directory.
 
+The provider appends project-location instructions from each lookup's `cwd` without modifying the upstream files or their attribution checks. A lookup without `cwd` returns the upstream body alone. Resource paths continue to identify the installed skill directory.
+
 ### Source map
 
 | File | Role |
@@ -93,7 +99,7 @@ Indirectly, through `dsh-tool-skill`, which publishes the `ppt-master` summary i
 
 #### KV Cache effect
 
-The catalog summary changes the session-prefix skill list. Loading `ppt-master` adds its routed entry instructions at the tool result insertion point; later referenced files affect only the turns that read them.
+The catalog summary changes the session-prefix skill list. Loading `ppt-master` adds its routed entry instructions and available session workspace at the tool result insertion point; later referenced files affect only the turns that read them.
 
 ## Known Limitations and Deferred Work
 

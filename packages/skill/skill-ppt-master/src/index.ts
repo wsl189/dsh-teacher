@@ -98,11 +98,25 @@ function createProvider(config: Config): SkillProvider {
   return {
     name: PROVIDER_NAME,
     list: () => Promise.resolve([candidate]),
-    async get(_candidate): Promise<SkillDefinition> {
+    async get(_candidate, { cwd }): Promise<SkillDefinition> {
       const resourcePath = materialized === undefined
         ? LOOSE_RESOURCE_PATH
         : await materializeSkill(materialized)
       const skillPath = join(resourcePath, 'SKILL.md')
+      const body = await loadSkillBody(skillPath)
+      const content = cwd === undefined ? body : `${body}
+## DSH project workspace
+
+Current session workspace (JSON-encoded path): ${JSON.stringify(cwd)}.
+
+Temporary directories such as /tmp may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the session workspace.
+
+For every \`project_manager.py init\` call, explicitly pass \`--dir\` with the absolute workspace path or a directory inside it. Use another project location only when the user explicitly requests it and the session permits writing there. Quote paths for the active shell.
+
+Keep \`SKILL_DIR\` as the skill resource directory. The script's default project directory is derived from the installed skill's path; changing the shell working directory does not select this workspace.
+
+Keep the exporter's default project-local output to preserve its backup behavior, unless the user explicitly requests a different output path. Follow the selected workflow and its required checks, including the attribution guard.
+`
       return {
         name: 'ppt-master',
         description: DESCRIPTION,
@@ -110,7 +124,7 @@ function createProvider(config: Config): SkillProvider {
         provider: PROVIDER_NAME,
         source: 'bundled',
         resourceBase: { kind: 'directory', path: resourcePath },
-        content: await loadSkillBody(skillPath),
+        content,
         path: skillPath,
         metadata: METADATA,
       }

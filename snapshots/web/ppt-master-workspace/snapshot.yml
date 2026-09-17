@@ -1,0 +1,8 @@
+version: 1
+scenario: ppt-master-workspace
+profile: web
+composition: web-default
+# Synthetic model responses; the real agent loop records the workspace-aware PPT Master skill.
+recording: authored
+header:
+  class: web-default

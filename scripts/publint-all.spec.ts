@@ -176,7 +176,7 @@ describe('publint package runner', () => {
       '@huanlin/dsh-plugin-better-sidebar-plugin-office': 'file:../../../third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz',
       'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
       'dsh-skill-mcp-panel': 'file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz',
-      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz',
+      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz',
     }
     const accepted = await run(fixture({ packagePath: 'packages/bundle/web-app', dependencies }), signal)
     expect(accepted.exitCode, accepted.stdout + accepted.stderr).toBe(0)

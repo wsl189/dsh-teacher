@@ -2404,8 +2404,8 @@ importers:
         specifier: file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz
         version: file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz(patch_hash=8e1851a170173ac71d1ec3a52aecc2a76fbf0969789b32030f3b0b9aae098064)(supports-color@9.4.0)
       dsh-univer-office:
-        specifier: file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz
-        version: file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)(yauzl@2.10.0)
+        specifier: file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz
+        version: file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)(yauzl@2.10.0)
       open:
         specifier: ^11.0.0
         version: 11.0.4
@@ -18559,8 +18559,8 @@ packages:
     version: 2.0.4
     hasBin: true
 
-  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz:
-    resolution: {integrity: sha512-b6Ti+cip804diW0eXUyzV+7rjuU7B+M6IChht0kvPgx1ZGwaXWiYCw0mBa7nNG4unHTtyuzGJ26gzCH6ER5j6g==, tarball: file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz}
+  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz:
+    resolution: {integrity: sha512-VNawmKcOeP+9X8Vy8MYZ9LQUMtX8m+GKook1kuWlpzN9o4HMF/+s0O6TZ4W2pkyz2EgT1VaN53e94WmCV8mrHg==, tarball: file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz}
     version: 0.3.0
     engines: {node: '>=22.19.0'}
     peerDependencies:
@@ -28103,7 +28103,7 @@ snapshots:
       - '@cfworker/json-schema'
       - supports-color
 
-  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.4.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)(yauzl@2.10.0):
+  dsh-univer-office@file:third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.5.tgz(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-attachment@packages+attachment+attachment)(@deepseek-ai/dsh-host-webserver@packages+host+webserver)(@deepseek-ai/dsh-llm@packages+llm+llm)(@deepseek-ai/dsh-session@packages+core+session)(@deepseek-ai/dsh-settings@packages+settings+settings)(@deepseek-ai/dsh-skill@packages+skill+skill)(@deepseek-ai/dsh-tools@packages+core+tools)(@deepseek-ai/schemastery@vendor+schemastery)(yauzl@2.10.0):
     dependencies:
       '@deepseek-ai/cordis': link:vendor/cordis
       '@deepseek-ai/dsh-attachment': link:packages/attachment/attachment

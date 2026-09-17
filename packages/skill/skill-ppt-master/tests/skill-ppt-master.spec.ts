@@ -46,6 +46,7 @@ describe('dsh-skill-ppt-master', () => {
       invocation: { modelInvocable: true, userInvocable: true },
       provider: 'ppt-master',
       source: 'bundled',
+      path: skillPath,
       resourceBase: { kind: 'directory', path: resourcePath },
     })
     const loaded = await ctx.skills.get('ppt-master')
@@ -64,6 +65,49 @@ describe('dsh-skill-ppt-master', () => {
 
     await fiber.dispose()
     expect(await ctx.skills.list()).toEqual([])
+  })
+
+  it('adds each session workspace while preserving the upstream instructions and resource directory', async () => {
+    const ctx = new Context()
+    try {
+      await ctx.plugin(SkillRegistry)
+      await ctx.plugin(SkillPptMaster)
+      const skillPath = fileURLToPath(new URL('../assets/ppt-master/SKILL.md', import.meta.url))
+      const source = await readFile(skillPath, 'utf8')
+      const upstreamBody = source.replace(/^---\n[\s\S]*?\n---\n/u, '')
+      const baseline = await ctx.skills.get('ppt-master')
+      expect(baseline?.content).toBe(upstreamBody)
+
+      const [first, second] = await Promise.all([
+        ctx.skills.get('ppt-master', { cwd: '/workspaces/presentation draft' }),
+        ctx.skills.get('ppt-master', { cwd: String.raw`C:\Workspaces\Presentation review` }),
+      ])
+      expect(first?.content.startsWith(upstreamBody)).toBe(true)
+      expect(second?.content.startsWith(upstreamBody)).toBe(true)
+      expect(first?.resourceBase).toEqual(baseline?.resourceBase)
+      expect(second?.resourceBase).toEqual(baseline?.resourceBase)
+      expect(second?.content).toContain(String.raw`"C:\\Workspaces\\Presentation review"`)
+      expect(second?.content).not.toContain('/workspaces/presentation draft')
+      expect(first?.content).not.toContain('Presentation review')
+      expect(first?.content.slice(upstreamBody.length)).toMatchInlineSnapshot(`
+        "
+        ## DSH project workspace
+
+        Current session workspace (JSON-encoded path): "/workspaces/presentation draft".
+
+        Temporary directories such as /tmp may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the session workspace.
+
+        For every \`project_manager.py init\` call, explicitly pass \`--dir\` with the absolute workspace path or a directory inside it. Use another project location only when the user explicitly requests it and the session permits writing there. Quote paths for the active shell.
+
+        Keep \`SKILL_DIR\` as the skill resource directory. The script's default project directory is derived from the installed skill's path; changing the shell working directory does not select this workspace.
+
+        Keep the exporter's default project-local output to preserve its backup behavior, unless the user explicitly requests a different output path. Follow the selected workflow and its required checks, including the attribution guard.
+        "
+      `)
+      expect((await ctx.skills.get('ppt-master'))?.content).toBe(upstreamBody)
+    } finally {
+      await ctx.fiber.dispose()
+    }
   })
 
   it('ships the complete attributed upstream 6.4.0 distribution', async () => {

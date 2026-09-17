@@ -13,7 +13,7 @@
 | `@xmanrui/dsh-im` | 4.21.1 | 十一个 IM 平台、文件发送、提醒及共用的 QQ 语音输入。 |
 | `dsh-plugin-cron` | 0.1.3 | 持久化定时任务、模型工具和浏览器管理。 |
 | `dsh-skill-mcp-panel` | 2.0.4 | 技能与 profile MCP 管理。 |
-| `dsh-univer-office` | 0.3.0，DSH 重打包 4 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
+| `dsh-univer-office` | 0.3.0，DSH 重打包 5 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
 
 Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
@@ -40,9 +40,9 @@ Univer 每次内容操作均在独立的 Node 进程中运行，并共用 `<DSH_
 <a id="artifact-notes"></a>
 ## 来源包说明
 
-npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.4.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
+npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.5.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
 
-Univer 重打包补齐[上游 0.3.0 锁文件](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml)指定版本的 `@univerjs-pro/engine-formula-rust-binding`（`1.0.0-insiders.20260910-22fe9c7`）和 `@univerjs-pro/exchange-node-binding`（`0.1.2`）。技能将相关写入合为批次，并精确查询 API 成员，同时保留独立读回与视觉检查。[Office 生成决策](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.zh.md)记录了 worker 测量结果与验证范围。
+Univer 重打包补齐[上游 0.3.0 锁文件](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml)指定版本的 `@univerjs-pro/engine-formula-rust-binding`（`1.0.0-insiders.20260910-22fe9c7`）和 `@univerjs-pro/exchange-node-binding`（`0.1.2`）。技能将相关写入合为批次，并保留独立读回与视觉检查。技能和 API 工具说明均建议精确查询成员，并区分 `find` 的结果条数限制与 `show` 的完整响应。[Office 生成决策](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.zh.md)记录了 worker 测量结果与验证范围。
 
 ## 验证
 
