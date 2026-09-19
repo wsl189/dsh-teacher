@@ -25,10 +25,8 @@ overrides:
   dsh-skill-mcp-panel>@deepseek-ai/dsh-subprocess: link:packages/subprocess/subprocess
   dsh-skill-mcp-panel>@deepseek-ai/dsh-typert-protocol: link:packages/typert/protocol
   dsh-univer-office>@deepseek-ai/dsh-attachment: link:packages/attachment/attachment
-  dsh-univer-office>@deepseek-ai/dsh-host-webserver: link:packages/host/webserver
   dsh-univer-office>@deepseek-ai/dsh-llm: link:packages/llm/llm
   dsh-univer-office>@deepseek-ai/dsh-session: link:packages/core/session
-  dsh-univer-office>@deepseek-ai/dsh-settings: link:packages/settings/settings
   dsh-univer-office>@deepseek-ai/dsh-skill: link:packages/skill/skill
   dsh-univer-office>@deepseek-ai/dsh-tools: link:packages/core/tools
   app-builder-lib>@electron/get: 3.1.0
@@ -100,7 +98,6 @@ minimumReleaseAgeExclude:
   - '@tencent-connect/qqbot-nodejs@1.0.4'
   - '@wecom/aibot-node-sdk@1.0.7'
 patchedDependencies:
-  dsh-univer-office@0.3.0: patches/dsh-univer-office@0.3.0.patch
   '@electron/osx-sign@1.3.3': patches/@electron__osx-sign@1.3.3.patch
   '@yao-pkg/pkg@6.21.0': patches/@yao-pkg__pkg@6.21.0.patch
   node-pty@1.2.0-beta.15: patches/node-pty@1.2.0-beta.15.patch

@@ -14,7 +14,9 @@ The [Office workspace plugin](../../../../packages/deliverables/office-workspace
 
 A monotonic tool guard requires new Univer projects and output files to stay in an active directory owned by the calling session and turn. Existing ancestors resolve through symlinks before checking containment and the allocation's filesystem identity. This also covers direct calls and old sessions with previously loaded instructions. Existing native projects remain editable, and explicit `.univer` deliverables use the same publication operation as Office files.
 
-Unfinished directories expire when their turn ends, including cancellation and errors. A workflow awaiting user confirmation calls `pause` before a normal turn ending and `resume` before the next turn continues its project. Session and plugin disposal also join queued cleanup. Original user inputs stay outside temporary storage. Explicit pauses preserve multi-stage PPT planning without retaining every forgotten draft indefinitely.
+Unfinished directories are cleaned when their turn ends, including cancellation and errors, after the [final-file preservation policy](../bug-fix/2026-09-19-office-final-files-survive-cleanup.md) recovers remaining Office exports. A workflow awaiting user confirmation calls `pause` before a normal turn ending and `resume` before the next turn continues its project. Session and plugin disposal also join queued cleanup. Original user inputs stay outside temporary storage. Explicit pauses preserve multi-stage PPT planning without retaining every forgotten draft indefinitely.
+
+Before publication or removal, `office-workspace/releasing` serially awaits registered resource owners after verifying directory identity. Univer closes its cached databases here so Windows can remove them and native project copies include committed data. A failed release, publication, or deletion retains that directory and reports its path; other directories continue independently. Plugin disposal waits for every session cleanup before reporting failures.
 
 The [generation performance decision](../bug-fix/2026-09-16-office-generation-overhead.md) retains grouped authoring, independent readback, compile caching, and workspace-local sharing across sandbox calls. This decision narrows shared workspace placement to an owned temporary directory and governs cleanup. Upstream PPT Master assets and attribution checks remain intact.
 
@@ -28,7 +30,7 @@ The [generation performance decision](../bug-fix/2026-09-16-office-generation-ov
 
 ## Consequences
 
-Finalization adds short tool calls but does not remove content or visual verification. Concurrent sessions receive separate directories, existing destinations remain intact, and final files contain independent copies. Cancellation and application shutdown lose unfinished drafts; confirmation pauses survive only while the owning session stays loaded. Abrupt application crashes and scripts that ignore the allocated path can still leave residue; automatic startup scans are excluded because another live process may own those files.
+Finalization adds short tool calls but does not remove content or visual verification. Concurrent sessions receive separate directories, existing destinations remain intact, and final files contain independent copies. Cancellation and application shutdown clean intermediate projects after recovering Office exports; confirmation pauses survive only while the owning session stays loaded. Abrupt application crashes and scripts that ignore the allocated path can still leave residue; automatic startup scans are excluded because another live process may own those files.
 
 ## Verification
 

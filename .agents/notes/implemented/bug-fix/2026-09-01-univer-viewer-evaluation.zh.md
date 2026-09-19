@@ -10,7 +10,7 @@ Status: implemented
 
 ## 决策
 
-发布版 Viewer 提供评估界面。[运行时补丁](../../../../third-party/dsh-univer-office/runtime.patch)移除 Host 和文档工作线程中的开发许可证回退值；显式设置的 `UNIVER_LICENSE` 仍作为运行时输入。DSH 不提供替代授权，并保留上游验证、水印和功能限制。[内置扩展决策](../feature/2026-08-25-bundled-extensions-and-qq-speech.zh.md)拥有制品分发、遥测和凭据管理规则。
+[无界面分发决策](../simplification/2026-09-19-univer-headless-office.zh.md)取代 Viewer 界面；内容工具与后台渲染继续遵守评估模式及运行时许可规则。[运行时补丁](../../../../third-party/dsh-univer-office/runtime.patch)移除 Host 和文档工作线程中的开发许可证回退值；显式设置的 `UNIVER_LICENSE` 仍作为运行时输入。DSH 不提供替代授权，并保留上游验证、水印和功能限制。[内置扩展决策](../feature/2026-08-25-bundled-extensions-and-qq-speech.zh.md)拥有制品分发、遥测和凭据管理规则。
 
 ## 考虑过的替代方案
 
@@ -20,4 +20,4 @@ Status: implemented
 
 ## 后果
 
-[录制的 Web 场景](../../../../snapshots/web/univer-viewer/snapshot.yml)和[浏览器测试](../../../../apps/web/tests/univer-viewer.e2e.ts)打开打包的 Gateway 与 Viewer，要求表格网格可用且 Gateway 连接已同步，并比较持久化工具回合和无障碍界面。它们使用模型回放与合成表格，不验证商业许可证。
+[录制的 Web 场景](../../../../snapshots/web/univer-viewer/snapshot.yml)在无许可证情况下运行打包的内容工具，并验证移除的 Viewer 不再可用。真实 Office 生成测试保留导出内容与后台渲染检查。这些场景不验证商业许可证。

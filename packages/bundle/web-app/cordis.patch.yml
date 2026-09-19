@@ -216,7 +216,7 @@
       name: dsh-univer-office
       config:
         # The built-in distribution does not opt users into third-party
-        # telemetry. All other plugin defaults remain available in Settings.
+        # telemetry. Content editing and export run without a Univer Client.
         telemetry: false
 
     - id: teacher-workbench

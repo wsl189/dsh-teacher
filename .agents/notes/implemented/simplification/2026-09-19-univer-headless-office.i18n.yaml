@@ -1,0 +1,6 @@
+# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
+# side as of the last confirmed-consistent state. Both languages carry equal authority;
+# after editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-19-univer-headless-office.md
+2026-09-19-univer-headless-office.md: ddab004da1306a70d27e0ccbb5daf604dbe594c2
+2026-09-19-univer-headless-office.zh.md: 396221733df5b5469f44dbd4bcaf07be286f9aa9

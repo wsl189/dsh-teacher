@@ -3,7 +3,7 @@ import * as fs from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
-import { createScratch, publishFiles, removeScratch } from '../src/files.ts'
+import { createScratch, publishAvailable, publishFiles, removeScratch } from '../src/files.ts'
 
 vi.mock('node:fs/promises', async (original) => {
   const actual = await original<typeof fs>()
@@ -78,4 +78,20 @@ it('admits only one publisher when two generations reach the same destination to
     [{ source: 'source.docx', destination: 'final.docx' }], new AbortController().signal)))
   expect(results.filter(result => result.status === 'fulfilled')).toHaveLength(1)
   expect(await fs.readFile(join(cwd, 'final.docx'), 'utf8')).toMatch(/^(?:second )?document$/u)
+})
+
+it('recovers both documents when another publisher wins the automatic destination race', async () => {
+  const { cwd, scratch: first } = await draft()
+  const second = await createScratch(cwd)
+  await fs.writeFile(join(second.directory, 'source.docx'), 'second document')
+  const bothReady = Promise.withResolvers<undefined>()
+  let count = 0
+  vi.mocked(fs.link).mockImplementation(async (source, destination) => {
+    if (++count === 2) bothReady.resolve(undefined)
+    await bothReady.promise
+    return actual.link(source, destination)
+  })
+  const results = await Promise.all([first, second].map(scratch => publishAvailable(scratch, ['source.docx'], new AbortController().signal)))
+  expect(results.flat().sort()).toEqual([join(cwd, 'source (1).docx'), join(cwd, 'source.docx')])
+  expect((await Promise.all(results.flat().map(path => fs.readFile(path, 'utf8')))).sort()).toEqual(['document', 'second document'])
 })

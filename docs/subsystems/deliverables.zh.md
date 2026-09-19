@@ -137,6 +137,8 @@ interface WorkspaceChanges {
 
 `tool-present` 通过声明合并把 `deliverables/presented: { turn; callId; files: PresentedFile[] }` 加入 `SessionEventMap`，每次 `present` 的最终结果成功时追加一条。`workspace-changes` 合并 `workspace/changes: { turn }`，在顶层轮停止时追加；该事件宣告的摘要不在日志里，而是由 `workspaceChanges.summary(sessionId, seq)` 按事件序号返回，直到 Session 释放，因此 Host 重启后重新打开的对话，先前轮次没有改动文件卡片。`workspaceChanges.diff(sessionId, seq, index, signal)` 按同样的条件对比一个所列文件。同一轮后来的事件替代先前的，客户端只保留最新一条。生成的[持久化目录](../persistence-catalog.zh.md#deliverablespresented--log-only)记录了两处声明位置。两个事件都不会进入模型请求。
 
+`deliverables/prepare` 瀑布事件接收所属 Session、工作区和取消信号；监听器等待 `next()` 返回选中的文件列表，再返回用于校验与持久声明的路径。[Office 工作区插件](../../packages/deliverables/office-workspace/README.zh.md)使用它在交付前发布自有临时文件。
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -175,4 +177,52 @@ diff(sessionId: SessionId, seq: number, index: number, signal: AbortSignal): Pro
 Types: [SessionId](core.zh.md)
 
 Source: [`packages/deliverables/workspace-changes/src/types.ts`](../../packages/deliverables/workspace-changes/src/types.ts)
+
+<a id="deliverables-events"></a>
+
+### `deliverables/*` events
+
+<a id="deliverablesprepare--waterfall"></a>
+
+#### `deliverables/prepare` — waterfall
+
+Prepare final files before checking and recording their delivery paths. Listeners await `next()` for the selected files and may publish owned temporary files. Rejection fails presentation; returned paths must survive temporary cleanup.
+
+```ts cordis-catalog
+/**
+ * Prepare final files before checking and recording their delivery paths.
+ * Listeners await `next()` for the selected files and may publish owned temporary files.
+ * Rejection fails presentation; returned paths must survive temporary cleanup.
+ * @param request - owning Session, workspace, and cancellation signal.
+ * @mode waterfall
+ */
+'deliverables/prepare'(request: { session: Session; cwd: string; signal: AbortSignal }, next: () => Promise<readonly PresentedFile[]>): Promise<readonly PresentedFile[]>
+```
+
+Types: [Session](session.zh.md)
+
+Source: [`packages/deliverables/tool-present/src/index.ts`](../../packages/deliverables/tool-present/src/index.ts)
+
+<a id="office-workspace-events"></a>
+
+### `office-workspace/*` events
+
+<a id="office-workspacereleasing--serial"></a>
+
+#### `office-workspace/releasing` — serial
+
+Release cached file handles before owned Office files are copied or removed. Listeners must finish writes and close handles; rejection preserves the directory. Subsequent edits may reopen the files until the owner removes the project.
+
+```ts cordis-catalog
+/**
+ * Release cached file handles before owned Office files are copied or removed.
+ * Listeners must finish writes and close handles; rejection preserves the directory.
+ * Subsequent edits may reopen the files until the owner removes the project.
+ * @param directory - canonical temporary directory whose allocated identity was verified.
+ * @mode serial
+ */
+'office-workspace/releasing'(directory: string): Promise<void> | void
+```
+
+Source: [`packages/deliverables/office-workspace/src/index.ts`](../../packages/deliverables/office-workspace/src/index.ts)
 <!-- END GENERATED cordis-surface -->

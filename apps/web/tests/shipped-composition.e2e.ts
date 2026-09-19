@@ -87,6 +87,7 @@ const EXPECTED_GLOBAL_TOOLS = [
   'edit_image',
   'generate_image',
   'get_image_generation_task',
+  'office_workspace',
   'teacher_daily_management',
   'teacher_question_image_read',
   'teacher_question_workbench',
@@ -118,7 +119,6 @@ const EXPECTED_BUNDLED_CLIENT_MODULES = [
   '@xmanrui/dsh-im',
   'dsh-plugin-cron',
   'dsh-skill-mcp-panel',
-  'dsh-univer-office',
 ]
 
 let scaffold: WebScaffold | undefined
@@ -140,6 +140,8 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     expect.arrayContaining(EXPECTED_BUNDLED_CLIENT_MODULES),
   )
   expect(ctx.settings.describe().some(row => row.ns === 'windows-mcp')).toBe(false)
+  expect(ctx.clientModules.graph().entries.some(entry => entry.id === 'dsh-univer-office')).toBe(false)
+  expect(ctx.settings.describe().some(row => row.ns === 'univer-office')).toBe(false)
   for (const endpoint of ['skillsViewer/list', 'skillsViewer/workspaces', 'mcpManager/list']) {
     const response = await scaffold.hostFetch(`/api/${endpoint}`, {
       method: 'POST',

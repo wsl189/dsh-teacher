@@ -137,6 +137,8 @@ interface WorkspaceChanges {
 
 `tool-present` declaration-merges `deliverables/presented: { turn; callId; files: PresentedFile[] }` into `SessionEventMap`, appended once per successful final `present` result. `workspace-changes` merges `workspace/changes: { turn }`, appended when a top-level turn stops; the summary that event announced is not in the log but is returned by `workspaceChanges.summary(sessionId, seq)` for the event's sequence until the Session is disposed, so a conversation reopened after a Host restart has no changed-files card for its earlier turns. `workspaceChanges.diff(sessionId, seq, index, signal)` compares one listed file on the same terms. A later event for the same turn replaces the earlier one, so a client keeps only the latest. The generated [persistence catalog](../persistence-catalog.md#deliverablespresented--log-only) records both declaration sites. Neither event reaches the model.
 
+The `deliverables/prepare` waterfall receives the owning Session, workspace, and cancellation signal; listeners await the selected file list from `next()` and return paths for validation and durable declaration. The [Office workspace plugin](../../packages/deliverables/office-workspace/README.md) uses it to publish owned temporary files before presentation.
+
 <!-- BEGIN GENERATED cordis-surface (gen-cordis-catalog.ts) — do not edit between markers -->
 
 <a id="cordis-surface"></a>
@@ -175,4 +177,52 @@ diff(sessionId: SessionId, seq: number, index: number, signal: AbortSignal): Pro
 Types: [SessionId](core.md)
 
 Source: [`packages/deliverables/workspace-changes/src/types.ts`](../../packages/deliverables/workspace-changes/src/types.ts)
+
+<a id="deliverables-events"></a>
+
+### `deliverables/*` events
+
+<a id="deliverablesprepare--waterfall"></a>
+
+#### `deliverables/prepare` — waterfall
+
+Prepare final files before checking and recording their delivery paths. Listeners await `next()` for the selected files and may publish owned temporary files. Rejection fails presentation; returned paths must survive temporary cleanup.
+
+```ts cordis-catalog
+/**
+ * Prepare final files before checking and recording their delivery paths.
+ * Listeners await `next()` for the selected files and may publish owned temporary files.
+ * Rejection fails presentation; returned paths must survive temporary cleanup.
+ * @param request - owning Session, workspace, and cancellation signal.
+ * @mode waterfall
+ */
+'deliverables/prepare'(request: { session: Session; cwd: string; signal: AbortSignal }, next: () => Promise<readonly PresentedFile[]>): Promise<readonly PresentedFile[]>
+```
+
+Types: [Session](session.md)
+
+Source: [`packages/deliverables/tool-present/src/index.ts`](../../packages/deliverables/tool-present/src/index.ts)
+
+<a id="office-workspace-events"></a>
+
+### `office-workspace/*` events
+
+<a id="office-workspacereleasing--serial"></a>
+
+#### `office-workspace/releasing` — serial
+
+Release cached file handles before owned Office files are copied or removed. Listeners must finish writes and close handles; rejection preserves the directory. Subsequent edits may reopen the files until the owner removes the project.
+
+```ts cordis-catalog
+/**
+ * Release cached file handles before owned Office files are copied or removed.
+ * Listeners must finish writes and close handles; rejection preserves the directory.
+ * Subsequent edits may reopen the files until the owner removes the project.
+ * @param directory - canonical temporary directory whose allocated identity was verified.
+ * @mode serial
+ */
+'office-workspace/releasing'(directory: string): Promise<void> | void
+```
+
+Source: [`packages/deliverables/office-workspace/src/index.ts`](../../packages/deliverables/office-workspace/src/index.ts)
 <!-- END GENERATED cordis-surface -->

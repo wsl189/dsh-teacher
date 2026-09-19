@@ -3,7 +3,7 @@ import { mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } fro
 import { tmpdir } from 'node:os'
 import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createScratch, ownsOutput, publishFiles, removeScratch } from '../src/files.ts'
+import { createScratch, ownsOutput, publishAvailable, publishFiles, recoverableFiles, removeScratch } from '../src/files.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -17,6 +17,46 @@ async function workspace(): Promise<string> {
 }
 
 describe('Office scratch files', () => {
+  it('recovers only non-empty Office exports without following input links or copying previews', async () => {
+    const cwd = await workspace()
+    const scratch = await createScratch(cwd)
+    await mkdir(join(scratch.directory, 'nested'))
+    await writeFile(join(scratch.directory, 'nested', 'report.DOCX'), 'document')
+    await writeFile(join(scratch.directory, 'report.docx'), 'another document')
+    for (const name of ['empty.xlsx', 'preview.pdf', 'draft.univer', 'author.js']) await writeFile(join(scratch.directory, name), name === 'empty.xlsx' ? '' : 'intermediate')
+    const outside = await workspace()
+    await writeFile(join(outside, 'original.docx'), 'original')
+    await symlink(outside, join(scratch.directory, 'inputs'), 'junction')
+    const sources = await recoverableFiles(scratch)
+    expect(sources).toEqual([join(scratch.directory, 'nested', 'report.DOCX'), join(scratch.directory, 'report.docx')])
+    const files = await publishAvailable(scratch, sources, new AbortController().signal)
+    expect(files).toEqual([join(cwd, 'report.DOCX'), join(cwd, 'report (1).docx')])
+    expect(await readFile(files[0]!, 'utf8')).toBe('document')
+    expect(await readFile(files[1]!, 'utf8')).toBe('another document')
+    expect(await recoverableFiles(scratch)).toEqual([])
+    await removeScratch(scratch)
+    expect(await recoverableFiles(scratch)).toEqual([])
+    await expect(publishFiles(scratch, [{ source: 'report.docx', destination: 'missing.docx' }], new AbortController().signal)).rejects.toMatchObject({ code: 'ENOENT' })
+    expect(await readFile(join(outside, 'original.docx'), 'utf8')).toBe('original')
+  })
+
+  it('gives colliding exports separate workspace names and does not replace existing files', async () => {
+    const cwd = await workspace()
+    const scratch = await createScratch(cwd)
+    await mkdir(join(scratch.directory, 'second'))
+    await writeFile(join(scratch.directory, 'report.docx'), 'one')
+    await writeFile(join(scratch.directory, 'second', 'report.docx'), 'two')
+    await writeFile(join(cwd, 'report.docx'), 'original')
+    const files = await publishAvailable(scratch, ['report.docx', 'second/report.docx'], new AbortController().signal)
+    expect(files).toEqual([join(cwd, 'report (1).docx'), join(cwd, 'report (2).docx')])
+    expect(await readFile(files[0]!, 'utf8')).toBe('one')
+    expect(await readFile(files[1]!, 'utf8')).toBe('two')
+    expect(await readFile(join(cwd, 'report.docx'), 'utf8')).toBe('original')
+    expect(await recoverableFiles(scratch)).toEqual([])
+    await expect(publishAvailable(scratch, ['missing.docx'], new AbortController().signal)).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(publishAvailable(scratch, [], AbortSignal.abort())).rejects.toThrow()
+  })
+
   it('accepts existing and new output descendants and resolves workspace aliases', async () => {
     const cwd = await workspace()
     const scratch = await createScratch(cwd)

@@ -13,7 +13,7 @@
 | `@xmanrui/dsh-im` | 4.21.1 | 十一个 IM 平台、文件发送、提醒及共用的 QQ 语音输入。 |
 | `dsh-plugin-cron` | 0.1.3 | 持久化定时任务、模型工具和浏览器管理。 |
 | `dsh-skill-mcp-panel` | 2.0.4 | 技能与 profile MCP 管理。 |
-| `dsh-univer-office` | 0.3.0，DSH 重打包 7 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
+| `dsh-univer-office` | 0.3.0，DSH 重打包 8 | 无界面的 Sheet、Doc、Slide、Base、Board 编辑、校验和导入导出。 |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
 
 Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器，并将面板可用高度分配给各预览器的画布或滚动区域。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
@@ -40,7 +40,7 @@ Univer 每次内容操作均在独立的 Node 进程中运行，并共用 `<DSH_
 
 聊天生成的 Word 默认使用 Times New Roman 排版拉丁字母和数字。Doc 技能以 `\(...\)` 和 `\[...\]` 标记行内与独立 TeX 公式；DOCX 导出将这些表达式转换为可编辑的原生 Office 公式。新公式中的字母和数字使用 Times New Roman，变量保留斜体，数字及函数名保持正体。运算符和可伸展符号保留 Cambria Math，明确指定的数学字形类别保留各自样式。不支持的已标记公式会使导出失败，不会替换已有目标文件。明确设置的正文字体及中文字体保持不变。
 
-转换器对 XML 文本与属性值转义，保留比较符号和与号。公式速查表同样使用 TeX 标记并逐行创建段落；未标记文本和字面的 `\n` 不会被推断为公式或换行。转换错误指出待修正的源公式，不以相似符号替代。Univer 实时编辑器显示 TeX 源文，因此需要检查导出 Word 的公式排版。已经栅格化为图片的公式无法通过此转换恢复。[原生 Word 决策](../.agents/notes/implemented/feature/2026-09-17-chat-word-native-equations.zh.md)定义转换范围和验证方式；工作台导出与模型设置各自独立。
+转换器对 XML 文本与属性值转义，保留比较符号和与号。公式速查表同样使用 TeX 标记并逐行创建段落；未标记文本和字面的 `\n` 不会被推断为公式或换行。转换错误指出待修正的源公式，不以相似符号替代。Univer 原生文档保存 TeX 源文，因此需要检查导出 Word 的公式排版。已经栅格化为图片的公式无法通过此转换恢复。[原生 Word 决策](../.agents/notes/implemented/feature/2026-09-17-chat-word-native-equations.zh.md)定义转换范围和验证方式；工作台导出与模型设置各自独立。
 
 Univer 技能使用 [Office 工作区工具](../packages/deliverables/office-workspace/README.zh.md)，将编写脚本、截图、`.univer` 源文件和导出草稿保存在受管理的临时目录中。完成必需回读与视觉检查后，再发布最终文件并清理。
 
@@ -51,9 +51,9 @@ Univer 技能使用 [Office 工作区工具](../packages/deliverables/office-wor
 <a id="artifact-notes"></a>
 ## 来源包说明
 
-固定版本的技能/MCP 面板使用兼容补丁适配 alpha.2 的 Typert 编解码器工厂；其版本、已保存技能、分组和服务器配置保持不变。Univer 以具名回合尾部列表项贡献预览，与官方文件修改卡片共存。
+固定版本的技能/MCP 面板使用兼容补丁适配 alpha.2 的 Typert 编解码器工厂；其版本、已保存技能、分组和服务器配置保持不变。Univer 不包含 Client 入口、弹窗、实时预览、审阅页面或插件设置卡片。DSH 保留独立的 Office 侧边栏预览器。内容 worker 和后台渲染继续用于 AI 编辑、截图及导出。
 
-npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.7.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
+npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.8.tgz` 旁保留原始 npm 来源包、[runtime.patch](dsh-univer-office/runtime.patch) 和 [headless.patch](dsh-univer-office/headless.patch)。使用 GNU tar、patch 和 gzip 执行 `node third-party/dsh-univer-office/repack.mjs` 可复现来源包。重打包移除 `lib/client.js` 和 `artifacts/viewer`；Gateway 提供内容 API 和 JSON 健康检查端点。Office 发布或清理前，只关闭已验证临时目录内的空闲数据库缓存；存在活动操作时阻止清理并保留源文件。
 
 Univer 重打包补齐[上游 0.3.0 锁文件](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml)指定版本的 `@univerjs-pro/engine-formula-rust-binding`（`1.0.0-insiders.20260910-22fe9c7`）和 `@univerjs-pro/exchange-node-binding`（`0.1.2`）。技能将相关写入合为批次，并保留独立读回与视觉检查。技能和 API 工具说明均建议精确查询成员，并区分 `find` 的结果条数限制与 `show` 的完整响应。[Office 生成决策](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.zh.md)记录了 worker 测量结果与验证范围。
 

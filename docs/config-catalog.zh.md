@@ -3454,7 +3454,7 @@ export interface Config {
 }
 ```
 
-来源：[`packages/deliverables/tool-present/src/index.ts:15`](../packages/deliverables/tool-present/src/index.ts)
+来源：[`packages/deliverables/tool-present/src/index.ts:28`](../packages/deliverables/tool-present/src/index.ts)
 
 <a id="deepseek-aidsh-tool-pwsh"></a>
 

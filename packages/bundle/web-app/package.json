@@ -149,7 +149,7 @@
     "@xmanrui/dsh-im": "file:../../../third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz",
     "dsh-plugin-cron": "file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz",
     "dsh-skill-mcp-panel": "file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz",
-    "dsh-univer-office": "file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.7.tgz",
+    "dsh-univer-office": "file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.8.tgz",
     "@deepseek-ai/dsh-computer-use": "workspace:^",
     "@deepseek-ai/dsh-experimental-computer-use-cua-driver-native": "workspace:^",
     "@deepseek-ai/dsh-workspace-changes": "workspace:^",

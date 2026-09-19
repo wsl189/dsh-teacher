@@ -7,6 +7,8 @@ import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-client-modules'
+import type {} from '@deepseek-ai/dsh-settings'
 import {
   assertFixtureInventory,
   compareOrRefreshGolden,
@@ -17,14 +19,13 @@ import {
 import { newEnglishPage, saveFailureShot } from './support.ts'
 
 const SNAPSHOT_DIR = fileURLToPath(new URL('../../../snapshots/web/univer-viewer', import.meta.url))
-const FIXTURE = join(SNAPSHOT_DIR, 'session.jsonl')
+const FIXTURE = join(SNAPSHOT_DIR, 'session.v3.jsonl')
 
-describe('bundled Univer Viewer without a license', () => {
+describe('bundled Univer content tools without their own interface', () => {
   let scaffold: WebScaffold
   let handle: AgentHandle
   let browser: Browser
   let page: Page
-  let viewerUrl: string
 
   beforeAll(async () => {
     vi.stubEnv('UNIVER_LICENSE', undefined)
@@ -43,15 +44,6 @@ describe('bundled Univer Viewer without a license', () => {
     const results = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
     expect(results).toHaveLength(1)
     expect(results.every(event => event.data.message.content.every(block => !block.isError))).toBe(true)
-    const query = new URLSearchParams({
-      file: join(scaffold.workspaceCwd, 'evaluation.univer'), sessionId: String(handle.agent.session.id),
-    })
-    const response = await scaffold.hostFetch('/univer-api/state?' + query.toString())
-    expect(response.status).toBe(200)
-    const state = await response.json() as { gateway: string; worktrees: { worktreeUrl: string }[] }
-    const worktree = state.worktrees[0]
-    if (worktree === undefined) throw new Error('the recorded Univer Sheet has no draft worktree')
-    viewerUrl = new URL(worktree.worktreeUrl, scaffold.baseUrl).href
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })
@@ -66,20 +58,27 @@ describe('bundled Univer Viewer without a license', () => {
     if (failures.length > 0) throw new AggregateError(failures, 'Univer Viewer teardown failed')
   })
 
-  it('opens the recorded draft Sheet with the upstream evaluation limits', async () => {
-    onTestFailed(() => saveFailureShot(page, 'univer-viewer-unlicensed'))
-    const errors: string[] = []
-    page.on('pageerror', error => errors.push(error.message))
-    await page.goto(viewerUrl, { waitUntil: 'load' })
-    await page.getByText('Sheet1', { exact: true }).waitFor({ timeout: 20_000 })
-    await page.locator('canvas').first().waitFor({ state: 'visible', timeout: 20_000 })
-    await page.getByRole('tab', { name: 'Formulas', exact: true }).waitFor({ timeout: 20_000 })
-    await page.getByText('General', { exact: true }).waitFor({ timeout: 20_000 })
-    expect(await page.locator('body').innerText()).not.toContain('requires a valid UNIVER_LICENSE')
-    await page.getByRole('status', { name: 'Synced', exact: true }).waitFor({ timeout: 30_000 })
-    expect(errors).toEqual([])
+  it('keeps the recorded draft readable without loading a Viewer or settings card', async () => {
+    onTestFailed(() => saveFailureShot(page, 'univer-headless'))
+    expect(scaffold.ctx.clientModules.graph().entries.some(entry => entry.id === 'dsh-univer-office')).toBe(false)
+    expect(scaffold.ctx.settings.describe().some(row => row.ns === 'univer-office')).toBe(false)
+    const requests: string[] = []
+    page.on('request', (request) => {
+      if (/\/univer-(?:api|viewer)(?:\/|\?)/u.test(request.url())) requests.push(request.url())
+    })
+    const group = page.getByRole('treeitem').first()
+    await group.waitFor({ timeout: 15_000 })
+    if (await group.getAttribute('aria-expanded') !== 'true') await group.click()
+    await page.getByRole('treeitem').nth(1).click()
+    await page.getByText('UNIVER_VIEWER_OK', { exact: true }).waitFor({ timeout: 15_000 })
+    expect(await page.locator('iframe[src*="univer-viewer"]').count()).toBe(0)
+    expect(requests).toEqual([])
+    for (const path of ['/univer-api/status', '/univer-api/state', '/univer-viewer/']) {
+      const response = await scaffold.hostFetch(path)
+      expect(response.status, path).toBe(404)
+    }
     await compareOrRefreshGolden(
-      join(SNAPSHOT_DIR, 'ui.expected.md'), await page.locator('body').ariaSnapshot(), scaffold.mode,
+      join(SNAPSHOT_DIR, 'ui.expected.md'), await page.getByText('UNIVER_VIEWER_OK', { exact: true }).ariaSnapshot(), scaffold.mode,
     )
   })
 

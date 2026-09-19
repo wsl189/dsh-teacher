@@ -10,7 +10,7 @@ The distribution must open supported evaluation documents without shipping an em
 
 ## Decision
 
-The published Viewer provides its evaluation interface. The [runtime patch](../../../../third-party/dsh-univer-office/runtime.patch) removes development-license fallbacks from the Host and document worker; explicit `UNIVER_LICENSE` values remain runtime inputs. DSH supplies no replacement entitlement and preserves upstream validation, watermarks, and feature limits. The [bundled-extension decision](../feature/2026-08-25-bundled-extensions-and-qq-speech.md) owns artifact distribution, telemetry, and secret ownership.
+The [headless distribution decision](../simplification/2026-09-19-univer-headless-office.md) supersedes the Viewer interface; evaluation and runtime-license rules continue for content tools and background rendering. The [runtime patch](../../../../third-party/dsh-univer-office/runtime.patch) removes development-license fallbacks from the Host and document worker; explicit `UNIVER_LICENSE` values remain runtime inputs. DSH supplies no replacement entitlement and preserves upstream validation, watermarks, and feature limits. The [bundled-extension decision](../feature/2026-08-25-bundled-extensions-and-qq-speech.md) owns artifact distribution, telemetry, and secret ownership.
 
 ## Alternatives considered
 
@@ -20,4 +20,4 @@ The published Viewer provides its evaluation interface. The [runtime patch](../.
 
 ## Consequences
 
-The [recorded Web scenario](../../../../snapshots/web/univer-viewer/snapshot.yml) and [browser test](../../../../apps/web/tests/univer-viewer.e2e.ts) open the packaged Gateway and Viewer, require the Sheet grid and a synchronized Gateway connection, and compare the persisted tool round and accessible interface. They use model replay and a synthetic Sheet, and do not validate a commercial license.
+The [recorded Web scenario](../../../../snapshots/web/univer-viewer/snapshot.yml) exercises the packaged content tools without a license and verifies that the removed Viewer is unavailable. Real Office generation tests retain exported-content and background-render checks. These cases do not validate a commercial license.

@@ -8,6 +8,19 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type { PresentedFile } from './types.ts'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Prepare final files before checking and recording their delivery paths.
+     * Listeners await `next()` for the selected files and may publish owned temporary files.
+     * Rejection fails presentation; returned paths must survive temporary cleanup.
+     * @param request - owning Session, workspace, and cancellation signal.
+     * @mode waterfall
+     */
+    'deliverables/prepare'(request: { session: Session; cwd: string; signal: AbortSignal }, next: () => Promise<readonly PresentedFile[]>): Promise<readonly PresentedFile[]>
+  }
+}
+
 /** Stable Loader identity. */
 export const name = 'tool-present'
 
@@ -40,7 +53,8 @@ export function apply(ctx: Context, config: Config): void {
     description: 'Declare existing files accessible through the Session filesystem as final deliverables. '
       + 'When a file you create or update is an output the user asked to receive, you must call present after writing it and before your final response, including files created through Bash or code execution. '
       + 'Mentioning its path in your reply does not replace this call. The files must already exist. '
-      + 'The user opens the current source files; their contents are not copied or preserved.',
+      + 'Managed Office temporary files are saved to the workspace before delivery. Use the returned paths. '
+      + 'Other files are opened in place; their contents are not copied or preserved.',
     parameters: {
       files: {
         type: 'array', required: true,
@@ -81,7 +95,8 @@ export function apply(ctx: Context, config: Config): void {
       if (cwd === undefined) throw new Error('present requires a workspace')
       const options = { cwd, signal: exec.signal }
       const files: PresentedFile[] = []
-      for (const file of args.files) {
+      const prepared = await ctx.waterfall('deliverables/prepare', { session: exec.agent.session, cwd, signal: exec.signal }, () => Promise.resolve(args.files))
+      for (const file of prepared) {
         if (file.path.trim().length === 0) throw new Error('present requires a non-empty file path')
         const entry = await ctx.fs.lstat(file.path, { cwd }, exec.signal)
         if (entry !== undefined && entry.type !== 'file') throw new Error(`Cannot present ${file.path}: not a regular file`)

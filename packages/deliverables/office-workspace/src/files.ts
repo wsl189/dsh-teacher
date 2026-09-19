@@ -1,7 +1,7 @@
 /** Private Office scratch directories and exclusive publication of completed files. */
 import { constants, lstatSync, realpathSync, type Stats } from 'node:fs'
 import { copyFile, link, lstat, mkdtemp, readdir, realpath, rmdir, unlink } from 'node:fs/promises'
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
+import { basename, dirname, extname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
 /** A newly allocated directory whose identity guards later cleanup. */
 export interface Scratch {
@@ -76,10 +76,76 @@ export function ownsOutput(scratch: Scratch, cwd: string, output: string): boole
   }
 }
 
-async function checkScratch(scratch: Scratch): Promise<void> {
-  const current = await lstat(scratch.directory)
+/**
+ * Check that an existing directory still has its allocated identity.
+ * @param scratch - directory whose consumers are about to release files or change contents.
+ * @returns false for an already removed directory; replacement and access failures throw.
+ */
+export async function checkScratch(scratch: Scratch): Promise<boolean> {
+  const current = await info(scratch.directory)
+  if (current === undefined) return false
   if (!current.isDirectory() || current.isSymbolicLink() || !sameFile(current, scratch.identity)) {
     throw new Error('Office temporary directory was replaced; refusing to use or remove its contents')
+  }
+  return true
+}
+
+/**
+ * Find recoverable Office exports only inside the allocated directory, without following links.
+ * PDF previews, native projects, and other intermediate files are not selected automatically.
+ * @param scratch - generation whose unselected exports must survive automatic cleanup.
+ * @returns non-empty Word, Excel, and PowerPoint files in stable path order.
+ */
+export async function recoverableFiles(scratch: Scratch): Promise<string[]> {
+  if (!await checkScratch(scratch)) return []
+  const files: string[] = []
+  const visit = async (directory: string): Promise<void> => {
+    for (const name of (await readdir(directory)).sort()) {
+      const path = join(directory, name)
+      const entry = await lstat(path)
+      if (entry.isDirectory() && !entry.isSymbolicLink()) await visit(path)
+      else if (entry.isFile() && entry.size > 0 && /\.(?:docx|xlsx|pptx)$/iu.test(name)) files.push(path)
+    }
+  }
+  await visit(scratch.directory)
+  return files
+}
+
+/**
+ * Move selected files to the workspace root, adding numeric suffixes on name conflicts.
+ * Existing files are never replaced, including when another publisher wins a destination race.
+ * Sources are removed only after the complete set has been copied successfully.
+ * @param scratch - source owner and destination workspace.
+ * @param sources - selected regular files inside the owned directory.
+ * @param signal - cancellation before the complete publication commits.
+ * @returns workspace paths in the same order as sources.
+ */
+export async function publishAvailable(scratch: Scratch, sources: readonly string[], signal: AbortSignal): Promise<string[]> {
+  for (;;) {
+    signal.throwIfAborted()
+    const outputs: OfficeOutput[] = []
+    for (const source of sources) {
+      const extension = extname(source)
+      const stem = basename(source, extension)
+      let destination = join(scratch.workspace, `${stem}${extension}`)
+      let suffix = 0
+      // Batch names must also remain distinct on case-insensitive filesystems.
+      while (outputs.some(file => file.destination.normalize('NFC').toLowerCase() === destination.normalize('NFC').toLowerCase())
+        || await info(destination) !== undefined) {
+        signal.throwIfAborted()
+        destination = join(scratch.workspace, `${stem} (${++suffix})${extension}`)
+      }
+      outputs.push({ source, destination })
+    }
+    let files: string[]
+    try {
+      files = await publishFiles(scratch, outputs, signal)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'EEXIST') throw error
+      continue
+    }
+    for (const source of new Set(sources)) await unlink(resolve(scratch.directory, source))
+    return files
   }
 }
 
@@ -118,7 +184,9 @@ export async function removeScratch(scratch: Scratch): Promise<void> {
  * @returns canonical paths of the completed, independently copied files.
  */
 export async function publishFiles(scratch: Scratch, outputs: readonly OfficeOutput[], signal: AbortSignal): Promise<string[]> {
-  await checkScratch(scratch)
+  if (!await checkScratch(scratch)) {
+    throw Object.assign(new Error('Office temporary directory no longer exists'), { code: 'ENOENT' })
+  }
   const selected: Array<{ source: string; destination: string }> = []
   for (const output of outputs) {
     signal.throwIfAborted()
@@ -136,7 +204,7 @@ export async function publishFiles(scratch: Scratch, outputs: readonly OfficeOut
       throw new Error('Office final destination must be outside temporary directories and inside the session workspace')
     }
     if (selected.some(file => file.destination === destination) || await info(destination) !== undefined) {
-      throw new Error(`Office output already exists: ${destination}. Choose a new filename`)
+      throw Object.assign(new Error(`Office output already exists: ${destination}. Choose a new filename`), { code: 'EEXIST' })
     }
     selected.push({ source, destination })
   }

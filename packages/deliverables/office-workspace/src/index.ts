@@ -1,12 +1,27 @@
 /** Office generation scratch ownership, final publication, and turn-end cleanup. */
 import type { Context } from '@deepseek-ai/cordis'
+import { resolve, sep } from 'node:path'
 import type {} from '@deepseek-ai/dsh-agent'
 import type { Session } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
+import type {} from '@deepseek-ai/dsh-tool-present'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { createScratch, ownsOutput, publishFiles, removeScratch, type Scratch } from './files.ts'
+import { checkScratch, createScratch, ownsOutput, publishAvailable, publishFiles, recoverableFiles, removeScratch, type Scratch } from './files.ts'
+
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * Release cached file handles before owned Office files are copied or removed.
+     * Listeners must finish writes and close handles; rejection preserves the directory.
+     * Subsequent edits may reopen the files until the owner removes the project.
+     * @param directory - canonical temporary directory whose allocated identity was verified.
+     * @mode serial
+     */
+    'office-workspace/releasing'(directory: string): Promise<void> | void
+  }
+}
 
 /** Stable Loader identity. */
 export const name = 'office-workspace'
@@ -64,14 +79,63 @@ export function apply(ctx: Context): void {
     }
     return work
   }
+  const release = async (scratch: Scratch): Promise<void> => {
+    if (await checkScratch(scratch)) await ctx.serial('office-workspace/releasing', scratch.directory)
+  }
   const clean = async (work: SessionWork, turn?: number, keepPaused = false): Promise<void> => {
+    const failures: unknown[] = []
     for (const [directory, owned] of work.directories) {
       if (turn !== undefined && owned.turn !== turn) continue
       if (keepPaused && owned.paused) continue
-      await removeScratch(owned.scratch)
-      work.directories.delete(directory)
+      try {
+        await release(owned.scratch)
+        const sources = await recoverableFiles(owned.scratch)
+        if (sources.length > 0) {
+          const files = await publishAvailable(owned.scratch, sources, new AbortController().signal)
+          ctx.logger.warn(`Office exports saved to workspace before temporary cleanup: ${files.join(', ')}`)
+        }
+        await removeScratch(owned.scratch)
+        work.directories.delete(directory)
+      } catch (error) {
+        failures.push(new Error(`${directory}: ${String(error)}`, { cause: error }))
+      }
     }
+    if (failures.length > 0) throw new AggregateError(failures, failures.map(String).join('; '))
   }
+  ctx.on('deliverables/prepare', async ({ session, cwd, signal: callerSignal }, next) => {
+    const selected = await next()
+    const work = sessions.get(session)
+    if (work === undefined) return selected
+    return enqueue(work, async () => {
+      const signal = AbortSignal.any([callerSignal, lifetime.signal])
+      signal.throwIfAborted()
+      const boundary = ctx.sessionProjections.stateOf(session, 'turnBoundary')
+      const files = selected.map(file => ({ ...file }))
+      const groups = new Map<OwnedScratch, typeof files>()
+      for (const file of files) {
+        const owned = [...work.directories.values()].find(item => ownsOutput(item.scratch, cwd, file.path))
+        if (owned === undefined) {
+          if (resolve(cwd, file.path).split(sep).some(part => part.startsWith('.dsh-office-'))) {
+            throw new Error('Cannot present an Office temporary file not owned by this session')
+          }
+          continue
+        }
+        if (owned.paused || boundary?.openTurnStartSeq == null || owned.turn !== boundary.lastTurn) {
+          throw new Error('Resume the paused Office project before presenting its files')
+        }
+        if (ctx.sandboxPolicy.resolve({ session }).mode === 'read-only') throw new Error('Office generation requires workspace-write file access')
+        const group = groups.get(owned) ?? []
+        group.push(file)
+        groups.set(owned, group)
+      }
+      for (const [owned, group] of groups) {
+        await release(owned.scratch)
+        const paths = await publishAvailable(owned.scratch, group.map(file => resolve(cwd, file.path)), signal)
+        for (const [index, file] of group.entries()) file.path = paths[index] as string
+      }
+      return files
+    })
+  })
   ctx.tools.guard((exec) => {
     const output = univerOutput(exec.name, exec.arguments)
     if (output === undefined) return undefined
@@ -95,7 +159,8 @@ export function apply(ctx: Context): void {
       + 'After finishing all content and visual checks and waiting for every authoring/rendering process to exit, call finish with only the requested final files. '
       + 'It copies completed files to new workspace destinations and removes all intermediates. Call discard to abandon a draft. '
       + 'Before waiting for user choices across turns, call pause to retain the temporary project; call resume on the next turn before continuing work. '
-      + 'Temporary directories also expire when the current turn ends, including cancellation and errors; publish final files before ending the turn. '
+      + 'Presenting selected temporary files also moves them to the workspace; use the returned paths. '
+      + 'At turn end, cancellation, or errors, remaining non-empty DOCX, XLSX, and PPTX exports are recovered to the workspace before cleanup; failed recovery retains the source directory. '
       + 'Paused projects survive a normally completed turn while awaiting the user. '
       + 'Use present on the returned final paths. Never place user originals in temporary directories.',
     parameters: {
@@ -156,9 +221,11 @@ export function apply(ctx: Context): void {
             owned.paused = true
             return { directory: owned.scratch.directory, files, cleaned: false, paused: true }
           case 'discard':
+            await release(owned.scratch)
             break
           case 'finish':
             if (args.files === undefined || args.files.length === 0) throw new Error('Office finish requires final files; use discard to abandon a draft')
+            await release(owned.scratch)
             files = await publishFiles(owned.scratch, args.files, signal)
             break
           /* v8 ignore next 2 -- defineTool validates the closed action enum before execution. */
@@ -188,7 +255,9 @@ export function apply(ctx: Context): void {
   })
   ctx.effect(() => async () => {
     lifetime.abort()
-    await Promise.all([...sessions.values()].map(work => enqueue(work, () => clean(work))))
+    const settled = await Promise.allSettled([...sessions.values()].map(work => enqueue(work, () => clean(work))))
     sessions.clear()
+    const failures = settled.filter(result => result.status === 'rejected').map(result => result.reason as unknown)
+    if (failures.length > 0) throw new AggregateError(failures, failures.map(String).join('; '))
   })
 }

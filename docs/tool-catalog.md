@@ -629,7 +629,7 @@ The bash tool is the model-facing consumer of the bash executor seam. A `run_in_
 
 ### `office_workspace`
 
-Manage temporary files for Word, Excel, and PowerPoint generation, including PPT Master. Call create before authoring. Put scripts, screenshots, rendered pages, .univer files, project folders, backups, and draft exports inside the returned directory. After finishing all content and visual checks and waiting for every authoring/rendering process to exit, call finish with only the requested final files. It copies completed files to new workspace destinations and removes all intermediates. Call discard to abandon a draft. Before waiting for user choices across turns, call pause to retain the temporary project; call resume on the next turn before continuing work. Temporary directories also expire when the current turn ends, including cancellation and errors; publish final files before ending the turn. Paused projects survive a normally completed turn while awaiting the user. Use present on the returned final paths. Never place user originals in temporary directories.
+Manage temporary files for Word, Excel, and PowerPoint generation, including PPT Master. Call create before authoring. Put scripts, screenshots, rendered pages, .univer files, project folders, backups, and draft exports inside the returned directory. After finishing all content and visual checks and waiting for every authoring/rendering process to exit, call finish with only the requested final files. It copies completed files to new workspace destinations and removes all intermediates. Call discard to abandon a draft. Before waiting for user choices across turns, call pause to retain the temporary project; call resume on the next turn before continuing work. Presenting selected temporary files also moves them to the workspace; use the returned paths. At turn end, cancellation, or errors, remaining non-empty DOCX, XLSX, and PPTX exports are recovered to the workspace before cleanup; failed recovery retains the source directory. Paused projects survive a normally completed turn while awaiting the user. Use present on the returned final paths. Never place user originals in temporary directories.
 
 ```json
 {
@@ -686,7 +686,7 @@ Source: [`packages/deliverables/office-workspace/src/index.ts`](../packages/deli
 
 ### `present`
 
-Declare existing files accessible through the Session filesystem as final deliverables. When a file you create or update is an output the user asked to receive, you must call present after writing it and before your final response, including files created through Bash or code execution. Mentioning its path in your reply does not replace this call. The files must already exist. The user opens the current source files; their contents are not copied or preserved.
+Declare existing files accessible through the Session filesystem as final deliverables. When a file you create or update is an output the user asked to receive, you must call present after writing it and before your final response, including files created through Bash or code execution. Mentioning its path in your reply does not replace this call. The files must already exist. Managed Office temporary files are saved to the workspace before delivery. Use the returned paths. Other files are opened in place; their contents are not copied or preserved.
 
 ```json
 {

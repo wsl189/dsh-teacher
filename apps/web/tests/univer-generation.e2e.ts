@@ -1,6 +1,8 @@
 /** Exercise Office authoring and native exports through the shipped chat tools. */
 
+import { once } from 'node:events'
 import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { request, type IncomingMessage } from 'node:http'
 import { dirname, join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
@@ -149,6 +151,74 @@ describe('bundled Univer chat generation', () => {
       expect((await readFile(join(output, name))).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
     }
   }
+
+  it('closes only idle databases in the managed directory and keeps editing after reopening', async () => {
+    const address = await createUnit('sheet', 'release-check')
+    await call('univer_execute', { ...address, code: "workbook.getActiveSheet().getRange('A1').setValue('Retained after close'); return true;" })
+    // The external plugin ships JavaScript; only the public calls used here are declared.
+    const service = scaffold.ctx.get('univer') as unknown as {
+      ensureGateway(): Promise<{ gateway: string }>
+    }
+    const { gateway } = await service.ensureGateway()
+    for (const path of ['/', '/univer-viewer/', '/assets/viewer.js']) {
+      expect((await fetch(`${gateway}${path}`)).status).toBe(404)
+    }
+    const release = (directory: string): Promise<Response> => fetch(`${gateway}/dsh/release-directory`, {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ directory }), signal: AbortSignal.timeout(10_000),
+    })
+    expect((await release('relative')).status).toBe(409)
+    expect(await (await release(`${dirname(address.file)}-unrelated`)).json()).toEqual({ ok: true, released: 0 })
+    const key = Buffer.from(address.file).toString('base64url')
+    const socket = new WebSocket(`${gateway.replace('http:', 'ws:')}/uf/${key}/events`)
+    try {
+      await once(socket, 'open', { signal: AbortSignal.timeout(10_000) })
+      const busy = await release(dirname(address.file))
+      expect(busy.status).toBe(409)
+      const failure = await busy.json() as { ok: boolean; error: { message: string } }
+      expect(failure.ok).toBe(false)
+      expect(failure.error.message).toContain('still in use')
+    } finally {
+      const closed = once(socket, 'close', { signal: AbortSignal.timeout(10_000) })
+      socket.close()
+      await closed
+    }
+    // The SDK waits for this body before validating it; no document mutation is requested.
+    const upload = request(`${gateway}/uf/${key}/universer-api/snapshot/-/units/recover`, {
+      method: 'POST', headers: { 'content-type': 'application/json', 'x-user-id': 'office-cleanup-test', expect: '100-continue' },
+    })
+    const responded = new Promise<IncomingMessage>((resolve, reject) => {
+      upload.once('response', resolve)
+      upload.on('error', reject)
+    })
+    const uploadClosed = new Promise<void>((resolve) => { upload.once('close', resolve) })
+    upload.setTimeout(30_000, () => upload.destroy(new Error('SDK fixture upload timed out')))
+    const completed = responded.then(async (response) => {
+      response.resume()
+      await once(response, 'end', { signal: AbortSignal.timeout(10_000) })
+      return response.statusCode
+    })
+    // Attach rejection handling before any assertion can trigger teardown.
+    void completed.catch(() => undefined)
+    try {
+      const accepted = once(upload, 'continue', { signal: AbortSignal.timeout(10_000) })
+      upload.flushHeaders()
+      await accepted
+      upload.write('{"unitIds":')
+      expect((await release(dirname(address.file))).status).toBe(409)
+      upload.end('[]}')
+      expect(await completed).toBe(400)
+    } finally {
+      upload.destroy()
+      await uploadClosed
+      await completed.catch(() => undefined)
+    }
+    expect(await (await release(dirname(address.file))).json()).toEqual({ ok: true, released: 1 })
+    expect(await (await release(dirname(address.file))).json()).toEqual({ ok: true, released: 0 })
+    expect(await call('univer_execute', { ...address, code: "return workbook.getActiveSheet().getRange('A1').getValue();" }))
+      .toMatchObject({ committed: false, value: 'Retained after close' })
+    await call('univer_export', { ...address, output: join(dirname(address.file), 'release-check.xlsx') })
+    await finish(address, 'release-check.xlsx')
+  })
 
   it('writes twenty document paragraphs and exports their text to DOCX', async () => {
     const address = await createUnit('doc')
@@ -324,5 +394,32 @@ return titles.length;
       ...address, file, code: 'return doc.getParagraphs()[0].getText();',
     })).toMatchObject({ value: 'Continue editing the requested native project.' })
     expect((await readdir(workspace)).sort()).toEqual([...finalFiles].sort())
+  })
+
+  it('keeps real Office exports after presentation and turn cleanup when finish is omitted', async () => {
+    const { directory } = await call('office_workspace', { action: 'create' })
+    if (typeof directory !== 'string') throw new Error('Office workspace returned no directory')
+    const exports = ['lesson.docx', 'scores.xlsx', 'lesson.pptx']
+    const expected = await Promise.all(exports.map(name => readFile(join(workspace, name))))
+    for (const [index, name] of exports.entries()) await writeFile(join(directory, `recovered-${name}`), expected[index]!)
+    await writeFile(join(directory, 'author.js'), 'intermediate script')
+    await writeFile(join(directory, 'draft.univer'), 'intermediate project')
+    const files = [exports[0]!, exports[2]!].map(name => ({ path: join(directory, `recovered-${name}`) }))
+    const result = await scaffold.ctx.tools.execute({
+      name: 'present', arguments: { files }, callId: ToolCallId('temporary-office-delivery'),
+      signal: new AbortController().signal, agent: handle.agent,
+    })
+    expect(result.isError).toBe(false)
+    const delivered = [exports[0]!, exports[2]!].map(name => ({ path: join(workspace, `recovered-${name}`) }))
+    expect(result.value).toMatchObject({ files: delivered })
+    expect(handle.agent.session.snapshotEvents().filter(event => event.type === 'deliverables/presented').at(-1)?.data.files).toEqual(delivered)
+    handle.agent.session.append('turn/end', { turn: 2, reason: { kind: 'completed' } })
+    finalFiles.push(...exports.map(name => `recovered-${name}`))
+    await vi.waitFor(async () => { expect((await readdir(workspace)).sort()).toEqual([...finalFiles].sort()) })
+    for (const [index, name] of exports.entries()) {
+      const file = join(workspace, `recovered-${name}`)
+      expect(await readFile(file)).toEqual(expected[index])
+      await officeParts(file)
+    }
   })
 })

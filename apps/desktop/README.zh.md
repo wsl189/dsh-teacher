@@ -36,7 +36,7 @@ pnpm --filter @deepseek-ai/dsh-desktop run package:win
 
 桌面打包命令会在 electron-builder 装配 Windows 安装器前重新生成鲸鱼图标。
 
-安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，创建标准会话，并确认其斜杠命令目录与工作区目录操作均可加载；仅成功生成 artifact 并不会执行 Electron 主进程或动态解析的 preset。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。作用于整个依赖树的排除规则会移除 Source Map 与 TypeScript 增量编译状态。electron-builder 不会沿 workspace peer 声明收集依赖，因此生产依赖图中缺失的必需 workspace peer 会列为桌面端的直接依赖。Windows CI 在构建前检查该依赖图，并在打包后校验收集到的载荷。它还以 Node 模式运行 Electron，加载原生 profile 解析器所需的内部模块；固定的 Electron 版本必须匹配该 addon 支持的 Node/V8 指纹。标准 preset 会动态解析 `dsh-tool-web`，因此桌面 manifest 还会直接锚定 Turndown 及其 GFM 插件。`afterPack` 钩子从桌面应用解析这两个包，并从 Turndown 的依赖解析基址定位 Domino，再把各包的 manifest、许可证与运行时 `lib` 目录写入 `resources/app`；同一钩子把经过排序的完整 PPT Master 目录写入 `resources/ppt-master.tgz`，并移除安装载荷中的散文件副本。载荷门禁会读取该归档，并要求其中包含精确的文件数、逻辑字节数、归属文件、脚本、参考资料、布局和代表性二进制资源。门禁还要求包含生图 Host 与 Client bundle、模板快照与许可证、技能／MCP 包、Univer Viewer、Gateway、worker、技能、商业资源、Windows x64 原生 binding 与官方电脑操控 SDK。
+安装器、blockmap、更新元数据与解包后的应用都会写入 `apps/desktop/release/`。分发安装器前，请在 Windows 上启动 `apps/desktop/release/win-unpacked/DSH Teacher.exe`，等待 `DeepSeek Harness` 主窗口出现，创建标准会话，并确认其斜杠命令目录与工作区目录操作均可加载；仅成功生成 artifact 并不会执行 Electron 主进程或动态解析的 preset。签入的 builder 配置面向 Windows x64，并有意关闭 `asar`，因为 Host 需要从真实文件加载插件包、子进程入口、worker 与原生 addon。作用于整个依赖树的排除规则会移除 Source Map 与 TypeScript 增量编译状态。electron-builder 不会沿 workspace peer 声明收集依赖，因此生产依赖图中缺失的必需 workspace peer 会列为桌面端的直接依赖。Windows CI 在构建前检查该依赖图，并在打包后校验收集到的载荷。它还以 Node 模式运行 Electron，加载原生 profile 解析器所需的内部模块；固定的 Electron 版本必须匹配该 addon 支持的 Node/V8 指纹。标准 preset 会动态解析 `dsh-tool-web`，因此桌面 manifest 还会直接锚定 Turndown 及其 GFM 插件。`afterPack` 钩子从桌面应用解析这两个包，并从 Turndown 的依赖解析基址定位 Domino，再把各包的 manifest、许可证与运行时 `lib` 目录写入 `resources/app`；同一钩子把经过排序的完整 PPT Master 目录写入 `resources/ppt-master.tgz`，并移除安装载荷中的散文件副本。载荷门禁会读取该归档，并要求其中包含精确的文件数、逻辑字节数、归属文件、脚本、参考资料、布局和代表性二进制资源。门禁还要求包含生图 Host 与 Client bundle、模板快照与许可证、技能／MCP 包、Univer Gateway、worker、技能、商业资源、Windows x64 原生 binding 与官方电脑操控 SDK。
 
 ## GitHub 自动化
 
@@ -66,5 +66,5 @@ renderer 启用 `contextIsolation` 与 sandbox，并关闭 Node integration。pr
 - **仅支持 Windows x64**：不会生成 arm64 安装器，也没有 macOS／Linux 桌面产物。
 - **外部 AI 服务仍是部署依赖**：MinerU 默认指向 `http://127.0.0.1:8005/file_parse`；生图、vLLM 与 ASR 端点需要单独安装和运行。
 - **Windows 桌面控制需要交互式会话**：可见桌面操作要求 Windows 未锁定。Full access 不会授予 Windows 管理员权限，也不能绕过 UAC、安全桌面或其他 DSH 策略。
-- **Univer 试用与授权使用**：未设置 `UNIVER_LICENSE` 时，Viewer 按上游试用限制打开；授权功能需要有效的运行时许可证，分发时仍需取得相应权利；Slide 渲染操作还需要本机 Chrome／Chromium，必要时通过 `UNIVER_RENDER_BROWSER` 指定。
+- **Univer 试用与授权使用**：未设置 `UNIVER_LICENSE` 时，AI 编辑和导出遵循上游试用限制；授权功能需要有效的运行时许可证，分发时仍需取得相应权利；Slide 渲染操作还需要本机 Chrome／Chromium，必要时通过 `UNIVER_RENDER_BROWSER` 指定。
 - **代码签名依赖仓库 secret**：未签名的 fork 构建可以运行，但 Windows 可能显示信誉警告。

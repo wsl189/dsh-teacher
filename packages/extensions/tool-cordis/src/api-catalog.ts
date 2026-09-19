@@ -3975,6 +3975,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     parameters: [{ name: 'ref', description: 'the reference whose stored value changed.' }],
   },
   {
+    name: 'deliverables/prepare',
+    mode: 'waterfall',
+    signature: '\'deliverables/prepare\'(request: { session: Session; cwd: string; signal: AbortSignal }, next: () => Promise<readonly PresentedFile[]>): Promise<readonly PresentedFile[]>',
+    summary: 'Prepare final files before checking and recording their delivery paths.',
+    description: 'Prepare final files before checking and recording their delivery paths. Listeners await `next()` for the selected files and may publish owned temporary files. Rejection fails presentation; returned paths must survive temporary cleanup.',
+    parameters: [{ name: 'request', description: 'owning Session, workspace, and cancellation signal.' }],
+  },
+  {
     name: 'domain/changed',
     mode: 'emit',
     signature: '\'domain/changed\'(change: DomainChanged): void',
@@ -4061,6 +4069,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     summary: 'Waterfall around every streaming model call (retry, replay, routing).',
     description: 'Waterfall around every streaming model call (retry, replay, routing). Bound to the LlmRuntime; call `next()` to reach the resolved adapter\'s stream, or yield your own chunks to short-circuit.',
     parameters: [{ name: 'options', description: 'the full request. A LOOP-built request carries the process-local {@link markAgentLoopRequest} identity and arrives deep-frozen (mutation throws): its content is a pure function of the session log (the reconstructability Agent Note), so listeners read it, never rewrite it. Hand-built calls do not carry that marker; their messages already obey the immutable creation contract.' }],
+  },
+  {
+    name: 'office-workspace/releasing',
+    mode: 'serial',
+    signature: '\'office-workspace/releasing\'(directory: string): Promise<void> | void',
+    summary: 'Release cached file handles before owned Office files are copied or removed.',
+    description: 'Release cached file handles before owned Office files are copied or removed. Listeners must finish writes and close handles; rejection preserves the directory. Subsequent edits may reopen the files until the owner removes the project.',
+    parameters: [{ name: 'directory', description: 'canonical temporary directory whose allocated identity was verified.' }],
   },
   {
     name: 'permission-presets/catalog-changed',
@@ -5769,6 +5785,10 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'PrepareSessionOptions',
     declaration: 'export type PrepareSessionOptions = (CreateSessionOptions & {\n    readonly eventState?: undefined;\n}) | RestoredSessionOptions;',
+  },
+  {
+    name: 'PresentedFile',
+    declaration: 'export interface PresentedFile {\n    path: string;\n    description?: string;\n}',
   },
   {
     name: 'PresetOption',

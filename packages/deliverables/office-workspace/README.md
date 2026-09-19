@@ -30,11 +30,13 @@ Mount the plugin beside tools, session projections, and sandbox policy. It has n
 - name: '@deepseek-ai/dsh-office-workspace'
 ```
 
-`create` allocates a unique `.dsh-office-*` directory inside the current session workspace. `finish` copies selected regular, non-empty files to new destinations outside temporary directories, then removes the source directory. Destination parents must exist. Existing files are never replaced; failed publication retains drafts for retry during the same turn. `discard` removes an abandoned directory. All authoring and rendering processes must exit before either operation.
+`create` allocates a unique `.dsh-office-*` directory inside the current session workspace. `finish` copies selected regular, non-empty files to new destinations outside temporary directories, then removes the source directory. Destination parents must exist. Existing files are never replaced; failed publication retains drafts for retry. `discard` removes an abandoned directory. All authoring and rendering processes must exit before either operation.
 
 New Univer projects, screenshots, resource exports, PDF previews, and Office exports must target an active temporary directory owned by the calling session and turn. A tool guard rejects other output paths before execution, including paths through symlinks into unrelated directories. Existing native projects remain editable; publish a `.univer` file through `finish` when the user requests that format. Temporary directories remain inside the workspace during generation so sandboxed commands can share them.
 
-`pause` retains a project across a normal turn ending while the user confirms a plan; `resume` attaches it to the next turn. Other temporary directories expire at the end of their owning turn, including cancellation or error, and during session or plugin disposal. Final files must be published before ending the turn. Only allocated directories are eligible for cleanup; unrelated paths and user originals are not scanned. Workspace-write access is sufficient; read-only mode rejects tool mutations. This tool publishes inside the session workspace even in Full Access mode.
+`present` moves selected files from an active owned directory to the workspace root before recording delivery paths. Name conflicts receive numeric suffixes; other project files remain until finalization or cleanup. Use the returned paths for subsequent access.
+
+`pause` retains a project across a normal turn ending while the user confirms a plan; `resume` attaches it to the next turn. Automatic cleanup at turn end, cancellation, errors, or disposal first recovers remaining non-empty DOCX, XLSX, and PPTX files into the workspace root without replacing existing files. Recovery failure retains the source directory. Explicit `finish` keeps only selected files; `discard` abandons all drafts. Only allocated directories are scanned; user originals and unrelated paths remain untouched. Workspace-write access is sufficient; read-only mode rejects tool mutations. Publication stays inside the session workspace even in Full Access mode.
 
 -----
 
@@ -45,6 +47,8 @@ New Univer projects, screenshots, resource exports, PDF previews, and Office exp
 <summary>Implementation details — click to expand</summary>
 
 Each session serializes workspace operations and cleanup. Directory identity checks prevent recursive removal of a replacement directory; nested symbolic links and Windows junctions are unlinked. Publication stages complete copies beside each destination and links them into place exclusively. A failed publication rolls back only the destinations it created. Final file bytes are independent of draft files.
+
+Before publication or removal, `office-workspace/releasing` serially awaits registered resource owners after verifying directory identity. Univer closes its cached databases here so Windows can remove them and native project copies include committed data. A failed release, publication, or deletion retains that directory and reports its path; other directories continue independently. Plugin disposal waits for every session cleanup before reporting failures.
 
 No runtime invariant companion is published: the plugin owns one directory registry and its serialized operations; no independent service observations require reconciliation.
 
@@ -74,7 +78,7 @@ Tool schemas stay stable for the plugin lifetime. Tool results extend recorded h
 - Generated scripts and tools other than the guarded Univer outputs must follow the allocated directory instructions; the plugin does not scan or delete arbitrary files elsewhere.
 - An abrupt process or machine crash can leave an owned directory. Startup does not guess whether another process still uses it.
 - Final publication requires a local filesystem supporting hard links. Cleanup failures are reported; a replaced real directory is retained to avoid deleting another owner's files.
-- Structural, mathematical, visual, and formula-result checks belong to the authoring workflow. Publication confirms file presence, not document quality.
+- Structural, mathematical, visual, and formula-result checks belong to the authoring workflow. Recovery preserves bytes, not checked quality; it can retain unfinished Office exports. PDF previews and native project files are recovered only when explicitly selected for delivery.
 
 <a id="dev-note"></a>
 ### Dev Note
@@ -82,6 +86,6 @@ Tool schemas stay stable for the plugin lifetime. Tool results extend recorded h
 <details>
 <summary>Working context for maintainers — click to expand</summary>
 
-See the [cleanup decision](../../../.agents/notes/implemented/feature/2026-09-19-office-generation-cleanup.md) for ownership and expiration tradeoffs.
+See the [final-file preservation decision](../../../.agents/notes/implemented/bug-fix/2026-09-19-office-final-files-survive-cleanup.md) and the [cleanup decision](../../../.agents/notes/implemented/feature/2026-09-19-office-generation-cleanup.md) for ownership and expiration tradeoffs.
 
 </details>
