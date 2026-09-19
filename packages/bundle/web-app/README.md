@@ -69,6 +69,8 @@ When you launch `dsh --profile web` over SSH, the URL line still prints but the 
 
 Each browser session composes its own agent from the shipped presets (the `standard` preset by default), instead of sharing one process-wide tool set. You can change the default preset or add your own presets under `$DSH_HOME/.agent-presets`.
 
+The [Office workspace plugin](../../deliverables/office-workspace/README.md) gives Univer and PPT Master generation private temporary directories and final-file publication with cleanup.
+
 The bundled [Univer Office](../../../third-party/README.md#configuration-and-migration) Viewer opens without a license in the upstream limited evaluation mode. A runtime `UNIVER_LICENSE` enables features covered by that license.
 
 ### Built-in Windows desktop control

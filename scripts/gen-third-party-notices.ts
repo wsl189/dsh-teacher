@@ -62,7 +62,7 @@ export const OFFICE_VIEWER_PACKAGE = '@huanlin/dsh-plugin-better-sidebar-plugin-
 export const MATHML_PACKAGE = 'mathml2omml'
 const MATHML_DISTRIBUTION_ROOT = 'packages/host/teacher-workbench/third-party/mathml2omml'
 const MATHML_DISTRIBUTION_SHA256 = {
-  'colors.patch': 'c95b38d7f3882bd7ca0c127d901922ac3fbe632ddd1056ced4da17864236874e',
+  'colors.patch': '2f36e89f171ca716fff2808b2265e8326111fbaf62882120583eca92adaae624',
   'COPYING.GPL-3': '3972dc9744f6499f0f9b2dbf76696f2ae7ad8af9b23dde66d6af86c9dfb36986',
   'COPYING.LGPL-3': 'e3a994d82e644b03a792a930f574002658412f62407f5fee083f2555c5f23118',
   'COPYING.entities': 'cb992345949ccd6e8394b2cd6c465f7b897c864f845937dbf64e8997f389e164',

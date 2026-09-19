@@ -29,10 +29,12 @@ published package, including TypeScript source, is supplied as entities-6.0.1.tg
 The parser is derived from html-parse-stringify by Henrik Joreteg under MIT;
 COPYING.html-parse-stringify preserves its copyright and permission notice.
 The upstream source archive also preserves its test fixtures' separate notices.
-DSH Teacher applies the accompanying colors.patch (2026-09-16) to preserve
+DSH Teacher applies the accompanying colors.patch (2026-09-19) to preserve
 inherited foreground and background colors on native runs and structural control
 characters, native math alphabet/style properties, upright function names, and
-bar structures, and n-ary operands and emphasis. Apply this patch to the upstream source before rebuilding. The runtime
+bar structures, and n-ary operands and emphasis. It also decodes attribute
+entities and escapes XML text and attributes to retain comparison operators
+and ampersands. Apply this patch to the upstream source before rebuilding. The runtime
 bundle patch is pinned by pnpm-lock.yaml; the source patch contains every local
 algorithm change. All library modifications retain LGPL-3.0-or-later.
 
@@ -92,5 +94,5 @@ COPYING.entities 保留其 BSD-2-Clause 许可；COPYING.html-parse-stringify �
 会使用替换后的库，已保存的 Word 不会自动重写。恢复备份即可撤销替换；应用更新可能覆盖修改。
 再次发行时须保留许可声明，并提供实际发行版本的对应源码和安装替换说明。
 
-本包随附 colors.patch，保留公式文字、结构符号的前景色与背景色继承，以及数学字母体、字重属性和求和等运算的操作数结构和运算符加粗。重建前按上述命令
+本包随附 colors.patch，保留公式文字、结构符号的前景色与背景色继承，以及数学字母体、字重属性和求和等运算的操作数结构和运算符加粗；同时解码属性实体并转义 XML 文本与属性，保留比较符号和与号。重建前按上述命令
 将补丁应用到原版源码。补丁包含全部本地算法修改，并遵循原 LGPL-3.0-or-later 许可。

@@ -624,6 +624,9 @@
       "path": "./packages/shell/tool-bash"
     },
     {
+      "path": "./packages/deliverables/office-workspace"
+    },
+    {
       "path": "./packages/deliverables/tool-present"
     },
     {

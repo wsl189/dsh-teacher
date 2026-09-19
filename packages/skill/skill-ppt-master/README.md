@@ -27,9 +27,9 @@ The shipped Web and Windows desktop product exposes PPT Master 6.4.0 as the buil
 
 The default Web composition mounts this package with no configuration. `ppt-master` therefore appears in the session skill catalog and can be loaded by the model or invoked by the user. The desktop installer includes that Web composition and the complete packaged resource directory.
 
-When loaded for a session, the skill includes the current workspace and directs project initialization to pass `--dir` with that workspace or a subdirectory. Explicit user requests for another project or output location remain subject to the session's permissions. The skill retains the exporter's default project-local output and backups unless the user requests a different output path.
+When loaded for a session, the skill includes the current workspace and uses the [Office workspace tool](../../deliverables/office-workspace/README.md) for project initialization, scripts, assets, exports, and verification. `project_manager.py init --dir` selects the allocated directory. Checked final files are published before the temporary project and backups are removed.
 
-Office generation guidance also directs reusable scripts, virtual environments, and files shared between calls or tools into the session workspace because temporary directories such as `/tmp` may be isolated. This guidance does not change sandbox permissions or temporary-directory behavior.
+The allocated directory stays inside the session workspace so separate sandboxed commands and Host tools can share it. If the tool is unavailable, the instructions require a unique workspace subdirectory and explicit cleanup after final-file copying. User originals remain outside temporary storage.
 
 ### Configuration
 

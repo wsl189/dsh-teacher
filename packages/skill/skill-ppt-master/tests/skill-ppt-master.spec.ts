@@ -95,13 +95,15 @@ describe('dsh-skill-ppt-master', () => {
 
         Current session workspace (JSON-encoded path): "/workspaces/presentation draft".
 
-        Temporary directories such as /tmp may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the session workspace.
+        Before creating a presentation, call \`office_workspace\` with \`action: "create"\`. Put every project, script, virtual environment, asset, screenshot, rendered page, report, backup, and draft export inside its returned directory. Temporary directories such as /tmp may be isolated per command or tool; the returned workspace directory is shared across calls.
 
-        For every \`project_manager.py init\` call, explicitly pass \`--dir\` with the absolute workspace path or a directory inside it. Use another project location only when the user explicitly requests it and the session permits writing there. Quote paths for the active shell.
+        For every \`project_manager.py init\` call, explicitly pass \`--dir\` with that temporary directory or a directory inside it. Quote paths for the active shell. If \`office_workspace\` is unavailable, allocate one unique temporary subdirectory under the session workspace and remove only that directory after copying the requested final files out.
 
         Keep \`SKILL_DIR\` as the skill resource directory. The script's default project directory is derived from the installed skill's path; changing the shell working directory does not select this workspace.
 
-        Keep the exporter's default project-local output to preserve its backup behavior, unless the user explicitly requests a different output path. Follow the selected workflow and its required checks, including the attribution guard.
+        Keep project-local exports inside the temporary directory until all required checks, including the attribution guard and visual review, finish. Wait for every authoring and rendering process to exit. Then call \`office_workspace\` with \`action: "finish"\`, the returned \`directory\`, and \`files: [{ source, destination }]\` for only the requested final deliverables. It publishes the files without overwriting existing destinations and removes the project and all intermediates. Present only the returned final paths. Include source projects or preview files only when explicitly requested. Never move user originals into the temporary directory.
+
+        Before a required user confirmation that spans turns, call \`office_workspace\` action \`pause\`; call \`resume\` with that directory on the next turn before continuing. Paused projects survive a normal waiting turn. Other temporary directories expire when the current turn ends, including cancellation and errors. Finish before ending the turn; use \`discard\` when abandoning a draft. Do not leave background processes writing into a temporary directory.
         "
       `)
       expect((await ctx.skills.get('ppt-master'))?.content).toBe(upstreamBody)

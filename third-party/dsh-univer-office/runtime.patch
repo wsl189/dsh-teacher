@@ -131,7 +131,7 @@ diff --git a/lib/docx-policy.js b/lib/docx-policy.js
 +    root = parseXml(mml2omml(new XMLSerializer().serializeToString(math))).documentElement;
 +    if (root?.namespaceURI !== M || root.localName !== 'oMath') throw new Error('No native Office equation returned');
 +  } catch (cause) {
-+    throw new Error(`DOCX_EQUATION_INVALID: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
++    throw new Error(`DOCX_EQUATION_INVALID: equation ${JSON.stringify(span.latex)}: ${cause instanceof Error ? cause.message : String(cause)}. Correct the TeX while preserving its mathematical meaning; keep the equation markers and operators.`, { cause });
 +  }
 +  for (const run of Array.from(root.getElementsByTagNameNS(M, 'r'))) {
 +    const properties = ensure(run, W, 'w:rPr');
@@ -427,16 +427,18 @@ diff --git a/package.json b/package.json
 diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
 --- a/skills/univer/SKILL.md
 +++ b/skills/univer/SKILL.md
-@@ -15,6 +15,8 @@
+@@ -15,6 +15,10 @@
  - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
  - For an Embed or a Chart backed by another Unit's data, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
  
-+Temporary directories such as `/tmp` may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the current session workspace; its parent directory is not part of the writable workspace.
++For Word, Excel, and PowerPoint generation, first call `office_workspace` with `action: "create"`. Put the `.univer` file, authoring scripts, assets, screenshots, rendered pages, reports, and draft exports inside its returned directory. Temporary directories such as `/tmp` may be isolated per command or tool; the returned directory is shared across calls. Do not write intermediates directly into the desktop or workspace root. If `office_workspace` is unavailable, allocate one unique temporary subdirectory under the current session workspace and clean only that directory after copying final deliverables out.
++
++Complete the required content checks and visual review while the temporary files still exist, and wait for every authoring/rendering process to exit. Export into the temporary directory, then call `office_workspace` with `action: "finish"`, its `directory`, and `files: [{ source, destination }]` for only the requested final files. The tool publishes new files without replacing existing destinations and removes all intermediates. Present only its returned final paths. Keep `.univer` sources or previews only when explicitly requested; never move user originals into temporary storage. Before waiting for user choices across turns, call `office_workspace` action `pause`; call `resume` with the same directory on the next turn. Paused projects survive a normal waiting turn. Other temporary directories expire at the end of the current turn, including errors and cancellation. Finish before ending the turn, or call `discard` to abandon the draft. Do not leave background processes writing there.
 +
  ## Mental model
  
  - A `.univer` file is the authoritative multi-Unit container. Each Sheet, Doc, Slide, Base, or Board is a top-level Unit with a stable `unitId`.
-@@ -38,12 +40,16 @@
+@@ -38,12 +42,16 @@
  
  ## Facade API lookup
  
@@ -456,7 +458,7 @@ diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
  ## Required workflow
  
  1. Call `univer_status` to discover Unit IDs and worktree states.
-@@ -103,6 +109,8 @@
+@@ -103,6 +111,8 @@
  
  Do not redeclare injected variables. Use `code` only for a small snippet. For multi-line or reusable Facade logic, write a workspace JavaScript body file and pass it as `codeFile`; provide exactly one of `code` or `codeFile`.
  
@@ -468,7 +470,16 @@ diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
 diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 --- a/skills/univer-doc/SKILL.md
 +++ b/skills/univer-doc/SKILL.md
-@@ -18,7 +18,24 @@
+@@ -5,6 +5,8 @@
+ 
+ # Univer Doc Units
+ 
++Use the `office_workspace` temporary directory from the main Univer skill for all authoring, screenshots, and draft exports. After the required checks, publish only the requested final files with `office_workspace` action `finish`; it removes the intermediates.
++
+ Load `univer` first. `univer_execute` provides `univerAPI`, `api` (the same object), and `doc` (the `FDocument` selected by `unitId`). Do not redeclare them. A Doc Unit does not provide `workbook` or `presentation`; if one appears undefined, verify the selected Unit type.
+ 
+ Select paragraphs with `doc.getParagraphs()` and `doc.getParagraph(paragraphId)`. Resolve exact signatures and enums with `univer_api`; do not guess or use Doc model internals.
+@@ -18,7 +20,35 @@
  - Lists and task helpers include `isListItem`, `isTask`, and `setTaskChecked`.
  - Native charts use the direct `doc.newChart()`, `doc.insertChart()`, `doc.getCharts()`, and
    `doc.getChart()` methods.
@@ -488,13 +499,24 @@ diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 +}
 +```
 +
++Apply the same equation markers to formula summaries, callouts, captions, and table cells. Use one paragraph per summary line; `String.raw` preserves a literal `\n`, so it is not a line break. For example:
++
++```js
++for (const text of [
++  String.raw`Ellipse: \(\frac{x^2}{a^2}+\frac{y^2}{b^2}=1,\quad a>b>0\).`,
++  String.raw`Hyperbola: \(\frac{x^2}{a^2}-\frac{y^2}{b^2}=1,\quad c^2=a^2+b^2\).`,
++]) doc.appendParagraph(text);
++```
++
++Keep comparison operators as `<`, `>`, `\leq`, or `\geq`; quotation marks `‹` and `›` have different meanings. Separate a TeX command from the next letter with whitespace or braces: write `\leq x`, not `\leqx`, and `\Delta>0`, not `\Deltagt0`. On export failure, fix the reported equation while preserving its mathematical meaning; never bypass a failure by removing math markers, flattening formulas, or substituting similar-looking symbols. In the independent readback, check every formula section for unmarked formulas, literal `\n`, and altered operators before export.
++
 +Use Times New Roman for Latin letters and digits by default; retain a font the user explicitly requests. `univer_export` converts marked equations to native Office Math (OMML), including fractions, roots, scripts, matrices, and integrals. Latin letters and digits in newly converted equations use Times New Roman; variables retain italics, while numbers and function names remain upright. Mathematical operators and extensible symbols retain a math font, and explicitly requested mathematical alphabets retain their styles. Do not replace equations with pictures, screenshots, Unicode lookalikes, or unmarked TeX. Unsupported or incomplete marked TeX fails export; correct the source and retry instead of delivering unconverted math.
 +
 +The live Univer document and its screenshots show TeX source, while the exported Word file contains editable equations. Inspect the actual exported DOCX and render that file before claiming equation layout is verified. Existing native equations, explicit text fonts, Chinese fonts, tables, and images are preserved by the export policy; importing a document still depends on the upstream importer's support. An equation already flattened to an image cannot be recovered by the export policy.
  
  ## Data stream
  
-@@ -139,7 +156,7 @@
+@@ -139,7 +169,7 @@
  
  ## Inspect and verify
  
@@ -506,7 +528,16 @@ diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 diff --git a/skills/univer-sheet/SKILL.md b/skills/univer-sheet/SKILL.md
 --- a/skills/univer-sheet/SKILL.md
 +++ b/skills/univer-sheet/SKILL.md
-@@ -55,6 +55,8 @@
+@@ -5,6 +5,8 @@
+ 
+ # Univer Sheet Units
+ 
++Use the `office_workspace` temporary directory from the main Univer skill for all authoring, screenshots, and draft exports. After the required checks, publish only the requested final files with `office_workspace` action `finish`; it removes the intermediates.
++
+ Load `univer` first. `univer_execute` provides `univerAPI`, `api` (the same object), and `workbook` (the `FWorkbook` selected by `unitId`). Do not redeclare them. Execution is ESM and has no `require`.
+ 
+ Obtain a worksheet with `workbook.getActiveSheet()` or `workbook.getSheetByName("…")`. Use `getSheetName()`; `FWorksheet` has no `getName()`. Resolve unfamiliar APIs with `univer_api` before writing code.
+@@ -55,6 +57,8 @@
  
  `setValues()` merges cell data. `{}` or `{ s }` does not clear existing `v/f/p`. To replace a region, call `clearContent()` first, then `setValues()`. To clear one cell explicitly, set `{ v: null, f: null, p: null, si: null, custom: null }`.
  
@@ -515,7 +546,7 @@ diff --git a/skills/univer-sheet/SKILL.md b/skills/univer-sheet/SKILL.md
  ## Over-grid images
  
  Create an image with `sheet.newOverGridImage()`, set source, explicit size and position, await `buildAsync()`, then pass the built data to `sheet.insertImages()`:
-@@ -125,7 +127,7 @@
+@@ -125,7 +129,7 @@
  
  ## Verification
  
@@ -527,7 +558,13 @@ diff --git a/skills/univer-sheet/SKILL.md b/skills/univer-sheet/SKILL.md
 diff --git a/skills/univer-slide/SKILL.md b/skills/univer-slide/SKILL.md
 --- a/skills/univer-slide/SKILL.md
 +++ b/skills/univer-slide/SKILL.md
-@@ -9,10 +9,12 @@
+@@ -5,14 +5,18 @@
+ 
+ # Univer Slide Units
+ 
++Use the `office_workspace` temporary directory from the main Univer skill for all authoring, screenshots, and draft exports. After the required checks, publish only the requested final files with `office_workspace` action `finish`; it removes the intermediates.
++
+ Load `univer` first. `univer_execute` provides `univerAPI`, `api` (the same object), and `presentation` (the `FPresentation` selected by `unitId`). Do not redeclare them. A Slide Unit does not provide `workbook`; if it is undefined, verify the selected Unit type.
  
  Facade page indexes are zero-based (`getSlideByIndex`, `getSlides()[i]`). Tool page numbers are one-based: `univer_compile_svg.page` and numeric `univer_lint.pages` use `1` for the first page. Prefer stable page IDs when carrying a page from inspection into Facade code.
  

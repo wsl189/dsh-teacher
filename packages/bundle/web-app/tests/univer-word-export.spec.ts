@@ -9,6 +9,14 @@ import { afterEach, describe, expect, it } from 'vitest'
 const require = createRequire(import.meta.url)
 const pluginRoot = dirname(dirname(require.resolve('dsh-univer-office')))
 const requirePlugin = createRequire(join(pluginRoot, 'package.json'))
+const { DOMParser } = requirePlugin('@xmldom/xmldom') as {
+  DOMParser: new (options: { onError: (level: string, message: string) => void }) => {
+    parseFromString(xml: string, mime: string): {
+      getElementsByTagNameNS(ns: string, name: string): ArrayLike<{ textContent: string | null }>
+      getElementsByTagName(name: string): ArrayLike<unknown>
+    }
+  }
+}
 // The external repack publishes JavaScript; these declarations cover the adapter's tested exports.
 const policy = await import(/* @vite-ignore */ pathToFileURL(join(pluginRoot, 'lib/docx-policy.js')).href) as {
   normalizeWordExport(bytes: Uint8Array): Uint8Array
@@ -44,6 +52,33 @@ afterEach(async () => {
 })
 
 describe('Word export defaults', () => {
+  it('preserves comparisons, minus signs and literal XML characters as native equation text', () => {
+    const output = policy.normalizeWordExport(fixture(String.raw`<w:p><w:r><w:t>\(0&lt;x&lt;1,\quad a&gt;b&gt;0,\quad x_1+x_2=-\frac{B}{A},\quad \text{A\&amp;B &lt;tag&gt;}\)</w:t></w:r></w:p>`))
+    const document = new DOMParser({ onError: (_level, message) => { throw new Error(message) } })
+      .parseFromString(xml(output), 'application/xml')
+    const text = Array.from(document.getElementsByTagNameNS(M, 't')).map(node => node.textContent).join('')
+    expect(text).toContain('0<x<1')
+    expect(text).toContain('a>b>0')
+    expect(text).toContain('x1+x2=−BA')
+    expect(text).toContain('A&B\u00a0<tag>')
+    expect(text).not.toMatch(/[‹›]/u)
+    expect(document.getElementsByTagNameNS(M, 'f').length).toBe(1)
+    expect(document.getElementsByTagNameNS(M, 'sSub').length).toBe(2)
+    expect(document.getElementsByTagName('tag').length).toBe(0)
+    expect(xml(policy.normalizeWordExport(output))).toBe(xml(output))
+  })
+
+  it('decodes glyph attributes once and escapes native accent attributes', () => {
+    const { mml2omml } = requirePlugin('mathml2omml') as { mml2omml: (xml: string) => string }
+    const math = mml2omml('<math><mover accent="true"><mi>x</mi><mo>&quot;</mo></mover><mi><mglyph alt="&lt;&amp;"/></mi></math>')
+    const document = new DOMParser({ onError: (_level, message) => { throw new Error(message) } })
+      .parseFromString(math, 'application/xml')
+    expect(document.getElementsByTagNameNS(M, 'acc').length).toBe(1)
+    expect(math).toContain('m:chr m:val="&quot;"')
+    expect(Array.from(document.getElementsByTagNameNS(M, 't')).map(node => node.textContent)).toEqual(['x', '<&'])
+    expect(math).not.toContain('&amp;lt;')
+  })
+
   it('converts math across styled runs and retains surrounding text, explicit fonts, Chinese fonts and media', () => {
     const input = fixture(String.raw`<w:p><w:r><w:rPr><w:rFonts w:ascii="Arial" w:eastAsia="宋体"/><w:b/></w:rPr><w:t>ABC 123 中文 \(\frac{x</w:t></w:r><w:r><w:t>_1+2}{\sqrt{y}}=3\) cost $5 and $10.</w:t></w:r></w:p>`)
     const output = policy.normalizeWordExport(input)

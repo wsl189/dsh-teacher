@@ -27,6 +27,8 @@ Agent（智能体）可以加载 Word、PowerPoint 和 Excel 工作流，默认�
 
 将本提供方与 skill 注册表及 `dsh-tool-skill` 一同挂载，即可在会话目录中提供 `office-docx`、`office-pptx` 和 `office-xlsx`。提供方携带指令和脚本；部署提供解释器、编写库、执行工具与文件交付工具。
 
+生成指令将临时文件放入 [Office 工作区](../../deliverables/office-workspace/README.zh.md)，保留用户原件，并在清理前发布检查过的最终文件。没有该工具的部署使用唯一的任务子目录并显式清理。
+
 ### 最小配置
 
 ```yaml

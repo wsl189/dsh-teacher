@@ -69,6 +69,8 @@ dsh --profile web --no-open --port 8080
 
 每个浏览器会话都从随发行版交付的 preset（默认 `standard`）组合自己的 agent，而不是共享一套进程级工具集。你可以更改默认 preset，或在 `$DSH_HOME/.agent-presets` 下添加自己的 preset。
 
+[Office 工作区插件](../../deliverables/office-workspace/README.zh.md)为 Univer 和 PPT Master 生成提供私有临时目录，以及带清理的最终文件发布。
+
 内置的 [Univer Office](../../../third-party/README.zh.md#configuration-and-migration) Viewer 无需许可证即可按上游受限试用模式打开。运行时的 `UNIVER_LICENSE` 会启用该许可证覆盖的功能。
 
 ### 内置 Windows 桌面控制

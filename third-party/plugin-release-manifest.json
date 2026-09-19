@@ -31,8 +31,8 @@
       "version": "0.3.0",
       "tarball": "https://registry.npmjs.org/dsh-univer-office/-/dsh-univer-office-0.3.0.tgz",
       "integrity": "sha512-GTA2C8Yg0uolFQHqAbSh8Xn0ooyTyudUjQCC/DgcQzpQEa9vpGSinGTZO6t97jClmytTUF7oXT7ycx2DehdJCg==",
-      "shippedArtifact": "third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.6.tgz",
-      "shippedSha256": "6f39cb0730427343e729ef4efe8f4480e714b3ba4d2dfdb60a055a09a7bbcdb6",
+      "shippedArtifact": "third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.7.tgz",
+      "shippedSha256": "5180e28c8dcd0e9591daab37ff7446890a5edaaa647b00a8eaede94a7c12af6f",
       "nativeRuntimeDependencies": {
         "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260910-22fe9c7",
         "@univerjs-pro/exchange-node-binding": "0.1.2"

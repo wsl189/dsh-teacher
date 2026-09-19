@@ -1,7 +1,7 @@
 /** Exercise Office authoring and native exports through the shipped chat tools. */
 
 import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
+import { dirname, join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
@@ -63,6 +63,8 @@ describe('bundled Univer chat generation', () => {
       meta: { cwd: scaffold.workspaceCwd, agentPreset: 'standard' },
       setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx).then(() => undefined),
     })
+    handle.agent.session.append('turn/start', { turn: 1 })
+    await writeFile(join(scaffold.workspaceCwd, 'user-original.txt'), 'keep user original')
   })
 
   afterAll(async () => {
@@ -83,13 +85,16 @@ describe('bundled Univer chat generation', () => {
     })
     const text = result.content.filter(block => block.type === 'text').map(block => block.text).join('\n')
     expect(result.isError, `${name}: ${text}`).toBe(false)
+    if (name === 'office_workspace') return JSON.parse(text) as Record<string, unknown>
     const output = JSON.parse(text) as OperationOutput
     expect(output.ok).toBe(true)
     return output.result
   }
 
   async function createUnit(kind: 'doc' | 'sheet' | 'slide', name: string = kind): Promise<UnitAddress> {
-    const file = `${name}.univer`
+    const { directory } = await call('office_workspace', { action: 'create' })
+    if (typeof directory !== 'string') throw new Error('Office workspace returned no directory')
+    const file = join(directory, `${name}.univer`)
     await call('univer_new', { file })
     const created = await call('univer_worktree', { action: 'create', file, name: `Synthetic ${kind}` })
     const worktreeId = stringField(created, 'worktreeId')
@@ -99,8 +104,22 @@ describe('bundled Univer chat generation', () => {
 
   async function executeFile(address: UnitAddress, code: string): Promise<Record<string, unknown>> {
     const codeFile = `${address.file}.js`
-    await writeFile(join(scaffold.workspaceCwd, codeFile), `${code.trim()}\n`)
+    await writeFile(codeFile, `${code.trim()}\n`)
     return call('univer_execute', { ...address, codeFile })
+  }
+
+  async function finish(address: UnitAddress, filename: string): Promise<void> {
+    const source = join(dirname(address.file), filename)
+    const before = await readFile(source)
+    const result = await call('office_workspace', {
+      action: 'finish', directory: dirname(address.file),
+      files: [{ source, destination: filename }],
+    })
+    expect(result).toMatchObject({ cleaned: true, files: [join(scaffold.workspaceCwd, filename)] })
+    expect(await readFile(join(scaffold.workspaceCwd, filename))).toEqual(before)
+    await expect(stat(dirname(address.file))).rejects.toMatchObject({ code: 'ENOENT' })
+    expect((await readdir(scaffold.workspaceCwd)).filter(name => name.startsWith('.dsh-office-'))).toEqual([])
+    expect(await readFile(join(scaffold.workspaceCwd, 'user-original.txt'), 'utf8')).toBe('keep user original')
   }
 
   it('writes twenty document paragraphs and exports their text to DOCX', async () => {
@@ -120,8 +139,8 @@ return paragraphs.length;
     })
     expect(read).toMatchObject({ committed: false, value: PARAGRAPHS })
 
-    await call('univer_export', { ...address, output: 'lesson.docx' })
-    const document = xmlPart(await officeParts(join(scaffold.workspaceCwd, 'lesson.docx')), 'word/document.xml')
+    await call('univer_export', { ...address, output: join(dirname(address.file), 'lesson.docx') })
+    const document = xmlPart(await officeParts(join(dirname(address.file), 'lesson.docx')), 'word/document.xml')
     for (const text of PARAGRAPHS) expect(document).toContain(text)
     expect([...document.matchAll(/<w:t(?:\s[^>]*)?>([^<]*)<\/w:t>/gu)].map(match => match[1]))
       .toEqual(PARAGRAPHS)
@@ -130,6 +149,7 @@ return paragraphs.length;
     const entries = await readdir(cache, { recursive: true })
     const files = await Promise.all(entries.map(entry => stat(join(cache, entry))))
     expect(files.some(file => file.isFile() && file.size > 0)).toBe(true)
+    await finish(address, 'lesson.docx')
   })
 
   it('exports chat-authored formulas as native Word math with Times New Roman letters and digits', async () => {
@@ -139,6 +159,7 @@ return paragraphs.length;
       String.raw`Quadratic equation \(x=\frac{-b+\sqrt{b^2-4ac}}{2a}\).`,
       String.raw`\[\int_0^1 x^2\,dx=\frac{1}{3}\]`,
       String.raw`Matrix \(A=\begin{pmatrix}1&2\\3&4\end{pmatrix}\).`,
+      String.raw`Comparisons \(0<x<1,\quad a>b>0,\quad x_1+x_2=-\frac{B}{A},\quad \text{A\&B}\).`,
     ]
     await executeFile(address, `
 const paragraphs = ${JSON.stringify(paragraphs)};
@@ -147,8 +168,8 @@ if (!first || !first.setText(paragraphs[0])) throw new Error('Initial paragraph 
 for (const text of paragraphs.slice(1)) doc.appendParagraph(text);
 return true;
     `)
-    await call('univer_export', { ...address, output: 'native-word.docx' })
-    const parts = await officeParts(join(scaffold.workspaceCwd, 'native-word.docx'))
+    await call('univer_export', { ...address, output: join(dirname(address.file), 'native-word.docx') })
+    const parts = await officeParts(join(dirname(address.file), 'native-word.docx'))
     const document = xmlPart(parts, 'word/document.xml')
     expect(document).toContain(paragraphs[0])
     expect(document).toContain('<m:f>')
@@ -157,7 +178,11 @@ return true;
     expect(document).toContain('<m:nary>')
     expect(document).toContain('<m:m>')
     expect(document).toContain('<m:oMathPara>')
-    expect(document.match(/<m:oMath(?:\s|>)/gu)).toHaveLength(3)
+    expect(document.match(/<m:oMath(?:\s|>)/gu)).toHaveLength(4)
+    expect(document).toContain('&lt;')
+    expect(document).toContain('&gt;')
+    expect(document).toContain('&amp;')
+    expect(document).not.toMatch(/[‹›]/u)
     expect(document).not.toContain('\\frac')
     expect(document).not.toContain('<w:drawing')
     expect(xmlPart(parts, 'word/styles.xml')).toContain('w:ascii="Times New Roman"')
@@ -170,6 +195,7 @@ return true;
       ...address, code: 'return doc.getParagraphs().map(paragraph => paragraph.getText());',
     })
     expect(source).toMatchObject({ committed: false, value: paragraphs })
+    await finish(address, 'native-word.docx')
   })
 
   it('writes a twenty by eight spreadsheet and exports calculated formulas to XLSX', async () => {
@@ -198,13 +224,14 @@ return rows.length;
       }))),
     })
 
-    await call('univer_export', { ...address, output: 'scores.xlsx' })
-    const worksheet = xmlPart(await officeParts(join(scaffold.workspaceCwd, 'scores.xlsx')), 'xl/worksheets/sheet1.xml')
+    await call('univer_export', { ...address, output: join(dirname(address.file), 'scores.xlsx') })
+    const worksheet = xmlPart(await officeParts(join(dirname(address.file), 'scores.xlsx')), 'xl/worksheets/sheet1.xml')
     const cells = [...worksheet.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)]
     expect(cells).toHaveLength(160)
     expect(cells.map(match => Number(/<v>([^<]*)<\/v>/u.exec(match[2]!)?.[1]))).toEqual(ROWS.flat())
     expect(cells.filter(match => /\br="H\d+"/u.test(match[1]!)).map(match => /<f(?:\s[^>]*)?>([^<]*)<\/f>/u.exec(match[2]!)?.[1]))
       .toEqual(ROWS.map((_, index) => `SUM(A${String(index + 1)}:G${String(index + 1)})`))
+    await finish(address, 'scores.xlsx')
   })
 
   it('writes three editable slide titles and exports their text to PPTX', async () => {
@@ -237,13 +264,19 @@ return titles.length;
     })
     expect(read).toMatchObject({ committed: false, value: SLIDE_TITLES.map(text => [text]) })
 
-    await call('univer_export', { ...address, output: 'lesson.pptx' })
-    const parts = await officeParts(join(scaffold.workspaceCwd, 'lesson.pptx'))
+    expect(await call('office_workspace', { action: 'pause', directory: dirname(address.file) })).toMatchObject({ paused: true })
+    handle.agent.session.append('turn/end', { turn: 1, reason: { kind: 'completed' } })
+    handle.agent.session.append('turn/start', { turn: 2 })
+    expect(await call('office_workspace', { action: 'resume', directory: dirname(address.file) })).toMatchObject({ paused: false })
+
+    await call('univer_export', { ...address, output: join(dirname(address.file), 'lesson.pptx') })
+    const parts = await officeParts(join(dirname(address.file), 'lesson.pptx'))
     expect(Object.keys(parts).filter(path => /^ppt\/slides\/slide\d+\.xml$/u.test(path))).toHaveLength(3)
     for (const [index, title] of SLIDE_TITLES.entries()) {
       const slide = xmlPart(parts, `ppt/slides/slide${String(index + 1)}.xml`)
       expect([...slide.matchAll(/<a:t(?:\s[^>]*)?>([^<]*)<\/a:t>/gu)].map(match => match[1])).toEqual([title])
       expect(slide).toContain('<p:sp>')
     }
+    await finish(address, 'lesson.pptx')
   })
 })

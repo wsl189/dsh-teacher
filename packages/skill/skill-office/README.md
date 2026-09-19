@@ -27,6 +27,8 @@ Agents can load Word, PowerPoint, and Excel workflows that use the bundled Pytho
 
 Mount this provider beside the skill registry and `dsh-tool-skill` to expose `office-docx`, `office-pptx`, and `office-xlsx` in the session catalog. The provider supplies instructions and scripts; the deployment supplies its interpreters, authoring libraries, execution tools, and file delivery tool.
 
+Generation instructions place temporary files in an [Office workspace](../../deliverables/office-workspace/README.md), preserve user originals, and publish checked final files before cleanup. Deployments without that tool use a unique task subdirectory and explicit cleanup.
+
 ### Minimal configuration
 
 ```yaml

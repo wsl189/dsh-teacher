@@ -17,6 +17,16 @@ function documentXml(bytes: Uint8Array) {
 }
 
 describe('editable equations in collected Word documents', () => {
+  it('retains comparisons and ampersands inside editable equations', async () => {
+    const bytes = await createExampleWord(String.raw`范围 $0<x<1$，条件 $a>b>0$，标记 $\text{A\&B}$。`)
+    const { text } = documentXml(bytes)
+    const document = new DOMParser({ onError: (_level, message) => { throw new Error(message) } })
+      .parseFromString(text, 'application/xml')
+    const math = Array.from(document.getElementsByTagNameNS(MATH_NS, 'oMath')).map(node => node.textContent)
+    expect(math).toEqual(['0<x<1', 'a>b>0', 'A&B'])
+    expect(await normalizeExampleWord(bytes)).toBeUndefined()
+  })
+
   it('keeps Roman subpart labels upright in their printed case while body variables remain italic', async () => {
     const source = ['（i）已知变量 i，求 $i^2$。', '(ii) 讨论变量 v。', '（I）求点 I 的位置。',
       '(II) 证明直线 AB 平行。', '（ⅲ）验证结论。', '(iv) Check the result.', '（1）变量 i 的值。'].join('\n')

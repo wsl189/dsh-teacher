@@ -282,3 +282,48 @@
  
    if (!targetElement) {
      // Target element hasn't been assigned, so don't handle children.
+--- a/src/parse-stringify/parse-tag.js
++++ b/src/parse-stringify/parse-tag.js
+@@ -1,3 +1,4 @@
++import { decodeXML } from 'entities'
+ const attrRE = /\s([^'"/\s><]+?)[\s/>]|([^\s=]+)=\s?(".*?"|'.*?')/g
+ 
+ export default function stringify(tag) {
+@@ -47,10 +48,10 @@
+         arr = attr.split('=')
+       }
+ 
+-      res.attribs[arr[0]] = arr[1]
++      res.attribs[arr[0]] = decodeXML(arr[1])
+       reg.lastIndex--
+     } else if (result[2]) {
+-      res.attribs[result[2]] = result[3].trim().substring(1, result[3].length - 1)
++      res.attribs[result[2]] = decodeXML(result[3].trim().substring(1, result[3].length - 1))
+     }
+   }
+ 
+--- a/src/parse-stringify/stringify.js
++++ b/src/parse-stringify/stringify.js
+@@ -1,7 +1,12 @@
++function escapeXml(value) {
++  return String(value).replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;')
++    .replaceAll('"', '&quot;').replaceAll("'", '&apos;')
++}
++
+ function attrString(attribs) {
+   const buff = []
+   for (const key in attribs) {
+-    buff.push(`${key}="${attribs[key]}"`)
++    buff.push(`${key}="${escapeXml(attribs[key])}"`)
+   }
+   if (!buff.length) {
+     return ''
+@@ -12,7 +17,7 @@
+ function stringify(buff, doc) {
+   switch (doc.type) {
+     case 'text':
+-      return buff + doc.data
++      return buff + escapeXml(doc.data)
+     case 'tag': {
+       const voidElement =
+         doc.voidElement || (!doc.children.length && doc.attribs['xml:space'] !== 'preserve')

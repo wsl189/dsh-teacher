@@ -22,7 +22,7 @@ The Univer skills group related, known Facade edits in one execute call and requ
 
 The API tool schema gives the same focused-query guidance and states that `limit` does not shorten `show` responses. A missing label sends discovery to `find`; the instructions reject repeated guessed type names and distinguish an undocumented capability from a permission failure. Complete class inventories remain available when needed. The Univer and PPT Master instructions place reusable scripts, virtual environments, and shared intermediate files under the session workspace because temporary directories may be isolated per command or tool.
 
-PPT Master's provider appends the current session workspace to the loaded instructions and requires an explicit `project_manager.py init --dir` inside it unless the user requests another permitted location. The upstream skill files, resource directory, workflow selection, attribution guard, and project-local export backups remain intact.
+PPT Master's provider appends the current session workspace to the loaded instructions and requires an explicit `project_manager.py init --dir` inside it unless the user requests another permitted location. The upstream skill files, resource directory, workflow selection, and attribution guard remain intact. The [Office cleanup decision](../feature/2026-09-19-office-generation-cleanup.md) owns temporary project placement and removes project-local backups after final publication.
 
 ## Alternatives considered
 
