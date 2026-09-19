@@ -16,7 +16,7 @@ This directory pins third-party plugins in the dsh-teacher Web and Windows distr
 | `dsh-univer-office` | 0.3.0, DSH repack 7 | Sheets, Docs, Slides, Bases, Boards, review, and import/export. |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | DOCX, XLSX, and PPTX previews in the official sidebar. |
 
-The Office viewer retains its upstream package name but has no dependency on `dsh-better-sidebar`. Its compatibility patch registers viewers with the official document-preview service. Sidebar files, documents, and terminals come from DSH. Windows desktop control uses the official [native Cua Driver provider](../packages/experimental/computer-use-cua-driver-native/README.md); Windows-MCP and its private Python runtime are absent.
+The Office viewer retains its upstream package name but has no dependency on `dsh-better-sidebar`. Its compatibility patch registers viewers with the official document-preview service and gives each viewer the available pane height for its canvas or scrollport. Sidebar files, documents, and terminals come from DSH. Windows desktop control uses the official [native Cua Driver provider](../packages/experimental/computer-use-cua-driver-native/README.md); Windows-MCP and its private Python runtime are absent.
 
 The [PPT Master provider](../packages/skill/skill-ppt-master/README.md) separately bundles the complete upstream v6.4.0 skill directory. Its execution routes retain their external Python and tool prerequisites.
 

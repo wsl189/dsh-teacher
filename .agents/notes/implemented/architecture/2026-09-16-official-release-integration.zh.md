@@ -12,7 +12,7 @@ Status: implemented
 
 集成以官方 `dsh-v0.1.6-alpha.2` 为基础，采用其 harness、Remote API、会话升级、原生系统支持和官方侧边栏。教师工作台包与模型设置保留原有用户操作、字段、默认值、存储位置和供应商分配；这些包中的修改仅适配上游 API。教师版 Electron 启动器和更新器保留现有应用标识及数据位置。
 
-Web profile 加载官方文件、文档和终端侧边栏插件。保留的 Office 预览插件通过官方文档预览服务注册。发行版不包含 `dsh-better-sidebar` 包、草稿标签页适配器、Windows-MCP 包或私有 Python 运行时。
+Web profile 加载官方文件、文档和终端侧边栏插件。保留的 Office 预览插件通过官方文档预览服务注册。适配器提供占满高度的 flex 容器，因为 Office 预览器依赖父级的 flex 尺寸分配；块级父容器可能读入工作簿数据，却使表格画布高度为零。Univer 在销毁时负责移除其嵌套 React 根节点的 DOM；另外清空宿主容器会在切换标签时与该移除操作冲突。浏览器回归通过文件面板打开 DOCX、XLSX 和 PPTX，要求表格画布实际显示内容，并覆盖面板缩放和标签切换。发行版不包含 `dsh-better-sidebar` 包、草稿标签页适配器、Windows-MCP 包或私有 Python 运行时。
 
 Windows 加载官方原生 Cua Driver 电脑操控提供方。发行检查仅允许 Web bundle 引入这一确定的实验性依赖；其他实验性运行时依赖仍被拒绝。其生命周期、工具目录、取消、截图准入与操作系统权限要求仍由上游负责。
 

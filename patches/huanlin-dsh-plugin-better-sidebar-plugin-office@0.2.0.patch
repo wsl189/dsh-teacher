@@ -1,7 +1,8 @@
 diff --git a/lib/client.js b/lib/client.js
+index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc06725702 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -55,6 +55,7 @@
+@@ -55,6 +55,7 @@ window.__ModuleLoader__.load({
  		//#region src/client/urls.ts
  		/** Absolute URL of the media route for one path (raw bytes). */
  		function mediaUrl(scope, path) {
@@ -9,7 +10,24 @@ diff --git a/lib/client.js b/lib/client.js
  			return fileUrl(scope, path, false);
  		}
  		/** Absolute URL of the download route (Content-Disposition: attachment). */
-@@ -426061,7 +426062,7 @@
+@@ -366041,7 +366042,6 @@ td.UniverTableCell, th.UniverTableCell{mso-padding-alt:0cm 5.4pt 0cm 5.4pt;}
+ 								univerRef.current?.dispose();
+ 							} catch {}
+ 							univerRef.current = null;
+-							host.innerHTML = "";
+ 							setLoad({
+ 								status: "error",
+ 								message: error instanceof Error ? error.message : String(error)
+@@ -366055,7 +366055,7 @@ td.UniverTableCell, th.UniverTableCell{mso-padding-alt:0cm 5.4pt 0cm 5.4pt;}
+ 						univerRef.current?.dispose();
+ 					} catch {}
+ 					univerRef.current = null;
+-					if (host !== null) host.innerHTML = "";
++					// Univer disposes its nested React root; it owns removal of the host children.
+ 				};
+ 			}, [
+ 				scope.sessionId,
+@@ -426061,7 +426061,7 @@ self.onmessage = async (e) => {
  		*/
  		/** Services required before mounting: better-sidebar's client service + the
  		*  DSH locale service (the viewer copy follows its active locale). */
@@ -18,7 +36,7 @@ diff --git a/lib/client.js b/lib/client.js
  		/** The three Office viewer descriptors (id / exts match the former built-ins). */
  		function officeViewers() {
  			return [
-@@ -426114,26 +426115,30 @@
+@@ -426114,26 +426114,37 @@ self.onmessage = async (e) => {
  				zh: zh$1,
  				en: en$1
  			}), "dsh-better-sidebar-plugin-office: dictionaries");
@@ -57,10 +75,17 @@ diff --git a/lib/client.js b/lib/client.js
 +                        return () => URL.revokeObjectURL(next);
 +                    }, [content]);
 +                    if (url === "") return null;
-+                    return react$1.createElement(viewer.component, {
++                    // Office viewers need a flex parent with the document scrollport's definite height.
++                    return react$1.createElement("div", {
++                        "data-office-preview": viewer.id,
++                        style: {
++                            display: "flex", flexDirection: "column", height: "100%",
++                            minHeight: 0, minWidth: 0, overflow: "hidden", whiteSpace: "normal"
++                        }
++                    }, react$1.createElement(viewer.component, {
 +                        scope: { sessionId: "", cwd: "" }, path: url,
 +                        title: decodeURIComponent(resourceAddress.split("/").pop() ?? viewer.id)
-+                    });
++                    }));
 +                };
 +                ctx.effect(() => ctx.slots.inject("sidebar.right.tab.document", () => ctx.slots.register({
 +                    name: "sidebar.right.tab.document", key: id
@@ -70,6 +95,7 @@ diff --git a/lib/client.js b/lib/client.js
  		//#endregion
  		exports.apply = apply;
 diff --git a/package.json b/package.json
+index 5eb418cec2c46dc6b3fb5b8fdc148629048564da..a11f90d6491b996acb8a877c689e534daabbe2c9 100644
 --- a/package.json
 +++ b/package.json
 @@ -31,7 +31,11 @@
@@ -85,7 +111,7 @@ diff --git a/package.json b/package.json
        "platform": "web"
      }
    },
-@@ -45,14 +49,10 @@
+@@ -45,16 +49,12 @@
    },
    "peerDependencies": {
      "@deepseek-ai/cordis": "^4.0.1",
@@ -94,12 +120,14 @@ diff --git a/package.json b/package.json
    },
    "peerDependenciesMeta": {
      "@deepseek-ai/cordis": {
--      "optional": true
--    },
--    "dsh-better-sidebar": {
        "optional": true
      },
+-    "dsh-better-sidebar": {
+-      "optional": true
+-    },
      "react": {
+       "optional": true
+     }
 @@ -63,7 +63,6 @@
      "@types/node": "^24.0.0",
      "@types/react": "~18.3.1",
@@ -108,10 +136,3 @@ diff --git a/package.json b/package.json
      "react": "^18.2.0",
      "react-dom": "18.2.0",
      "tsdown": "^0.22.2",
-@@ -80,4 +79,4 @@
-     "bundle:client": "tsdown --config tsdown.config.ts",
-     "watch": "tsdown --config tsdown.config.ts --watch"
-   }
--}
-\ No newline at end of file
-+}

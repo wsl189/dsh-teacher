@@ -16,7 +16,7 @@
 | `dsh-univer-office` | 0.3.0，DSH 重打包 7 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
 
-Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
+Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器，并将面板可用高度分配给各预览器的画布或滚动区域。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
 
 [PPT Master 提供方](../packages/skill/skill-ppt-master/README.zh.md)另行内置上游 v6.4.0 的完整技能目录。执行具体工作流仍需满足外部 Python 和工具前置条件。
 
