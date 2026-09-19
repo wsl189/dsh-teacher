@@ -34,7 +34,7 @@ patchedDependencies:
   '@anysearch/anysearch-dsh@0.1.4': 6b32c351a48240a048d438b33b2c4299f9b785e4ed9bfe5f436669faef84afe4
   '@dickpy/dsh-imagegen@1.5.12': a0c7cf892dc9d16f528d937ec9e4f6726f74e31643a1455606e623a354488c07
   '@electron/osx-sign@1.3.3': 280e7b2816caf01423097d24e79107a66afeb563a348630ce9928ae8499a5861
-  '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.2.0': 9e71412c635c2b3f52053686c550427f8aa4a40ec1d981a08d824364d98a7b67
+  '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.2.0': 4a1d6017b14d6aff4cb16e72a84843876966a62544f630b9f96b579043b54a0d
   '@xmanrui/dsh-im@4.21.1': c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64
   '@yao-pkg/pkg@6.21.0': 07f08c630d0d3886d81fd4600116d07e4871ddcd57f92cb22746b6d246cdc337
   dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
@@ -2544,7 +2544,7 @@ importers:
         version: file:third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.12.tgz(patch_hash=a0c7cf892dc9d16f528d937ec9e4f6726f74e31643a1455606e623a354488c07)(@deepseek-ai/dsh-agent-default-model@packages+core+agent-default-model)(@deepseek-ai/dsh-credentials@packages+credentials+credentials)(@deepseek-ai/dsh-model-service-settings@packages+settings+model-service-settings)(react@18.3.1)
       '@huanlin/dsh-plugin-better-sidebar-plugin-office':
         specifier: file:../../../third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz
-        version: file:third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz(patch_hash=9e71412c635c2b3f52053686c550427f8aa4a40ec1d981a08d824364d98a7b67)(@deepseek-ai/cordis@vendor+cordis)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(pdfjs-dist@6.3.289)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
+        version: file:third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz(patch_hash=4a1d6017b14d6aff4cb16e72a84843876966a62544f630b9f96b579043b54a0d)(@deepseek-ai/cordis@vendor+cordis)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(pdfjs-dist@6.3.289)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       '@xmanrui/dsh-im':
         specifier: file:../../../third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz
         version: file:third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz(patch_hash=c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64)(debug@4.4.3(supports-color@9.4.0))(supports-color@9.4.0)
@@ -23853,7 +23853,7 @@ snapshots:
     dependencies:
       hono: 4.12.29
 
-  '@huanlin/dsh-plugin-better-sidebar-plugin-office@file:third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz(patch_hash=9e71412c635c2b3f52053686c550427f8aa4a40ec1d981a08d824364d98a7b67)(@deepseek-ai/cordis@vendor+cordis)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(pdfjs-dist@6.3.289)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
+  '@huanlin/dsh-plugin-better-sidebar-plugin-office@file:third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz(patch_hash=4a1d6017b14d6aff4cb16e72a84843876966a62544f630b9f96b579043b54a0d)(@deepseek-ai/cordis@vendor+cordis)(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(pdfjs-dist@6.3.289)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)':
     dependencies:
       '@aiden0z/pptx-renderer': 1.3.0(pdfjs-dist@6.3.289)
       '@univerjs/preset-sheets-core': 0.25.1(@types/react-dom@18.3.7(@types/react@18.3.31))(@types/react@18.3.31)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)(rxjs@7.8.2)

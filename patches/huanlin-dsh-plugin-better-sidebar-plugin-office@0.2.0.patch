@@ -1,8 +1,7 @@
 diff --git a/lib/client.js b/lib/client.js
-index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc06725702 100644
 --- a/lib/client.js
 +++ b/lib/client.js
-@@ -55,6 +55,7 @@ window.__ModuleLoader__.load({
+@@ -55,6 +55,7 @@
  		//#region src/client/urls.ts
  		/** Absolute URL of the media route for one path (raw bytes). */
  		function mediaUrl(scope, path) {
@@ -10,7 +9,219 @@ index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc
  			return fileUrl(scope, path, false);
  		}
  		/** Absolute URL of the download route (Content-Disposition: attachment). */
-@@ -366041,7 +366042,6 @@ td.UniverTableCell, th.UniverTableCell{mso-padding-alt:0cm 5.4pt 0cm 5.4pt;}
+@@ -83,6 +84,7 @@
+ 			nextSlide: "Next",
+ 			zoom: "Zoom",
+ 			zoomHint: "Alt + wheel",
++            fitWidth: "Fit width",
+ 			viewerDocx: "Word",
+ 			viewerXlsx: "Excel",
+ 			viewerPptx: "PowerPoint"
+@@ -95,6 +97,7 @@
+ 			nextSlide: "下一页",
+ 			zoom: "缩放",
+ 			zoomHint: "Alt + 滚轮",
++            fitWidth: "适应宽度",
+ 			viewerDocx: "Word 文档",
+ 			viewerXlsx: "Excel 表格",
+ 			viewerPptx: "PPT 演示"
+@@ -40397,12 +40400,19 @@
+ 		//#endregion
+ 		//#region \0dsh-css:D:\Projects\deepseek-harness\dsh-better-sidebar-plugin-office\src\client\office.module.css.mjs
+ 		const css$1 = "/* Office preview styles (extracted from dsh-better-sidebar's sidebar.l5v9sv_module.l5v9sv_css\n   when the office viewers moved into this plugin). The shared placeholder /\n   binary-fallback / download-link affordances are scoped here too so the\n   plugin is self-contained. */\n\n/* Loading / empty state shared by the docx / xlsx / pptx views. */\n.l5v9sv_editorPlaceholder {\n  flex: 1;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  font: var(--dsw-font-xxs-12);\n  color: var(--dsw-alias-label-tertiary);\n  padding: 16px;\n  text-align: center;\n}\n\n/* Error / download-only fallback: a centered notice plus a download link —\n   the user always gets the file. */\n.l5v9sv_editorBinary {\n  flex: 1;\n  display: flex;\n  flex-direction: column;\n  align-items: center;\n  justify-content: center;\n  gap: 12px;\n  padding: 24px 16px;\n  text-align: center;\n}\n\n.l5v9sv_editorBinaryNotice {\n  font: var(--dsw-font-xxs-12);\n  color: var(--dsw-alias-label-tertiary);\n}\n\n.l5v9sv_editorDownloadLink {\n  display: inline-flex;\n  align-items: center;\n  gap: 6px;\n  padding: 6px 14px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-primary);\n  font: var(--dsw-font-xxs-strong-12);\n  text-decoration: none;\n  cursor: pointer;\n  transition:\n    background var(--ds-transition-duration-slow) var(--ds-ease-in-out),\n    border-color var(--ds-transition-duration-slow) var(--ds-ease-in-out);\n}\n\n.l5v9sv_editorDownloadLink:hover {\n  background: var(--dsw-alias-interactive-bg-hover);\n  border-color: var(--dsw-alias-border-l2);\n}\n\n.l5v9sv_editorError {\n  padding: 12px 16px;\n  font: var(--dsw-font-xxs-12);\n  color: var(--dsw-alias-state-error-primary);\n}\n\n/* Word preview: the document scrolls independently while the zoom control\n   stays pinned to the bottom edge. */\n.l5v9sv_editorDocx {\n  flex: 1;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  background: var(--dsw-alias-bg-base);\n}\n\n.l5v9sv_editorDocxViewport {\n  flex: 1;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  overflow: auto;\n  background: var(--dsw-alias-bg-base);\n}\n\n/* docx-preview renders into a wrapper div with .l5v9sv_docx className; the host\n   above scrolls while the wrapper holds the page flow. */\n.l5v9sv_editorDocxWrap {\n  flex: none;\n  padding: 16px;\n}\n\n.l5v9sv_editorDocxZoom {\n  flex: none;\n  display: flex;\n  align-items: center;\n  gap: 8px;\n  min-height: 34px;\n  padding: 4px 10px;\n  border-top: 1px solid var(--dsw-alias-border-l1);\n  background: var(--dsw-alias-bg-layer-1);\n}\n\n.l5v9sv_editorDocxZoomHint,\n.l5v9sv_editorDocxZoomValue {\n  flex: none;\n  font: var(--dsw-font-xxxs-11);\n  color: var(--dsw-alias-label-tertiary);\n}\n\n.l5v9sv_editorDocxZoomValue {\n  width: 36px;\n  text-align: right;\n}\n\n.l5v9sv_editorDocxZoomRange {\n  flex: 1;\n  min-width: 72px;\n  accent-color: var(--dsw-alias-brand-primary);\n  cursor: pointer;\n}\n\n/* Excel preview: the Univer canvas fills the pane; the overlay covers it\n   while loading / on error. */\n.l5v9sv_editorXlsx {\n  position: relative;\n  flex: 1;\n  min-height: 0;\n  overflow: hidden;\n  background: var(--dsw-alias-bg-base);\n}\n\n.l5v9sv_editorUniverHost {\n  width: 100%;\n  height: 100%;\n  min-width: 0;\n  min-height: 0;\n}\n\n.l5v9sv_editorOfficeOverlay {\n  position: absolute;\n  inset: 0;\n  z-index: 2;\n  display: flex;\n  background: var(--dsw-alias-bg-base);\n}\n\n/* PPTX preview: a pinned toolbar over a scrolling slide stage. */\n.l5v9sv_editorPptx {\n  flex: 1;\n  min-height: 0;\n  display: flex;\n  flex-direction: column;\n  background: var(--dsw-alias-bg-base);\n}\n\n.l5v9sv_editorPptxToolbar {\n  flex: none;\n  display: flex;\n  align-items: center;\n  justify-content: center;\n  gap: 8px;\n  padding: 6px 8px;\n  border-bottom: 1px solid var(--dsw-alias-border-l1);\n}\n\n.l5v9sv_editorPptxToolbar .l5v9sv_editorDownloadLink {\n  margin-left: auto;\n}\n\n.l5v9sv_editorPptxButton {\n  height: 28px;\n  padding: 0 10px;\n  border: 1px solid var(--dsw-alias-border-l2);\n  border-radius: 6px;\n  background: var(--dsw-alias-bg-layer-2);\n  color: var(--dsw-alias-label-secondary);\n  font: var(--dsw-font-xxs-strong-12);\n  cursor: pointer;\n}\n\n.l5v9sv_editorPptxButton:hover:not(:disabled) {\n  background: var(--dsw-alias-interactive-bg-hover);\n  color: var(--dsw-alias-label-primary);\n}\n\n.l5v9sv_editorPptxButton:disabled {\n  opacity: 0.4;\n  cursor: default;\n}\n\n.l5v9sv_editorPptxPosition {\n  min-width: 64px;\n  text-align: center;\n  font: var(--dsw-font-xxs-12);\n  color: var(--dsw-alias-label-tertiary);\n}\n\n.l5v9sv_editorPptxStage {\n  position: relative;\n  flex: 1;\n  min-height: 0;\n  overflow: hidden;\n}\n\n.l5v9sv_editorPptxHost {\n  width: 100%;\n  height: 100%;\n  min-width: 0;\n  min-height: 0;\n  overflow: auto;\n}\n";
++		const officeLayoutCss = `
++/* Wider pages start at a reachable scroll origin; smaller pages remain centered. */
++.l5v9sv_editorDocxWrap { width: max-content; align-self: flex-start; margin-inline: auto; }
++.l5v9sv_editorDocx, .l5v9sv_editorDocxViewport, .l5v9sv_editorXlsx { min-width: 0; }
++.l5v9sv_editorXlsx { display: flex; flex-direction: column; }
++.l5v9sv_editorUniverHost { flex: 1; height: 0; }
++`;
+ 		const tagId$1 = "@huanlin/dsh-plugin-better-sidebar-plugin-office/office.module.css";
+ 		if (typeof document !== "undefined" && document.querySelector("style[data-plugin-css=" + JSON.stringify(tagId$1) + "]") === null) {
+ 			const tag = document.createElement("style");
+ 			tag.dataset.plugin = "@huanlin/dsh-plugin-better-sidebar-plugin-office";
+ 			tag.dataset.pluginCss = tagId$1;
+-			tag.textContent = css$1;
++			tag.textContent = css$1 + officeLayoutCss;
+ 			document.head.appendChild(tag);
+ 		}
+ 		var office_module_css_default = {
+@@ -157179,11 +157189,10 @@
+ 					(this._mainScene || this._viewport.scene).makeDirty(state);
+ 				}
+ 				pick(coord) {
+-					var _this$horizonThumbRec9, _this$verticalThumbRe9, _this$horizonScrollTr4, _this$verticalScrollT4;
+-					if ((_this$horizonThumbRec9 = this.horizonThumbRect) === null || _this$horizonThumbRec9 === void 0 ? void 0 : _this$horizonThumbRec9.isHit(coord)) return this.horizonThumbRect;
+-					if ((_this$verticalThumbRe9 = this.verticalThumbRect) === null || _this$verticalThumbRe9 === void 0 ? void 0 : _this$verticalThumbRe9.isHit(coord)) return this.verticalThumbRect;
+-					if ((_this$horizonScrollTr4 = this.horizonScrollTrack) === null || _this$horizonScrollTr4 === void 0 ? void 0 : _this$horizonScrollTr4.isHit(coord)) return this.horizonScrollTrack;
+-					if ((_this$verticalScrollT4 = this.verticalScrollTrack) === null || _this$verticalScrollT4 === void 0 ? void 0 : _this$verticalScrollT4.isHit(coord)) return this.verticalScrollTrack;
++                    // Hidden thumbs retain their previous rectangles after the content fits the viewport.
++                    for (const rect of [this.horizonThumbRect, this.verticalThumbRect, this.horizonScrollTrack, this.verticalScrollTrack]) {
++                        if (rect?.visible && rect.evented && rect.isHit(coord)) return rect;
++                    }
+ 					return null;
+ 				}
+ 				_initialScrollRect() {
+@@ -365892,13 +365901,30 @@
+ 			const viewportRef = (0, react$1.useRef)(null);
+ 			const wrapRef = (0, react$1.useRef)(null);
+ 			const [load, setLoad] = (0, react$1.useState)({ status: "loading" });
+-			const [zoom, setZoom] = (0, react$1.useState)(100);
++			const [manualZoom, setZoom] = (0, react$1.useState)(null);
++            const [fitZoom, setFitZoom] = (0, react$1.useState)(100);
++            const zoom = manualZoom ?? fitZoom;
++            (0, react$1.useLayoutEffect)(() => {
++                const viewport = viewportRef.current;
++                const wrap = wrapRef.current;
++                if (load.status !== "ready" || !viewport || !wrap) return;
++                const fit = () => {
++                    if (viewport.clientWidth > 0 && wrap.offsetWidth > 0) {
++                        setFitZoom(Math.max(10, Math.min(100, Math.floor(viewport.clientWidth / wrap.offsetWidth * 100))));
++                    }
++                };
++                fit();
++                const observer = new ResizeObserver(fit);
++                observer.observe(viewport);
++                return () => observer.disconnect();
++            }, [load.status]);
+ 			(0, react$1.useEffect)(() => {
+ 				let cancelled = false;
+ 				const container = viewportRef.current;
+ 				const wrap = wrapRef.current;
+ 				if (container === null || wrap === null) return;
+-				setZoom(100);
++				setZoom(null);
++                setLoad({ status: "loading" });
+ 				(async () => {
+ 					try {
+ 						const response = await fetch(mediaUrl(scope, path));
+@@ -365939,13 +365965,13 @@
+ 					if (!event.altKey) return;
+ 					event.preventDefault();
+ 					const delta = event.deltaY < 0 ? 10 : -10;
+-					setZoom((current) => Math.max(50, Math.min(200, current + delta)));
++					setZoom((current) => Math.max(10, Math.min(200, (current ?? fitZoom) + delta)));
+ 				};
+ 				viewport.addEventListener("wheel", onWheel, { passive: false });
+ 				return () => {
+ 					viewport.removeEventListener("wheel", onWheel);
+ 				};
+-			}, []);
++			}, [fitZoom]);
+ 			return /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+ 				className: office_module_css_default.editorDocx,
+ 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+@@ -365975,12 +366001,16 @@
+ 							className: office_module_css_default.editorDocxZoomHint,
+ 							children: t("zoomHint")
+ 						}),
++                        (0, react_jsx_runtime.jsx)("button", {
++                            type: "button", className: office_module_css_default.editorPptxButton,
++                            onClick: () => setZoom(null), children: t("fitWidth")
++                        }),
+ 						/* @__PURE__ */ (0, react_jsx_runtime.jsx)("input", {
+ 							className: office_module_css_default.editorDocxZoomRange,
+ 							type: "range",
+-							min: 50,
++							min: 10,
+ 							max: 200,
+-							step: 10,
++							step: 1,
+ 							value: zoom,
+ 							"aria-label": t("zoom"),
+ 							onChange: (event) => {
+@@ -366006,9 +366036,14 @@
+ 			const { scope, path, title } = props;
+ 			const hostRef = (0, react$1.useRef)(null);
+ 			const univerRef = (0, react$1.useRef)(null);
++            const fitRef = (0, react$1.useRef)(null);
+ 			const [load, setLoad] = (0, react$1.useState)({ status: "loading" });
+ 			(0, react$1.useEffect)(() => {
+ 				let cancelled = false;
++                let observer;
++                let sheetChanged;
++                let lifecycleChanged;
++                let rendered = false;
+ 				const host = hostRef.current;
+ 				if (host === null) return;
+ 				(async () => {
+@@ -366019,13 +366054,32 @@
+ 						const buf = await response.arrayBuffer();
+ 						if (cancelled) return;
+ 						const XLSX = await Promise.resolve().then(() => /* @__PURE__ */ __toESM(require_xlsx_full_min(), 1));
+-						const { createUniver, LocaleType, mergeLocales } = await Promise.resolve().then(() => (init_es$17(), es_exports$1));
++						const { createUniver, LocaleType, mergeLocales, LifecycleStages } = await Promise.resolve().then(() => (init_es$17(), es_exports$1));
+ 						const { UniverSheetsCorePreset } = await Promise.resolve().then(() => (init_es(), es_exports));
+ 						const isZh = typeof navigator !== "undefined" && navigator.language.toLowerCase().startsWith("zh");
+ 						const localePack = await (isZh ? Promise.resolve().then(() => (init_zh_CN(), zh_CN_exports)).then((m) => m.default).catch(() => null) : Promise.resolve().then(() => (init_en_US(), en_US_exports)).then((m) => m.default).catch(() => null));
+-						const wb = XLSX.read(buf, { type: "array" });
++						const wb = XLSX.read(buf, { type: "array", cellStyles: true });
+ 						const locale = isZh ? LocaleType.ZH_CN : LocaleType.EN_US;
+ 						const workbookData = xlsxWorkbookToUniver(wb, "0.25.1", locale);
++                        const widths = new Map();
++                        const autoZoom = new Map();
++                        const manualSheets = new Set();
++                        const ratioFor = (id) => Math.max(.1, Math.min(1, Math.floor((host.clientWidth - 12) / widths.get(id) * 100) / 100));
++                        const widthFor = (sheet, last) => {
++                            const defaultWidth = sheet.defaultColumnWidth ?? 96;
++                            let width = (sheet.rowHeader?.width ?? 46) + (last + 1) * defaultWidth;
++                            for (const [column, info] of Object.entries(sheet.columnData ?? {})) {
++                                if (Number(column) <= last) width += (info.hd ? 0 : info.w ?? defaultWidth) - defaultWidth;
++                            }
++                            return width;
++                        };
++                        for (const [id, sheet] of Object.entries(workbookData.sheets)) {
++                            const source = wb.Sheets[sheet.name];
++                            const last = decodeRange(source?.["!ref"] ?? "A1").endColumn;
++                            widths.set(id, widthFor(sheet, last));
++                            sheet.zoomRatio = host.clientWidth > 0 ? ratioFor(id) : 1;
++                            autoZoom.set(id, sheet.zoomRatio);
++                        }
+ 						if (cancelled) return;
+ 						const { univer, univerAPI } = createUniver({
+ 							locale,
+@@ -366033,15 +366087,45 @@
+ 							presets: [UniverSheetsCorePreset({ container: host })]
+ 						});
+ 						univerRef.current = univer;
+-						univerAPI.createWorkbook(workbookData);
+-						if (!cancelled) setLoad({ status: "ready" });
++                        lifecycleChanged = univerAPI.addEvent(univerAPI.Event.LifeCycleChanged, ({ stage }) => {
++                            if (cancelled || stage !== LifecycleStages.Rendered) return;
++                            // Render modules register in other listeners for this same lifecycle event.
++                            queueMicrotask(() => {
++                                if (cancelled) return;
++                                rendered = true;
++                                fitRef.current?.();
++                                setLoad({ status: "ready" });
++                            });
++                        });
++						const workbook = univerAPI.createWorkbook(workbookData);
++                        const fit = (force = false) => {
++                            if (cancelled || !rendered || host.clientWidth === 0) return;
++                            const sheet = workbook.getActiveSheet();
++                            const id = sheet.getSheetId();
++                            if (autoZoom.has(id) && Math.abs(sheet.getZoom() - autoZoom.get(id)) > .001) manualSheets.add(id);
++                            if (force) manualSheets.delete(id);
++                            if (manualSheets.has(id)) return;
++                            if (force || !widths.has(id)) widths.set(id, widthFor(sheet.getSheet().getSnapshot(), sheet.getDataRange().getRange().endColumn));
++                            const ratio = ratioFor(id);
++                            autoZoom.set(id, ratio);
++                            if (!force && sheet.getZoom() === ratio) return;
++                            sheet.zoom(ratio);
++                            sheet.scrollToCell(0, 0, 0);
++                        };
++                        fitRef.current = () => fit(true);
++                        observer = new ResizeObserver(() => fit());
++                        observer.observe(host);
++                        sheetChanged = univerAPI.addEvent(univerAPI.Event.ActiveSheetChanged, () => fit());
+ 					} catch (error) {
++                        observer?.disconnect();
++                        sheetChanged?.dispose();
++                        lifecycleChanged?.dispose();
++                        fitRef.current = null;
+ 						if (!cancelled) {
+ 							try {
  								univerRef.current?.dispose();
  							} catch {}
  							univerRef.current = null;
@@ -18,7 +229,15 @@ index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc
  							setLoad({
  								status: "error",
  								message: error instanceof Error ? error.message : String(error)
-@@ -366055,7 +366055,7 @@ td.UniverTableCell, th.UniverTableCell{mso-padding-alt:0cm 5.4pt 0cm 5.4pt;}
+@@ -366051,11 +366135,15 @@
+ 				})();
+ 				return () => {
+ 					cancelled = true;
++                    observer?.disconnect();
++                    sheetChanged?.dispose();
++                    lifecycleChanged?.dispose();
++                    fitRef.current = null;
+ 					try {
  						univerRef.current?.dispose();
  					} catch {}
  					univerRef.current = null;
@@ -27,7 +246,22 @@ index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc
  				};
  			}, [
  				scope.sessionId,
-@@ -426061,7 +426061,7 @@ self.onmessage = async (e) => {
+@@ -366068,7 +366156,13 @@
+ 				children: [/* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+ 					className: office_module_css_default.editorUniverHost,
+ 					ref: hostRef
+-				}), load.status !== "ready" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
++				}), (0, react_jsx_runtime.jsx)("div", {
++                    className: office_module_css_default.editorDocxZoom,
++                    children: (0, react_jsx_runtime.jsx)("button", {
++                        type: "button", className: office_module_css_default.editorPptxButton,
++                        disabled: load.status !== "ready", onClick: () => fitRef.current?.(), children: t("fitWidth")
++                    })
++                }), load.status !== "ready" && /* @__PURE__ */ (0, react_jsx_runtime.jsxs)("div", {
+ 					className: office_module_css_default.editorOfficeOverlay,
+ 					children: [load.status === "loading" && /* @__PURE__ */ (0, react_jsx_runtime.jsx)("div", {
+ 						className: office_module_css_default.editorPlaceholder,
+@@ -426061,7 +426155,7 @@
  		*/
  		/** Services required before mounting: better-sidebar's client service + the
  		*  DSH locale service (the viewer copy follows its active locale). */
@@ -36,7 +270,7 @@ index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc
  		/** The three Office viewer descriptors (id / exts match the former built-ins). */
  		function officeViewers() {
  			return [
-@@ -426114,26 +426114,37 @@ self.onmessage = async (e) => {
+@@ -426114,26 +426208,37 @@
  				zh: zh$1,
  				en: en$1
  			}), "dsh-better-sidebar-plugin-office: dictionaries");
@@ -95,7 +329,6 @@ index 86e9dad21280e502d529e777e0a22c777ea82586..04334c54c5b3330031022f86158fa1dc
  		//#endregion
  		exports.apply = apply;
 diff --git a/package.json b/package.json
-index 5eb418cec2c46dc6b3fb5b8fdc148629048564da..a11f90d6491b996acb8a877c689e534daabbe2c9 100644
 --- a/package.json
 +++ b/package.json
 @@ -31,7 +31,11 @@
@@ -111,7 +344,7 @@ index 5eb418cec2c46dc6b3fb5b8fdc148629048564da..a11f90d6491b996acb8a877c689e534d
        "platform": "web"
      }
    },
-@@ -45,16 +49,12 @@
+@@ -45,14 +49,10 @@
    },
    "peerDependencies": {
      "@deepseek-ai/cordis": "^4.0.1",
@@ -120,14 +353,12 @@ index 5eb418cec2c46dc6b3fb5b8fdc148629048564da..a11f90d6491b996acb8a877c689e534d
    },
    "peerDependenciesMeta": {
      "@deepseek-ai/cordis": {
-       "optional": true
-     },
--    "dsh-better-sidebar": {
 -      "optional": true
 -    },
-     "react": {
+-    "dsh-better-sidebar": {
        "optional": true
-     }
+     },
+     "react": {
 @@ -63,7 +63,6 @@
      "@types/node": "^24.0.0",
      "@types/react": "~18.3.1",

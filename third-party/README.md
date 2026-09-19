@@ -18,6 +18,8 @@ This directory pins third-party plugins in the dsh-teacher Web and Windows distr
 
 The Office viewer retains its upstream package name but has no dependency on `dsh-better-sidebar`. Its compatibility patch registers viewers with the official document-preview service and gives each viewer the available pane height for its canvas or scrollport. Sidebar files, documents, and terminals come from DSH. Windows desktop control uses the official [native Cua Driver provider](../packages/experimental/computer-use-cua-driver-native/README.md); Windows-MCP and its private Python runtime are absent.
 
+Word pages and populated Excel columns initially fit the preview width, down to 10% zoom. Excel preserves imported column widths. Automatic zoom follows pane resizing; manual zoom remains until **Fit width** is selected. Enlarged Word pages remain reachable at both horizontal scroll edges. Preview zoom does not change the saved document.
+
 The [PPT Master provider](../packages/skill/skill-ppt-master/README.md) separately bundles the complete upstream v6.4.0 skill directory. Its execution routes retain their external Python and tool prerequisites.
 
 <a id="configuration-and-migration"></a>
