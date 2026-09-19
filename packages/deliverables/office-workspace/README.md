@@ -32,6 +32,8 @@ Mount the plugin beside tools, session projections, and sandbox policy. It has n
 
 `create` allocates a unique `.dsh-office-*` directory inside the current session workspace. `finish` copies selected regular, non-empty files to new destinations outside temporary directories, then removes the source directory. Destination parents must exist. Existing files are never replaced; failed publication retains drafts for retry during the same turn. `discard` removes an abandoned directory. All authoring and rendering processes must exit before either operation.
 
+New Univer projects, screenshots, resource exports, PDF previews, and Office exports must target an active temporary directory owned by the calling session and turn. A tool guard rejects other output paths before execution, including paths through symlinks into unrelated directories. Existing native projects remain editable; publish a `.univer` file through `finish` when the user requests that format. Temporary directories remain inside the workspace during generation so sandboxed commands can share them.
+
 `pause` retains a project across a normal turn ending while the user confirms a plan; `resume` attaches it to the next turn. Other temporary directories expire at the end of their owning turn, including cancellation or error, and during session or plugin disposal. Final files must be published before ending the turn. Only allocated directories are eligible for cleanup; unrelated paths and user originals are not scanned. Workspace-write access is sufficient; read-only mode rejects tool mutations. This tool publishes inside the session workspace even in Full Access mode.
 
 -----
@@ -55,7 +57,7 @@ No runtime invariant companion is published: the plugin owns one directory regis
 
 #### What the model sees
 
-The [tool schema](../../../docs/tool-catalog.md#office_workspace) describes creation, publication, expiration, and cleanup. Results contain `directory`, final `files`, `cleaned`, and `paused`. Source and final file contents are not included. Loaded Office and PPT Master skills direct all intermediate outputs into the allocated directory and require their normal checks before finalization.
+The [tool schema](../../../docs/tool-catalog.md#office_workspace) describes creation, publication, expiration, and cleanup. Results contain `directory`, final `files`, `cleaned`, and `paused`. Source and final file contents are not included. Loaded Office and PPT Master skills direct all intermediate outputs into the allocated directory and require their normal checks before finalization. A rejected Univer output returns instructions to create or resume a temporary project and publish requested final files through `finish`; this applies even when the model has not loaded a skill.
 
 #### Token effect
 
@@ -69,7 +71,7 @@ Tool schemas stay stable for the plugin lifetime. Tool results extend recorded h
 
 <a id="known-limitations-and-deferred-work"></a>
 
-- Models and scripts must use the allocated directory; the plugin does not scan or delete arbitrary files elsewhere.
+- Generated scripts and tools other than the guarded Univer outputs must follow the allocated directory instructions; the plugin does not scan or delete arbitrary files elsewhere.
 - An abrupt process or machine crash can leave an owned directory. Startup does not guess whether another process still uses it.
 - Final publication requires a local filesystem supporting hard links. Cleanup failures are reported; a replaced real directory is retained to avoid deleting another owner's files.
 - Structural, mathematical, visual, and formula-result checks belong to the authoring workflow. Publication confirms file presence, not document quality.

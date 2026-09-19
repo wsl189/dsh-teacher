@@ -1,9 +1,9 @@
 /** Publication preserves originals and cleanup removes only owned scratch. */
 import { mkdir, mkdtemp, readdir, readFile, rename, rm, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { join, relative } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { createScratch, publishFiles, removeScratch } from '../src/files.ts'
+import { createScratch, ownsOutput, publishFiles, removeScratch } from '../src/files.ts'
 
 const roots: string[] = []
 afterEach(async () => {
@@ -17,6 +17,41 @@ async function workspace(): Promise<string> {
 }
 
 describe('Office scratch files', () => {
+  it('accepts existing and new output descendants and resolves workspace aliases', async () => {
+    const cwd = await workspace()
+    const scratch = await createScratch(cwd)
+    await writeFile(join(scratch.directory, 'draft.univer'), 'draft')
+    await symlink(scratch.directory, join(cwd, 'alias'), 'junction')
+    for (const output of [scratch.directory, join(scratch.directory, 'draft.univer'), join(scratch.directory, 'screens', 'page.png'), 'alias/screens/page.png']) {
+      expect(ownsOutput(scratch, cwd, output)).toBe(true)
+      expect(ownsOutput(scratch, cwd, relative(cwd, output.startsWith('alias') ? join(cwd, output) : output))).toBe(true)
+    }
+    for (const output of [cwd, join(cwd, 'draft.univer'), `${scratch.directory}-other/draft.univer`, join(scratch.directory, '..', 'page.png')]) {
+      expect(ownsOutput(scratch, cwd, output)).toBe(false)
+    }
+  })
+
+  it('refuses escaping or dangling links and replaced or missing output owners', async () => {
+    const cwd = await workspace()
+    const outside = await workspace()
+    const scratch = await createScratch(cwd)
+    await symlink(outside, join(scratch.directory, 'escape'), 'junction')
+    await symlink(join(outside, 'missing'), join(scratch.directory, 'dangling'), 'junction')
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'escape', 'page.png'))).toBe(false)
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'dangling', 'page.png'))).toBe(false)
+    await rename(scratch.directory, `${scratch.directory}-moved`)
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'draft.univer'))).toBe(false)
+    await mkdir(scratch.directory)
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'draft.univer'))).toBe(false)
+    await rm(scratch.directory, { recursive: true })
+    await symlink(outside, scratch.directory, 'junction')
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'draft.univer'))).toBe(false)
+    await rm(scratch.directory)
+    await writeFile(scratch.directory, 'replacement file')
+    expect(ownsOutput(scratch, cwd, join(scratch.directory, 'draft.univer'))).toBe(false)
+    expect(await readdir(outside)).toEqual([])
+  })
+
   it('publishes all requested formats and removes nested intermediates while keeping originals', async () => {
     const cwd = await workspace()
     await writeFile(join(cwd, 'original.docx'), 'user original')

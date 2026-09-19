@@ -153,6 +153,7 @@
     "apps/web/tests/univer-viewer.e2e.ts",
     "apps/web/tests/univer-generation.e2e.ts",
     "apps/web/tests/univer-skills.e2e.ts",
+    "apps/web/tests/office-output-guard.e2e.ts",
     "apps/web/tests/office-preview.e2e.ts"
   ],
   "exclude": [

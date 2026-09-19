@@ -150,6 +150,7 @@
     "tests/univer-viewer.e2e.ts",
     "tests/univer-generation.e2e.ts",
     "tests/univer-skills.e2e.ts",
+    "tests/office-output-guard.e2e.ts",
     "tests/office-preview.e2e.ts"
   ],
   "references": [

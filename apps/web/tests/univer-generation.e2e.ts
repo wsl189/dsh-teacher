@@ -1,11 +1,11 @@
 /** Exercise Office authoring and native exports through the shipped chat tools. */
 
-import { readFile, readdir, stat, writeFile } from 'node:fs/promises'
+import { mkdir, readFile, readdir, stat, writeFile } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import { strFromU8, unzipSync } from 'fflate'
 import { afterAll, beforeAll, describe, expect, it, vi } from 'vitest'
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
-import { ToolCallId } from '@deepseek-ai/dsh-llm'
+import { LlmAdapter, ToolCallId, type LlmResolvedModelInfo, type StreamChunk } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-agent-presets'
 import type {} from '@deepseek-ai/dsh-tools'
@@ -46,10 +46,23 @@ function xmlPart(parts: Record<string, Uint8Array>, path: string): string {
   return strFromU8(bytes)
 }
 
+/** Image admission uses a declared test route; authoring and rendering use the real tools. */
+class UniverVisionAdapter extends LlmAdapter {
+  override resolveModel(provider: string, model: string): Promise<LlmResolvedModelInfo> {
+    return Promise.resolve({ provider, id: model, name: model, context: { contextWindow: 128_000 }, inputModalities: ['text', 'image'] })
+  }
+
+  override async *stream(): AsyncIterable<StreamChunk> {
+    throw new Error('Univer generation tests must not request model inference')
+  }
+}
+
 describe('bundled Univer chat generation', () => {
   let scaffold: WebScaffold
+  let workspace: string
   let handle: AgentHandle
   let callNumber = 0
+  const finalFiles = ['user-original.txt']
 
   beforeAll(async () => {
     // Native dependencies must resolve from the shipped plugin, not a developer's NODE_PATH.
@@ -58,13 +71,17 @@ describe('bundled Univer chat generation', () => {
     vi.stubEnv('NODE_COMPILE_CACHE', undefined)
     vi.stubEnv('NODE_DISABLE_COMPILE_CACHE', undefined)
     scaffold = await launchWebScaffold()
+    workspace = join(scaffold.workspaceCwd, 'workspace')
+    await mkdir(workspace)
+    scaffold.ctx.effect(() => scaffold.ctx.llm.registerAdapter(['univer-generation-fixture'], new UniverVisionAdapter()), 'Univer image admission fixture')
     handle = await scaffold.ctx.agents.create({
       sessionId: SessionId('univer-generation'),
-      meta: { cwd: scaffold.workspaceCwd, agentPreset: 'standard' },
+      meta: { cwd: workspace, agentPreset: 'standard' },
+      agentOptions: { provider: 'univer-generation-fixture', model: 'vision' },
       setup: agentCtx => scaffold.ctx.agentPresets.mount(agentCtx).then(() => undefined),
     })
     handle.agent.session.append('turn/start', { turn: 1 })
-    await writeFile(join(scaffold.workspaceCwd, 'user-original.txt'), 'keep user original')
+    await writeFile(join(workspace, 'user-original.txt'), 'keep user original')
   })
 
   afterAll(async () => {
@@ -115,11 +132,22 @@ describe('bundled Univer chat generation', () => {
       action: 'finish', directory: dirname(address.file),
       files: [{ source, destination: filename }],
     })
-    expect(result).toMatchObject({ cleaned: true, files: [join(scaffold.workspaceCwd, filename)] })
-    expect(await readFile(join(scaffold.workspaceCwd, filename))).toEqual(before)
+    expect(result).toMatchObject({ cleaned: true, files: [join(workspace, filename)] })
+    expect(await readFile(join(workspace, filename))).toEqual(before)
     await expect(stat(dirname(address.file))).rejects.toMatchObject({ code: 'ENOENT' })
-    expect((await readdir(scaffold.workspaceCwd)).filter(name => name.startsWith('.dsh-office-'))).toEqual([])
-    expect(await readFile(join(scaffold.workspaceCwd, 'user-original.txt'), 'utf8')).toBe('keep user original')
+    finalFiles.push(filename)
+    expect((await readdir(workspace)).sort()).toEqual([...finalFiles].sort())
+    expect(await readFile(join(workspace, 'user-original.txt'), 'utf8')).toBe('keep user original')
+  }
+
+  async function screenshot(address: UnitAddress, selection: Record<string, unknown>): Promise<void> {
+    const output = join(dirname(address.file), 'screens')
+    await call('univer_screenshot', { ...address, ...selection, output })
+    const images = (await readdir(output)).filter(name => name.endsWith('.png'))
+    expect(images.length).toBeGreaterThan(0)
+    for (const name of images) {
+      expect((await readFile(join(output, name))).subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    }
   }
 
   it('writes twenty document paragraphs and exports their text to DOCX', async () => {
@@ -138,6 +166,8 @@ return paragraphs.length;
       code: 'return doc.getParagraphs().map(paragraph => paragraph.getText());',
     })
     expect(read).toMatchObject({ committed: false, value: PARAGRAPHS })
+
+    await screenshot(address, { pages: [1] })
 
     await call('univer_export', { ...address, output: join(dirname(address.file), 'lesson.docx') })
     const document = xmlPart(await officeParts(join(dirname(address.file), 'lesson.docx')), 'word/document.xml')
@@ -224,6 +254,8 @@ return rows.length;
       }))),
     })
 
+    await screenshot(address, { range: 'A1:H6' })
+
     await call('univer_export', { ...address, output: join(dirname(address.file), 'scores.xlsx') })
     const worksheet = xmlPart(await officeParts(join(dirname(address.file), 'scores.xlsx')), 'xl/worksheets/sheet1.xml')
     const cells = [...worksheet.matchAll(/<c\b([^>]*)>([\s\S]*?)<\/c>/gu)]
@@ -278,5 +310,19 @@ return titles.length;
       expect(slide).toContain('<p:sp>')
     }
     await finish(address, 'lesson.pptx')
+  })
+
+  it('publishes a requested native Univer project and keeps it editable outside scratch', async () => {
+    const address = await createUnit('doc', 'native-project')
+    await finish(address, 'native-project.univer')
+    const file = join(workspace, 'native-project.univer')
+    expect(await call('univer_execute', {
+      ...address, file,
+      code: "doc.getParagraphs()[0].setText('Continue editing the requested native project.'); return true;",
+    })).toMatchObject({ committed: true, value: true })
+    expect(await call('univer_execute', {
+      ...address, file, code: 'return doc.getParagraphs()[0].getText();',
+    })).toMatchObject({ value: 'Continue editing the requested native project.' })
+    expect((await readdir(workspace)).sort()).toEqual([...finalFiles].sort())
   })
 })

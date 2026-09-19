@@ -6,7 +6,7 @@ import type {} from '@deepseek-ai/dsh-session-projection'
 import type {} from '@deepseek-ai/dsh-sandbox-policy'
 import { defineTool } from '@deepseek-ai/dsh-tools'
 import { assertNever } from '@deepseek-ai/dsh-util-values'
-import { createScratch, publishFiles, removeScratch, type Scratch } from './files.ts'
+import { createScratch, ownsOutput, publishFiles, removeScratch, type Scratch } from './files.ts'
 
 /** Stable Loader identity. */
 export const name = 'office-workspace'
@@ -28,6 +28,24 @@ function enqueue<T>(work: SessionWork, operation: () => Promise<T>): Promise<T> 
   const result = work.tail.then(operation)
   work.tail = result.then(() => undefined, () => undefined)
   return result
+}
+
+function univerOutput(name: string, args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null) return undefined
+  let key: string
+  switch (name) {
+    case 'univer_new': key = 'file'; break
+    case 'univer_screenshot':
+    case 'univer_export':
+    case 'univer_print_pdf': key = 'output'; break
+    case 'univer_resources':
+      if (!('action' in args) || args.action !== 'export') return undefined
+      key = 'output'
+      break
+    default: return undefined
+  }
+  const output = (args as Record<string, unknown>)[key]
+  return typeof output === 'string' ? output : undefined
 }
 
 /**
@@ -54,6 +72,22 @@ export function apply(ctx: Context): void {
       work.directories.delete(directory)
     }
   }
+  ctx.tools.guard((exec) => {
+    const output = univerOutput(exec.name, exec.arguments)
+    if (output === undefined) return undefined
+    const session = exec.agent?.session
+    const cwd = session?.header.cwd
+    const work = session === undefined ? undefined : sessions.get(session)
+    const boundary = session === undefined ? undefined : ctx.sessionProjections.stateOf(session, 'turnBoundary')
+    if (cwd !== undefined && work !== undefined && boundary !== undefined && boundary.openTurnStartSeq !== null) {
+      for (const owned of work.directories.values()) {
+        if (!owned.paused && owned.turn === boundary.lastTurn && ownsOutput(owned.scratch, cwd, output)) return undefined
+      }
+    }
+    return 'Univer output must be inside an active Office temporary directory owned by this session. '
+      + 'Call office_workspace with action="create" and use its returned directory for .univer files, screenshots, resources, PDFs, and Office exports. '
+      + 'Resume a paused project before writing. After checks, call office_workspace with action="finish" to publish only the requested final files, including .univer files when requested.'
+  })
   ctx.tools.register(defineTool({
     name: 'office_workspace',
     description: 'Manage temporary files for Word, Excel, and PowerPoint generation, including PPT Master. '

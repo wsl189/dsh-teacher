@@ -1,5 +1,5 @@
 /** Private Office scratch directories and exclusive publication of completed files. */
-import { constants, type Stats } from 'node:fs'
+import { constants, lstatSync, realpathSync, type Stats } from 'node:fs'
 import { copyFile, link, lstat, mkdtemp, readdir, realpath, rmdir, unlink } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
 
@@ -48,6 +48,32 @@ export async function createScratch(cwd: string): Promise<Scratch> {
   const workspace = await realpath(cwd)
   const directory = await mkdtemp(join(workspace, '.dsh-office-'))
   return { workspace, directory, identity: await lstat(directory) }
+}
+
+/**
+ * Check a tool output against the allocated directory, including existing symlink parents.
+ * Missing descendants are allowed; replaced, missing, or inaccessible owners are refused.
+ * @param scratch - directory allocated to the calling session.
+ * @param cwd - base for workspace-relative tool paths.
+ * @param output - requested file or directory, which need not exist yet.
+ * @returns whether the resolved output stays inside the original temporary directory.
+ */
+export function ownsOutput(scratch: Scratch, cwd: string, output: string): boolean {
+  try {
+    const current = lstatSync(scratch.directory)
+    if (!current.isDirectory() || current.isSymbolicLink() || !sameFile(current, scratch.identity)) return false
+    let ancestor = resolve(cwd, output)
+    const suffix: string[] = []
+    while (lstatSync(ancestor, { throwIfNoEntry: false }) === undefined) {
+      suffix.unshift(basename(ancestor))
+      ancestor = dirname(ancestor)
+    }
+    const target = resolve(realpathSync(ancestor), ...suffix)
+    return target === scratch.directory || inside(scratch.directory, target)
+  } catch (_error) {
+    // Unreadable paths and dangling symlinks cannot establish ownership.
+    return false
+  }
 }
 
 async function checkScratch(scratch: Scratch): Promise<void> {

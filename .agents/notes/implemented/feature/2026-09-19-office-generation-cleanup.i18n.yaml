@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-19-office-generation-cleanup.md
-2026-09-19-office-generation-cleanup.md: 4c671062ef62a896fa6a4163cc991161a685c5ef
-2026-09-19-office-generation-cleanup.zh.md: fcc64f15d8db2ca1afa140a0210c8f147e4cbddd
+2026-09-19-office-generation-cleanup.md: 27ca6ee2713692e50e0c2b6e31df4f60f9870564
+2026-09-19-office-generation-cleanup.zh.md: 589871969947acb895a92472dda647065089c308
