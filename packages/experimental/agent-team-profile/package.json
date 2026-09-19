@@ -1,7 +1,7 @@
 {
   "name": "@deepseek-ai/dsh-experimental-agent-team-profile",
   "description": "Experimental profile bundle enabling Agent Teams over dsh-base",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "publishConfig": {
     "access": "public"
   },
