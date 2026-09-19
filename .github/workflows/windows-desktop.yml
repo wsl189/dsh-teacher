@@ -51,6 +51,10 @@ jobs:
         shell: pwsh
         run: pnpm install --frozen-lockfile
 
+      - name: Verify desktop dependency closure
+        shell: pwsh
+        run: pnpm exec vitest run scripts/verify-desktop-payload.spec.ts
+
       - name: Build application
         shell: pwsh
         env:

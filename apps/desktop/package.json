@@ -25,6 +25,8 @@
     "@deepseek-ai/dsh": "workspace:^",
     "@deepseek-ai/dsh-attachment": "workspace:^",
     "@deepseek-ai/dsh-brand": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-primitives": "workspace:^",
+    "@deepseek-ai/dsh-client-ui-slots": "workspace:^",
     "@deepseek-ai/dsh-credentials": "workspace:^",
     "@deepseek-ai/dsh-hook-protocol": "workspace:^",
     "@deepseek-ai/dsh-jobs": "workspace:^",

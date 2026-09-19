@@ -1,6 +1,7 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { globSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { afterEach, describe, expect, it } from 'vitest'
 import { c as createTar } from 'tar'
 import {
@@ -29,6 +30,39 @@ function createPayload(files: readonly string[], contents: Readonly<Record<strin
 }
 
 describe('desktop payload gate', () => {
+  it('includes every required workspace peer in the desktop production dependency graph', async () => {
+    const repository = fileURLToPath(new URL('..', import.meta.url))
+    const { workspaces } = JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8')) as {
+      workspaces: string[]
+    }
+    interface Manifest {
+      name: string
+      dependencies?: Record<string, string>
+      optionalDependencies?: Record<string, string>
+    }
+    const manifests = new Map<string, Manifest>()
+    for (const path of globSync(workspaces.map(path => `${path}/package.json`), { cwd: repository })) {
+      const manifest = JSON.parse(readFileSync(join(repository, path), 'utf8')) as Manifest
+      manifests.set(manifest.name, manifest)
+    }
+    const files: Record<string, string> = {}
+    const pending = new Set(['@deepseek-ai/dsh-desktop'])
+    for (const name of pending) {
+      const manifest = manifests.get(name)
+      if (!manifest) throw new Error(`Missing workspace manifest: ${name}`)
+      files[`node_modules/${name}/package.json`] = JSON.stringify(manifest)
+      for (const [dependency, version] of Object.entries({
+        ...manifest.dependencies,
+        ...manifest.optionalDependencies,
+      })) {
+        if (version.startsWith('workspace:')) pending.add(dependency)
+      }
+    }
+
+    const root = createPayload(Object.keys(files), files)
+    expect((await inspectDesktopPayload(root, { requiredFiles: [] })).failures).toEqual([])
+  })
+
   it('accepts runtime JavaScript, assets, and native addons', async () => {
     const root = createPayload([
       'package.json',
