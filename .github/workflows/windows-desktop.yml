@@ -55,6 +55,10 @@ jobs:
         shell: pwsh
         run: pnpm exec vitest run scripts/verify-desktop-payload.spec.ts
 
+      - name: Verify Electron native loader compatibility
+        shell: pwsh
+        run: pnpm --filter @deepseek-ai/dsh-desktop run verify:runtime
+
       - name: Build application
         shell: pwsh
         env:

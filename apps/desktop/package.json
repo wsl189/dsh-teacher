@@ -12,6 +12,7 @@
   "scripts": {
     "bundle": "tsdown",
     "generate:icon": "tsx scripts/generate-icon.ts",
+    "verify:runtime": "node scripts/verify-native-loader.mjs",
     "package:win": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never",
     "build": "tsc -b && tsdown",
     "package:win:x64": "pnpm run package:win",
@@ -49,7 +50,7 @@
     "@types/node": "^22.20.0",
     "@types/semver": "^7.8.0",
     "app-builder-lib": "26.15.3",
-    "electron": "43.4.1",
+    "electron": "44.0.0",
     "electron-builder": "26.15.7",
     "extract-zip": "^2.0.1",
     "js-yaml": "^4.2.0",
