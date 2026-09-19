@@ -2,7 +2,7 @@
 
 import { fileURLToPath } from 'node:url'
 import { join } from 'node:path'
-import type { Browser, Page } from 'playwright'
+import type { Browser, Locator, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
 import {
@@ -17,6 +17,20 @@ const AVAILABLE_EXPECTED = join(SNAPSHOT_DIR, 'available.expected.md')
 const MODE = webSnapshotMode()
 const CURRENT_VERSION = '1.0.7-rc1'
 const VERSION = '9.9.9'
+
+async function expectInsideSidebar(page: Page, entry: Locator): Promise<void> {
+  const sidebar = await page.locator('[data-sidebar-root]').boundingBox()
+  const box = await entry.boundingBox()
+  if (sidebar === null || box === null) throw new Error('sidebar footer entry has no layout box')
+  expect(box.x).toBeGreaterThanOrEqual(sidebar.x)
+  expect(box.x + box.width).toBeLessThanOrEqual(sidebar.x + sidebar.width)
+  expect(box.y).toBeGreaterThanOrEqual(sidebar.y)
+  expect(box.y + box.height).toBeLessThanOrEqual(sidebar.y + sidebar.height)
+  await expect.poll(() => entry.evaluate((element) => {
+    const rect = element.getBoundingClientRect()
+    return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2))
+  }), { timeout: 10_000 }).toBe(true)
+}
 
 describe('web e2e: desktop update action', () => {
   let scaffold: WebScaffold
@@ -81,6 +95,7 @@ describe('web e2e: desktop update action', () => {
     const currentBox = await current.boundingBox()
     if (settingsBox === null || currentBox === null) throw new Error('sidebar footer status has no layout box')
     expect(currentBox.x).toBeGreaterThanOrEqual(settingsBox.x + settingsBox.width)
+    await expectInsideSidebar(page, current)
     await compareOrRefreshGolden(
       CURRENT_EXPECTED,
       await captureStableAria(page, '[data-desktop-update-status="up-to-date"]', scaffold.workspaceCwd),
@@ -97,17 +112,37 @@ describe('web e2e: desktop update action', () => {
     await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'detached', timeout: 10_000 })
     await current.waitFor({ timeout: 10_000 })
 
+    await page.setViewportSize({ width: 980, height: 640 })
+    await page.locator('[data-sidebar-collapsed]').waitFor({ timeout: 10_000 })
+    await page.getByRole('button', { name: '打开侧边栏', exact: true }).click()
+    await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'detached', timeout: 10_000 })
+    await current.waitFor({ timeout: 10_000 })
+    await expectInsideSidebar(page, current)
+    await expectInsideSidebar(page, settings)
+
     await page.evaluate((version) => {
       window.__publishDesktopUpdate({ status: 'available', version })
     }, VERSION)
     const update = page.getByRole('button', { name: `发现新版本 ${VERSION}，下载更新` })
     await update.waitFor({ timeout: 10_000 })
     const updateBox = await update.boundingBox()
-    if (settingsBox === null || updateBox === null) throw new Error('sidebar footer actions have no layout box')
-    expect(updateBox.x).toBeGreaterThanOrEqual(settingsBox.x + settingsBox.width)
+    const updatedSettingsBox = await settings.boundingBox()
+    if (updatedSettingsBox === null || updateBox === null) throw new Error('sidebar footer actions have no layout box')
+    expect(updateBox.x).toBeGreaterThanOrEqual(updatedSettingsBox.x + updatedSettingsBox.width)
+    await expectInsideSidebar(page, update)
+    await update.click({ trial: true })
 
     const snapshot = await captureStableAria(page, '[data-desktop-update-status="available"]', scaffold.workspaceCwd)
     await compareOrRefreshGolden(AVAILABLE_EXPECTED, snapshot, MODE)
+    await page.getByRole('button', { name: '收起侧边栏', exact: true }).click()
+    await page.locator('[data-sidebar-collapsed]').waitFor({ timeout: 10_000 })
+    await expect.poll(() => update.textContent(), { timeout: 10_000 }).toBe('')
+    await expectInsideSidebar(page, update)
+    await update.click({ trial: true })
+    await page.getByRole('button', { name: '打开侧边栏', exact: true }).click()
+    await page.locator('[data-sidebar-collapsed]').waitFor({ state: 'detached', timeout: 10_000 })
+    await page.setViewportSize({ width: 1680, height: 1000 })
+    await expectInsideSidebar(page, update)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
   })
@@ -118,6 +153,7 @@ describe('web e2e: desktop update action', () => {
     const progress = page.getByRole('button', { name: `正在下载版本 ${VERSION}，已完成 37%` })
     await progress.waitFor({ timeout: 10_000 })
     expect(await progress.isDisabled()).toBe(true)
+    await expectInsideSidebar(page, progress)
 
     await page.evaluate((version) => {
       window.__publishDesktopUpdate({ status: 'downloaded', version })
