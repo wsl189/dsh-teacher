@@ -6,6 +6,8 @@
   - text: 工作台
   - img
 - button "定时任务": 定时任务 0
+- navigation "全局面板":
+  - button "插件"
 - text: 工作区
 - button "搜索会话":
   - img

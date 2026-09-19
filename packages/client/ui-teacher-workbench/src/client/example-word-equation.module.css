@@ -1,5 +1,5 @@
-:global(.katex .text), :global(.katex .textrm) { font-family: 'DSH Math Symbols', KaTeX_Main; }
-:global(.katex .amsrm) { font-family: 'DSH Math Symbols', KaTeX_AMS; }
+:global(.katex), :global(.katex .text), :global(.katex .textrm), :global(.katex .mathbf), :global(.katex .mathit), :global(.katex .mainrm) { font-family: 'DSH Math Symbols', KaTeX_Main, 'Times New Roman', serif; }
+:global(.katex .amsrm) { font-family: 'DSH Set Relations', 'DSH Math Symbols', KaTeX_AMS; }
 .equation { position: relative; display: inline-block; }
 .equation :global(.katex) { font-size: 1em; }
 .equation :global(.katex-display) { margin: 0; }

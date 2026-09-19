@@ -700,7 +700,7 @@ describe('Windows Job runner protocol owner', () => {
     expect(missingSend.exitCode).toBe(127)
   })
 
-  it('hides the target window, reports its Job-owned exit, and closes runner stdio', async () => {
+  it('sends target-exit only after suspended Job launch and closes runner stdio', async () => {
     const host = new FakeRunnerHost()
     const closeFileDescriptor = vi.fn()
     const native = internals({ closeFileDescriptor })
@@ -715,7 +715,6 @@ describe('Windows Job runner protocol owner', () => {
     expect(native.spawnCurrentTokenJobProcess).toHaveBeenCalledWith(expect.anything(), {
       command: 'tool.exe', applicationName: 'C:\\resolved\\tool.exe', args: ['literal arg'], cwd: 'C:\\target',
       env: { TARGET: 'yes', dsh_subprocess_runner: 'restored' },
-      hideWindow: true,
       stdio: { stdin: 4, stdout: 5, stderr: 6 },
     })
     expect(closeFileDescriptor).toHaveBeenCalledTimes(3)

@@ -943,6 +943,7 @@ function importFailureText(code: string, message: string, t: TeacherWorkbenchTra
 
 function normalizeFailureText(code: string, message: string, t: TeacherWorkbenchTranslate): string {
   switch (code) {
+    case 'not-timetable': return t('timetable.importNotTimetable')
     case 'tool-model-unavailable': return t('timetable.importToolModelUnavailable')
     case 'vision-unavailable': return t('timetable.importVisionUnavailable')
     case 'source-too-large': return t('timetable.importTooLarge')

@@ -155,6 +155,15 @@ describe('desktop payload gate', () => {
     }
   })
 
+  it('rejects a Word export runtime missing its native equation adapter', async () => {
+    const requiredFiles = ['node_modules/dsh-univer-office/lib/docx-policy.js']
+    expect(REQUIRED_WINDOWS_RUNTIME_FILES).toEqual(expect.arrayContaining(requiredFiles))
+    expect((await inspectDesktopPayload(createPayload(requiredFiles), { requiredFiles })).failures).toEqual([])
+    expect((await inspectDesktopPayload(createPayload([]), { requiredFiles })).failures).toEqual([
+      `${requiredFiles[0]}: required product runtime file is absent from payload`,
+    ])
+  })
+
   it('requires both Univer native loaders and their Windows binaries', async () => {
     const requiredFiles = REQUIRED_WINDOWS_RUNTIME_FILES.filter(path =>
       path.includes('/@univerjs-pro/') && path.includes('binding'))

@@ -43,7 +43,12 @@ export function renderExampleMathml(
     ADD_ATTR: ['fontweight'],
   })
   for (const [index, math] of fragment.querySelectorAll('math').entries()) {
-    const latex = formatting?.latex ?? MathMLToLaTeX.convert(new XMLSerializer().serializeToString(math))
+    // Saved palette text atoms use the same TeX relation font before and after Word normalization.
+    const latex = (formatting?.latex ?? MathMLToLaTeX.convert(new XMLSerializer().serializeToString(math)))
+      .replaceAll(/\\text(bf)?\{([\s⫋⫌]+)\}/gu, (_match, bold: string | undefined, signs: string) => {
+        const relations = signs.trim().replaceAll('⫋', '\\subsetneqq ').replaceAll('⫌', '\\supsetneqq ')
+        return bold === undefined ? relations : `\\mathbf{${relations}}`
+      })
     if (latex.trim() === '') continue
     const savedStyle = document.createElement('span').style
     savedStyle.cssText = originals[index]?.getAttribute('style') ?? ''

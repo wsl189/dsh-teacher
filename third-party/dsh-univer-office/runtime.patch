@@ -1,7 +1,12 @@
 diff --git a/artifacts/unit-content-worker.mjs b/artifacts/unit-content-worker.mjs
 --- a/artifacts/unit-content-worker.mjs
 +++ b/artifacts/unit-content-worker.mjs
-@@ -329388,7 +329388,7 @@
+@@ -1,3 +1,4 @@
++import { exportNativeWord } from '../lib/docx-policy.js';
+ var __create = Object.create;
+ var __defProp = Object.defineProperty;
+ var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
+@@ -329365,7 +329366,7 @@
  }
  
  // src/workers/unit-content/license.ts
@@ -10,6 +15,286 @@ diff --git a/artifacts/unit-content-worker.mjs b/artifacts/unit-content-worker.m
  
  // src/workers/unit-content/runtime/local-referenced-unit-provider.ts
  var LOCAL_REFERENCED_UNIT_PROVIDER_ID = "local-referenced-unit-provider";
+@@ -329738,9 +329739,16 @@
+       return;
+     case UniverType.UNIVER_DOC:
+       requireExtension(extension, ".docx", "Doc");
+-      await exportOfficeFile(unitData, request.outputPath, {
+-        format: ExchangeFormat.DOCX,
+-        type: UniverType.UNIVER_DOC
++      await exportNativeWord(request.outputPath, async (output) => {
++        const documentStyle = unitData.documentStyle ?? {};
++        const document = { ...unitData, documentStyle: {
++          ...documentStyle,
++          textStyle: { ff: "Times New Roman", ...documentStyle.textStyle }
++        } };
++        await exportOfficeFile(document, output, {
++          format: ExchangeFormat.DOCX,
++          type: UniverType.UNIVER_DOC
++        });
+       });
+       return;
+     case UniverType.UNIVER_SLIDE:
+diff --git a/lib/docx-policy.js b/lib/docx-policy.js
+--- a/lib/docx-policy.js
++++ b/lib/docx-policy.js
+@@ -0,0 +1,256 @@
++/** Native Office equations and Latin font defaults for exported Word documents. */
++import { mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
++import { dirname, join } from 'node:path';
++import { DOMParser, XMLSerializer } from '@xmldom/xmldom';
++import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
++import katex from 'katex';
++import { mml2omml } from 'mathml2omml';
++
++const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main';
++const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math';
++const XML = 'http://www.w3.org/XML/1998/namespace';
++const LATIN_FONT = 'Times New Roman';
++const MATH_FONT = 'Cambria Math';
++
++function parseXml(xml) {
++  return new DOMParser({ onError(level, message) { throw new Error(`Invalid Word XML: ${message}`); } })
++    .parseFromString(xml, 'application/xml');
++}
++
++function elements(parent) {
++  return Array.from(parent.childNodes).filter(node => node.nodeType === 1);
++}
++
++function child(parent, ns, local) {
++  return elements(parent).find(node => node.namespaceURI === ns && node.localName === local);
++}
++
++function ensure(parent, ns, name) {
++  const existing = child(parent, ns, name.slice(name.indexOf(':') + 1));
++  if (existing) return existing;
++  const node = parent.ownerDocument.createElementNS(ns, name);
++  parent.appendChild(node);
++  return node;
++}
++
++function setProperty(parent, ns, name, value) {
++  const node = ensure(parent, ns, name);
++  node.setAttributeNS(ns, `${name.split(':')[0]}:val`, value);
++  if (ns === W && parent.localName === 'rPr') {
++    const order = ['rStyle', 'rFonts', 'b', 'bCs', 'i', 'iCs', 'color', 'sz', 'szCs', 'shd'];
++    const following = elements(parent).find(item => order.indexOf(item.localName) > order.indexOf(node.localName));
++    if (following) parent.insertBefore(node, following);
++  }
++}
++
++function fonts(properties, latin, overwrite = false) {
++  const node = ensure(properties, W, 'w:rFonts');
++  for (const name of ['ascii', 'hAnsi']) {
++    if (overwrite || (!node.hasAttributeNS(W, name) && !node.hasAttributeNS(W, `${name}Theme`))) {
++      node.setAttributeNS(W, `w:${name}`, latin);
++      node.removeAttributeNS(W, `${name}Theme`);
++    }
++  }
++  const next = elements(properties).find(item => item.localName !== 'rStyle' && item !== node);
++  if (next) properties.insertBefore(node, next);
++}
++
++/** Explicit TeX delimiters avoid treating currency amounts as equations. */
++function equationSpans(text) {
++  const spans = [];
++  let open;
++  for (const match of text.matchAll(/\\([()[\]])/gu)) {
++    let preceding = 0;
++    for (let i = match.index - 1; i >= 0 && text[i] === '\\'; i--) preceding++;
++    if (preceding % 2 === 1) continue;
++    const delimiter = match[1];
++    if (delimiter === '(' || delimiter === '[') {
++      if (open) throw new Error('DOCX_EQUATION_INVALID: nested equation delimiters');
++      open = { start: match.index, display: delimiter === '[' };
++    } else {
++      if (!open || delimiter !== (open.display ? ']' : ')')) throw new Error('DOCX_EQUATION_INVALID: unmatched equation delimiter');
++      spans.push({ ...open, end: match.index + 2, latex: text.slice(open.start + 2, match.index) });
++      open = undefined;
++    }
++  }
++  if (open) throw new Error('DOCX_EQUATION_INVALID: equation must close within one uninterrupted paragraph text range');
++  return spans;
++}
++
++function nativeEquation(span, sourceProperties) {
++  if (span.latex.trim() === '') throw new Error('DOCX_EQUATION_INVALID: empty equation');
++  let root;
++  try {
++    const rendered = katex.renderToString(span.latex, {
++      output: 'mathml', displayMode: span.display, throwOnError: true, trust: false, strict: 'ignore',
++    });
++    const math = parseXml(rendered).getElementsByTagName('math').item(0);
++    if (!math) throw new Error('No MathML returned');
++    for (const annotation of Array.from(math.getElementsByTagName('annotation'))) annotation.parentNode.removeChild(annotation);
++    root = parseXml(mml2omml(new XMLSerializer().serializeToString(math))).documentElement;
++    if (root?.namespaceURI !== M || root.localName !== 'oMath') throw new Error('No native Office equation returned');
++  } catch (cause) {
++    throw new Error(`DOCX_EQUATION_INVALID: ${cause instanceof Error ? cause.message : String(cause)}`, { cause });
++  }
++  for (const run of Array.from(root.getElementsByTagNameNS(M, 'r'))) {
++    const properties = ensure(run, W, 'w:rPr');
++    for (const prop of elements(sourceProperties ?? properties).filter(node => ['sz', 'szCs', 'color', 'b', 'bCs'].includes(node.localName))) {
++      if (!child(properties, W, prop.localName)) properties.appendChild(root.ownerDocument.importNode(prop, true));
++    }
++    fonts(properties, MATH_FONT, true);
++    const text = child(run, M, 't');
++    const mathProperties = child(run, M, 'rPr');
++    if (mathProperties && run.firstChild !== mathProperties) run.insertBefore(mathProperties, run.firstChild);
++    run.insertBefore(properties, text);
++  }
++  formatLatinMath(root);
++  return root;
++}
++
++/** Keep mathematical operators in math runs while giving Latin tokens an explicit text font. */
++function formatLatinMath(root) {
++  for (const run of Array.from(root.getElementsByTagNameNS(M, 'r'))) {
++    const properties = child(run, M, 'rPr');
++    const script = properties && child(properties, M, 'scr')?.getAttributeNS(M, 'val');
++    if (script && script !== 'roman') continue;
++    const text = child(run, M, 't');
++    if (!text || !/[A-Za-z0-9]/u.test(text.textContent)) continue;
++    const style = properties && child(properties, M, 'sty')?.getAttributeNS(M, 'val');
++    const normal = properties && child(properties, M, 'nor');
++    for (const token of text.textContent.match(/[A-Za-z]+|[0-9]+|[^A-Za-z0-9]+/gu)) {
++      const copy = run.cloneNode(true);
++      child(copy, M, 't').textContent = token;
++      if (/^[A-Za-z0-9]+$/u.test(token)) {
++        const mathPr = ensure(copy, M, 'm:rPr');
++        if (copy.firstChild !== mathPr) copy.insertBefore(mathPr, copy.firstChild);
++        const nor = ensure(mathPr, M, 'm:nor');
++        nor.setAttributeNS(M, 'm:val', '1');
++        if (mathPr.firstChild !== nor) mathPr.insertBefore(nor, mathPr.firstChild);
++        const wordPr = ensure(copy, W, 'w:rPr');
++        fonts(wordPr, LATIN_FONT, true);
++        const italic = style === 'i' || style === 'bi' || (!style && !normal && /^[A-Za-z]+$/u.test(token));
++        setProperty(wordPr, W, 'w:i', italic ? '1' : '0');
++        if (style === 'b' || style === 'bi') setProperty(wordPr, W, 'w:b', '1');
++      }
++      run.parentNode.insertBefore(copy, run);
++    }
++    run.parentNode.removeChild(run);
++  }
++}
++
++function textOf(run) {
++  return elements(run).filter(node => node.namespaceURI === W && node.localName === 't').map(node => node.textContent).join('');
++}
++
++function isTextRun(node) {
++  return node.namespaceURI === W && node.localName === 'r' && elements(node).every(
++    item => item.namespaceURI === W && ['rPr', 't'].includes(item.localName),
++  );
++}
++
++function sliceRun(run, text) {
++  const copy = run.cloneNode(false);
++  const properties = child(run, W, 'rPr');
++  if (properties) copy.appendChild(properties.cloneNode(true));
++  const content = copy.ownerDocument.createElementNS(W, 'w:t');
++  content.setAttributeNS(XML, 'xml:space', 'preserve');
++  content.textContent = text;
++  copy.appendChild(content);
++  return copy;
++}
++
++function convertGroup(parent, runs) {
++  const text = runs.map(textOf).join('');
++  const spans = equationSpans(text);
++  if (spans.length === 0) return;
++  const positions = [];
++  let offset = 0;
++  for (const run of runs) {
++    const content = textOf(run);
++    positions.push({ run, start: offset, end: offset + content.length, content });
++    offset += content.length;
++  }
++  const output = [];
++  function appendText(start, end) {
++    for (const position of positions) {
++      const a = Math.max(start, position.start), b = Math.min(end, position.end);
++      if (a < b) output.push(sliceRun(position.run, position.content.slice(a - position.start, b - position.start)));
++    }
++  }
++  offset = 0;
++  for (const span of spans) {
++    appendText(offset, span.start);
++    const source = positions.find(position => position.start <= span.start && position.end > span.start);
++    const equation = parent.ownerDocument.importNode(nativeEquation(span, source && child(source.run, W, 'rPr')), true);
++    if (span.display && text.slice(0, span.start).trim() === '' && text.slice(span.end).trim() === '') {
++      const block = parent.ownerDocument.createElementNS(M, 'm:oMathPara');
++      block.appendChild(equation);
++      output.push(block);
++    } else output.push(equation);
++    offset = span.end;
++  }
++  appendText(offset, text.length);
++  for (const node of output) parent.insertBefore(node, runs[0]);
++  for (const run of runs) parent.removeChild(run);
++}
++
++function convertParagraph(paragraph) {
++  let group = [];
++  for (const node of elements(paragraph)) {
++    if (isTextRun(node)) group.push(node);
++    else {
++      convertGroup(paragraph, group);
++      group = [];
++      // Hyperlinks retain their relationship and run formatting.
++      if (node.namespaceURI === W && node.localName === 'hyperlink') convertParagraph(node);
++    }
++  }
++  convertGroup(paragraph, group);
++}
++
++/**
++ * Set inherited Latin fonts and convert explicitly delimited TeX to editable OMML.
++ * @param {Uint8Array} bytes - DOCX from the Office exporter.
++ * @returns {Uint8Array} DOCX retaining tables, media, relationships, and explicit text fonts.
++ * @throws {Error} when marked math cannot be converted without dropping content.
++ */
++export function normalizeWordExport(bytes) {
++  const parts = unzipSync(bytes);
++  if (!parts['word/document.xml'] || !parts['word/styles.xml']) throw new Error('DOCX_INVALID: missing document or styles');
++  const styles = parseXml(strFromU8(parts['word/styles.xml']));
++  const docDefaults = ensure(styles.documentElement, W, 'w:docDefaults');
++  if (styles.documentElement.firstChild !== docDefaults) styles.documentElement.insertBefore(docDefaults, styles.documentElement.firstChild);
++  const defaults = ensure(ensure(docDefaults, W, 'w:rPrDefault'), W, 'w:rPr');
++  fonts(defaults, LATIN_FONT, true);
++  parts['word/styles.xml'] = strToU8(new XMLSerializer().serializeToString(styles));
++  for (const name of Object.keys(parts).filter(name => /^word\/(?:document|header\d*|footer\d*|footnotes|endnotes)\.xml$/u.test(name))) {
++    const document = parseXml(strFromU8(parts[name]));
++    for (const paragraph of Array.from(document.getElementsByTagNameNS(W, 'p'))) convertParagraph(paragraph);
++    for (const text of Array.from(document.getElementsByTagNameNS(W, 't'))) {
++      if (equationSpans(text.textContent).length > 0) {
++        throw new Error('DOCX_EQUATION_INVALID: equation text shares an unsupported drawing or field run');
++      }
++    }
++    parts[name] = strToU8(new XMLSerializer().serializeToString(document));
++  }
++  return zipSync(parts);
++}
++
++/**
++ * Publish a Word export only after font and equation processing succeeds.
++ * @param {string} output - authorized destination filename.
++ * @param {(temporaryOutput: string) => Promise<void>} writer - upstream DOCX writer.
++ * @returns {Promise<void>} completed publication; conversion failure preserves any existing output.
++ */
++export async function exportNativeWord(output, writer) {
++  const directory = await mkdtemp(join(dirname(output), '.dsh-word-'));
++  try {
++    const temporary = join(directory, 'document.docx');
++    await writer(temporary);
++    const bytes = normalizeWordExport(await readFile(temporary));
++    await writeFile(temporary, bytes, { mode: 0o600 });
++    await rename(temporary, output);
++  } finally {
++    await rm(directory, { recursive: true, force: true, maxRetries: 3 });
++  }
++}
 diff --git a/lib/index.js b/lib/index.js
 --- a/lib/index.js
 +++ b/lib/index.js
@@ -115,30 +400,43 @@ diff --git a/lib/index.js b/lib/index.js
 diff --git a/package.json b/package.json
 --- a/package.json
 +++ b/package.json
-@@ -92,7 +92,9 @@
+@@ -1,7 +1,7 @@
+ {
+   "name": "dsh-univer-office",
+   "version": "0.3.0",
+-  "description": "DSH × Univer integration with a bundled collaboration Gateway and Viewer: inline previews, live floating Worktree windows, and session-end review actions in DeepSeek Harness.",
++  "description": "DSH \u00d7 Univer integration with a bundled collaboration Gateway and Viewer: inline previews, live floating Worktree windows, and session-end review actions in DeepSeek Harness.",
+   "type": "module",
+   "main": "./lib/index.js",
+   "files": [
+@@ -92,7 +92,13 @@
      "@puppeteer/browsers": "^3.2.0",
      "@univerjs-pro/cli-assets": "0.1.0",
      "libsql": "^0.5.29",
 -    "puppeteer-core": "^25.7.0"
 +    "puppeteer-core": "^25.7.0",
 +    "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260910-22fe9c7",
-+    "@univerjs-pro/exchange-node-binding": "0.1.2"
++    "@univerjs-pro/exchange-node-binding": "0.1.2",
++    "@xmldom/xmldom": "0.9.12",
++    "fflate": "0.8.3",
++    "katex": "0.16.47",
++    "mathml2omml": "0.5.0"
    },
    "peerDependencies": {
      "@deepseek-ai/cordis": "^4.0.2",
 diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
 --- a/skills/univer/SKILL.md
 +++ b/skills/univer/SKILL.md
-@@ -14,6 +14,8 @@
- - Office source (`.xlsx`, `.csv`, `.tsv`, `.docx`, `.pptx`): create the target `.univer` and draft worktree, then call `univer_import`.
+@@ -15,6 +15,8 @@
  - Before authoring content, load the matching Unit skill: `univer-sheet`, `univer-doc`, `univer-slide`, `univer-base`, or `univer-board`.
  - For an Embed or a Chart backed by another Unit's data, also load `univer-embed`. For formulas that read another Unit, also load `univer-cross-unit-formula`.
-+
-+Temporary directories such as `/tmp` may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the current session workspace; its parent directory is not part of the writable workspace.
  
++Temporary directories such as `/tmp` may be isolated per command or tool. Keep reusable scripts, virtual environments, and other files needed across calls or tools under the current session workspace; its parent directory is not part of the writable workspace.
++
  ## Mental model
  
-@@ -38,11 +40,15 @@
+ - A `.univer` file is the authoritative multi-Unit container. Each Sheet, Doc, Slide, Base, or Board is a top-level Unit with a stable `unitId`.
+@@ -38,12 +40,16 @@
  
  ## Facade API lookup
  
@@ -150,13 +448,14 @@ diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
 +- Show a whole class only when its complete API inventory is needed. Knowing a class name alone does not require fetching every member.
  
  `find` is case-insensitive. Each query is searched independently and returns its own matches; queries are not combined as AND, and `find` does not interpret intent. Pass a useful returned label to `show` instead of searching that label again.
-+
+ 
 +`show` returning `not-found` means the label is absent from the bundled catalog. Use `find` with a member keyword instead of repeating the failed label or inventing type-name variants. If discovery provides no documented operation for a required step, report that capability gap; external documentation for another version does not establish support in this runtime.
 +
 +Reuse signatures already read for this plugin version. Follow referenced parameter types and enums when needed; focused lookup never permits guessing an unfamiliar API.
- 
++
  ## Required workflow
  
+ 1. Call `univer_status` to discover Unit IDs and worktree states.
 @@ -103,6 +109,8 @@
  
  Do not redeclare injected variables. Use `code` only for a small snippet. For multi-line or reusable Facade logic, write a workspace JavaScript body file and pass it as `codeFile`; provide exactly one of `code` or `codeFile`.
@@ -169,16 +468,33 @@ diff --git a/skills/univer/SKILL.md b/skills/univer/SKILL.md
 diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 --- a/skills/univer-doc/SKILL.md
 +++ b/skills/univer-doc/SKILL.md
-@@ -19,6 +19,8 @@
+@@ -18,7 +18,24 @@
+ - Lists and task helpers include `isListItem`, `isTask`, and `setTaskChecked`.
  - Native charts use the direct `doc.newChart()`, `doc.insertChart()`, `doc.getCharts()`, and
    `doc.getChart()` methods.
- - Colors must use `#RRGGBB`. Docs do not support formulas or recalculation.
+-- Colors must use `#RRGGBB`. Docs do not support formulas or recalculation.
++- Colors must use `#RRGGBB`. Docs do not calculate spreadsheet formulas. Word exports support editable mathematical equations as described below.
 +
 +Write planned paragraphs, their text styles, and related document formatting in one `univer_execute` authoring batch. Use `codeFile` for the complete multiline script, retain paragraph IDs needed later, and await asynchronous image or chart mutations before returning. Split batches when the next edit depends on inspecting the preceding result.
++
++## Word equations and fonts
++
++For Word output, author every mathematical equation as TeX enclosed in `\(...\)` for inline math or `\[...\]` for a display equation in its own paragraph. These markers are literal document text: JavaScript string literals must escape each backslash or use `String.raw`. Dollar amounts remain ordinary text; translate dollar-delimited math from the user's source into these explicit markers. Keep each equation in one paragraph, including inside a table cell, with no image, field, tab, or hyperlink boundary inside it.
++
++```js
++const paragraph = doc.appendParagraph(String.raw`The result is \(x=\frac{-b+\sqrt{b^2-4ac}}{2a}\).`);
++if (!paragraph.setStyle({ textStyle: { ff: "Times New Roman" } })) {
++  throw new Error("document font update failed");
++}
++```
++
++Use Times New Roman for Latin letters and digits by default; retain a font the user explicitly requests. `univer_export` converts marked equations to native Office Math (OMML), including fractions, roots, scripts, matrices, and integrals. Latin letters and digits in newly converted equations use Times New Roman; variables retain italics, while numbers and function names remain upright. Mathematical operators and extensible symbols retain a math font, and explicitly requested mathematical alphabets retain their styles. Do not replace equations with pictures, screenshots, Unicode lookalikes, or unmarked TeX. Unsupported or incomplete marked TeX fails export; correct the source and retry instead of delivering unconverted math.
++
++The live Univer document and its screenshots show TeX source, while the exported Word file contains editable equations. Inspect the actual exported DOCX and render that file before claiming equation layout is verified. Existing native equations, explicit text fonts, Chinese fonts, tables, and images are preserved by the export policy; importing a document still depends on the upstream importer's support. An equation already flattened to an image cannot be recovered by the export policy.
  
  ## Data stream
  
-@@ -139,7 +141,7 @@
+@@ -139,7 +156,7 @@
  
  ## Inspect and verify
  
@@ -190,15 +506,15 @@ diff --git a/skills/univer-doc/SKILL.md b/skills/univer-doc/SKILL.md
 diff --git a/skills/univer-sheet/SKILL.md b/skills/univer-sheet/SKILL.md
 --- a/skills/univer-sheet/SKILL.md
 +++ b/skills/univer-sheet/SKILL.md
-@@ -54,6 +54,8 @@
- - Style: use explicit xlsx-safe colors in `#RRGGBB` or `rgb(r,g,b)` form.
+@@ -55,6 +55,8 @@
  
  `setValues()` merges cell data. `{}` or `{ s }` does not clear existing `v/f/p`. To replace a region, call `clearContent()` first, then `setValues()`. To clear one cell explicitly, set `{ v: null, f: null, p: null, si: null, custom: null }`.
-+
-+Build each rectangular data region as an explicit `ICellData` grid and write it with one `setValues(grid)` call. Apply shared formatting to ranges and group related writes to the same Unit in one `univer_execute` authoring batch. Use `codeFile` for the multiline script. Keep every required value, type, formula, and style; split batches when later edits depend on inspecting earlier results. Await the required calculation before checking computed values or exporting.
  
++Build each rectangular data region as an explicit `ICellData` grid and write it with one `setValues(grid)` call. Apply shared formatting to ranges and group related writes to the same Unit in one `univer_execute` authoring batch. Use `codeFile` for the multiline script. Keep every required value, type, formula, and style; split batches when later edits depend on inspecting earlier results. Await the required calculation before checking computed values or exporting.
++
  ## Over-grid images
  
+ Create an image with `sheet.newOverGridImage()`, set source, explicit size and position, await `buildAsync()`, then pass the built data to `sheet.insertImages()`:
 @@ -125,7 +127,7 @@
  
  ## Verification

@@ -8,6 +8,15 @@ const XML_NS = 'http://www.w3.org/XML/1998/namespace'
 const FUNCTIONS = /^(?:arcsin|arccos|arctan|sin|cos|tan|cot|sec|csc|log|ln|exp|lim|max|min|det)([A-Za-z])$/u
 
 /**
+ * Locate a leading parenthesized Roman subpart number in its original case and character width.
+ * @param text - paragraph text, including full-width parentheses or Unicode Roman numerals.
+ * @returns the label's ending offset, or zero when the paragraph has no Roman label.
+ */
+export function exampleRomanSubquestionLength(text: string): number {
+  return /^\s*[（(]\s*(?:i{1,3}|iv|vi{0,3}|ix|xi{0,2}|[Ⅰ-Ⅻ])\s*[)）]/iu.exec(text)?.[0].length ?? 0
+}
+
+/**
  * Recognize a paragraph whose formatting is owned by the user's Word editor.
  * @param node - paragraph or descendant in collection Word XML.
  * @returns whether automatic typography and layout must preserve this paragraph.
@@ -173,13 +182,17 @@ export function normalizeExampleFigures(document: XmlDocument): void {
 export function normalizeExampleLetterRuns(document: XmlDocument): void {
   for (const paragraph of Array.from(document.getElementsByTagNameNS(WORD_NS, 'p'))) {
     if (exampleWordIsEdited(paragraph)) continue
+    const romanEnd = exampleRomanSubquestionLength(paragraph.textContent ?? '')
     const mathematicalContext = /\p{Script=Han}/u.test(paragraph.textContent ?? '') ||
       paragraph.getElementsByTagNameNS(MATH_NS, 'oMath').length > 0 ||
-      paragraph.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')?.startsWith('DshExampleChoices')
+      paragraph.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')?.startsWith('DshExampleChoices') || romanEnd > 0
     if (!mathematicalContext) continue
     const vectors = new Set([...(paragraph.textContent ?? '').matchAll(/向量\s*([a-z](?:\s*[,，、和与]\s*[a-z])*)/gu)]
       .flatMap(match => match[1]?.match(/[a-z]/gu) ?? []))
+    let offset = 0
     for (const run of elements(paragraph)) {
+      const runStart = offset
+      offset += run.textContent?.length ?? 0
       if (!plainRun(run)) continue
       const text = run.textContent ?? ''
       if (/[$\\`]|!\[/u.test(text)) continue
@@ -189,8 +202,9 @@ export function normalizeExampleLetterRuns(document: XmlDocument): void {
         const functionMatch = FUNCTIONS.exec(value)
         const suffix = text.slice(piece.index + value.length) + (run.nextSibling?.textContent ?? '')
         const label = /^[A-Da-d]$/u.test(value) && /^[.．、]/u.test(suffix)
+        const romanLabel = runStart + piece.index < romanEnd
         const citation = /^[AB]$/u.test(value) && /^版/u.test(suffix) || value === 'P' && /^\d/u.test(suffix)
-        const variable = !label && !citation && (/^[A-Za-z\p{Script=Greek}]$/u.test(value) || /^[A-Z]{2,4}$/u.test(value)) &&
+        const variable = !label && !romanLabel && !citation && (/^[A-Za-z\p{Script=Greek}]$/u.test(value) || /^[A-Z]{2,4}$/u.test(value)) &&
           !['PDF', 'PNG', 'JPG', 'DOCX'].includes(value)
         if (functionMatch !== null) {
           paragraph.insertBefore(textRun(run, value.slice(0, -1), false), run)

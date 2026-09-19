@@ -47,9 +47,9 @@ function welcomeView(value: unknown, revision = 0) {
   }
 }
 
-type AttentionSnapshot = Parameters<Parameters<WelcomeNoticeProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<WelcomeNoticeProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
-const useSessionPendingInteraction: WelcomeNoticeProps['useSessionPendingInteraction'] = selector => selector(noAttention)
+const useSessionStatus: WelcomeNoticeProps['useSessionStatus'] = selector => selector(noAttention)
 
 function mount(
   version?: string,
@@ -87,7 +87,8 @@ function mount(
     complete,
     openSection: vi.fn(),
     useSessions: unusedHook,
-    useSessionPendingInteraction,
+    useSessionStatus,
+    useSessionRetainInfo: () => { throw new Error('unused retain hook') },
     usePanelInfo: () => { throw new Error('unused panel hook') },
     useResource: () => { throw new Error('unused resource hook') },
     useWorkspaces: unusedHook,

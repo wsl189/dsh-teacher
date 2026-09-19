@@ -14,7 +14,173 @@ function xml(bytes: Uint8Array) { return new DOMParser().parseFromString(strFrom
 function equations(bytes: Uint8Array) { return Array.from(xml(bytes).getElementsByTagNameNS(M, 'oMath')).map(node => new XMLSerializer().serializeToString(node)) }
 
 describe('collection Word editing', () => {
-  it.each([String.raw`A\text{ ⫋ }B\text{ ⫌ }C`, String.raw`\textbf{⫋⫌}`, String.raw`\subsetneqq\supsetneqq`])('keeps %s compact without changing equation size across saves and export', async (latex) => {
+  it('declares the Linux Unicode alternate for editable symbol runs and shared operator spacing', async () => {
+    const original = await createExampleWord(String.raw`$\text{∁}_U A\subseteq B\subsetneqq C\supseteq D\supsetneqq E+AB\text{ ⫽⃥ }CD$`)
+    for (const bytes of [original, await compileExampleWord([{ bytes: original }, { bytes: original }])]) {
+      const entries = unzipSync(bytes)
+      expect(Object.keys(entries).some(path => path.startsWith('word/fonts/'))).toBe(false)
+      expect(strFromU8(entries['word/settings.xml']!)).toContain('m:val="Cambria Math"')
+      const fonts = new DOMParser().parseFromString(strFromU8(entries['word/fontTable.xml']!), 'application/xml')
+      const font = Array.from(fonts.getElementsByTagNameNS(W, 'font')).filter(node => node.getAttributeNS(W, 'name') === 'Segoe UI Symbol')
+      expect(font).toHaveLength(1)
+      expect(font[0]!.getElementsByTagNameNS(W, 'altName').item(0)?.getAttributeNS(W, 'val')).toBe('Noto Sans Math')
+      expect(font[0]!.getElementsByTagNameNS(W, 'charset').item(0)?.getAttributeNS(W, 'val')).toBe('00')
+      const symbols = Array.from(xml(bytes).getElementsByTagNameNS(M, 'r')).filter(run => /^[∁⊆⊇⫋⫌∥]$/u.test(run.textContent ?? ''))
+      expect(symbols.length).toBe(bytes === original ? 6 : 12)
+      for (const symbol of symbols) {
+        expect(symbol.getElementsByTagNameNS(M, 'nor')).toHaveLength(1)
+        expect(symbol.getElementsByTagNameNS(W, 'position')).toHaveLength(0)
+        expect(symbol.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii')).toBe('Segoe UI Symbol')
+        if (symbol.textContent === '∁') continue
+        const box = symbol.parentNode!.parentNode!
+        expect(box.localName).toBe('box')
+        expect((box as typeof symbol).getElementsByTagNameNS(M, 'opEmu')).toHaveLength(1)
+      }
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+  })
+
+  it('repairs a saved symbol font without a Unicode alternate and preserves unrelated declarations', async () => {
+    const original = await createExampleWord(String.raw`$\text{∁}_U A\subseteq B\subsetneqq C+AB\text{⫽⃥}CD$`)
+    const entries = unzipSync(original)
+    entries['word/fontTable.xml'] = strToU8(`<w:fonts xmlns:w="${W}"><w:font w:name="Segoe UI Symbol"><w:charset w:val="02"/></w:font><w:font w:name="Other Font"/></w:fonts>`)
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    expect(repaired).toBeDefined()
+    const table = strFromU8(unzipSync(repaired!)['word/fontTable.xml']!)
+    expect(table).toContain('w:val="Noto Sans Math"')
+    expect(table).toContain('w:charset w:val="00"')
+    expect(table).toContain('w:name="Other Font"')
+    expect(equations(repaired!)).toEqual(equations(original))
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
+  it('removes the obsolete embedded math font while retaining editable colored formulas', async () => {
+    const original = await createExampleWord(String.raw`$\textcolor{blue}{\textbf{∁}_U A+AB\textbf{ ⫽⃥ }CD}$`)
+    const entries = unzipSync(original)
+    entries['word/fontTable.xml'] = strToU8(`<w:fonts xmlns:w="${W}"><w:font w:name="DSH Teacher Math"><w:embedRegular/></w:font></w:fonts>`)
+    entries['word/_rels/fontTable.xml.rels'] = strToU8('<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="dshTeacherMathFont" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/font" Target="fonts/dsh-teacher-math.odttf"/></Relationships>')
+    entries['word/fonts/dsh-teacher-math.odttf'] = new Uint8Array([1, 2, 3])
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    const output = unzipSync(repaired!)
+    expect(output['word/fonts/dsh-teacher-math.odttf']).toBeUndefined()
+    expect(strFromU8(output['word/fontTable.xml']!)).not.toContain('DSH Teacher Math')
+    expect(strFromU8(output['word/_rels/fontTable.xml.rels']!)).not.toContain('dshTeacherMathFont')
+    expect(equations(repaired!)).toEqual(equations(original))
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
+  it('repairs missing colors after native parallel conversion without changing relation text or spacing', async () => {
+    const original = await createExampleWord(String.raw`$\textcolor{blue}{A\text{ ⫽⃥ }B\subsetneqq C}$`)
+    const entries = unzipSync(original)
+    const document = xml(original)
+    for (const color of Array.from(document.getElementsByTagNameNS(W, 'color'))) color.parentNode!.removeChild(color)
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    const native = xml(repaired!)
+    expect(native.getElementsByTagNameNS(M, 'oMath').item(0)?.textContent).toBe('A \\∥B⫋C')
+    expect(native.getElementsByTagNameNS(M, 'box')).toHaveLength(2)
+    for (const run of Array.from(native.getElementsByTagNameNS(M, 'r'))) {
+      expect(run.getElementsByTagNameNS(W, 'color').item(0)?.getAttributeNS(W, 'val')).toBe('0000FF')
+    }
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
+  it('keeps the same operator padding when bold selection splits surrounding text spaces into separate runs', async () => {
+    const original = await createExampleWord(String.raw`$AB\text{ ⫽⃥ }CD+AB\text{ }\textbf{⫽⃥}\text{ }CD$`)
+    for (const bytes of [original, await compileExampleWord([{ bytes: original }])]) {
+      const equation = xml(bytes).getElementsByTagNameNS(M, 'oMath').item(0)!
+      expect(equation.textContent).toBe('AB \\∥CD+AB \\∥CD')
+      expect(equation.getElementsByTagNameNS(M, 'opEmu')).toHaveLength(2)
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+  })
+
+  it('joins a split not-parallel overlay into one editable operator', async () => {
+    const original = await createExampleWord(String.raw`$AB\text{⫽}\text{⃥}CD$`)
+    const equation = xml(original).getElementsByTagNameNS(M, 'oMath').item(0)!
+    expect(equation.textContent).toBe('AB \\∥CD')
+    expect(equation.getElementsByTagNameNS(M, 'opEmu')).toHaveLength(1)
+    expect(await normalizeExampleWord(original)).toBeUndefined()
+  })
+
+  it('keeps a short reverse negation stroke centered without widening the parallel operator', async () => {
+    let bytes = await createExampleWord(String.raw`$\textcolor{blue}{A\textbf{⫽⃥}B}+A\nparallel B$`)
+    for (const size of [12, 18, 24, 5]) {
+      const model = readExampleWordEditor(bytes)
+      bytes = saveExampleWordEditor(bytes, model.paragraphs.map(row => ({ ...row,
+        content: row.content.map(inline => inline.kind === 'equation' ? { ...inline, size } : inline),
+      })))
+      for (const output of [bytes, await compileExampleWord([{ bytes }])]) {
+        const native = xml(output)
+        const marks = Array.from(native.getElementsByTagNameNS(M, 'phant'))
+        expect(marks).toHaveLength(2)
+        for (const [index, mark] of marks.entries()) {
+          expect(mark.textContent).toBe(' \\')
+          for (const flag of ['show', 'zeroWid', 'zeroAsc', 'zeroDesc']) {
+            expect(mark.getElementsByTagNameNS(M, flag).item(0)?.getAttributeNS(M, 'val')).toBe('1')
+          }
+          expect(mark.nextSibling?.textContent).toBe('∥')
+          const [padding, stroke] = Array.from(mark.getElementsByTagNameNS(M, 'r'))
+          expect(padding?.textContent).toBe(' ')
+          expect(padding?.getElementsByTagNameNS(M, 't').item(0)?.getAttribute('xml:space')).toBe('preserve')
+          expect(padding?.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe(String(Math.round(size)))
+          expect(stroke?.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe(String(Math.round(size * 1.1)))
+          expect(stroke?.getElementsByTagNameNS(W, 'w').item(0)?.getAttributeNS(W, 'val')).toBe('150')
+          expect(stroke?.getElementsByTagNameNS(W, 'position').item(0)?.getAttributeNS(W, 'val')).toBe(String(Math.round(size / 3)))
+          expect(stroke?.getElementsByTagNameNS(W, 'i').item(0)?.getAttributeNS(W, 'val')).toBe('false')
+          expect(stroke?.getElementsByTagNameNS(W, 'b').length).toBe(index === 0 ? 1 : 0)
+          if (index === 0) expect(stroke?.getElementsByTagNameNS(W, 'color').item(0)?.getAttributeNS(W, 'val')).toBe('0000FF')
+        }
+        expect(await normalizeExampleWord(output)).toBeUndefined()
+      }
+    }
+  })
+
+  it.each(['missing offset', 'low stroke'] as const)('updates saved negation overlays with %s when a Word file is normalized', async (alignment) => {
+    const original = await createExampleWord(String.raw`$A\text{⫽⃥}B$`)
+    const entries = unzipSync(original)
+    const document = xml(original)
+    const overlay = document.getElementsByTagNameNS(M, 'phant').item(0)!
+    const [padding, stroke] = Array.from(overlay.getElementsByTagNameNS(M, 'r'))
+    if (alignment === 'missing offset') {
+      padding!.parentNode!.removeChild(padding!)
+      for (const name of ['sz', 'szCs']) stroke!.getElementsByTagNameNS(W, name).item(0)!.setAttributeNS(W, 'w:val', '16')
+      stroke!.getElementsByTagNameNS(W, 'position').item(0)!.setAttributeNS(W, 'w:val', '2')
+      const width = stroke!.getElementsByTagNameNS(W, 'w').item(0)!
+      width.parentNode!.removeChild(width)
+    } else {
+      for (const name of ['sz', 'szCs']) padding!.getElementsByTagNameNS(W, name).item(0)!.setAttributeNS(W, 'w:val', '15')
+      stroke!.getElementsByTagNameNS(W, 'position').item(0)!.setAttributeNS(W, 'w:val', '3')
+    }
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    expect(repaired).toBeDefined()
+    expect(equations(repaired!)).toEqual(equations(original))
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
+  it('restores full-size proper relations in saved files that contain the old reduced runs', async () => {
+    const original = await createExampleWord(String.raw`$\text{⫋⫌}AB$`)
+    const entries = unzipSync(original)
+    const document = xml(original)
+    for (const run of Array.from(document.getElementsByTagNameNS(M, 'r')).filter(run => /[⫋⫌]/u.test(run.textContent ?? ''))) {
+      const properties = run.getElementsByTagNameNS(W, 'rPr').item(0)!
+      for (const name of ['sz', 'szCs']) properties.getElementsByTagNameNS(W, name).item(0)!.setAttributeNS(W, 'w:val', '19')
+      const position = document.createElementNS(W, 'w:position')
+      position.setAttributeNS(W, 'w:val', '2')
+      properties.appendChild(position)
+    }
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const repaired = await normalizeExampleWord(zipSync(entries))
+    expect(repaired).toBeDefined()
+    for (const run of Array.from(xml(repaired!).getElementsByTagNameNS(M, 'r')).filter(run => /[⫋⫌]/u.test(run.textContent ?? ''))) {
+      expect(run.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe('24')
+      expect(run.getElementsByTagNameNS(W, 'position')).toHaveLength(0)
+    }
+    expect(await normalizeExampleWord(repaired!)).toBeUndefined()
+  })
+
+  it.each([String.raw`A\text{ ⫋ }B\text{ ⫌ }C`, String.raw`\textbf{⫋⫌}`, String.raw`\subsetneqq\supsetneqq`])('keeps %s in native math at the equation size across saves and export', async (latex) => {
     let bytes = await createExampleWord(`$${latex}$`)
     for (const size of [12, 18, 5, 24, 12]) {
       const model = readExampleWordEditor(bytes)
@@ -27,9 +193,10 @@ describe('collection Word editing', () => {
         const relations = runs.filter(run => run.textContent === '⫋' || run.textContent === '⫌')
         expect(relations).toHaveLength(2)
         for (const run of relations) {
-          expect(run.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe(String(Math.round(size * 2 * 0.8)))
-          expect(run.getElementsByTagNameNS(W, 'position').item(0)?.getAttributeNS(W, 'val')).toBe(String(Math.round(size * 2 * 0.08)))
-          expect(run.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii')).toBe('Cambria Math')
+          expect(run.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe(String(size * 2))
+          expect(run.getElementsByTagNameNS(W, 'position')).toHaveLength(0)
+          expect(run.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii')).toBe('Segoe UI Symbol')
+          expect(run.getElementsByTagNameNS(M, 'nor')).toHaveLength(1)
         }
         for (const run of runs.filter(run => /[ABC]/u.test(run.textContent ?? ''))) {
           expect(run.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val') ?? '24').toBe(String(size * 2))
@@ -37,6 +204,29 @@ describe('collection Word editing', () => {
         }
         expect(await normalizeExampleWord(document)).toBeUndefined()
       }
+    }
+  })
+
+  it('uses the same native math family for subset and proper-subset pairs, including saved text-mode signs', async () => {
+    const original = await createExampleWord(String.raw`$A\subseteq B\quad A\text{ ⫋ }B\quad B\supseteq A\quad B\textbf{ ⫌ }A$`)
+    const editor = readExampleWordEditor(original)
+    expect(editor.equations[0]!.latex).toContain('\\subsetneqq')
+    expect(editor.equations[0]!.latex).toContain('\\supsetneqq')
+    expect(editor.equations[0]!.latex).toContain('\\mathbf{\\supsetneqq}')
+    expect(editor.equations[0]!.latex).not.toContain('⫋')
+    const saved = saveExampleWordEditor(original, editor.paragraphs)
+    for (const bytes of [original, saved, await compileExampleWord([{ bytes: saved }])]) {
+      const entries = unzipSync(bytes)
+      expect(entries['word/fonts/dsh-teacher-math.odttf']).toBeUndefined()
+      expect(strFromU8(entries['word/settings.xml']!)).toContain('m:val="Cambria Math"')
+      const signs = Array.from(xml(bytes).getElementsByTagNameNS(M, 'r')).filter(run => /[⊆⊇⫋⫌]/u.test(run.textContent ?? ''))
+      expect(signs).toHaveLength(4)
+      for (const sign of signs) {
+        expect(sign.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii')).toBe('Segoe UI Symbol')
+        expect(sign.getElementsByTagNameNS(M, 'nor')).toHaveLength(1)
+      }
+      expect(signs.find(sign => sign.textContent === '⫌')?.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('b')
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
     }
   })
 
@@ -213,9 +403,9 @@ describe('collection Word editing', () => {
       }
       for (const run of Array.from(equation.getElementsByTagNameNS(M, 'r'))) {
         expect(run.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'eastAsia'))
-          .toBe('Cambria Math')
+          .toBe(/^[∁⊆⊇⫋⫌∥∦\\]$/u.test(run.textContent ?? '') || run.parentNode?.parentNode?.localName === 'phant' ? 'Segoe UI Symbol' : 'Cambria Math')
       }
-      expect(equation.textContent?.replaceAll(/\s/gu, '')).toContain(latex.includes('∁') ? '∁UA' : latex.includes("f''") ? 'f′′(x)' : 'A⫋B⫌C+AB⫽⃥CD')
+      expect(equation.textContent?.replaceAll(/\s/gu, '')).toContain(latex.includes('∁') ? '∁UA' : latex.includes("f''") ? 'f′′(x)' : 'A⫋B⫌C+AB\\∥CD')
       expect(await normalizeExampleWord(bytes)).toBeUndefined()
     }
   })
@@ -276,10 +466,10 @@ describe('collection Word editing', () => {
     { latex: String.raw`\mathbf{\forall}\forall`, glyph: '∀' },
     { latex: String.raw`\mathbf{\exists}\exists`, glyph: '∃' },
     { latex: String.raw`\mathbf{\nexists}\nexists`, glyph: '∄' },
-    { latex: String.raw`\mathbf{\nparallel}\nparallel`, glyph: '∦' },
+    { latex: String.raw`\mathbf{\nparallel}\nparallel`, glyph: '∥' },
     { latex: String.raw`\mathbf{\odot}\odot`, glyph: '⊙' },
     { latex: String.raw`\textbf{▱}\text{▱}`, glyph: '▱' },
-    { latex: String.raw`\textbf{⫽}\text{⫽}`, glyph: '⫽' },
+    { latex: String.raw`\textbf{⫽}\text{⫽}`, glyph: '∥' },
   ])('preserves local bold on $glyph while its neighbor stays regular through edits and export', async ({ latex, glyph }) => {
     const original = await createExampleWord('符号：')
     const paragraph = readExampleWordEditor(original).paragraphs[0]!
@@ -292,7 +482,7 @@ describe('collection Word editing', () => {
         const runs = Array.from(xml(document).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent?.includes(glyph))
         expect(runs).toHaveLength(2)
         expect(runs[0]!.textContent).toBe(glyph)
-        expect(runs[0]!.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe('b')
+        expect(runs[0]!.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')).toBe(/[∥∦]/u.test(glyph) ? 'bi' : 'b')
         expect(runs[0]!.getElementsByTagNameNS(W, 'b').length).toBe(1)
         expect(runs[1]!.getElementsByTagNameNS(W, 'b').length).toBe(0)
       }
@@ -311,9 +501,9 @@ describe('collection Word editing', () => {
       const style = sign.getElementsByTagNameNS(M, 'sty').item(0)?.getAttributeNS(M, 'val')
         ?? (sign.getElementsByTagNameNS(M, 'nor').length > 0 ? 'p' : 'i')
       expect(style).toBe('p')
-      expect(sign.getElementsByTagNameNS(M, 'nor')).toHaveLength(0)
+      expect(sign.getElementsByTagNameNS(M, 'nor')).toHaveLength(1)
       const fonts = sign.getElementsByTagNameNS(W, 'rFonts').item(0)!
-      for (const slot of ['ascii', 'hAnsi', 'eastAsia', 'cs']) expect(fonts.getAttributeNS(W, slot)).toBe('Cambria Math')
+      for (const slot of ['ascii', 'hAnsi', 'eastAsia', 'cs']) expect(fonts.getAttributeNS(W, slot)).toBe('Segoe UI Symbol')
       const entries = unzipSync(bytes)
       expect(entries['word/fonts/dsh-complement.odttf']).toBeUndefined()
       expect(strFromU8(entries['word/document.xml']!)).not.toContain('DSH Math Symbols')
@@ -354,7 +544,7 @@ describe('collection Word editing', () => {
     expect(runs.filter(run => run.textContent === '∁')).toHaveLength(3)
     for (const run of runs) {
       expect(run.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii'))
-        .toBe('Cambria Math')
+        .toBe(run.textContent === '∁' ? 'Segoe UI Symbol' : 'Cambria Math')
       expect(run.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val')).toBe('36')
     }
     for (const run of runs.slice(0, 4)) {
@@ -374,7 +564,7 @@ describe('collection Word editing', () => {
     { latex: "f''(x)", text: 'f′′(x)' },
     { latex: "f'''(x)", text: 'f′′′(x)' },
     { latex: String.raw`\forall x\exists y\nexists z`, text: '∀x∃y∄z' },
-    { latex: String.raw`AB\nparallel CD`, text: 'AB∦CD' },
+    { latex: String.raw`AB\nparallel CD`, text: 'AB\\∥CD' },
     { latex: String.raw`\odot O`, text: '⊙O' },
     { latex: String.raw`\text{▱}ABCD`, text: '▱ABCD' },
   ])('retains $text through repeated equation edits and Word export', async ({ latex, text }) => {
@@ -464,8 +654,8 @@ describe('collection Word editing', () => {
     expect(Array.from(native.getElementsByTagNameNS(W, 'shd')).map(node => node.getAttributeNS(W, 'fill'))).toContain('FFFF00')
   })
 
-  it('retains the compact slanted parallel glyph through editing, bold changes, and export', async () => {
-    const original = await createExampleWord(String.raw`$AB\text{ ⫽ }CD$`)
+  it.each(['⫽', '⫽⃥'])('retains the compact slanted %s glyph through editing, bold changes, and export', async (glyph) => {
+    const original = await createExampleWord(`$AB\\text{ ${glyph} }CD$`)
     const model = readExampleWordEditor(original)
     const formatted = model.paragraphs.map(paragraph => ({ ...paragraph,
       content: paragraph.content.map(inline => inline.kind === 'equation' ? { ...inline, latex: model.equations[0]!.latex, bold: true } : inline),
@@ -474,8 +664,15 @@ describe('collection Word editing', () => {
     const compiled = await compileExampleWord([{ bytes: saved }])
     for (const bytes of [original, saved, compiled]) {
       const text = xml(bytes).getElementsByTagNameNS(M, 'oMath').item(0)?.textContent
-      expect(text?.replaceAll('\u00a0', '')).toBe('AB⫽CD')
-      expect(readExampleWordEditor(bytes).equations[0]?.latex).toContain('⫽')
+      expect(text?.replaceAll('\u00a0', '')).toBe(`AB${glyph === '⫽' ? '∥' : ' \\∥'}CD`)
+      expect(readExampleWordEditor(bytes).equations[0]?.latex).toContain(glyph)
+      const runs = Array.from(xml(bytes).getElementsByTagNameNS(M, 'r')).filter(run => run.textContent === '∥')
+      expect(runs.length).toBeGreaterThan(0)
+      for (const run of runs) {
+        expect(run.getElementsByTagNameNS(W, 'rFonts').item(0)?.getAttributeNS(W, 'ascii')).toBe('Segoe UI Symbol')
+        expect(run.getElementsByTagNameNS(W, 'i').item(0)?.getAttributeNS(W, 'val')).toBe('true')
+      }
+      expect(unzipSync(bytes)['word/fonts/dsh-teacher-math.odttf']).toBeUndefined()
     }
   })
 

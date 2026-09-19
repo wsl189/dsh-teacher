@@ -3,10 +3,11 @@
 import { DOMParser, XMLSerializer, type Document as XmlDocument, type Element as XmlElement } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { exampleMathmlToOffice, formatExampleOfficeMath } from './example-word-math.ts'
-import { exampleWordIsEdited, normalizeExampleFigures, normalizeExampleLetterRuns, normalizeExampleParagraphs } from './example-word-layout.ts'
+import { exampleRomanSubquestionLength, exampleWordIsEdited, normalizeExampleFigures, normalizeExampleLetterRuns, normalizeExampleParagraphs } from './example-word-layout.ts'
 import { normalizeExampleImageSizes } from './example-word-images.ts'
 import { normalizeExampleComplement } from './example-word-complement.ts'
 import { normalizeExampleRelations } from './example-word-relations.ts'
+import { normalizeExampleSymbolFonts } from './example-word-symbol-font.ts'
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const MATH_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
@@ -40,7 +41,7 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
         if (paragraph.firstChild !== properties) paragraph.insertBefore(properties, paragraph.firstChild)
         const style = properties.getElementsByTagNameNS(WORD_NS, 'pStyle').item(0)?.getAttributeNS(WORD_NS, 'val')
         const figure = style === 'DshExampleFigure'
-        const subquestion = /^\s*\(\s*(?:i{1,3}|iv|vi{0,3}|ix|xi{0,2})\s*\)/iu.test((paragraph.textContent ?? '').normalize('NFKC'))
+        const subquestion = exampleRomanSubquestionLength(paragraph.textContent ?? '') > 0
         const firstLevel = /^\s*[（(]\s*\d+\s*[)）]/u.test(paragraph.textContent ?? '')
         property(properties, 'w:spacing', { before: figure ? '120' : '0', after: figure ? '120' : '80', line: '300', lineRule: 'auto' })
         property(properties, 'w:jc', { val: figure ? 'right' : 'left' })
@@ -111,6 +112,7 @@ export function normalizeExampleWordTypography(bytes: Uint8Array): Buffer | unde
     if (path === 'word/document.xml') {
       if (normalizeExampleComplement(document, entries)) changed = true
       if (normalizeExampleRelations(document, entries)) changed = true
+      if (normalizeExampleSymbolFonts(document, entries)) changed = true
     }
     const normalized = new XMLSerializer().serializeToString(document)
     if (normalized === source) continue
@@ -154,7 +156,7 @@ function normalizeMathLetters(document: XmlDocument, entries: Record<string, Uin
     if (native === undefined || native.parentNode === null) {
       throw new Error('Collected Word equation has no replaceable native content')
     }
-    if (replacement.textContent !== native.textContent) throw new Error('Collected Word letter formatting would change equation text')
+    if (nativeSymbolText(replacement.textContent ?? '') !== nativeSymbolText(native.textContent ?? '')) throw new Error('Collected Word letter formatting would change equation text')
     if (missingColors || invalidText || missingAlphabet) {
       const style = equation.getAttribute('style') ?? ''
       const size = /font-size\s*:\s*([\d.]+)pt/u.exec(style)?.[1]
@@ -210,4 +212,8 @@ function insideEquation(element: XmlElement): boolean {
     parent = parent.parentNode
   }
   return false
+}
+
+function nativeSymbolText(text: string): string {
+  return text.replaceAll('⫽⃥', '∦').replaceAll('\\∥', '∦').replaceAll('⫽', '∥').replaceAll(/[ \u00a0]/gu, '')
 }

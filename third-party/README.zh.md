@@ -13,7 +13,7 @@
 | `@xmanrui/dsh-im` | 4.21.1 | 十一个 IM 平台、文件发送、提醒及共用的 QQ 语音输入。 |
 | `dsh-plugin-cron` | 0.1.3 | 持久化定时任务、模型工具和浏览器管理。 |
 | `dsh-skill-mcp-panel` | 2.0.4 | 技能与 profile MCP 管理。 |
-| `dsh-univer-office` | 0.3.0，DSH 重打包 5 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
+| `dsh-univer-office` | 0.3.0，DSH 重打包 6 | Sheets、Docs、Slides、Bases、Boards、审阅和导入导出。 |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
 
 Office 预览器保留上游包名，但不依赖 `dsh-better-sidebar`。兼容补丁通过官方文档预览服务注册预览器。侧边栏文件、文档和终端由 DSH 提供。Windows 电脑操控使用官方[原生 Cua Driver 提供方](../packages/experimental/computer-use-cua-driver-native/README.zh.md)；发行版不包含 Windows-MCP 及其私有 Python 运行时。
@@ -35,6 +35,13 @@ Univer profile 关闭遥测，并将运行时的 `UNIVER_LICENSE` 转发给内�
 
 Univer 每次内容操作均在独立的 Node 进程中运行，并共用 `<DSH_HOME>/cache/dsh-univer-office/node` 中的编译缓存。可设置 `NODE_COMPILE_CACHE` 指定其他目录，或设置 `NODE_DISABLE_COMPILE_CACHE=1` 关闭缓存。代码或运行时版本变化时，Node 会使对应的编译缓存失效；该缓存不替代已保存的 Office 文档或工作树。
 
+<a id="word-equations-and-fonts"></a>
+## Word 公式与字体
+
+聊天生成的 Word 默认使用 Times New Roman 排版拉丁字母和数字。Doc 技能以 `\(...\)` 和 `\[...\]` 标记行内与独立 TeX 公式；DOCX 导出将这些表达式转换为可编辑的原生 Office 公式。新公式中的字母和数字使用 Times New Roman，变量保留斜体，数字及函数名保持正体。运算符和可伸展符号保留 Cambria Math，明确指定的数学字形类别保留各自样式。不支持的已标记公式会使导出失败，不会替换已有目标文件。明确设置的正文字体及中文字体保持不变。
+
+Univer 实时编辑器显示 TeX 源文，因此需要检查导出 Word 的公式排版。已经栅格化为图片的公式无法通过此转换恢复。[原生 Word 决策](../.agents/notes/implemented/feature/2026-09-17-chat-word-native-equations.zh.md)定义转换范围和验证方式；工作台导出与模型设置各自独立。
+
 ## 机器人工作目录
 
 新机器人默认使用 Host 用户的桌面。Electron 通过 `DSH_DESKTOP_DIR` 提供系统桌面路径；其他启动方式使用该绝对路径覆盖值或 `<home>/Desktop`。显式配置与已保存的机器人工作目录优先。应用内目录选择器只替换所选机器人的目录。[工作目录决策](../.agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.zh.md)规定这一保留规则。
@@ -42,7 +49,9 @@ Univer 每次内容操作均在独立的 Node 进程中运行，并共用 `<DSH_
 <a id="artifact-notes"></a>
 ## 来源包说明
 
-npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.5.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
+固定版本的技能/MCP 面板使用兼容补丁适配 alpha.2 的 Typert 编解码器工厂；其版本、已保存技能、分组和服务器配置保持不变。Univer 以具名回合尾部列表项贡献预览，与官方文件修改卡片共存。
+
+npm 发布包保留许可证和来源元数据。`pnpm-workspace.yaml` 列出每个兼容补丁，`pnpm-lock.yaml` 固定解析后的依赖集合。AnySearch 沿用经审阅的 0.1.4 源码构建。Univer 在 `dsh-univer-office-0.3.0-dsh.6.tgz` 旁保留原始 npm 来源包和 [runtime.patch](dsh-univer-office/runtime.patch)，便于复现重打包。其 WebSocket 代理保留文本帧和二进制帧的类型，并将 Viewer 会话票据转发给 Gateway。
 
 Univer 重打包补齐[上游 0.3.0 锁文件](https://github.com/dream-num/dsh-univer-office/blob/v0.3.0/pnpm-lock.yaml)指定版本的 `@univerjs-pro/engine-formula-rust-binding`（`1.0.0-insiders.20260910-22fe9c7`）和 `@univerjs-pro/exchange-node-binding`（`0.1.2`）。技能将相关写入合为批次，并保留独立读回与视觉检查。技能和 API 工具说明均建议精确查询成员，并区分 `find` 的结果条数限制与 `show` 的完整响应。[Office 生成决策](../.agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.zh.md)记录了 worker 测量结果与验证范围。
 

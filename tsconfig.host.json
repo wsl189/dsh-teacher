@@ -4,6 +4,9 @@
     "noEmit": true,
     "rewriteRelativeImportExtensions": false
   },
+  "files": [
+    "packages/client/ui-settings-general/src/client/desktop-update-bridge.ts"
+  ],
   "include": [
     "apps/web/product-isolation.ts",
     "apps/web/tests/default-product-isolation.e2e.ts",
@@ -17,6 +20,7 @@
     "apps/web/tests/streaming-fence-highlight.e2e.ts",
     "apps/web/tests/declared-reasoning.e2e.ts",
     "apps/web/tests/support.ts",
+    "apps/web/tests/model-input-layout.ts",
     "apps/web/tests/scaffold-hermetic.e2e.ts",
     "apps/web/tests/startup-rpc-budget.e2e.ts",
     "apps/web/tests/minimal-preset.snapshot.ts",
@@ -34,7 +38,13 @@
     "apps/web/tests/lifecycle-chrome.e2e.ts",
     "apps/web/tests/details-session-lifecycle.e2e.ts",
     "apps/web/tests/document-preview.e2e.ts",
+    "apps/web/tests/office-fixture.ts",
+    "apps/web/tests/sidebar-browser.e2e.ts",
     "apps/web/tests/plugin-config.e2e.ts",
+    "apps/web/tests/plugin-manager.e2e.ts",
+    "apps/web/tests/plugin-install-cancel.e2e.ts",
+    "apps/web/tests/plugin-install-approve.e2e.ts",
+    "apps/web/tests/client-plugin-live.e2e.ts",
     "apps/web/tests/settings-chrome.e2e.ts",
     "apps/web/tests/models-settings.e2e.ts",
     "apps/web/tests/deepseek-messages-settings.e2e.ts",
@@ -54,6 +64,7 @@
     "apps/web/tests/cold-blank-session.e2e.ts",
     "apps/web/tests/stats-paged-history.e2e.ts",
     "apps/web/tests/sidebar-scrollbar.e2e.ts",
+    "apps/web/tests/sidebar-title-hover-scroll.e2e.ts",
     "apps/web/tests/rail-search-expand.e2e.ts",
     "apps/web/tests/conversation-column-overflow.e2e.ts",
     "apps/web/tests/ptc-round.e2e.ts",
@@ -62,6 +73,7 @@
     "apps/web/tests/present-svg.e2e.ts",
     "apps/web/tests/composer-draft-scroll.e2e.ts",
     "apps/web/tests/composer-placeholder.e2e.ts",
+    "apps/web/tests/context-meter.e2e.ts",
     "apps/web/tests/cordis-tool-round.e2e.ts",
     "apps/web/tests/web-search-round.e2e.ts",
     "apps/web/tests/file-upload-round.e2e.ts",
@@ -69,8 +81,10 @@
     "apps/web/tests/open-in-app-ssh.e2e.ts",
     "apps/web/tests/message-feedback.e2e.ts",
     "apps/web/tests/markdown-images.e2e.ts",
+    "apps/web/tests/markdown-file-links.e2e.ts",
     "apps/web/tests/reference-composer.e2e.ts",
     "apps/web/tests/markdown-wide-table.e2e.ts",
+    "apps/web/tests/thinking-markdown.e2e.ts",
     "apps/web/tests/math-rendering.e2e.ts",
     "apps/web/tests/markdown-cjk-strong.e2e.ts",
     "apps/web/tests/markdown-inline-code-links.e2e.ts",
@@ -90,7 +104,7 @@
     "apps/web/tests/feedback-release.e2e.ts",
     "apps/web/tests/goal-command-presentation.e2e.ts",
     "apps/web/tests/startup-auto-selection.e2e.ts",
-    "apps/web/tests/produced-files.e2e.ts",
+    "apps/web/tests/changed-files-turn.e2e.ts",
     "apps/web/tests/produced-file-mentions.e2e.ts",
     "apps/web/tests/subagent-conversation.e2e.ts",
     "apps/web/tests/subagent-interrupt.e2e.ts",
@@ -116,6 +130,7 @@
     "apps/cli/tests/**/*.ts",
     "apps/desktop/scripts/**/*.ts",
     "apps/desktop/tests/**/*.ts",
+    "apps/desktop-host/tests/**/*.ts",
     "benchmarks/**/*.ts",
     "packages/*/*/tests/**/*.ts",
     "scripts/**/*.ts",
@@ -156,6 +171,12 @@
   ],
   "references": [
     {
+      "path": "./packages/client/connection/tsconfig.host.json"
+    },
+    {
+      "path": "./packages/skill/skill-office"
+    },
+    {
       "path": "./packages/browser-use/browser-use"
     },
     {
@@ -181,6 +202,12 @@
     },
     {
       "path": "./packages/experimental/computer-use-cua-driver-native"
+    },
+    {
+      "path": "./packages/client/ui-sidebar-documentpreview/tsconfig.host.json"
+    },
+    {
+      "path": "./packages/document/office-to-pdf"
     },
     {
       "path": "./packages/client/ui-deliverables/tsconfig.host.json"
@@ -210,6 +237,9 @@
       "path": "./vendor/hmr"
     },
     {
+      "path": "./packages/boot/hmr"
+    },
+    {
       "path": "./vendor/logger-console"
     },
     {
@@ -223,6 +253,9 @@
     },
     {
       "path": "./packages/util/launch-environment"
+    },
+    {
+      "path": "./packages/util/lazy-require"
     },
     {
       "path": "./packages/util/native-command"
@@ -591,6 +624,12 @@
       "path": "./packages/shell/tool-bash"
     },
     {
+      "path": "./packages/deliverables/tool-present"
+    },
+    {
+      "path": "./packages/deliverables/workspace-changes"
+    },
+    {
       "path": "./packages/fs/fs"
     },
     {
@@ -604,9 +643,6 @@
     },
     {
       "path": "./packages/fs/tool-fs"
-    },
-    {
-      "path": "./packages/fs/tool-present"
     },
     {
       "path": "./packages/fs/tool-fs-search"
@@ -841,6 +877,9 @@
     },
     {
       "path": "./packages/host/plugin-inventory"
+    },
+    {
+      "path": "./packages/boot/plugin-manager"
     },
     {
       "path": "./packages/llm/plugin-package-inventory-deepseek"

@@ -49,11 +49,12 @@ PPT Master 提供方在加载的说明后附加当前会话工作区，并要求
 构建好包的运行时产物后，在仓库根目录编译并运行诊断。诊断解析已安装的 Cordis 与 Univer 产物，创建私有 `DSH_HOME`，移除外部环境中的原生模块和许可证覆盖值，并在释放插件后恢复环境。每次运行均从空缓存开始，只有同一次运行中的 worker 共用缓存。`--fragmented` 仅运行一个文档样本，不运行三种格式的完整集合。
 
 ```sh
-pnpm exec tsdown --no-config --platform node --format esm --no-dts --out-dir packages/bundle/web-app/.dsh-build packages/bundle/web-app/tests/univer-generation.perf.ts
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache --fragmented
+cd packages/bundle/web-app
+pnpm exec tsdown --no-config --platform node --format esm --no-dts --out-dir .dsh-build tests/univer-generation.perf.ts
+node .dsh-build/univer-generation.perf.mjs --disable-cache
+node .dsh-build/univer-generation.perf.mjs
+node .dsh-build/univer-generation.perf.mjs --disable-cache
+node .dsh-build/univer-generation.perf.mjs --disable-cache --fragmented
 ```
 
 2026-09-16 的测量得到下列总耗时中位数。再次关闭缓存后，工作负载的耗时接近原有水平，可作为主机预热的对照。所有生成文件均通过读回与导出内容检查。

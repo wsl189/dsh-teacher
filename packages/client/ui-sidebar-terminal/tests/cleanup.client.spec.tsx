@@ -13,10 +13,8 @@ afterEach(cleanup)
 type CleanupProps = Parameters<typeof TerminalCleanup>[0]
 const unusedHook = (): never => { throw new Error('Terminal cleanup does not consume global hooks') }
 const standard: Omit<CleanupProps, 'useCloseFailures' | 'retryClose' | 't'> = {
-  sidebarWidth: 256,
-  detailsWidth: 360,
-  useSessions: unusedHook, useSessionPendingInteraction: unusedHook, usePanelInfo: unusedHook,
-  useWorkspaces: unusedHook, useResource: unusedHook,
+  useSessions: unusedHook, useSessionStatus: unusedHook, useSessionRetainInfo: unusedHook, usePanelInfo: unusedHook,
+  useWorkspaces: unusedHook, useResource: unusedHook, sidebarWidth: 240, detailsWidth: 320,
 }
 
 it('stays absent for ordinary closes and offers a retry only after cleanup fails', () => {

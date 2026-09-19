@@ -5,7 +5,7 @@ import {
   encodeDesktopResponseEnd,
   encodeDesktopResponseError,
   encodeDesktopResponseStart,
-} from '../../desktop-host/src/wire.ts'
+} from './fixtures/host-wire.ts'
 import {
   DesktopHostResponseDecoder,
   encodeDesktopRequestCancel,

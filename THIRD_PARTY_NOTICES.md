@@ -5,7 +5,7 @@
 
 DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party software listed below. Each project remains under its own license; nothing in this file changes those terms.
 
-This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the bundled Windows-MCP desktop runtime, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by `scripts/gen-third-party-notices.ts`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and `scripts/gen-third-party-notices.spec.ts` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run `pnpm run verify-third-party-notices` for the standalone check.
+This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by `scripts/gen-third-party-notices.ts`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and `scripts/gen-third-party-notices.spec.ts` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run `pnpm run verify-third-party-notices` for the standalone check.
 
 The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [`pnpm-lock.yaml`](pnpm-lock.yaml) — inspect it with `pnpm licenses list`. The Python SDK closure is recorded separately in [`python/sdk/uv.lock`](python/sdk/uv.lock).
 
@@ -43,6 +43,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`@anysearch/anysearch-dsh`](https://github.com/anysearch-team/anysearch-dsh) | MIT |
 | [`@babel/code-frame`](https://github.com/babel/babel) | MIT |
 | [`@browserbasehq/stagehand`](https://github.com/browserbase/stagehand) | MIT |
+| [`@deepseek-ai/libreoffice-kit`](https://github.com/deepseek-harness/libreoffice-kit) | MPL-2.0 |
 | [`@dickpy/dsh-imagegen`](https://github.com/dickpy/dsh-imagegen) | Apache-2.0 |
 | [`@earendil-works/pi-ai`](https://github.com/earendil-works/pi) | MIT |
 | [`@huanlin/dsh-plugin-better-sidebar-plugin-office`](https://github.com/HuanLinOTO/dsh-plugin-better-sidebar-plugin-office) | AGPL-3.0 |
@@ -103,6 +104,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`electron-log`](https://github.com/megahertz/electron-log) | MIT |
 | [`electron-updater`](https://github.com/electron-userland/electron-builder) | MIT |
 | [`eventsource-parser`](https://github.com/rexxars/eventsource-parser) | MIT |
+| [`execa`](https://github.com/sindresorhus/execa) | MIT |
 | [`fflate`](https://github.com/101arrowz/fflate) | MIT |
 | [`immer`](https://github.com/immerjs/immer) | MIT |
 | [`import-meta-resolve`](https://github.com/wooorm/import-meta-resolve) | MIT |
@@ -142,6 +144,7 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`semver`](https://github.com/npm/node-semver) | ISC |
 | [`sharp`](https://github.com/lovell/sharp) | Apache-2.0 |
 | [`shiki`](https://github.com/shikijs/shiki) | MIT |
+| [`simple-icons`](https://github.com/simple-icons/simple-icons) | CC0-1.0 |
 | [`supports-color`](https://github.com/chalk/supports-color) | MIT |
 | [`tar`](https://github.com/isaacs/node-tar) | BlueOak-1.0.0 |
 | [`tsx`](https://github.com/privatenumber/tsx) | MIT |
@@ -164,11 +167,14 @@ The teacher workbench uses [`mathml2omml`](https://github.com/fiduswriter/mathml
 
 Every teacher-workbench package includes [the notice and replacement instructions](packages/host/teacher-workbench/third-party/mathml2omml/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](packages/host/teacher-workbench/third-party/mathml2omml/mathml2omml-0.5.0-source.tar.gz) from upstream commit `0ddeb8b59ff1a97796b25d8f682dfb410febde1d`. The accompanying [equation-formatting source patch](packages/host/teacher-workbench/third-party/mathml2omml/colors.patch) supplies the local changes and is applied before rebuilding. The packet also contains the bundled `entities` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from `html-parse-stringify`. The Windows installer includes the same packet under `resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
 
-The formula palette embeds five glyphs derived from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The DSH Math Symbols subset scales and raises the two proper-set relations. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
+The formula palette embeds compact proper-set signs derived from the KaTeX 0.16.47 fonts, renamed DSH Set Relations under SIL OFL 1.1. The UI package includes their [font license](packages/client/ui-teacher-workbench/third-party/katex/OFL.txt) and [reproduction instructions](packages/client/ui-teacher-workbench/third-party/katex/NOTICE.txt).
+
+The formula palette also embeds three glyphs derived from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The DSH Math Symbols subset includes an upright complement with short inward terminals, compact slanted parallel lines, and a centered short negation stroke. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
 
 
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
+- `dsh-univer-office@0.3.0` — [`patches/dsh-univer-office@0.3.0.patch`](patches/dsh-univer-office@0.3.0.patch)
 - `@electron/osx-sign@1.3.3` — [`patches/@electron__osx-sign@1.3.3.patch`](patches/@electron__osx-sign@1.3.3.patch)
 - `@yao-pkg/pkg@6.21.0` — [`patches/@yao-pkg__pkg@6.21.0.patch`](patches/@yao-pkg__pkg@6.21.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
@@ -323,6 +329,13 @@ The installed SDK 0.3.263 declares the following optional platform packages. Eac
 | [`@univerjs-pro/slides-ui`](https://www.npmjs.com/package/@univerjs-pro/slides-ui) | 1.0.0-rc.0 | bundled artifact module |
 
 
+## LibreOffice conversion kit
+
+`@deepseek-ai/libreoffice-kit`, `@deepseek-ai/libreoffice-kit-wasm`, `@deepseek-ai/libreoffice-kit-darwin-arm64`, `@deepseek-ai/libreoffice-kit-darwin-x64`, `@deepseek-ai/libreoffice-kit-win32-arm64`, `@deepseek-ai/libreoffice-kit-win32-x64` declare MPL-2.0, which remains outside the permissive-license allowlist; the notices check accepts only these package identities at those terms. The [distribution decision](.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) records the source obligations.
+
+The [kit repository](https://github.com/deepseek-harness/libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
+
+
 ## Development-only npm dependencies
 
 External packages **directly declared** for development, tests, types, or tooling, without a runtime installation or browser-build relationship. A package here may still be pulled in transitively by a runtime dependency — `pnpm-lock.yaml` is the authority on that full closure.
@@ -372,7 +385,6 @@ External packages **directly declared** for development, tests, types, or toolin
 | [`electron-builder`](https://github.com/electron-userland/electron-builder) | MIT |
 | [`esbuild`](https://github.com/evanw/esbuild) | MIT |
 | [`eslint-plugin-sonarjs`](https://github.com/SonarSource/SonarJS) | LGPL-3.0-only |
-| [`execa`](https://github.com/sindresorhus/execa) | MIT |
 | [`extract-zip`](https://github.com/maxogden/extract-zip) | BSD-2-Clause |
 | [`fast-check`](https://github.com/dubzzz/fast-check) | MIT |
 | [`http-server`](https://github.com/http-party/http-server) | MIT |
@@ -411,6 +423,14 @@ Direct dependencies of the `pyproject.toml` manifests, plus `uv` as the developm
 | [`pydantic`](https://github.com/pydantic/pydantic) | MIT | runtime dependency of `deepseek-harness-sdk` |
 | [`pytest`](https://github.com/pytest-dev/pytest) | MIT | test-only |
 | [`uv`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
+
+## Desktop bundled Python distributions
+
+The [Desktop runtime lock](apps/desktop/scripts/primary-runtime-lock.json) records each distribution version and the wheel download hashes. The table includes every entry in `pythonPackages`, including transitive dependencies. Wheel extraction preserves distribution metadata and the license and notice files supplied by each archive. Project licenses below do not enumerate the separate licenses of native libraries bundled inside wheels.
+
+| Distribution | Locked version | Project license |
+| --- | --- | --- |
+
 
 ## First-party native packages
 

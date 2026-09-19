@@ -1,15 +1,16 @@
-/** Native complement runs that use the equation font in Word and WPS. */
+/** Upright system-font complements and removal of obsolete collection font parts. */
 
 import { DOMParser, XMLSerializer, type Document as XmlDocument, type Element as XmlElement } from '@xmldom/xmldom'
 import { strFromU8, strToU8 } from 'fflate'
+import { formatExampleSymbolRun } from './example-word-symbol-font.ts'
 
 const W = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const M = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
 
 /**
- * Keep complements upright in native math and remove the unsupported embedded text-font assignment.
+ * Keep complements upright in a Windows system font and remove obsolete embedded collection fonts.
  * @param document - collection document after its ordinary typography normalization.
- * @param entries - mutable DOCX package; only the collection's complement font parts are removed.
+ * @param entries - mutable DOCX package; only the collection's obsolete embedded fonts are removed.
  * @returns whether package parts changed; the caller separately serializes the modified document.
  */
 export function normalizeExampleComplement(document: XmlDocument, entries: Record<string, Uint8Array>): boolean {
@@ -28,22 +29,8 @@ export function normalizeExampleComplement(document: XmlDocument, entries: Recor
         parent.insertBefore(target, run)
       }
       if (part !== '∁') continue
-      let math = target.getElementsByTagNameNS(M, 'rPr').item(0)
-      if (math === null) {
-        math = document.createElementNS(M, 'm:rPr')
-        target.insertBefore(math, target.firstChild)
-      }
-      let style = math.getElementsByTagNameNS(M, 'sty').item(0)
-      const bold = ['b', 'bi'].includes(style?.getAttributeNS(M, 'val') ?? '')
-      // WPS can omit a complement in normal-text mode when its text font is unavailable.
-      for (const property of Array.from(math.childNodes)) {
-        if (property.namespaceURI === M && ['nor', 'scr'].includes(property.localName ?? '')) math.removeChild(property)
-      }
-      if (style === null) {
-        style = document.createElementNS(M, 'm:sty')
-        math.appendChild(style)
-      }
-      style.setAttributeNS(M, 'm:val', bold ? 'b' : 'p')
+      const size = Number(target.getElementsByTagNameNS(W, 'sz').item(0)?.getAttributeNS(W, 'val') ?? '24') / 2
+      formatExampleSymbolRun(document, target, size)
     }
     if (parts.length > 1) parent.removeChild(run)
   }
@@ -57,8 +44,8 @@ export function normalizeExampleComplement(document: XmlDocument, entries: Recor
     const source = strFromU8(entry)
     const xml = parser.parseFromString(source, 'application/xml')
     for (const node of Array.from(xml.getElementsByTagName('*'))) {
-      const ownedFont = node.namespaceURI === W && node.localName === 'font' && node.getAttributeNS(W, 'name') === 'DSH Math Symbols'
-      const ownedRelationship = node.localName === 'Relationship' && node.getAttribute('Id') === 'dshComplementFont' && node.getAttribute('Target') === 'fonts/dsh-complement.odttf'
+      const ownedFont = node.namespaceURI === W && node.localName === 'font' && ['DSH Math Symbols', 'DSH Teacher Math'].includes(node.getAttributeNS(W, 'name') ?? '')
+      const ownedRelationship = node.localName === 'Relationship' && [['dshComplementFont', 'fonts/dsh-complement.odttf'], ['dshTeacherMathFont', 'fonts/dsh-teacher-math.odttf']].some(([id, target]) => node.getAttribute('Id') === id && node.getAttribute('Target') === target)
       if (ownedFont || ownedRelationship) node.parentNode?.removeChild(node)
     }
     const normalized = serializer.serializeToString(xml)
@@ -68,6 +55,10 @@ export function normalizeExampleComplement(document: XmlDocument, entries: Recor
   }
   if (entries['word/fonts/dsh-complement.odttf'] !== undefined) {
     delete entries['word/fonts/dsh-complement.odttf']
+    changed = true
+  }
+  if (entries['word/fonts/dsh-teacher-math.odttf'] !== undefined) {
+    delete entries['word/fonts/dsh-teacher-math.odttf']
     changed = true
   }
   return changed

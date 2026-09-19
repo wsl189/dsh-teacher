@@ -113,6 +113,7 @@ function completeEvents(): SessionLiveEventEntry[] {
 
 function assembler(entries: readonly SessionLiveEventEntry[], hasMore = false): ConversationNodeAssembler {
   const value = new ConversationNodeAssembler(new TestEventDefinitions(), new TestViewDefinitions())
+  value.activateTarget('chat')
   value.replaceWindow(entries, hasMore)
   value.flush()
   return value
@@ -174,7 +175,10 @@ describe('generated-image result Conversation Definition', () => {
     const value = assembler(events.slice(0, 1))
     for (const event of events.slice(1)) value.append(event)
     value.flush()
-    expect(imageNode(value)).toEqual(imageNode(assembler(events)))
+    expect(imageData(value)).toEqual(imageData(assembler(events)))
+    expect(imageNode(value)).toMatchObject({
+      anchorSeq: 13, location: { kind: 'turn', turn: { turn: 1, status: 'closed' } },
+    })
   })
 
   it('requires a recognized image Tool call and append-origin result metadata', () => {

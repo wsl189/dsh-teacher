@@ -8,6 +8,7 @@ import {
 /** The external model seam; source inspection and validated submission execute in the real child. */
 export class TimetableAgentAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
+  notTimetable = false
 
   constructor(
     private readonly entries: () => readonly object[],
@@ -62,8 +63,9 @@ export class TimetableAgentAdapter extends LlmAdapter {
       : index === undefined ? { mode: 'inspect' }
         : unread !== undefined ? { mode: 'read', ...unread }
           : inspectImage ? { index: 0 }
-            : hasBatch ? { action: 'finish', expectedTotal: this.entries().length }
-              : { action: 'submit', items: this.entries() })
+            : this.notTimetable ? { action: 'not-timetable' }
+              : hasBatch ? { action: 'finish', expectedTotal: this.entries().length }
+                : { action: 'submit', items: this.entries() })
     const id = ToolCallId(`timetable-${String(this.requests.length)}`)
     yield { type: 'block-start', index: 0, blockType: 'tool-call' }
     yield { type: 'tool-call-delta', index: 0, id, name, argumentsDelta: args }

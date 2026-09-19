@@ -17,6 +17,46 @@ function documentXml(bytes: Uint8Array) {
 }
 
 describe('editable equations in collected Word documents', () => {
+  it('keeps Roman subpart labels upright in their printed case while body variables remain italic', async () => {
+    const source = ['（i）已知变量 i，求 $i^2$。', '(ii) 讨论变量 v。', '（I）求点 I 的位置。',
+      '(II) 证明直线 AB 平行。', '（ⅲ）验证结论。', '(iv) Check the result.', '（1）变量 i 的值。'].join('\n')
+    const original = await createExampleWord(source)
+    const entries = unzipSync(original)
+    const document = documentXml(original).document
+    const firstLabel = Array.from(document.getElementsByTagNameNS(WORD_NS, 'r')).find(run => run.textContent === 'i')!
+    const properties = firstLabel.getElementsByTagNameNS(WORD_NS, 'rPr').item(0)!
+    const style = document.createElementNS(WORD_NS, 'w:rStyle')
+    style.setAttributeNS(WORD_NS, 'w:val', 'DshExampleVariable')
+    properties.appendChild(style)
+    firstLabel.getElementsByTagNameNS(WORD_NS, 'i').item(0)!.setAttributeNS(WORD_NS, 'w:val', 'true')
+    entries['word/document.xml'] = strToU8(new XMLSerializer().serializeToString(document))
+    const legacy = zipSync(entries)
+    const repaired = await normalizeExampleWord(legacy)
+    expect(repaired).toBeDefined()
+    const combined = await compileExampleWord([{ bytes: legacy }, { bytes: original, blankLinesBefore: true }])
+    for (const [bytes, copies] of [[original, 1], [repaired!, 1], [combined, 2]] as const) {
+      const doc = documentXml(bytes).document
+      const paragraphs = Array.from(doc.getElementsByTagNameNS(WORD_NS, 'p')).filter(p => p.textContent?.trim())
+      expect(paragraphs.map(p => p.textContent)).toEqual(Array.from({ length: copies }, () => source.replace('$i^2$', 'i2').split('\n')).flat())
+      for (const [index, paragraph] of paragraphs.entries()) {
+        let offset = 0
+        const prefixEnd = (paragraph.textContent ?? '').search(/[)）]/u) + 1
+        for (const run of Array.from(paragraph.getElementsByTagNameNS(WORD_NS, 'r'))) {
+          if (offset < prefixEnd) {
+            expect(run.getElementsByTagNameNS(WORD_NS, 'i').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('false')
+          } else if (/^[iIv]$/u.test(run.textContent ?? '')) {
+            expect(run.getElementsByTagNameNS(WORD_NS, 'i').item(0)?.getAttributeNS(WORD_NS, 'val')).toBe('true')
+          }
+          offset += run.textContent?.length ?? 0
+        }
+        expect(paragraph.getElementsByTagNameNS(WORD_NS, 'ind').item(0)?.getAttributeNS(WORD_NS, 'left'))
+          .toBe(index % 7 === 6 ? '240' : '480')
+      }
+      expect(doc.getElementsByTagNameNS(MATH_NS, 'sSup').length).toBe(copies)
+      expect(await normalizeExampleWord(bytes)).toBeUndefined()
+    }
+  })
+
   it('indents Roman-numbered subquestions in saved and compiled Word without changing their text or equations', async () => {
     const source = '已知曲线的方程。\n（1）求曲线的方程；\n（2）讨论下列情况。\n（i）若 $k=2$，证明直线过定点。\n(ii) 若 $k=3$，求交点。\n（Ⅲ）验证所得结论。\n（3）说明理由，条件（i）仍成立。'
     const original = await createExampleWord(source)
@@ -377,6 +417,26 @@ describe('editable equations in collected Word documents', () => {
     expect(text).toContain(String.raw`$\unknowncommand{x}$`)
     expect(document.getElementsByTagNameNS(MATH_NS, 'oMath').length).toBe(1)
     expect(text).toContain('后文')
+  })
+
+  it('converts escaped tab whitespace inside OCR formulas without changing TeX commands, row breaks, or code', async () => {
+    const source = [
+      String.raw`A. $2\sqrt{5}\t\t\t$ B. 10 C. 2 D. 5`,
+      String.raw`$\tan\theta+\text{t}$`,
+      String.raw`$\begin{aligned}x&=1\\t&=2\end{aligned}$`,
+      '代码 `\\t`；路径 images\\t.png',
+    ].join('\n')
+    const bytes = await createExampleWord(source)
+    const combined = await compileExampleWord([{ bytes }])
+    for (const saved of [bytes, combined]) {
+      const { text, document } = documentXml(saved)
+      expect(document.getElementsByTagNameNS(MATH_NS, 'oMath').length).toBe(3)
+      expect(document.getElementsByTagNameNS(MATH_NS, 'rad').length).toBe(1)
+      expect(Array.from(document.getElementsByTagNameNS(MATH_NS, 'oMath')).map(node => node.textContent))
+        .toEqual(['25', 'tan\u2061θ+t', 'x=1t=2'])
+      expect(text).not.toContain('\\sqrt')
+      expect(document.getElementsByTagNameNS(WORD_NS, 'body').item(0)?.textContent).toContain('代码 `\\t`；路径 images\\t.png')
+    }
   })
 
   it('normalizes saved text-only DOCX and leaves formatted native equations byte-stable', async () => {

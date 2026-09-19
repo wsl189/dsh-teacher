@@ -38,18 +38,19 @@ const emptyState = (): TeacherWorkbenchState => ({
   noticeTemplates: [], notices: [], seatingLayouts: [],
 })
 
-type AttentionSnapshot = Parameters<Parameters<SidebarWorkbenchProps['useSessionPendingInteraction']>[0]>[0]
+type AttentionSnapshot = Parameters<Parameters<SidebarWorkbenchProps['useSessionStatus']>[0]>[0]
 const noAttention: AttentionSnapshot = new Map()
 
 const globalProps: Pick<
   SidebarWorkbenchProps,
-  'useSessions' | 'useSessionPendingInteraction' | 'useWorkspaces' | 'expandSidebar' | 'usePanelInfo' | 'useResource'
+  'useSessions' | 'useSessionStatus' | 'useSessionRetainInfo' | 'useWorkspaces' | 'expandSidebar' | 'usePanelInfo' | 'useResource'
 > = {
   expandSidebar: vi.fn(),
   usePanelInfo: () => { throw new Error('unused panel hook') },
   useResource: () => { throw new Error('unused resource hook') },
   useSessions: (() => undefined) as SidebarWorkbenchProps['useSessions'],
-  useSessionPendingInteraction: selector => selector(noAttention),
+  useSessionStatus: selector => selector(noAttention),
+  useSessionRetainInfo: () => { throw new Error('unused retain hook') },
   useWorkspaces: (() => undefined) as SidebarWorkbenchProps['useWorkspaces'],
 }
 

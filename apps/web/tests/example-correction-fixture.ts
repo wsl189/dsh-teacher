@@ -9,6 +9,7 @@ import {
 export class ExampleCorrectionAdapter extends LlmAdapter {
   readonly requests: GenerateOptions[] = []
   fail = false
+  correction: { markdown: string; omittedIllustrations: readonly { index: number; reason: string }[] } | undefined
 
   override providerInfo(provider: string): LlmProviderInfo {
     return { id: provider, name: 'Example proofreading fixture' }
@@ -36,7 +37,11 @@ export class ExampleCorrectionAdapter extends LlmAdapter {
     const evidence = JSON.parse(input.text.slice(input.text.indexOf('\n') + 1)) as { mineruMarkdown: string } | { documentText: string; paragraphs: { index: number; text: string }[] }
     const result = 'documentText' in evidence
       ? { headings: evidence.paragraphs.flatMap(({ index, text }) => text.startsWith('【题 4】') ? [{ paragraph: index, prefix: text.slice(0, text.indexOf('已知')) }] : []) }
-      : { markdown: evidence.mineruMarkdown.replaceAll('点0', '点 O').replaceAll('$a\\cdot b:c$', '\\(a:b:c\\)') }
+      : this.correction ?? {
+        markdown: evidence.mineruMarkdown.replaceAll('点0', '点 O').replaceAll('$a\\cdot b:c$', '\\(a:b:c\\)')
+          .replaceAll('$\\mathbf{a}$', '$\\mathbf{a}\\t\\t\\t$'),
+        omittedIllustrations: [],
+      }
     const id = ToolCallId(`proofread-${String(this.requests.length)}`)
     const args = JSON.stringify(result)
     yield { type: 'block-start', index: 0, blockType: 'tool-call' }

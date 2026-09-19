@@ -12,6 +12,7 @@ import {
   claudeDistributionFromManifest,
   collectPythonDependencies,
   assertRuntimeLicenses,
+  collectDesktopPythonDependencies,
   isOwnerAuthorizedRuntime,
   isPermissive,
   type Manifest,
@@ -45,6 +46,8 @@ describe('THIRD_PARTY_NOTICES.md', () => {
     expect(generated).toContain('## Editable Word equations')
     expect(generated).toContain('mathml2omml-0.5.0-source.tar.gz')
     expect(generated).toContain('Users may modify it and reverse engineer the combined application')
+    expect(generated).toContain('## LibreOffice conversion kit')
+    expect(generated).toContain('Recipients must have access to those corresponding sources and notices.')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })
 })
@@ -60,6 +63,27 @@ function workspace(entries: Record<string, Manifest>): { manifests: Map<string, 
 }
 
 describe('tierExternalDeps', () => {
+  it('limits the LibreOffice exception to its reviewed package identity and MPL terms', () => {
+    for (const name of [
+      '@deepseek-ai/libreoffice-kit', '@deepseek-ai/libreoffice-kit-wasm',
+      '@deepseek-ai/libreoffice-kit-darwin-arm64', '@deepseek-ai/libreoffice-kit-darwin-x64',
+      '@deepseek-ai/libreoffice-kit-win32-arm64', '@deepseek-ai/libreoffice-kit-win32-x64',
+    ]) {
+      expect(() => { assertRuntimeLicenses([{ name, license: 'MPL-2.0' }]) }).not.toThrow()
+      expect(() => { assertRuntimeLicenses([{ name, license: 'GPL-3.0-only' }]) }).toThrow(name)
+    }
+    for (const dependency of [
+      { name: 'unrelated-library', license: 'MPL-2.0' },
+      { name: '@deepseek-ai/dsh-libreoffice-kit', license: 'MPL-2.0' },
+      { name: '@deepseek-ai/libreoffice-kit-unreviewed', license: 'MPL-2.0' },
+      { name: '@deepseek-ai/libreoffice-kit', license: 'GPL-3.0-only' },
+      { name: '@deepseek-ai/libreoffice-kit', license: 'UNKNOWN' },
+    ]) {
+      expect(() => { assertRuntimeLicenses([dependency]) }).toThrow(`${dependency.name} (${dependency.license})`)
+    }
+    expect(isPermissive('MPL-2.0')).toBe(false)
+  })
+
   it('keeps license rejection active when a browser library is declared for development', () => {
     const { manifests, names } = workspace({
       'packages/client/ui/package.json': { devDependencies: { 'browser-lib': '^1', 'test-tool': '^1' } },
@@ -295,6 +319,11 @@ describe('parsePyprojectRequirements', () => {
 })
 
 describe('collectPythonDependencies', () => {
+  it('labels shared Python metadata in the Python-project context', () => {
+    const dependencies = collectPythonDependencies(['[project]\ndependencies = ["numpy", "pandas", "six", "tzdata"]\n'])
+    expect(dependencies.map(({ role }) => role)).toEqual(Array(4).fill('Python project dependency'))
+  })
+
   it('excludes normalized local project names without exempting a third-party prefix', () => {
     const pyprojects = [
       '[project]\nname = "deepseek-harness-runtime-bin"\ndependencies = ["pydantic"]\n',
@@ -303,6 +332,47 @@ describe('collectPythonDependencies', () => {
     expect(() => collectPythonDependencies(pyprojects)).toThrow(
       'python dependency deepseek-unrelated is missing from PYTHON_METADATA',
     )
+  })
+})
+
+describe('collectDesktopPythonDependencies', () => {
+  it('discloses supplied Python distributions with their exact locked versions', () => {
+    const dependencies = collectDesktopPythonDependencies({ Pillow: '12.3.0', typing_extensions: '4.16.0' })
+    expect(dependencies).toHaveLength(2)
+    expect(dependencies).toContainEqual({
+      name: 'pillow', version: '12.3.0',
+      license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow',
+    })
+    expect(dependencies).toContainEqual({
+      name: 'typing-extensions', version: '4.16.0',
+      license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions',
+    })
+  })
+
+  it('normalizes names while preserving pinned version strings', () => {
+    expect(collectDesktopPythonDependencies({ 'typing_extensions': '4.16.0', 'Pillow': '12.3.0' }))
+      .toEqual([
+        { name: 'pillow', version: '12.3.0', license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
+        { name: 'typing-extensions', version: '4.16.0', license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions' },
+      ])
+  })
+
+  it('rejects duplicate normalized distribution names with the same locked version', () => {
+    expect(() => collectDesktopPythonDependencies({ typing_extensions: '4.16.0', 'typing.extensions': '4.16.0' }))
+      .toThrow('duplicate normalized names')
+  })
+
+  it('rejects missing distribution metadata and conflicting normalized versions', () => {
+    expect(() => collectDesktopPythonDependencies({ missing: '1.0' })).toThrow('missing from PYTHON_METADATA')
+    expect(() => collectDesktopPythonDependencies({ Pillow: '12.3.0', pillow: '12.4.0' })).toThrow('conflicting locked versions')
+  })
+
+  it('applies the runtime license check to bundled Python distributions', () => {
+    expect(() => { assertRuntimeLicenses(collectDesktopPythonDependencies({ Pillow: '12.3.0', typing_extensions: '4.16.0' })) }).not.toThrow()
+    const dependencies = collectDesktopPythonDependencies({ 'copyleft-wheel': '1.0' }, {
+      'copyleft-wheel': { license: 'GPL-3.0-only', repo: 'https://example.com/project' },
+    })
+    expect(() => { assertRuntimeLicenses(dependencies) }).toThrow('copyleft-wheel (GPL-3.0-only)')
   })
 })
 

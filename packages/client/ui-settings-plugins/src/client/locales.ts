@@ -1,10 +1,11 @@
-/** Locale bundles for the plugin configuration section and its plugin cards. */
+/** Locale bundles for the built-in plugins settings section and the plugin configuration pages. */
 
 /** Locale keys these surfaces render. */
 export type PluginsSettingsLocaleKey =
-  | 'nav' | 'title' | 'intro' | 'tabs' | 'configurableTab' | 'empty'
-  | 'overridden' | 'reset' | 'readOnly' | 'expand' | 'collapse'
-  | 'save' | 'saving' | 'discard' | 'unsaved' | 'saveFailed' | 'invalidNumber'
+  | 'configurableTab' | 'collapse' | 'expand' | 'unsaved' | 'discard'
+  | 'nav' | 'title' | 'intro' | 'tabs' | 'empty'
+  | 'overridden' | 'reset' | 'readOnly' | 'unavailable'
+  | 'save' | 'saving' | 'saveFailed' | 'invalidNumber'
   | 'bashTitle' | 'bashDescription' | 'bashTimeoutMs' | 'bashTimeoutMsHint'
   | 'bashMaxOutputBytes' | 'bashMaxOutputBytesHint'
   | 'agentLoopTitle' | 'agentLoopDescription' | 'agentLoopMaxParallel' | 'agentLoopMaxParallelHint'
@@ -26,6 +27,15 @@ export type PluginsSettingsLocaleKey =
   | 'teacherSegmentsRoot' | 'teacherSegmentsRootHint' | 'teacherStudentsRoot' | 'teacherStudentsRootHint'
   | 'teacherImageLimit' | 'teacherImageLimitHint' | 'teacherBatchLimit' | 'teacherBatchLimitHint'
   | 'subagentModelSelectionTitle' | 'subagentModelSelectionDescription'
+  | 'webSearchMaxUses' | 'webSearchMaxUsesHint'
+  | 'subagentTitle' | 'subagentDescription' | 'subagentLimitsTitle'
+  | 'subagentMaxDepth'
+  | 'subagentDepthHelpLabel' | 'subagentDepthHelp'
+  | 'subagentDepthZero' | 'subagentDepthOne' | 'subagentDepthOverride'
+  | 'subagentMaxActive'
+  | 'subagentCapacityHelpLabel' | 'subagentCapacityHelp'
+  | 'subagentDepthInvalid'
+  | 'subagentCapacityInvalid'
   | 'subagentModelSelectionToggle' | 'subagentModelSelectionChoose' | 'subagentModelSelectionAllowed'
   | 'subagentModelSelectionLoading' | 'subagentModelSelectionLoadFailed' | 'subagentModelSelectionRetry'
   | 'subagentModelSelectionPartial' | 'subagentModelSelectionUnavailable'
@@ -38,17 +48,13 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   title: 'Plugins',
   intro: 'Configure and inspect the plugins installed in this deployment.',
   tabs: 'Plugin views',
-  configurableTab: 'Plugin configuration',
   empty: 'This deployment exposes no plugin settings.',
   overridden: 'Overridden',
   reset: 'Reset to default',
   readOnly: 'This deployment stores settings read-only.',
-  expand: 'Show settings',
-  collapse: 'Hide settings',
+  unavailable: 'This plugin is not loaded, so it cannot be configured right now.',
   save: 'Save',
   saving: 'Saving…',
-  discard: 'Discard',
-  unsaved: 'Unsaved',
   saveFailed: 'The deployment did not accept these values; they were left for you to correct.',
   invalidNumber: 'Enter a number, or leave blank to use the default.',
   bashTitle: 'Shell',
@@ -120,10 +126,26 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   teacherImageLimitHint: 'Largest decoded question raster accepted from the browser.',
   teacherBatchLimit: 'Maximum paper batch size (bytes)',
   teacherBatchLimitHint: 'Maximum aggregate decoded bytes accepted in one save.',
-  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionTitle: 'Model selection',
   subagentModelSelectionDescription: 'Control which models agents may choose for subagents.',
   subagentModelSelectionToggle: 'Allow agents to choose models for subagents',
   subagentModelSelectionChoose: 'When enabled, agents can choose a provider, model, and reasoning effort for each subagent from the authorized models below. Applies only to new sessions.',
+  webSearchMaxUses: 'Max searches per request',
+  webSearchMaxUsesHint: 'How many times one request may search before it must answer.',
+  subagentTitle: 'Subagent',
+  subagentDescription: 'Set Subagent recursion depth, count, and models.',
+  subagentLimitsTitle: 'Limits',
+  subagentMaxDepth: 'Maximum recursion depth',
+  subagentDepthHelpLabel: 'About maximum recursion depth',
+  subagentDepthHelp: 'Limits how many levels of Subagents an Agent can create.',
+  subagentDepthZero: 'Disable Subagents',
+  subagentDepthOne: 'Only the main Agent can create Subagents',
+  subagentDepthOverride: 'If a tool defines its own maximum recursion depth, that setting takes precedence.',
+  subagentMaxActive: 'Subagent parallelism limit',
+  subagentCapacityHelpLabel: 'About the Subagent parallelism limit',
+  subagentCapacityHelp: 'Total live Subagents under the same main Agent, across all recursion levels. The main Agent is excluded. New start requests are rejected when the limit is reached.',
+  subagentDepthInvalid: 'Enter a whole number of 0 or more.',
+  subagentCapacityInvalid: 'Enter a whole number of 1 or more.',
   subagentModelSelectionAllowed: 'Models agents may choose',
   subagentModelSelectionLoading: 'Loading models…',
   subagentModelSelectionLoadFailed: 'Models could not be loaded.',
@@ -135,6 +157,11 @@ export const en: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: 'Select at least one model before saving.',
   subagentModelSelectionConflict: 'Settings changed elsewhere. Discard your draft and try again.',
   subagentModelSelectionOff: 'Subagents use configured defaults or inherit the parent agent\'s model. Saved model choices are retained.',
+  configurableTab: 'Plugin configuration',
+  collapse: 'Hide settings',
+  expand: 'Show settings',
+  unsaved: 'Unsaved',
+  discard: 'Discard',
 }
 
 /** Simplified Chinese copy. */
@@ -143,17 +170,13 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   title: '插件',
   intro: '配置和查看本部署已安装的插件。',
   tabs: '插件视图',
-  configurableTab: '插件配置',
   empty: '本部署没有开放任何插件设置。',
   overridden: '已覆盖',
   reset: '恢复默认',
   readOnly: '本部署的设置为只读。',
-  expand: '展开设置',
-  collapse: '收起设置',
+  unavailable: '该插件当前未加载，暂时无法配置。',
   save: '保存',
   saving: '保存中…',
-  discard: '放弃修改',
-  unsaved: '未保存',
   saveFailed: '本部署没有接受这些值，已保留供你修改。',
   invalidNumber: '请填数字；留空表示使用默认值。',
   bashTitle: '终端',
@@ -225,8 +248,24 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   teacherImageLimitHint: '浏览器可保存的单张解码后试题图片最大大小。',
   teacherBatchLimit: '单份试卷上限（字节）',
   teacherBatchLimitHint: '一次保存中所有解码后切题图片的总大小上限。',
-  subagentModelSelectionTitle: 'Subagent',
+  subagentModelSelectionTitle: '模型选择',
   subagentModelSelectionDescription: '控制 Agent 为 Subagent 选择模型的权限。',
+  webSearchMaxUses: '单次请求最多搜索次数',
+  webSearchMaxUsesHint: '一次请求在必须作答前最多可以搜索多少次。',
+  subagentTitle: 'Subagent',
+  subagentDescription: '设置 Subagent 的递归层级、数量和模型。',
+  subagentLimitsTitle: '运行限制',
+  subagentMaxDepth: '最大递归深度',
+  subagentDepthHelpLabel: '最大递归深度说明',
+  subagentDepthHelp: '限制 Agent 创建 Subagent 的递归层级。',
+  subagentDepthZero: '禁用 Subagent',
+  subagentDepthOne: '仅允许主 Agent 创建 Subagent',
+  subagentDepthOverride: '如果某个工具单独设置了最大递归深度，以该工具的设置为准。',
+  subagentMaxActive: 'Subagent 并行数量上限',
+  subagentCapacityHelpLabel: 'Subagent 并行数量上限说明',
+  subagentCapacityHelp: '同一主 Agent 下，所有递归层级同时存活的 Subagent 总数，主 Agent 不计入。达到上限时，新的启动请求会被拒绝。',
+  subagentDepthInvalid: '请输入不小于 0 的整数。',
+  subagentCapacityInvalid: '请输入不小于 1 的整数。',
   subagentModelSelectionToggle: '允许 Agent 为 Subagent 选择模型',
   subagentModelSelectionChoose: '开启后，Agent 可以从下方授权模型中，为每个 Subagent 选择提供方、模型和推理强度。仅影响新会话。',
   subagentModelSelectionAllowed: 'Agent 可选择的模型',
@@ -240,4 +279,9 @@ export const zh: Record<PluginsSettingsLocaleKey, string> = {
   subagentModelSelectionRequired: '保存前请至少选择一个模型。',
   subagentModelSelectionConflict: '设置已在其他位置更新。请放弃修改后重试。',
   subagentModelSelectionOff: '关闭后，Subagent 使用配置的默认模型或继承父 Agent 的模型；已选模型会保留。',
+  configurableTab: '插件配置',
+  collapse: '收起设置',
+  expand: '展开设置',
+  unsaved: '未保存',
+  discard: '放弃修改',
 }

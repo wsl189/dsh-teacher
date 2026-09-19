@@ -20,7 +20,8 @@ function setup(state: DesktopUpdateState, wide = true) {
   const props: UpdateButtonProps = {
     wide,
     useSessions: neverHook,
-    useSessionPendingInteraction: neverHook,
+    useSessionStatus: neverHook,
+    useSessionRetainInfo: () => { throw new Error('unused retain hook') },
     usePanelInfo: () => { throw new Error('unused panel hook') },
     useResource: () => { throw new Error('unused resource hook') },
     useWorkspaces: neverHook,

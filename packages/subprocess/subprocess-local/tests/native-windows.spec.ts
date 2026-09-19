@@ -3,9 +3,7 @@ import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSy
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { execa } from 'execa'
 import { afterAll, describe, expect, it } from 'vitest'
-import { resolveExampleLaunch } from '@deepseek-ai/dsh-loader-smoke'
 import type { SubprocessSpawnSpec } from '@deepseek-ai/dsh-subprocess'
 import { targetEnvironment } from '../src/runner-launch.ts'
 import { bindManagedProcess } from '../src/spawn.ts'
@@ -86,35 +84,27 @@ function directSpawnFailure(argv: readonly string[], cwd = scratch): Promise<Spa
 
 const windowsNative = process.platform === 'win32' && probeWindowsJob()
 
-describe.skipIf(process.platform !== 'win32')('Windows console visibility', () => {
-  it.each(['pwsh.exe', 'powershell.exe'])('keeps %s hidden from a host without a console while collecting I/O and exit status', async (shell) => {
-    const repoRoot = fileURLToPath(new URL('../../../../', import.meta.url))
-    const hostScript = fileURLToPath(new URL('./fixtures/hidden-console-host.ts', import.meta.url))
-    const launch = resolveExampleLaunch({
-      srcBin: hostScript,
-      libBin: hostScript,
-      tsconfigPath: join(repoRoot, 'tsconfig.json'),
-      configArgs: [shell],
-    })
-    const result = await execa(launch.command, launch.args, {
-      cwd: repoRoot,
-      env: launch.env,
-      stdin: 'ignore',
-      windowsHide: true,
-      reject: false,
-      timeout: 60_000,
-    })
-    expect(result.timedOut).toBe(false)
-    expect(result.signal).toBeUndefined()
-    expect(result.exitCode, result.stderr).toBe(0)
-    const report = JSON.parse(result.stdout) as { outcome: unknown; stdout: string; stderr: string }
-    expect(report.outcome).toEqual({ exitCode: 37, signal: null })
-    expect(JSON.parse(report.stdout)).toEqual({ visible: false, input: 'captured-stdin' })
-    expect(report.stderr).toBe('captured-stderr')
-  }, 75_000)
-})
-
 describe.skipIf(!windowsNative)('Windows Job native containment', () => {
+  it('keeps ordinary descendants free of visible console windows', async () => {
+    const fixture = fileURLToPath(new URL('../../win32-process/tests/fixtures/console-state.ts', import.meta.url))
+    const script = `
+      const { spawnSync } = require('node:child_process')
+      const child = spawnSync(process.execPath, [process.argv[1]], { stdio: 'inherit' })
+      if (child.error) throw child.error
+      process.exitCode = child.status ?? 1
+    `
+    const request = spec([process.execPath, '-e', script, fixture])
+    const handle = bindManagedProcess(request, launchWindowsJob(request, targetEnvironment(request)))
+    try {
+      expect(await handle.done).toEqual({ exitCode: 0, signal: null })
+      expect(handle.collected.stderr?.readFrom(0).text).toBe('')
+      expect(JSON.parse(handle.collected.stdout?.readFrom(0).text ?? '')).toMatchObject({ visible: false })
+    } finally {
+      handle.terminate()
+      await handle.waitForExit()
+    }
+  })
+
   it('keeps raw stdin writable while the runner starts the target', async () => {
     const output = join(scratch, `stdin-${Date.now()}.txt`)
     const script = `

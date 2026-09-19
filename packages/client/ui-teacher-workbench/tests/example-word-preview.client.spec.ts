@@ -24,7 +24,22 @@ function preview() {
 }
 
 describe('collected Word formula previews', () => {
-  it.each([String.raw`\text{∁}_U A`, String.raw`\textbf{∁}_U A`, String.raw`\complement_U A`])('uses matching complement metrics in browser and Node renderers: %s', (latex) => {
+  it.each([
+    [String.raw`A\text{ ⫋ }B\text{ ⫌ }C`, String.raw`A\subsetneqq B\supsetneqq C`],
+    [String.raw`A\textbf{ ⫋⫌ }B`, String.raw`A\mathbf{\subsetneqq\supsetneqq}B`],
+  ])('renders saved text-mode relations with standard TeX spacing and weight: %s', (legacy, native) => {
+    const applied = renderExampleEquation(legacy)
+    const restored = preview()
+    renderExampleWordEquations(savedMath(new XMLSerializer().serializeToString(applied.querySelector('math')!)), restored)
+    const expected = renderExampleEquation(native).querySelector('.katex-html')?.innerHTML
+    for (const container of [applied, restored]) expect(container.querySelector('.katex-html')?.innerHTML).toBe(expected)
+  })
+
+  it.each([
+    String.raw`\text{∁}_U A`, String.raw`\textbf{∁}_U A`, String.raw`\complement_U A`,
+    String.raw`AB\text{ ⫽⃥ }CD`, String.raw`AB\textbf{ ⫽⃥ }CD`,
+    String.raw`A\subsetneqq B\supsetneqq C`, String.raw`\mathbf{A\subsetneqq B\supsetneqq C}`,
+  ])('uses matching symbol metrics in browser and Node renderers: %s', (latex) => {
     const commonJsKatex = createRequire(import.meta.url)('katex') as typeof katex
     const options = { output: 'html', strict: 'ignore' } as const
     expect(commonJsKatex.renderToString(latex, options)).toBe(katex.renderToString(latex, options))

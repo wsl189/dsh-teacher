@@ -1,0 +1,23 @@
+DSH Set Relations — compact proper-set symbols derived from KaTeX 0.16.47
+
+Copyright (c) 2009-2010 Design Science, Inc.
+Copyright (c) 2014-2018 Khan Academy.
+Licensed under the SIL Open Font License 1.1; see OFL.txt.
+Upstream: https://github.com/KaTeX/KaTeX/tree/v0.16.47
+Sources: dist/fonts/KaTeX_AMS-Regular.woff2 and KaTeX_Main-Regular.woff2
+
+The renamed font contains U+2ACB and U+2ACC. The containment curves are
+20% flatter with their TeX widths and 40-unit rules preserved.
+The two lower bars retain their original weight with a 60-unit gap;
+the shorter diagonal remains 40 units thick. Both signs use an upward
+slant for negation. The complete signs are raised 233 units to align their
+vertical centers with uppercase set letters. No entire-glyph scaling is
+applied. Font revision and name records identify version 1.2.
+
+Rebuild with fontTools and Brotli from the UI package directory:
+
+python third-party/katex/build-relations.py node_modules/katex/dist/fonts/KaTeX_AMS-Regular.woff2 node_modules/katex/dist/fonts/KaTeX_Main-Regular.woff2 src/client/fonts/DSHSetRelations-Regular.woff2
+
+The KaTeX and MathLive patches carry matching layout metrics. Word
+exports retain native editable U+2ACB/U+2ACC mathematical characters;
+the Office application's mathematical font determines their outlines.

@@ -1,5 +1,5 @@
 {
-  "font": "KaTeX_Main, \"Times New Roman\", serif",
+  "font": "\"DSH Math Symbols\", KaTeX_Main, \"Times New Roman\", serif",
   "radicalFills": [
     "rgb(0, 0, 0)"
   ],

@@ -10,15 +10,19 @@ The teacher distribution needs upstream fixes and maintained plugin releases whi
 
 ## Decision
 
-The integration uses the official `dsh-v0.1.6-alpha.1` release for the harness, Remote APIs, session upgrades, native system support, and official sidebar. Teacher workbench packages and Models keep their existing user operations, fields, defaults, persistence locations, and supplier assignments; changes in those packages adapt only the upstream APIs. The teacher Electron launcher and updater retain their existing application identity and data locations.
+The integration uses the official `dsh-v0.1.6-alpha.2` release for the harness, Remote APIs, session upgrades, native system support, and official sidebar. Teacher workbench packages and Models keep their existing user operations, fields, defaults, persistence locations, and supplier assignments; changes in those packages adapt only the upstream APIs. The teacher Electron launcher and updater retain their existing application identity and data locations.
 
 The Web profile mounts official Files, Documents, and Terminal sidebar plugins. The retained Office preview plugin registers with the official document-preview service. No `dsh-better-sidebar` package, draft-tab adapter, Windows-MCP package, or private Python runtime belongs to the distribution.
 
 Windows mounts the official native Cua Driver computer-use provider. The distribution checks allow this exact experimental dependency only from the Web bundle; other experimental runtime dependencies remain rejected. Its lifecycle, tool catalog, cancellation, screenshot admission, and OS permission requirements remain upstream-owned.
 
-The [third-party manifest](../../../../third-party/plugin-release-manifest.json) pins the reviewed plugin releases. Compatibility patches preserve unified media-model assignments, saved IM workspaces, QQ speech delegation, and native Office previews. Executable updates do not rewrite user settings or workbench data. Univer receives only runtime licensing configuration.
+The [third-party manifest](../../../../third-party/plugin-release-manifest.json) pins the reviewed plugin releases. Compatibility patches preserve unified media-model assignments, saved IM workspaces, QQ speech delegation, and native Office previews. Executable updates do not rewrite user settings or workbench data. Univer retains its runtime licensing, worker cache, and native Word equation changes.
 
 The [bundled extension decision](../feature/2026-08-25-bundled-extensions-and-qq-speech.md), [bot workspace decision](../feature/2026-09-01-im-bot-desktop-workspaces.md), and [supplier model decision](2026-09-01-supplier-grouped-model-settings.md) retain their independent ownership rules. The earlier better-sidebar and Windows-MCP decisions are archived because their implementations are absent.
+
+The alpha.2 integration adds the official plugin manager, sidebar browser and subagent conversations, turn file changes, Office-to-PDF previews, and restart-safe inbox behavior. General, Models, and workbench settings keep their saved namespaces. MinerU and document extraction remain in Settings → Plugins → Plugin configuration; the official shell, agent-loop, subagent, and AnySearch forms are on the sidebar Plugins page.
+
+The skills/MCP panel's pinned compatibility patch uses Typert codec factories on both Host and Client. Shipped-composition requests exercise its skill and MCP lists over the real Gateway so an installed but failed plugin cannot pass as available. Main-panel session navigation continues to publish the distribution's navigation event so selecting a conversation closes the workbench overlay.
 
 ## Alternatives considered
 

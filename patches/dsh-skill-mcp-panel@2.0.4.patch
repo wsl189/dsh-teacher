@@ -150,3 +150,244 @@ diff --git a/package.json b/package.json
 +    "@deepseek-ai/cordis": "^4.0.1"
 +  }
 +}
+diff --git a/lib/index.js b/lib/index.js
+--- a/lib/index.js
++++ b/lib/index.js
+@@ -126,9 +126,9 @@
+             method: "list",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } }
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillListResult", schema: listResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillListResult", create: () => listResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/workspaces",
+@@ -137,7 +137,7 @@
+             method: "workspaces",
+             invocation: { kind: "direct" },
+             parameters: [],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#WorkspacesResult", schema: workspacesResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#WorkspacesResult", create: () => workspacesResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/groups",
+@@ -146,7 +146,7 @@
+             method: "groups",
+             invocation: { kind: "direct" },
+             parameters: [],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", schema: groupsResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", create: () => groupsResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/checkUpdate",
+@@ -155,7 +155,7 @@
+             method: "checkUpdate",
+             invocation: { kind: "direct" },
+             parameters: [],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#CheckUpdateResult", schema: checkUpdateResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#CheckUpdateResult", create: () => checkUpdateResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/saveGroup",
+@@ -164,9 +164,9 @@
+             method: "saveGroup",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SaveGroupPayload", schema: saveGroupPayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SaveGroupPayload", create: () => saveGroupPayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", schema: groupsResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", create: () => groupsResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/deleteGroup",
+@@ -175,9 +175,9 @@
+             method: "deleteGroup",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#DeleteGroupPayload", schema: deleteGroupPayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#DeleteGroupPayload", create: () => deleteGroupPayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", schema: groupsResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#GroupsResult", create: () => groupsResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/content",
+@@ -186,11 +186,11 @@
+             method: "content",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", schema: z.string() } },
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", schema: z.union([z.string(), z.null()]) } }
++                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", create: () => z.string() } },
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", create: () => z.union([z.string(), z.null()]) } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillContent", schema: skillContentSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillContent", create: () => skillContentSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/setEnabled",
+@@ -199,12 +199,12 @@
+             method: "setEnabled",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", schema: z.string() } },
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "enabled", wire: "enabled", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#EnabledFlag", schema: z.boolean() } },
+-                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", schema: z.union([z.string(), z.null()]) } }
++                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", create: () => z.string() } },
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "enabled", wire: "enabled", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#EnabledFlag", create: () => z.boolean() } },
++                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", create: () => z.union([z.string(), z.null()]) } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SetEnabledResult", schema: setEnabledResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SetEnabledResult", create: () => setEnabledResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/migrate",
+@@ -213,11 +213,11 @@
+             method: "migrate",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", schema: z.string() } },
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#MigratePayload", schema: migratePayloadSchema } }
++                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", create: () => z.string() } },
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#MigratePayload", create: () => migratePayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#MigrateResult", schema: migrateResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#MigrateResult", create: () => migrateResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/batchMigrate",
+@@ -226,10 +226,10 @@
+             method: "batchMigrate",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#BatchMigratePayload", schema: batchMigratePayloadSchema } }
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#BatchMigratePayload", create: () => batchMigratePayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#BatchMigrateResult", schema: batchMigrateResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#BatchMigrateResult", create: () => batchMigrateResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/deleteSkill",
+@@ -238,11 +238,11 @@
+             method: "deleteSkill",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", schema: z.string() } },
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", schema: z.union([z.string(), z.null()]) } }
++                { name: "name", wire: "name", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillName", create: () => z.string() } },
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "scope", wire: "scope", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#SkillScope", create: () => z.union([z.string(), z.null()]) } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#DeleteSkillResult", schema: deleteSkillResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#DeleteSkillResult", create: () => deleteSkillResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#skillsViewer/addSkill",
+@@ -251,10 +251,10 @@
+             method: "addSkill",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", schema: sessionIdSchema } },
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#AddPayload", schema: addPayloadSchema } }
++                { name: "sessionId", wire: "sessionId", source: "json", acceptsUndefined: true, codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#sessionId", create: () => sessionIdSchema } },
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#AddPayload", create: () => addPayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#AddResult", schema: addResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#AddResult", create: () => addResultSchema }
+         }
+     ],
+     model: { services: [], events: [], objects: [] }
+diff --git a/lib/mcp/wire.js b/lib/mcp/wire.js
+--- a/lib/mcp/wire.js
++++ b/lib/mcp/wire.js
+@@ -81,7 +81,7 @@
+             method: "list",
+             invocation: { kind: "direct" },
+             parameters: [],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpListResult", schema: mcpListResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpListResult", create: () => mcpListResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#mcpManager/save",
+@@ -90,9 +90,9 @@
+             method: "save",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSavePayload", schema: mcpSavePayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSavePayload", create: () => mcpSavePayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSaveResult", schema: mcpSaveResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSaveResult", create: () => mcpSaveResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#mcpManager/removeServer",
+@@ -101,9 +101,9 @@
+             method: "removeServer",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpRemovePayload", schema: mcpRemovePayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpRemovePayload", create: () => mcpRemovePayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpRemoveResult", schema: mcpRemoveResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpRemoveResult", create: () => mcpRemoveResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#mcpManager/setEnabled",
+@@ -112,9 +112,9 @@
+             method: "setEnabled",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSetEnabledPayload", schema: mcpSetEnabledPayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSetEnabledPayload", create: () => mcpSetEnabledPayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSaveResult", schema: mcpSaveResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpSaveResult", create: () => mcpSaveResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#mcpManager/test",
+@@ -123,9 +123,9 @@
+             method: "test",
+             invocation: { kind: "direct" },
+             parameters: [
+-                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpTestPayload", schema: mcpTestPayloadSchema } }
++                { name: "payload", wire: "payload", source: "json", codec: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpTestPayload", create: () => mcpTestPayloadSchema } }
+             ],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpTestResult", schema: mcpTestResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpTestResult", create: () => mcpTestResultSchema }
+         },
+         {
+             id: "dsh-skill-mcp-panel#mcpManager/reload",
+@@ -134,7 +134,7 @@
+             method: "reload",
+             invocation: { kind: "direct" },
+             parameters: [],
+-            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpListResult", schema: mcpListResultSchema }
++            result: { mode: "strict", typeSymbol: "dsh-skill-mcp-panel#McpListResult", create: () => mcpListResultSchema }
+         }
+     ],
+     model: { services: [], events: [], objects: [] }
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -360,7 +360,7 @@
+         // 客户端生成 Remote 只要求 codec.mode === "strict" 且调用 schema.parse()；
+         // schema 用 parse 直通即可（严格校验由服务端 manifest 承担，无需 zod 依赖）。
+         const identity = (value) => value;
+-        const codec = (symbol) => ({ mode: "strict", typeSymbol: symbol, schema: { parse: identity } });
++        const codec = (symbol) => ({ mode: "strict", typeSymbol: symbol, create: () => ({ parse: identity }) });
+         const CONTRIBUTION = {
+             package: "dsh-skill-mcp-panel",
+             descriptors: [

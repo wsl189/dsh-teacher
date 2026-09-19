@@ -18,7 +18,7 @@ const CONFIG = {
 }
 const PIXEL = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII='
 
-function fixture(structured: unknown = { markdown: 'A. 点 O；C. $a:b:c$\n![](images/figure.jpg)' }) {
+function fixture(structured: unknown = { omittedIllustrations: [], markdown: 'A. 点 O；C. $a:b:c$\n![](images/figure.jpg)' }) {
   const ctx = new Context()
   const parent = { id: SessionId('parent') }
   const dispose = vi.fn(async () => {})
@@ -68,7 +68,7 @@ describe('example visual proofreading', () => {
     expect(f.dispose).toHaveBeenCalledOnce()
   })
 
-  it.each([{ headings: [{ paragraph: 0, prefix: '不是原文' }] }, { markdown: '改写题目' }, { headings: [], body: '改写题目' }])(
+  it.each([{ headings: [{ paragraph: 0, prefix: '不是原文' }] }, { omittedIllustrations: [], markdown: '改写题目' }, { headings: [], body: '改写题目' }])(
     'rejects heading output that rewrites text or does not follow the structured result: %j', async (structured) => {
       const f = fixture(structured)
       expect(await identifyExampleHeadingWithAgent(f.ctx, { ...f.request, text: '（1）已知x>0，求解。', paragraphs: [{ index: 0, text: '（1）已知x>0，求解。' }], equations: [] }, CONFIG, new AbortController().signal))
@@ -122,14 +122,62 @@ describe('example visual proofreading', () => {
   })
 
   it('keeps corrected TeX editable by canonicalizing delimiters without rewriting source content or code', async () => {
-    const f = fixture({ markdown: String.raw`求\(\sin D\)的值；\[a:b:c\]` + '代码 `\\(x\\)`，' + String.raw`$\text{\(literal\)}$` })
+    const f = fixture({ omittedIllustrations: [], markdown: String.raw`求\(\sin D\)的值；\[a:b:c\]` + '代码 `\\(x\\)`，' + String.raw`$\text{\(literal\)}$` })
     const request = { ...f.request, markdown: '求 sinD 的值；a:b:c' }
     const result = await correctExampleWithAgent(f.ctx, request, CONFIG, new AbortController().signal)
     expect(result).toEqual({ ok: true, value: '求$\\sin D$的值；\n$$\na:b:c\n$$\n代码 `\\(x\\)`，$\\text{\\(literal\\)}$' })
   })
 
+  it.each(['image/png', 'application/pdf'])('omits an identified promotional QR illustration but retains ordered question figures from %s', async (mediaType) => {
+    const markdown = '已知图示。\n![](images/diagram.png)\n（I）求 $i^2$。\n（II）证明结论。\n![](images/diagram.png)'
+    const f = fixture({ markdown, omittedIllustrations: [{ index: 1, reason: '右侧二维码仅链接课程广告，与题目无关。' }] })
+    const pdf = await PDFDocument.create()
+    pdf.addPage([600, 800])
+    const source = mediaType === 'application/pdf'
+      ? { name: 'source.pdf', mediaType, contentBase64: Buffer.from(await pdf.save()).toString('base64') }
+      : f.request.source
+    const result = await correctExampleWithAgent(f.ctx, {
+      ...f.request, source,
+      markdown: '已知图示。\n![](images/diagram.png)\n![](images/qr.png)\n扫码观看课程\n（i）求 $i^2$。\n（II）证明结论。\n![](images/diagram.png)',
+    }, CONFIG, new AbortController().signal)
+    expect(result).toEqual({ ok: true, value: markdown })
+    const request = f.start.mock.calls[0]![1]
+    const input = request.prompt.find(block => block.type === 'text')!
+    if (input.type !== 'text') throw new Error('missing proofreading evidence')
+    expect(JSON.parse(input.text.slice(input.text.indexOf('\n') + 1))).toMatchObject({ illustrationReferences: [
+      { index: 0, markdown: '![](images/diagram.png)' },
+      { index: 1, markdown: '![](images/qr.png)' },
+      { index: 2, markdown: '![](images/diagram.png)' },
+    ] })
+  })
+
+  it('keeps a QR code that belongs to the question and an uncertain illustration', async () => {
+    const markdown = '下图二维码有多少个定位标记？\n![](images/qr.png)\n![](images/unknown.png)'
+    const f = fixture({ markdown, omittedIllustrations: [] })
+    expect(await correctExampleWithAgent(f.ctx, { ...f.request, markdown }, CONFIG, new AbortController().signal))
+      .toEqual({ ok: true, value: markdown })
+  })
+
+  it.each([
+    { markdown: '题目', omittedIllustrations: [] },
+    { markdown: '题目', omittedIllustrations: [{ index: 0, reason: '广告' }, { index: 0, reason: '重复' }] },
+    { markdown: '题目', omittedIllustrations: [{ index: 2, reason: '广告' }] },
+    { markdown: '题目', omittedIllustrations: [{ index: -1, reason: '广告' }] },
+    { markdown: '题目', omittedIllustrations: [{ index: 0.5, reason: '广告' }] },
+    { markdown: '题目', omittedIllustrations: [{ index: 0, reason: ' ' }] },
+    { markdown: '![](images/qr.png)\n![](images/diagram.png)', omittedIllustrations: [{ index: 0, reason: '广告' }] },
+    { markdown: '![](images/qr.png)\n![](images/diagram.png)', omittedIllustrations: [] },
+    { markdown: '![](images/invented.png)', omittedIllustrations: [{ index: 1, reason: '广告' }] },
+    { markdown: '![](images/diagram.png)' },
+  ])('rejects undeclared omissions, invalid indexes, and changed retained figures: %j', async (output) => {
+    const f = fixture(output)
+    expect(await correctExampleWithAgent(f.ctx, {
+      ...f.request, markdown: '![](images/diagram.png)\n![](images/qr.png)',
+    }, CONFIG, new AbortController().signal)).toMatchObject({ ok: false, error: { code: 'correction-invalid' } })
+  })
+
   it('rejects corrected output whose normalized display delimiters exceed the complete text limit', async () => {
-    const f = fixture({ markdown: String.raw`\[x\]` })
+    const f = fixture({ omittedIllustrations: [], markdown: String.raw`\[x\]` })
     const request = { ...f.request, markdown: 'x' }
     const limit = { ...CONFIG, maxExampleCorrectionCharacters: 6 }
     const result = await correctExampleWithAgent(f.ctx, request, limit, new AbortController().signal)
@@ -137,12 +185,12 @@ describe('example visual proofreading', () => {
   })
 
   it.each([
-    { markdown: 'A. 点 O' },
-    { markdown: '![](https://example.invalid/figure.jpg)' },
-    { markdown: '![](images/figure.jpg)\n![](images/figure.jpg)' },
-    { markdown: '```markdown\n![](images/figure.jpg)\n```' },
-    { markdown: '' },
-    { markdown: 'x'.repeat(10_001) },
+    { omittedIllustrations: [], markdown: 'A. 点 O' },
+    { omittedIllustrations: [], markdown: '![](https://example.invalid/figure.jpg)' },
+    { omittedIllustrations: [], markdown: '![](images/figure.jpg)\n![](images/figure.jpg)' },
+    { omittedIllustrations: [], markdown: '```markdown\n![](images/figure.jpg)\n```' },
+    { omittedIllustrations: [], markdown: '' },
+    { omittedIllustrations: [], markdown: 'x'.repeat(10_001) },
     { text: 'A. 点 O' },
   ])('rejects incomplete output or changed illustration references: %j', async (output) => {
     const f = fixture(output)

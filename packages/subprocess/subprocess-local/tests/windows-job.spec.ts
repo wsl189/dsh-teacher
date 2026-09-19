@@ -176,7 +176,7 @@ describe('Windows parent runner contract', () => {
     control.destroy()
   })
 
-  it('hides the runner window, carries target stdio on fd 4 through fd 6, and sends cwd/env', () => {
+  it('isolates runner stdio, carries target stdio on fd 4 through fd 6, and sends cwd/env', () => {
     const { child, result, spawn } = launch()
     expect(spawn).toHaveBeenCalledWith('C:\\node.exe', [
       'C:\\runner.js', '--', 'tool.exe', 'literal arg',

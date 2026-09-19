@@ -44,7 +44,7 @@ export interface ExampleWordBlock {
 
 /**
  * Build a downloadable Word file from complete OCR text.
- * @param markdown - OCR Markdown; dollar-delimited math becomes native Office equations.
+ * @param markdown - OCR Markdown; dollar-delimited math becomes native Office equations, with escaped tab tokens treated as whitespace.
  * @param images - complete OCR illustration assets addressed by Markdown image targets.
  * @returns a DOCX whose equations remain editable in Word; unsupported TeX remains visible as text.
  */
@@ -252,7 +252,7 @@ async function wordContent(markdown: string, images: readonly OcrExtractedImage[
 
 function nativeEquation(equation: Equation): { word: ImportedXmlComponent; mathml: string } | undefined {
   try {
-    const { office, mathml } = exampleLatexToOffice(equation.value, equation.display)
+    const { office, mathml } = exampleLatexToOffice(equation.value.replace(/(?<!\\)\\t(?![A-Za-z])/gu, ' '), equation.display)
     return { word: importWordElement(office), mathml }
   } catch (error) {
     // Unsupported or malformed OCR TeX stays visible for correction in the exported document.

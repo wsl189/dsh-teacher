@@ -718,6 +718,7 @@ export interface TeacherTimetableNormalizedEntry {
 /** Stable failure codes for timetable normalization. */
 export type TeacherTimetableNormalizeErrorCode =
   | 'invalid-request'
+  | 'not-timetable'
   | 'tool-model-unavailable'
   | 'vision-unavailable'
   | 'source-too-large'

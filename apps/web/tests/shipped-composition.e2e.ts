@@ -140,6 +140,28 @@ it('assembles the shipped Web transport, catalog, guidance, and defaults', async
     expect.arrayContaining(EXPECTED_BUNDLED_CLIENT_MODULES),
   )
   expect(ctx.settings.describe().some(row => row.ns === 'windows-mcp')).toBe(false)
+  for (const endpoint of ['skillsViewer/list', 'skillsViewer/workspaces', 'mcpManager/list']) {
+    const response = await scaffold.hostFetch(`/api/${endpoint}`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({
+        type: 'client-request', rpcId: endpoint, method: endpoint, payload: { args: {} },
+      }),
+    })
+    expect(response.status, endpoint).toBe(200)
+    const body = await response.json() as { result: { ok: boolean; value?: unknown } }
+    expect(body.result, endpoint).toMatchObject({ ok: true })
+    if (endpoint === 'skillsViewer/list') {
+      expect(body.result.value).toMatchObject({
+        skills: expect.arrayContaining([expect.objectContaining({ name: 'ppt-master' })]) as unknown,
+      })
+    } else if (endpoint === 'skillsViewer/workspaces') {
+      expect(body.result.value).toMatchObject({ workspaces: expect.any(Array) as unknown })
+    } else {
+      expect(body.result.value).toMatchObject({ servers: [], externalServers: [] })
+    }
+  }
+
   expect(ctx.clientModules.graph().entries.map(entry => entry.id)).toEqual(expect.arrayContaining([
     '@deepseek-ai/dsh-client-ui-sidebar-right',
     '@deepseek-ai/dsh-client-ui-sidebar-files',

@@ -9,7 +9,22 @@ import { apply, inject } from '../src/client/index.ts'
 import { NativeDirectoryFlow } from '../src/client/flow.ts'
 import { apply as nodeApply } from '../src/index.ts'
 
-afterEach(cleanup)
+const desktopIpc = await vi.hoisted(async () => {
+  const { createRequire } = await import('node:module')
+  const path = await import('node:path')
+  // Electron belongs to the Desktop app; resolve its mock from that workspace.
+  const electron = createRequire(path.resolve(import.meta.dirname, '../../../../apps/desktop/package.json')).resolve('electron')
+  return { invoke: vi.fn(), electron }
+})
+vi.mock(desktopIpc.electron, () => ({
+  ipcRenderer: { invoke: desktopIpc.invoke, on: vi.fn() },
+  contextBridge: { exposeInMainWorld: (name: string, value: unknown) => { vi.stubGlobal(name, value) } },
+}))
+vi.mock('../../../../apps/desktop/src/preload-platform.ts', () => ({ markDocumentPlatform: vi.fn() }))
+vi.mock('../../../../apps/desktop/src/preload-theme.ts', () => ({ syncNativeTheme: vi.fn() }))
+vi.mock('../../../../apps/desktop/src/preload-windows.ts', () => ({ syncWindowsAppearance: vi.fn() }))
+
+afterEach(() => { cleanup(); vi.unstubAllGlobals() })
 
 const HOLES = ['conversation.hero.workspace.directoryFlow', 'sidebar.workspaces.directoryFlow'] as const
 
@@ -161,6 +176,47 @@ describe('directory-picker-native client half', () => {
     const injected = (entry.inject as () => { pick: () => Promise<string | null> })()
     await expect(injected.pick()).resolves.toBe('/tmp/picked')
     expect(b.pickDirectory).toHaveBeenCalledOnce()
+  })
+
+  it('uses the Host chooser with the teacher desktop update preload', async () => {
+    desktopIpc.invoke.mockResolvedValue({ status: 'checking' })
+    const preload = '../../../../apps/desktop/src/preload.ts'
+    await import(/* @vite-ignore */ preload)
+    const b = await bench()
+    const dispose = b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    try {
+      await fiber.await()
+      const entry = b.slots.entries(HOLES[0])[0]!
+      const injected = (entry.inject as () => { pick: () => Promise<string | null> })()
+      await expect(injected.pick()).resolves.toBe('/tmp/picked')
+      expect(b.pickDirectory).toHaveBeenCalledOnce()
+      expect(desktopIpc.invoke).not.toHaveBeenCalledWith('dsh-desktop:directory-pick')
+    } finally {
+      await fiber.dispose()
+      dispose()
+    }
+  })
+
+  it('uses the desktop bridge without calling the Host and preserves cancellation and errors', async () => {
+    const pick = vi.fn<() => Promise<string | null>>().mockResolvedValue('/desktop/workspace')
+    vi.stubGlobal('__DSH_DIRECTORY_PICKER__', { pick })
+    const b = await bench()
+    b.declare()
+    const fiber = b.ctx.plugin({ inject: [...inject], apply })
+    await fiber.await()
+    try {
+      const entry = b.slots.entries(HOLES[0])[0]!
+      const injected = (entry.inject as () => { pick: () => Promise<string | null> })()
+      await expect(injected.pick()).resolves.toBe('/desktop/workspace')
+      pick.mockResolvedValue(null)
+      await expect(injected.pick()).resolves.toBeNull()
+      pick.mockRejectedValue(new Error('desktop dialog failed'))
+      await expect(injected.pick()).rejects.toThrow('desktop dialog failed')
+      expect(b.pickDirectory).not.toHaveBeenCalled()
+    } finally {
+      await fiber.dispose()
+    }
   })
 
   it('runs one pick per open edge and reports the path to the latest onPicked', async () => {

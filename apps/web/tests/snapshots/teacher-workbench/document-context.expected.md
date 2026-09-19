@@ -31,7 +31,6 @@
 - button "选择模型，当前 DeepSeek-V4-Flash":
   - text: DeepSeek-V4-Flash
   - img
-- button "上下文已用 0%"
 - button "发送消息" [disabled]
 - button "1 轮 1 步 · {{throughput}} tok/s":
   - img
@@ -39,3 +38,4 @@
 - button "32 tok · 缓存命中 0%":
   - img
   - text: 32 tok缓存命中 0%
+- button "上下文已用 0%": 0%

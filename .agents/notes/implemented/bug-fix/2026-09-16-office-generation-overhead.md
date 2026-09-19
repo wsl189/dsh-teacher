@@ -49,11 +49,12 @@ The [generation diagnostic](../../../../packages/bundle/web-app/tests/univer-gen
 With package runtime outputs built, compile and run the diagnostic from the repository root. It resolves the installed Cordis and Univer artifacts, creates a private `DSH_HOME`, removes ambient native-module and license overrides, and restores the environment after disposing the plugin. Each invocation starts with a fresh cache; only workers within that invocation share it. `--fragmented` runs one document sample instead of the three-format set.
 
 ```sh
-pnpm exec tsdown --no-config --platform node --format esm --no-dts --out-dir packages/bundle/web-app/.dsh-build packages/bundle/web-app/tests/univer-generation.perf.ts
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache
-node packages/bundle/web-app/.dsh-build/univer-generation.perf.mjs --disable-cache --fragmented
+cd packages/bundle/web-app
+pnpm exec tsdown --no-config --platform node --format esm --no-dts --out-dir .dsh-build tests/univer-generation.perf.ts
+node .dsh-build/univer-generation.perf.mjs --disable-cache
+node .dsh-build/univer-generation.perf.mjs
+node .dsh-build/univer-generation.perf.mjs --disable-cache
+node .dsh-build/univer-generation.perf.mjs --disable-cache --fragmented
 ```
 
 The 2026-09-16 measurements have the following median total times. Re-disabling caching returns the workload close to its original cost, providing a control for host warmup. Every generated file passes readback and exported-content checks.

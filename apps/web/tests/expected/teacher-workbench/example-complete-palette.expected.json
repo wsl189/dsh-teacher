@@ -161,22 +161,22 @@
   },
   {
     "label": "真子集 ⫋",
-    "regular": "\\text{ ⫋ }",
-    "bold": "\\text{ } \\textbf{⫋} \\text{ }",
+    "regular": "\\subsetneqq",
+    "bold": "\\mathbf{\\subsetneqq}",
     "glyph": {
-      "ascent": 672,
-      "descent": 94,
-      "width": 504
+      "ascent": 766,
+      "descent": 79,
+      "width": 778
     }
   },
   {
     "label": "真包含 ⫌",
-    "regular": "\\text{ ⫌ }",
-    "bold": "\\text{ } \\textbf{⫌} \\text{ }",
+    "regular": "\\supsetneqq",
+    "bold": "\\mathbf{\\supsetneqq}",
     "glyph": {
-      "ascent": 672,
-      "descent": 94,
-      "width": 504
+      "ascent": 766,
+      "descent": 79,
+      "width": 778
     }
   },
   {
@@ -208,7 +208,13 @@
     "label": "补集",
     "regular": "\\text{∁}_{U} A",
     "bold": "\\textbf{∁} _{\\mathbfit{U}} \\mathbfit{A}",
-    "wordFont": "Cambria Math"
+    "glyph": {
+      "ascent": 719,
+      "descent": 16,
+      "width": 460
+    },
+    "wordFont": "Segoe UI Symbol",
+    "wordAlternateFont": "Noto Sans Math"
   },
   {
     "label": "任意 ∀",
@@ -288,7 +294,35 @@
   {
     "label": "不平行 ∦",
     "regular": "\\text{ ⫽⃥ }",
-    "bold": "\\text{ } \\textbf{⫽⃥} \\text{ }"
+    "bold": "\\text{ } \\textbf{⫽⃥} \\text{ }",
+    "glyph": {
+      "ascent": 672,
+      "descent": 63,
+      "width": 627
+    },
+    "previewFonts": [
+      {
+        "font": "\"DSH Math Symbols\", KaTeX_Main, \"Times New Roman\", serif",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "font": "\"DSH Math Symbols\", KaTeX_Main, \"Times New Roman\", serif",
+        "weight": "400",
+        "style": "normal"
+      },
+      {
+        "font": "\"DSH Math Symbols\", KaTeX_Main, \"Times New Roman\", serif",
+        "weight": "700",
+        "style": "normal"
+      },
+      {
+        "font": "\"DSH Math Symbols\", KaTeX_Main, \"Times New Roman\", serif",
+        "weight": "400",
+        "style": "italic"
+      }
+    ],
+    "wordNegation": " \\∥"
   },
   {
     "label": "垂直 ⊥",

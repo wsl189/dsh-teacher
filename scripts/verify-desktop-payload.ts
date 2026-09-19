@@ -83,6 +83,7 @@ export const REQUIRED_WINDOWS_RUNTIME_FILES = [
   'node_modules/dsh-univer-office/package.json',
   'node_modules/dsh-univer-office/lib/index.js',
   'node_modules/dsh-univer-office/lib/client.js',
+  'node_modules/dsh-univer-office/lib/docx-policy.js',
   'node_modules/dsh-univer-office/artifacts/gateway.cjs',
   'node_modules/dsh-univer-office/artifacts/unit-content-worker.mjs',
   'node_modules/dsh-univer-office/artifacts/render-machine/index.html',

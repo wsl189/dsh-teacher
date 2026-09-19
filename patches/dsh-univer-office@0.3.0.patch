@@ -1,0 +1,13 @@
+diff --git a/lib/client.js b/lib/client.js
+--- a/lib/client.js
++++ b/lib/client.js
+@@ -23064,7 +23064,8 @@
+           () => ctx.slots.register(
+             {
+               name: "conversation.chat.turnTail",
+-              priority: -10,
++              id: "univer-office-preview",
++              order: 20,
+               locale: UNIVER_LOCALE_NAMESPACE,
+               select: selectUniverTurn,
+               inject: () => ({ getViewerLocale })

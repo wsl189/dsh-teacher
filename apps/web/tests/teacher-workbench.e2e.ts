@@ -760,6 +760,91 @@ describe('web e2e: durable teacher workbench', () => {
     expect(tripwire.pageErrors).toEqual([])
   }, 90_000)
 
+  it('filters unrelated OCR illustrations and preserves upright Roman labels through previews and Word exports', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-example-ocr-cleanup'))
+    const { proofreader, recordedInputs } = await installExampleProofreader()
+    await openModule('典例收集')
+    const surface = page.getByRole('region', { name: '工作台', exact: true })
+    const directory = surface.getByRole('complementary', { name: '题目目录', exact: true })
+    await directory.getByRole('button', { name: '添加新题', exact: true }).click()
+    const catalog = await scaffold.ctx.teacherWorkbench.listExamples({})
+    if (!catalog.ok) throw new Error(catalog.error.code)
+    const created = catalog.value.questions.at(-1)!
+    const previous = { markdown: minerUMarkdown, images: minerUImages }
+    onTestFinished(async () => {
+      minerUMarkdown = previous.markdown
+      minerUImages = previous.images
+      await scaffold.ctx.teacherWorkbench.deleteExample({ id: created.id })
+      await page.reload({ waitUntil: 'load' })
+    })
+    await directory.getByRole('button', { name: String(created.number), exact: true }).click()
+    const png = await readFile(RASTER_FIXTURE)
+    const data = `data:image/png;base64,${png.toString('base64')}`
+    minerUImages = { 'advert.png': data, 'diagram.png': data, 'problem-qr.png': data, 'logo.png': data }
+    const snapshots = []
+    const summarizeWord = async (bytes: Uint8Array) => {
+      const entries = unzipSync(bytes)
+      return page.evaluate((xml) => {
+        const ns = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+        const math = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+        const doc = new DOMParser().parseFromString(xml, 'application/xml')
+        return {
+          paragraphs: Array.from(doc.getElementsByTagNameNS(ns, 'p')).map(p => p.textContent).filter(Boolean),
+          illustrations: Array.from(doc.getElementsByTagName('wp:docPr')).map(image => image.getAttribute('descr')),
+          romanLabels: Array.from(doc.getElementsByTagNameNS(ns, 'p')).filter(p => /^（[iI]+）/u.test(p.textContent ?? '')).map((p) => {
+            const label = Array.from(p.getElementsByTagNameNS(ns, 'r')).find(r => /^[iI]+$/u.test(r.textContent ?? ''))!
+            return { text: label.textContent, italic: label.getElementsByTagNameNS(ns, 'i').item(0)?.getAttributeNS(ns, 'val') }
+          }),
+          equations: Array.from(doc.getElementsByTagNameNS(math, 'oMath')).map(equation => equation.textContent),
+        }
+      }, strFromU8(entries['word/document.xml']!))
+    }
+    for (const document of ['question', 'explanation'] as const) {
+      const body = `${document === 'question' ? '图示题目' : '图示解析'}\n（1）讨论下列小问。\n（I）已知变量 i，求 $i^2$。\n（II）观察题目中的二维码。\n（i）保留小写编号。\n（ii）验证结论。\n![几何示意图](images/diagram.png)\n![题目中的二维码](images/problem-qr.png)`
+      minerUMarkdown = `![课程二维码](images/advert.png)\n扫码观看课程\n${body.replace('（I）', '（i）')}\n![页脚标志](images/logo.png)`
+      proofreader.correction = { markdown: body, omittedIllustrations: [
+        { index: 0, reason: '独立课程广告二维码及其推广文字，与题目无关。' },
+        { index: 3, reason: '页脚机构标志，不含题目内容。' },
+      ] }
+      const source = document === 'question'
+        ? { name: 'cleanup.png', mimeType: 'image/png', buffer: png }
+        : { name: 'cleanup.pdf', mimeType: 'application/pdf', buffer: onePagePdfFixture() }
+      await surface.getByLabel(document === 'question' ? '添加图片或 PDF' : '添加解析图片或 PDF', { exact: true })
+        .filter({ visible: false }).setInputFiles(source)
+      const preview = surface.getByRole('region', { name: document === 'question' ? 'Word 预览' : '解析 Word 预览', exact: true })
+      const download = preview.getByRole('link', { name: document === 'question' ? '下载 Word 文件' : '下载解析 Word 文件', exact: true })
+      await download.waitFor({ timeout: 30_000 })
+      await expect.poll(() => preview.locator('section.example-word img').count()).toBe(2)
+      expect(await preview.innerText()).not.toContain('扫码观看课程')
+      const labels = await preview.locator('section.example-word p').filter({ hasText: /^（[iI]+）/u }).evaluateAll(paragraphs => paragraphs.map((p) => {
+        const label = Array.from(p.querySelectorAll('span')).find(span => /^[iI]+$/u.test(span.textContent ?? ''))!
+        return { text: label.textContent, style: getComputedStyle(label).fontStyle, indent: getComputedStyle(p).marginLeft }
+      }))
+      expect(labels).toEqual(['I', 'II', 'i', 'ii'].map(text => ({ text, style: 'normal', indent: '32px' })))
+      const [file] = await Promise.all([page.waitForEvent('download'), download.click()])
+      const path = await file.path()
+      if (path === null) throw new Error('Word download is unavailable')
+      const native = await summarizeWord(await readFile(path))
+      expect(native.illustrations).toEqual(['几何示意图', '题目中的二维码'])
+      expect(native.romanLabels).toEqual(['I', 'II', 'i', 'ii'].map(text => ({ text, italic: 'false' })))
+      expect(native.equations).toEqual(['i2'])
+      snapshots.push({ document, labels, native })
+    }
+    for (const layout of ['paired', 'grouped'] as const) {
+      const exported = await scaffold.ctx.teacherWorkbench.exportExamplesWord({ ids: [created.id], layout })
+      if (!exported.ok) throw new Error(exported.error.code)
+      const summary = await summarizeWord(Buffer.from(exported.value.contentBase64, 'base64'))
+      expect(summary.illustrations).toEqual(['几何示意图', '题目中的二维码', '几何示意图', '题目中的二维码'])
+      expect(summary.romanLabels.every(label => label.italic === 'false')).toBe(true)
+      snapshots.push({ layout, native: summary })
+    }
+    expect(recordedInputs).toHaveLength(2)
+    expect(recordedInputs.every(input => input.data.content.filter(block => block.type === 'image').length === 1)).toBe(true)
+    await compareOrRefreshGolden(fileURLToPath(new URL('./expected/teacher-workbench/example-ocr-cleanup.expected.json', import.meta.url)),
+      JSON.stringify(snapshots, null, 2), MODE)
+    expect(tripwire.pageErrors).toEqual([])
+  })
+
   it('preserves formula structures when an IME confirms set letters', async () => {
     onTestFailed(() => saveFailureShot(page, 'web-e2e-formula-ime'))
     await installExampleProofreader()
@@ -1450,7 +1535,7 @@ describe('web e2e: durable teacher workbench', () => {
     expect(await page.evaluate((xml) => {
       const document = new DOMParser().parseFromString(xml, 'application/xml')
       return [...document.getElementsByTagNameNS('http://schemas.openxmlformats.org/officeDocument/2006/math', 'oMath')].at(-1)?.textContent?.replaceAll(/\s/gu, '')
-    }, strFromU8(unzipSync(symbolBytes)['word/document.xml']!))).toBe(`${symbolText}+1`)
+    }, strFromU8(unzipSync(symbolBytes)['word/document.xml']!))).toBe(`${symbolText.replaceAll('⫽⃥', '\\∥')}+1`)
     for (const layout of ['paired', 'grouped'] as const) {
       const exported = await scaffold.ctx.teacherWorkbench.exportExamplesWord({ ids: [id], layout })
       if (!exported.ok) throw new Error(exported.error.code)
@@ -1465,7 +1550,7 @@ describe('web e2e: durable teacher workbench', () => {
       await mathfield.pressSequentially(';')
       await formulaEditor.getByRole('button', { name: button, exact: true }).click()
       await mathfield.press('Home')
-      if (glyph === '⫽' || glyph === '⫋') await mathfield.press('ArrowRight')
+      if (glyph === '⫽') await mathfield.press('ArrowRight')
       await mathfield.press('Shift+ArrowRight')
       for (const enabled of [true, false, true]) {
         await mathfield.locator('[part="menu-toggle"]').click()
@@ -1508,7 +1593,7 @@ describe('web e2e: durable teacher workbench', () => {
         return [...document.getElementsByTagNameNS('http://schemas.openxmlformats.org/officeDocument/2006/math', 'r')]
           .filter(run => run.textContent?.includes(symbol))
           .map(run => run.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'b').length > 0)
-      }, { xml: strFromU8(unzipSync(styledBytes)['word/document.xml']!), symbol: glyph })).toEqual([true, false])
+      }, { xml: strFromU8(unzipSync(styledBytes)['word/document.xml']!), symbol: glyph === '⫽' ? '∥' : glyph })).toEqual([true, false])
       const styledParagraphs = await editedParagraphs(styledBytes)
       for (const layout of ['paired', 'grouped'] as const) {
         const exported = await scaffold.ctx.teacherWorkbench.exportExamplesWord({ ids: [id], layout })
@@ -2771,6 +2856,44 @@ describe('web e2e: durable teacher workbench', () => {
       { timeout: 10_000 },
     ).toBe(true)
     expect(await workbench.getByRole('button', { name: '删除班级' }).count()).toBe(0)
+    expect(tripwire.pageErrors).toEqual([])
+  }, 60_000)
+
+  it('explains non-timetable uploads without changing saved classes or lessons', async () => {
+    const selection = scaffold.ctx.agentDefaultModel.currentSelection()
+    const previous = { markdown: minerUMarkdown, middleJson: minerUMiddleJson }
+    const model = new TimetableAgentAdapter(() => [], true)
+    model.notTimetable = true
+    const disposeModel = scaffold.ctx.effect(
+      () => scaffold.ctx.llm.registerAdapter(['timetable-test'], model), 'Timetable source rejection fixture',
+    )
+    onTestFinished(async () => {
+      minerUMarkdown = previous.markdown
+      minerUMiddleJson = previous.middleJson
+      await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, selection)
+      await disposeModel()
+    })
+    await scaffold.ctx.settings.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
+      ...selection, toolProvider: 'timetable-test', toolModel: 'timetable',
+    })
+    const before = await scaffold.ctx.teacherWorkbench.read({})
+    await openModule('课程表')
+    const workbench = page.getByRole('region', { name: '工作台', exact: true })
+    await workbench.getByRole('tab', { name: '年级课表' }).click()
+    minerUMarkdown = '数学例题：求四边形的面积。'
+    minerUMiddleJson = ''
+    await workbench.locator('input[type="file"]').setInputFiles({
+      name: '非课表.png', mimeType: 'image/png', buffer: await readFile(RASTER_FIXTURE),
+    })
+    const review = page.getByRole('dialog', { name: '上传并识别课程表' })
+    await review.getByText('上传的文件中没有课程表。请检查是否选错文件，重新上传课表图片或文档。').waitFor({ timeout: 10_000 })
+    expect(await scaffold.ctx.teacherWorkbench.read({})).toEqual(before)
+    await compareOrRefreshGolden(
+      join(SNAPSHOT_DIR, 'timetable-not-timetable.expected.md'),
+      await captureStableAria(page, '[class*="timetableImportDialog"]', scaffold.workspaceCwd), MODE,
+    )
+    await page.keyboard.press('Escape')
+    await workbench.getByRole('button', { name: '清除识别结果', exact: true }).click()
     expect(tripwire.pageErrors).toEqual([])
   }, 60_000)
 

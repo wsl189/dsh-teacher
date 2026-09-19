@@ -31,8 +31,9 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     await bold.waitFor({ state: 'hidden', timeout: 10_000 })
   }
   await editor.locator('[data-equation]').last().dblclick()
-  await page.evaluate(async () => { await document.fonts.load('20px "DSH Math Symbols"', '∁⫋⫌⫽⃥') })
+  await page.evaluate(async () => { await document.fonts.load('20px "DSH Math Symbols"', '∁⫽⃥') })
   expect(await page.evaluate(() => [...document.fonts].some(font => font.family.includes('DSH Math Symbols') && font.status === 'loaded'))).toBe(true)
+  await page.evaluate(async () => { await document.fonts.load('20px "DSH Set Relations"', '⫋⫌') })
   await dialog.screenshot({ path: join(root, 'all-symbols-palette.png') })
   const labels = await dialog.getByRole('group').getByRole('button').evaluateAll(buttons => buttons.map(button => button.getAttribute('aria-label')!))
   const results: {
@@ -40,6 +41,9 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     regular: string
     bold: string
     wordFont?: string
+    wordAlternateFont?: string
+    wordNegation?: string
+    previewFonts?: { font: string; weight: string; style: string }[]
     glyph?: { ascent: number; descent: number; width: number }
   }[] = []
   let activeLabel = ''
@@ -58,6 +62,46 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     await expanded.getByText('已保存', { exact: true }).waitFor()
     return (await read()).equations.at(-1)!.latex
   }
+  await field.evaluate((element) => {
+    (element as HTMLElement & { value: string }).value = String.raw`A\subseteq B\quad A\subsetneqq B\qquad B\supseteq A\quad B\supsetneqq A`
+  })
+  await field.locator('.ML__ams').filter({ hasText: '⫋' }).waitFor({ state: 'visible' })
+  const inputFonts = await field.locator('.ML__ams').evaluateAll(elements => elements
+    .filter(element => ['⫋', '⫌'].includes(element.textContent ?? ''))
+    .map(element => getComputedStyle(element).fontFamily))
+  expect(inputFonts).toHaveLength(2)
+  expect(inputFonts.every(font => font.includes('DSH Set Relations'))).toBe(true)
+  await field.screenshot({ path: join(root, 'latex-set-relations-input.png') })
+  await save()
+  const comparison = editor.locator('[data-equation]').last()
+  const relations = await comparison.locator('.katex-html .mrel').allTextContents()
+  expect(relations).toEqual(['⊆', '⫋', '⊇', '⫌'])
+  const appliedFonts = await comparison.locator('.katex-html .amsrm').evaluateAll(elements => elements
+    .map(element => getComputedStyle(element).fontFamily))
+  expect(appliedFonts).toHaveLength(2)
+  expect(appliedFonts.every(font => font.includes('DSH Set Relations'))).toBe(true)
+  await comparison.screenshot({ path: join(root, 'latex-set-relations-applied.png') })
+  await comparison.dblclick()
+  await field.evaluate((element) => {
+    (element as HTMLElement & { value: string }).value = String.raw`A\text{ ⫽⃥ }B\quad A\ ⫽⃥\ B\quad A\ \mathbf{⫽⃥}\ B\quad A\ \mathit{⫽⃥}\ B`
+  })
+  await save()
+  const symbolFonts = () => comparison.locator('.katex-html span').evaluateAll(elements => elements
+    .filter(element => element.childElementCount === 0 && element.textContent?.includes('⃥'))
+    .map((element) => {
+      const style = getComputedStyle(element)
+      return { font: style.fontFamily, weight: style.fontWeight, style: style.fontStyle }
+    }))
+  const notParallelFonts = await symbolFonts()
+  expect(notParallelFonts).toHaveLength(4)
+  expect(notParallelFonts.every(symbol => symbol.font.includes('DSH Math Symbols'))).toBe(true)
+  expect(notParallelFonts.map(symbol => symbol.weight)).toEqual(['400', '400', '700', '400'])
+  await comparison.screenshot({ path: join(root, 'not-parallel-preview-modes.png') })
+  await expanded.getByRole('button', { name: '关闭预览', exact: true }).click()
+  await page.getByRole('button', { name: '放大解析 Word 预览', exact: true }).click()
+  await comparison.waitFor({ state: 'visible' })
+  expect(await symbolFonts()).toEqual(notParallelFonts)
+  await comparison.dblclick()
   for (const [index, label] of labels.entries()) {
     activeLabel = label
     if (index > 0) await editor.locator('[data-equation]').last().dblclick()
@@ -95,17 +139,55 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     const bold = await save()
     expect(bold, `${label}: ${boldInput}`).not.toBe(regular)
     const result: typeof results[number] = { label, regular, bold }
-    if (label === '真子集 ⫋' || label === '真包含 ⫌') {
-      const glyph = label.endsWith('⫋') ? '⫋' : '⫌'
+    if (label === '补集' || label.startsWith('不平行')) {
       result.glyph = await page.evaluate((text) => {
         const canvas = document.createElement('canvas').getContext('2d')!
         canvas.font = '1000px "DSH Math Symbols"'
         const metrics = canvas.measureText(text)
         return { ascent: Math.round(metrics.actualBoundingBoxAscent), descent: Math.round(metrics.actualBoundingBoxDescent),
           width: Math.round(metrics.width) }
+      }, label === '补集' ? '∁' : '⫽⃥')
+      expect(result.glyph.ascent).toBeLessThan(730)
+      expect(result.glyph.ascent).toBeGreaterThan(650)
+      expect(result.glyph.descent).toBeLessThan(80)
+    }
+    if (label === '真子集 ⫋' || label === '真包含 ⫌') {
+      const glyph = label.endsWith('⫋') ? '⫋' : '⫌'
+      result.glyph = await page.evaluate(async (text) => {
+        await document.fonts.load('1000px "DSH Set Relations"', text)
+        await document.fonts.load('1000px KaTeX_Main', '⊆')
+        const canvas = document.createElement('canvas').getContext('2d')!
+        canvas.font = '1000px "DSH Set Relations"'
+        const metrics = canvas.measureText(text)
+        return { ascent: Math.round(metrics.actualBoundingBoxAscent), descent: Math.round(metrics.actualBoundingBoxDescent),
+          width: Math.round(metrics.width) }
       }, glyph)
-      expect(result.glyph.ascent + result.glyph.descent).toBeLessThan(800)
-      expect(result.glyph.descent).toBeLessThan(100)
+      expect(regular).toContain(glyph === '⫋' ? '\\subsetneqq' : '\\supsetneqq')
+      const reference = await page.evaluate(() => {
+        const canvas = document.createElement('canvas').getContext('2d')!
+        canvas.font = '1000px KaTeX_Main'
+        const capital = canvas.measureText('B')
+        return { width: canvas.measureText('⊆').width,
+          center: (capital.actualBoundingBoxAscent - capital.actualBoundingBoxDescent) / 2 }
+      })
+      expect(Math.abs(result.glyph.width - reference.width)).toBeLessThan(2)
+      expect(Math.abs((result.glyph.ascent - result.glyph.descent) / 2 - reference.center)).toBeLessThan(16)
+      expect(result.glyph.ascent + result.glyph.descent).toBeGreaterThan(810)
+      expect(result.glyph.ascent + result.glyph.descent).toBeLessThan(850)
+    }
+    if (label.startsWith('不平行')) {
+      result.previewFonts = notParallelFonts
+      const proportions = await page.evaluate(() => {
+        const canvas = document.createElement('canvas').getContext('2d')!
+        canvas.font = '1000px "DSH Math Symbols"'
+        const mark = canvas.measureText('⃥')
+        const lines = canvas.measureText('⫽')
+        return { ratio: (mark.actualBoundingBoxAscent + mark.actualBoundingBoxDescent)
+          / (lines.actualBoundingBoxAscent + lines.actualBoundingBoxDescent), advance: mark.width }
+      })
+      expect(proportions.ratio).toBeGreaterThan(0.5)
+      expect(proportions.ratio).toBeLessThan(0.55)
+      expect(proportions.advance).toBe(0)
     }
     results.push(result)
     await writeFile(join(root, 'all-symbols-progress.json'), JSON.stringify(results, null, 2) + '\n')
@@ -142,6 +224,7 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
   if (!download.ok) throw new Error(download.error.code)
   const bytes = Buffer.from(download.value.contentBase64, 'base64')
   expect(unzipSync(bytes)['word/fonts/dsh-complement.odttf']).toBeUndefined()
+  expect(unzipSync(bytes)['word/fonts/dsh-teacher-math.odttf']).toBeUndefined()
   const complement = results.find(result => result.label === '补集')!
   complement.wordFont = await page.evaluate((source) => {
     const document = new DOMParser().parseFromString(source, 'application/xml')
@@ -150,7 +233,25 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
     const run = [...document.getElementsByTagNameNS(math, 'r')].find(run => run.textContent === '∁')!
     return run.getElementsByTagNameNS(word, 'rFonts')[0]!.getAttributeNS(word, 'ascii')!
   }, strFromU8(unzipSync(bytes)['word/document.xml']!))
-  expect(complement.wordFont).toBe('Cambria Math')
+  expect(complement.wordFont).toBe('Segoe UI Symbol')
+  complement.wordAlternateFont = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, 'application/xml')
+    const word = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
+    const font = [...document.getElementsByTagNameNS(word, 'font')].find(font => font.getAttributeNS(word, 'name') === 'Segoe UI Symbol')!
+    return font.getElementsByTagNameNS(word, 'altName')[0]!.getAttributeNS(word, 'val')!
+  }, strFromU8(unzipSync(bytes)['word/fontTable.xml']!))
+  expect(complement.wordAlternateFont).toBe('Noto Sans Math')
+  const notParallel = results.find(result => result.label.startsWith('不平行'))!
+  notParallel.wordNegation = await page.evaluate((source) => {
+    const document = new DOMParser().parseFromString(source, 'application/xml')
+    const math = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+    const mark = [...document.getElementsByTagNameNS(math, 'phant')].find(mark => mark.textContent?.trim() === '\\')!
+    for (const name of ['show', 'zeroWid', 'zeroAsc', 'zeroDesc']) {
+      if (mark.getElementsByTagNameNS(math, name)[0]?.getAttributeNS(math, 'val') !== '1') throw new Error('Not-parallel negation must preserve the operator spacing')
+    }
+    return mark.textContent + mark.nextElementSibling!.textContent
+  }, strFromU8(unzipSync(bytes)['word/document.xml']!))
+  expect(notParallel.wordNegation).toBe(' \\∥')
   await writeFile(join(root, 'all-symbols-download.docx'), bytes)
   const native = async (content: Uint8Array) => page.evaluate((source) => {
     const document = new DOMParser().parseFromString(source, 'application/xml')
@@ -164,10 +265,10 @@ export async function auditExampleFormulaPalette(page: Page, scaffold: WebScaffo
       }
     }
     for (const run of document.getElementsByTagNameNS(namespace, 'r')) {
-      if (run.textContent !== '∁') continue
+      if (!/^[∁⊆⊇⫋⫌∥∦]$/u.test(run.textContent ?? '')) continue
       const fonts = run.getElementsByTagNameNS('http://schemas.openxmlformats.org/wordprocessingml/2006/main', 'rFonts')[0]!
-      if (fonts.getAttribute('w:ascii') !== 'Cambria Math' || run.getElementsByTagNameNS(namespace, 'nor').length !== 0) {
-        throw new Error('Word complement must use an upright native math run')
+      if (fonts.getAttribute('w:ascii') !== 'Segoe UI Symbol' || run.getElementsByTagNameNS(namespace, 'nor').length !== 1) {
+        throw new Error('Word textbook symbols must select the Windows system font explicitly')
       }
     }
     return [...document.getElementsByTagNameNS(namespace, 'oMath')].map(equation => new XMLSerializer().serializeToString(equation))

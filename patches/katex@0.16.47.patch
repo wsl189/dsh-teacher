@@ -1,5 +1,5 @@
 diff --git a/dist/katex.js b/dist/katex.js
-index 2de2003251a8e5dda149c3b707eaf28f42b459f2..1e907dfd832639c7d5a2731f297030b64c008478 100644
+index 2de2003251a8e5dda149c3b707eaf28f42b459f2..01c323a4efead7f86562eacb88101ca881e32790 100644
 --- a/dist/katex.js
 +++ b/dist/katex.js
 @@ -3853,12 +3853,22 @@ function setFontMetrics(fontName, metrics) {
@@ -7,11 +7,11 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..1e907dfd832639c7d5a2731f297030b6
   * built using `Make extended_metrics`.
   */
 +const textbookSymbolMetrics = {
-+  8421: [0.16, 0.678, 0, 0, 0],
-+  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.079, 0.664, 0, 0, 0.504],
-+  10956: [0.079, 0.664, 0, 0, 0.504],
-+  11005: [0.228, 0.727, 0, 0, 0.726],
++  8421: [0, 0.487, 0, 0, 0],
++  8705: [0.008, 0.704, 0, 0, 0.46],
++  10955: [0.07, 0.753, 0, 0, 0.778],
++  10956: [0.07, 0.753, 0, 0, 0.778],
++  11005: [0.06, 0.66, 0, 0, 0.627],
 +};
  function getCharacterMetrics(character, font, mode) {
    if (!fontMetricsData[font]) {
@@ -155,7 +155,7 @@ index 2de2003251a8e5dda149c3b707eaf28f42b459f2..1e907dfd832639c7d5a2731f297030b6
      } else if (group.family === "open" || group.family === "close") {
        // Delims built here should not stretch vertically.
 diff --git a/dist/katex.mjs b/dist/katex.mjs
-index b4a83b4b7b9b31064413fa7eb5447823110d7305..d972b8499ac429de8e38575de650900f7c797284 100644
+index b4a83b4b7b9b31064413fa7eb5447823110d7305..e54ed79930e50c0ce90fd84f3f314772e25144d5 100644
 --- a/dist/katex.mjs
 +++ b/dist/katex.mjs
 @@ -3682,12 +3682,22 @@ function setFontMetrics(fontName, metrics) {
@@ -163,11 +163,11 @@ index b4a83b4b7b9b31064413fa7eb5447823110d7305..d972b8499ac429de8e38575de650900f
   * built using `Make extended_metrics`.
   */
 +const textbookSymbolMetrics = {
-+  8421: [0.16, 0.678, 0, 0, 0],
-+  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.079, 0.664, 0, 0, 0.504],
-+  10956: [0.079, 0.664, 0, 0, 0.504],
-+  11005: [0.228, 0.727, 0, 0, 0.726],
++  8421: [0, 0.487, 0, 0, 0],
++  8705: [0.008, 0.704, 0, 0, 0.46],
++  10955: [0.07, 0.753, 0, 0, 0.778],
++  10956: [0.07, 0.753, 0, 0, 0.778],
++  11005: [0.06, 0.66, 0, 0, 0.627],
 +};
  function getCharacterMetrics(character, font, mode) {
    if (!fontMetricsData[font]) {
@@ -357,20 +357,20 @@ index 50d79dfdce10a17aa0f455b07461c8ca7cf37740..9f3dc63c0aca066362bc2d291da497d3
      left: string;
      margin: string;
 diff --git a/src/fontMetrics.ts b/src/fontMetrics.ts
-index acd75c207de14fa7eb97e25ccd1d999584f6b917..96fe47c4312cf8f21125b8f0b0ddbb7e614e5c1b 100644
+index acd75c207de14fa7eb97e25ccd1d999584f6b917..99554c1280ed6c0ac13d787282a8cc113190c4bb 100644
 --- a/src/fontMetrics.ts
 +++ b/src/fontMetrics.ts
 @@ -191,6 +191,15 @@ export function setFontMetrics(
      metricMap[fontName] = metrics;
  }
  
-+// STIX Two Math 2.13 text symbols; dimensions match the shipped Unicode font subset.
++// Dimensions of the locally shipped STIX text symbols and compact KaTeX set relations.
 +const textbookSymbolMetrics: Record<number, CharacterMetricsTuple> = {
-+  8421: [0.16, 0.678, 0, 0, 0],
-+  8705: [0.016, 0.778, 0, 0, 0.474],
-+  10955: [0.079, 0.664, 0, 0, 0.504],
-+  10956: [0.079, 0.664, 0, 0, 0.504],
-+  11005: [0.228, 0.727, 0, 0, 0.726],
++  8421: [0, 0.487, 0, 0, 0],
++  8705: [0.008, 0.704, 0, 0, 0.46],
++  10955: [0.07, 0.753, 0, 0, 0.778],
++  10956: [0.07, 0.753, 0, 0, 0.778],
++  11005: [0.06, 0.66, 0, 0, 0.627],
 +};
 +
  /**

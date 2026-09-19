@@ -93,6 +93,16 @@ const OWNER_AUTHORIZED_RUNTIME_PACKAGES = new Set([
   ...UNIVER_PRO_RUNTIME_PACKAGES,
 ])
 
+const LIBREOFFICE_KIT_PACKAGE = '@deepseek-ai/libreoffice-kit'
+const LIBREOFFICE_PACKAGES = new Set([
+  LIBREOFFICE_KIT_PACKAGE,
+  '@deepseek-ai/libreoffice-kit-wasm',
+  '@deepseek-ai/libreoffice-kit-darwin-arm64',
+  '@deepseek-ai/libreoffice-kit-darwin-x64',
+  '@deepseek-ai/libreoffice-kit-win32-arm64',
+  '@deepseek-ai/libreoffice-kit-win32-x64',
+])
+
 /**
  * Whether a non-permissive runtime declaration has an identity-scoped owner
  * authorization. This does not reclassify its terms as permissive.
@@ -127,14 +137,27 @@ const OVERRIDES: Record<string, { license?: string; repo?: string }> = {
 }
 
 /**
- * Python dependencies are few and named directly in `pyproject.toml` files
- * without installed metadata to harvest, so license/repo are recorded here and
- * the generator fails when a manifest names a package this map misses.
+ * Python metadata is recorded from the distributions' license and project
+ * fields; generation does not require installing their wheels. Both Python
+ * manifests and the Desktop lock reject names absent from this map.
  */
-const PYTHON_METADATA: Record<string, { license: string; repo: string; role: string }> = {
+const PYTHON_METADATA: Record<string, { license: string; repo: string; role?: string }> = {
   pydantic: { license: 'MIT', repo: 'https://github.com/pydantic/pydantic', role: 'runtime dependency of `deepseek-harness-sdk`' },
   hatchling: { license: 'MIT', repo: 'https://github.com/pypa/hatch', role: 'build backend' },
+  'et-xmlfile': { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/et_xmlfile' },
+  lxml: { license: 'BSD-3-Clause', repo: 'https://github.com/lxml/lxml' },
+  numpy: { license: 'BSD-3-Clause', repo: 'https://github.com/numpy/numpy' },
+  openpyxl: { license: 'MIT', repo: 'https://foss.heptapod.net/openpyxl/openpyxl' },
+  pandas: { license: 'BSD-3-Clause', repo: 'https://github.com/pandas-dev/pandas' },
+  pillow: { license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
+  'python-dateutil': { license: 'Apache-2.0 OR BSD-3-Clause', repo: 'https://github.com/dateutil/dateutil' },
+  'python-docx': { license: 'MIT', repo: 'https://github.com/python-openxml/python-docx' },
+  'python-pptx': { license: 'MIT', repo: 'https://github.com/scanny/python-pptx' },
   pytest: { license: 'MIT', repo: 'https://github.com/pytest-dev/pytest', role: 'test-only' },
+  six: { license: 'MIT', repo: 'https://github.com/benjaminp/six' },
+  'typing-extensions': { license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions' },
+  tzdata: { license: 'Apache-2.0', repo: 'https://github.com/python/tzdata' },
+  xlsxwriter: { license: 'BSD-2-Clause', repo: 'https://github.com/jmcnamara/XlsxWriter' },
 }
 
 type PythonMetadata = typeof PYTHON_METADATA
@@ -828,7 +851,7 @@ export function collectPythonDependencies(
   return [...found].sort((a, b) => a.localeCompare(b)).map((name) => {
     const entry = metadata[name]
     if (entry === undefined) throw new Error(`gen-third-party-notices: python dependency ${name} is missing from PYTHON_METADATA.`)
-    return { name, ...entry }
+    return { name, ...entry, role: entry.role ?? 'Python project dependency' }
   })
 }
 
@@ -839,6 +862,33 @@ function collectPython(): { name: string; license: string; repo: string; role: s
   return collectPythonDependencies(manifests.map(path => readFileSync(resolve(root, path), 'utf8')))
 }
 
+/**
+ * Disclose every Desktop wheel distribution using its locked version, rejecting duplicate normalized names.
+ * @param packages - Distribution names and exact versions from the Desktop runtime lock.
+ * @param metadata - License and source metadata for every locked distribution.
+ * @returns Normalized, sorted distribution identities with versions and licenses.
+ */
+export function collectDesktopPythonDependencies(
+  packages: Readonly<Record<string, string>>,
+  metadata: PythonMetadata = PYTHON_METADATA,
+): { name: string; version: string; license: string; repo: string }[] {
+  const normalized = new Map<string, string>()
+  for (const [distribution, version] of Object.entries(packages)) {
+    const name = normalizePythonDistributionName(distribution)
+    const previous = normalized.get(name)
+    if (previous !== undefined && previous !== version) {
+      throw new Error(`gen-third-party-notices: Desktop python distribution ${name} has conflicting locked versions.`)
+    }
+    if (previous !== undefined) throw new Error(`gen-third-party-notices: Desktop python distribution ${name} has duplicate normalized names.`)
+    normalized.set(name, version)
+  }
+  return [...normalized].sort(([a], [b]) => a.localeCompare(b)).map(([name, version]) => {
+    const entry = metadata[name]
+    if (entry === undefined) throw new Error(`gen-third-party-notices: Desktop python distribution ${name} is missing from PYTHON_METADATA.`)
+    return { name, version, license: entry.license, repo: entry.repo }
+  })
+}
+
 /** pnpm-patched external packages, from `pnpm-workspace.yaml`. */
 function collectPatched(): { spec: string; patch: string }[] {
   const workspace = yaml.load(readFileSync(resolve(root, 'pnpm-workspace.yaml'), 'utf8')) as { patchedDependencies?: Record<string, string> }
@@ -846,7 +896,7 @@ function collectPatched(): { spec: string; patch: string }[] {
 }
 
 /** SPDX identifiers this project may ship without further review. */
-const PERMISSIVE_LICENSES = new Set(['MIT', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0'])
+const PERMISSIVE_LICENSES = new Set(['MIT', 'MIT-CMU', 'ISC', 'BSD-2-Clause', 'BSD-3-Clause', 'Apache-2.0', '0BSD', 'Unlicense', 'CC0-1.0', 'BlueOak-1.0.0', 'Python-2.0', 'PSF-2.0'])
 
 /** Evaluate a parsed SPDX expression under the repository's license policy. */
 function isPermissiveSpdx(expression: ReturnType<typeof parseSpdx>): boolean {
@@ -886,7 +936,9 @@ export function isPermissive(license: string): boolean {
  * @throws When a runtime package has no permissive license or exact owner authorization.
  */
 export function assertRuntimeLicenses(dependencies: readonly { name: string; license: string }[]): void {
-  const rejected = dependencies.filter(dep => !isPermissive(dep.license) && !isOwnerAuthorizedRuntime(dep.name))
+  const rejected = dependencies.filter(dep => !isPermissive(dep.license)
+    && !isOwnerAuthorizedRuntime(dep.name)
+    && !(LIBREOFFICE_PACKAGES.has(dep.name) && dep.license === 'MPL-2.0'))
   if (rejected.length > 0) {
     throw new Error(`gen-third-party-notices: runtime ${rejected.map(dep => `${dep.name} (${dep.license})`).join(', ')} is not a permissive license; review the distribution terms and record the decision before regenerating.`)
   }
@@ -975,7 +1027,9 @@ The teacher workbench uses [\`mathml2omml\`](https://github.com/fiduswriter/math
 
 Every teacher-workbench package includes [the notice and replacement instructions](${MATHML_DISTRIBUTION_ROOT}/NOTICE.txt), the complete GPL and LGPL texts, and the [unmodified corresponding source](${MATHML_DISTRIBUTION_ROOT}/mathml2omml-0.5.0-source.tar.gz) from upstream commit \`0ddeb8b59ff1a97796b25d8f682dfb410febde1d\`. The accompanying [equation-formatting source patch](${MATHML_DISTRIBUTION_ROOT}/colors.patch) supplies the local changes and is applied before rebuilding. The packet also contains the bundled \`entities\` 6.0.1 source under BSD-2-Clause and the MIT notice for the parser derived from \`html-parse-stringify\`. The Windows installer includes the same packet under \`resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/mathml2omml\`; its unpacked Node module can be replaced without rebuilding or signing the application. Modified redistributions retain these terms and supply their corresponding source and installation information.
 
-The formula palette embeds five glyphs derived from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The DSH Math Symbols subset scales and raises the two proper-set relations. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
+The formula palette embeds compact proper-set signs derived from the KaTeX 0.16.47 fonts, renamed DSH Set Relations under SIL OFL 1.1. The UI package includes their [font license](packages/client/ui-teacher-workbench/third-party/katex/OFL.txt) and [reproduction instructions](packages/client/ui-teacher-workbench/third-party/katex/NOTICE.txt).
+
+The formula palette also embeds three glyphs derived from [STIX Two Math 2.13b171](https://github.com/stipub/stixfonts/tree/v2.13b171), distributed under SIL OFL 1.1. The DSH Math Symbols subset includes an upright complement with short inward terminals, compact slanted parallel lines, and a centered short negation stroke. The UI package ships the [font license](packages/client/ui-teacher-workbench/third-party/stix/OFL.txt) and [subset source and reproduction instructions](packages/client/ui-teacher-workbench/third-party/stix/NOTICE.txt).
 `
 }
 
@@ -1022,9 +1076,11 @@ export async function render(): Promise<string> {
   const npm = collectNpmDeps(manifests, names, browser)
   const runtimeDeps = npm.filter(dep => dep.runtime)
   const devDeps = npm.filter(dep => !dep.runtime)
+  const kitRuntime = runtimeDeps.some(dep => dep.name === LIBREOFFICE_KIT_PACKAGE)
   const vendored = collectVendored()
   const pptMaster = collectPptMasterDistribution()
   const python = collectPython()
+  const desktopPython = collectDesktopPythonDependencies({})
   const patched = collectPatched()
   const claudeDistribution = runtimeDeps.some(
     dep => dep.name === CLAUDE_AGENT_SDK_PACKAGE,
@@ -1038,6 +1094,7 @@ export async function render(): Promise<string> {
     : undefined
   const nonPermissiveDev = devDeps.filter(dep => !isPermissive(dep.license))
   assertRuntimeLicenses(runtimeDeps)
+  assertRuntimeLicenses(desktopPython)
   const patchedLines = patched.map(({ spec, patch }) => `- \`${spec}\` — [\`${patch}\`](${patch})`)
 
   return `<!-- Generated by scripts/gen-third-party-notices.ts — do not edit by hand.
@@ -1047,7 +1104,7 @@ export async function render(): Promise<string> {
 
 DeepSeek Harness is licensed under [MIT](LICENSE). It depends on the third-party software listed below. Each project remains under its own license; nothing in this file changes those terms.
 
-This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the bundled Windows-MCP desktop runtime, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
+This file lists **direct** dependencies declared by the workspace, packaged third-party Skill distributions, the explicitly disclosed official Claude Code platform payload closure, and the installed and artifact-bundled Univer closure. It is generated from the workspace manifests and pinned distribution resources by \`scripts/gen-third-party-notices.ts\`: a pre-commit hook regenerates it whenever a staged file changes one of its inputs, and \`scripts/gen-third-party-notices.spec.ts\` asserts in the test lane that the committed bytes match. Deleting a manifest runs no hook, so that case is caught by the assertion instead. Run \`pnpm run verify-third-party-notices\` for the standalone check.
 
 The complete npm transitive closure, including the Landlock launcher workspace, is recorded with exact pinned versions in [\`pnpm-lock.yaml\`](pnpm-lock.yaml) — inspect it with \`pnpm licenses list\`. The Python SDK closure is recorded separately in [\`python/sdk/uv.lock\`](python/sdk/uv.lock).
 
@@ -1074,6 +1131,13 @@ pnpm applies local patches to the following packages at install time, so shipped
 ${patchedLines.join('\n')}
 ${renderClaudeDistribution(claudeDistribution)}
 ${renderUniverCommercialDistribution(univerDistribution)}
+${kitRuntime ? `
+## LibreOffice conversion kit
+
+${[...LIBREOFFICE_PACKAGES].map(name => `\`${name}\``).join(', ')} declare MPL-2.0, which remains outside the permissive-license allowlist; the notices check accepts only these package identities at those terms. The [distribution decision](.agents/notes/implemented/architecture/2026-09-14-independent-libreoffice-kit.md) records the source obligations.
+
+The [kit repository](https://github.com/deepseek-harness/libreoffice-kit) supplies the corresponding LibreOffice source pin, modifications, build instructions, Node API, and artifact validation. Its engine packages retain their license and third-party notices; the Node API retains its MPL-2.0 declaration and NOTICE. Recipients must have access to those corresponding sources and notices.
+` : ''}
 
 ## Development-only npm dependencies
 
@@ -1089,6 +1153,14 @@ Direct dependencies of the \`pyproject.toml\` manifests, plus \`uv\` as the deve
 | --- | --- | --- |
 ${python.map(dep => `| [\`${dep.name}\`](${dep.repo}) | ${dep.license} | ${dep.role} |`).join('\n')}
 | [\`uv\`](https://github.com/astral-sh/uv) | MIT / Apache-2.0 | development workflow tool |
+
+## Desktop bundled Python distributions
+
+The [Desktop runtime lock](apps/desktop/scripts/primary-runtime-lock.json) records each distribution version and the wheel download hashes. The table includes every entry in \`pythonPackages\`, including transitive dependencies. Wheel extraction preserves distribution metadata and the license and notice files supplied by each archive. Project licenses below do not enumerate the separate licenses of native libraries bundled inside wheels.
+
+| Distribution | Locked version | Project license |
+| --- | --- | --- |
+${desktopPython.map(dep => `| [\`${dep.name}\`](${dep.repo}) | ${dep.version} | ${dep.license} |`).join('\n')}
 
 ## First-party native packages
 

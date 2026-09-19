@@ -1,16 +1,21 @@
-STIX Two Math 2.13b171 — mathematical symbol subset
+STIX Two Math 2.13b171 — mathematical symbol fonts
 
 Copyright 2001-2021 The STIX Fonts Project Authors.
 Licensed under the SIL Open Font License 1.1; see OFL.txt.
 Source: https://github.com/stipub/stixfonts/tree/v2.13b171
 Original: fonts/static_ttf/STIXTwoMath-Regular.ttf
 
-The application embeds a WOFF2 subset named DSH Math Symbols for U+20E5,
-U+2201, U+2ACB, U+2ACC, and U+2AFD. U+2ACB and U+2ACC use 70% of their
-original size and a 150-unit baseline lift in the 1000-unit em. The other
-outlines are unchanged. Rebuild with fontTools and Brotli from the upstream
-TrueType font using the adjacent build-subset.py:
+The browser uses the DSH Math Symbols WOFF2 subset for U+20E5, U+2201,
+and U+2AFD. Proper-set signs use the separate KaTeX-derived DSH Set Relations
+browser font. The complement has a straight upright stem and short inward
+terminals, with a 712-unit height. The slanted parallel lines have a
+720-unit height, preserving their slope and 74-unit horizontal rule width.
+Their centered U+20E5 negation stroke has a 374-unit height and 57-unit
+horizontal rule width. Font revision and name records identify version 1.5.
+All other outlines retain the upstream design.
+
+Rebuild the browser subset with fontTools and Brotli from the upstream font:
 
 python build-subset.py STIXTwoMath-Regular.ttf STIXTwoMath-Symbols.woff2
 
-Subset SHA-256: 3c4878212467e96121fb39d8ee42eed54940ae8c902893b7d6b5b9d897e2dacc
+Browser SHA-256: b72d087bca0a16b98916c286d6bd31d444cd1840d414e3c2e001582b4c7a7c7d

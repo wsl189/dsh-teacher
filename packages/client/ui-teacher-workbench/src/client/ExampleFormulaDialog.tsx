@@ -47,7 +47,7 @@ const SYMBOL_GROUPS = [
   ['relations', [
     ['notEqual', '\\ne', '\\ne'], ['lessEqual', '\\leqslant', '\\leqslant'], ['greaterEqual', '\\geqslant', '\\geqslant'],
     ['approximate', '\\approx', '\\approx'], ['belongs', '\\in', '\\in'], ['notBelongs', '\\notin', '\\notin'],
-    ['properSubset', '\\text{⫋}', '\\text{ ⫋ }'], ['properSuperset', '\\text{⫌}', '\\text{ ⫌ }'],
+    ['properSubset', '\\subsetneqq', '\\subsetneqq'], ['properSuperset', '\\supsetneqq', '\\supsetneqq'],
     ['subset', '\\subseteq', '\\subseteq'], ['superset', '\\supseteq', '\\supseteq'],
     ['union', '\\cup', '\\cup'], ['intersection', '\\cap', '\\cap'], ['emptySet', '\\varnothing', '\\varnothing'],
     ['complement', '\\text{∁}_U A', '\\text{∁}_{#?}{#0}'],

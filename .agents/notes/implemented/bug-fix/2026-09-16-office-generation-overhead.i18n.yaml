@@ -2,5 +2,5 @@
 # side as of the last confirmed-consistent state. Both languages carry equal authority;
 # after editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.md
-2026-09-16-office-generation-overhead.md: d2c4d5245f56a6e3d34e4ce6a19671bfe5869d84
-2026-09-16-office-generation-overhead.zh.md: e46a14c07209002001cf4d3346b6dafa4d0d2ef1
+2026-09-16-office-generation-overhead.md: 528a4a416cbbde33796c8f9cec0cd350e15b6985
+2026-09-16-office-generation-overhead.zh.md: 998e2eab24657ca3f5e4a999e1a48caeefaab4b3

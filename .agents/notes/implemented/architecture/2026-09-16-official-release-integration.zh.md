@@ -10,15 +10,19 @@ Status: implemented
 
 ## Decision
 
-集成以官方 `dsh-v0.1.6-alpha.1` 为基础，采用其 harness、Remote API、会话升级、原生系统支持和官方侧边栏。教师工作台包与模型设置保留原有用户操作、字段、默认值、存储位置和供应商分配；这些包中的修改仅适配上游 API。教师版 Electron 启动器和更新器保留现有应用标识及数据位置。
+集成以官方 `dsh-v0.1.6-alpha.2` 为基础，采用其 harness、Remote API、会话升级、原生系统支持和官方侧边栏。教师工作台包与模型设置保留原有用户操作、字段、默认值、存储位置和供应商分配；这些包中的修改仅适配上游 API。教师版 Electron 启动器和更新器保留现有应用标识及数据位置。
 
 Web profile 加载官方文件、文档和终端侧边栏插件。保留的 Office 预览插件通过官方文档预览服务注册。发行版不包含 `dsh-better-sidebar` 包、草稿标签页适配器、Windows-MCP 包或私有 Python 运行时。
 
 Windows 加载官方原生 Cua Driver 电脑操控提供方。发行检查仅允许 Web bundle 引入这一确定的实验性依赖；其他实验性运行时依赖仍被拒绝。其生命周期、工具目录、取消、截图准入与操作系统权限要求仍由上游负责。
 
-[第三方清单](../../../../third-party/plugin-release-manifest.json)固定经审阅的插件版本。兼容补丁保留统一媒体模型分配、已保存的 IM 工作目录、QQ 语音委托和原生 Office 预览。可执行代码更新不改写用户设置或工作台数据。Univer 仅接收运行时许可证配置。
+[第三方清单](../../../../third-party/plugin-release-manifest.json)固定经审阅的插件版本。兼容补丁保留统一媒体模型分配、已保存的 IM 工作目录、QQ 语音委托和原生 Office 预览。可执行代码更新不改写用户设置或工作台数据。Univer 保留运行时许可、工作进程缓存和原生 Word 公式改动。
 
 [内置扩展决策](../feature/2026-08-25-bundled-extensions-and-qq-speech.zh.md)、[机器人工作目录决策](../feature/2026-09-01-im-bot-desktop-workspaces.zh.md)和[供应商模型决策](2026-09-01-supplier-grouped-model-settings.zh.md)继续约束各自的数据与配置归属。此前 better-sidebar 和 Windows-MCP 的实现已移除，相应决策归档。
+
+alpha.2 集成包含官方插件管理器、侧边栏浏览器和子代理会话、回合文件修改、Office 转 PDF 预览，以及重启后恢复收件箱的行为。通用、模型和工作台设置保留已有命名空间。MinerU 和文档提取仍位于设置 → 插件 → 插件配置；终端、Agent 循环、子代理和 AnySearch 表单位于侧边栏的插件页面。
+
+技能/MCP 面板的固定兼容补丁在 Host 和 Client 两端使用 Typert 编解码器工厂。发布组合测试通过真实 Gateway 请求技能和 MCP 列表，避免将已安装但加载失败的插件判定为可用。主面板的会话导航继续发布发行版的导航事件，使选择会话能够关闭工作台覆盖层。
 
 ## Alternatives considered
 

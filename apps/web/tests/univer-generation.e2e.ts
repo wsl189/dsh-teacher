@@ -88,8 +88,8 @@ describe('bundled Univer chat generation', () => {
     return output.result
   }
 
-  async function createUnit(kind: 'doc' | 'sheet' | 'slide'): Promise<UnitAddress> {
-    const file = `${kind}.univer`
+  async function createUnit(kind: 'doc' | 'sheet' | 'slide', name: string = kind): Promise<UnitAddress> {
+    const file = `${name}.univer`
     await call('univer_new', { file })
     const created = await call('univer_worktree', { action: 'create', file, name: `Synthetic ${kind}` })
     const worktreeId = stringField(created, 'worktreeId')
@@ -130,6 +130,46 @@ return paragraphs.length;
     const entries = await readdir(cache, { recursive: true })
     const files = await Promise.all(entries.map(entry => stat(join(cache, entry))))
     expect(files.some(file => file.isFile() && file.size > 0)).toBe(true)
+  })
+
+  it('exports chat-authored formulas as native Word math with Times New Roman letters and digits', async () => {
+    const address = await createUnit('doc', 'native-word')
+    const paragraphs = [
+      'Native Word equations 2026 中文',
+      String.raw`Quadratic equation \(x=\frac{-b+\sqrt{b^2-4ac}}{2a}\).`,
+      String.raw`\[\int_0^1 x^2\,dx=\frac{1}{3}\]`,
+      String.raw`Matrix \(A=\begin{pmatrix}1&2\\3&4\end{pmatrix}\).`,
+    ]
+    await executeFile(address, `
+const paragraphs = ${JSON.stringify(paragraphs)};
+const first = doc.getParagraphs()[0];
+if (!first || !first.setText(paragraphs[0])) throw new Error('Initial paragraph update failed');
+for (const text of paragraphs.slice(1)) doc.appendParagraph(text);
+return true;
+    `)
+    await call('univer_export', { ...address, output: 'native-word.docx' })
+    const parts = await officeParts(join(scaffold.workspaceCwd, 'native-word.docx'))
+    const document = xmlPart(parts, 'word/document.xml')
+    expect(document).toContain(paragraphs[0])
+    expect(document).toContain('<m:f>')
+    expect(document).toContain('<m:rad>')
+    expect(document).toContain('<m:sSup>')
+    expect(document).toContain('<m:nary>')
+    expect(document).toContain('<m:m>')
+    expect(document).toContain('<m:oMathPara>')
+    expect(document.match(/<m:oMath(?:\s|>)/gu)).toHaveLength(3)
+    expect(document).not.toContain('\\frac')
+    expect(document).not.toContain('<w:drawing')
+    expect(xmlPart(parts, 'word/styles.xml')).toContain('w:ascii="Times New Roman"')
+    expect(document).not.toContain('w:ascii="Arial"')
+    const mathRuns = [...document.matchAll(/<m:r>([\s\S]*?)<\/m:r>/gu)].map(match => match[1]!)
+    for (const run of mathRuns.filter(run => /<m:t[^>]*>[A-Za-z0-9]+<\/m:t>/u.test(run))) {
+      expect(run).toContain('w:ascii="Times New Roman"')
+    }
+    const source = await call('univer_execute', {
+      ...address, code: 'return doc.getParagraphs().map(paragraph => paragraph.getText());',
+    })
+    expect(source).toMatchObject({ committed: false, value: paragraphs })
   })
 
   it('writes a twenty by eight spreadsheet and exports calculated formulas to XLSX', async () => {

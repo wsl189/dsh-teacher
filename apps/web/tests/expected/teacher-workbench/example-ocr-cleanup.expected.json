@@ -1,0 +1,248 @@
+[
+  {
+    "document": "question",
+    "labels": [
+      {
+        "text": "I",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "II",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "i",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "ii",
+        "style": "normal",
+        "indent": "32px"
+      }
+    ],
+    "native": {
+      "paragraphs": [
+        "图示题目",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。"
+      ],
+      "illustrations": [
+        "几何示意图",
+        "题目中的二维码"
+      ],
+      "romanLabels": [
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        }
+      ],
+      "equations": [
+        "i2"
+      ]
+    }
+  },
+  {
+    "document": "explanation",
+    "labels": [
+      {
+        "text": "I",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "II",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "i",
+        "style": "normal",
+        "indent": "32px"
+      },
+      {
+        "text": "ii",
+        "style": "normal",
+        "indent": "32px"
+      }
+    ],
+    "native": {
+      "paragraphs": [
+        "图示解析",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。"
+      ],
+      "illustrations": [
+        "几何示意图",
+        "题目中的二维码"
+      ],
+      "romanLabels": [
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        }
+      ],
+      "equations": [
+        "i2"
+      ]
+    }
+  },
+  {
+    "layout": "paired",
+    "native": {
+      "paragraphs": [
+        "图示题目",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。",
+        "图示解析",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。"
+      ],
+      "illustrations": [
+        "几何示意图",
+        "题目中的二维码",
+        "几何示意图",
+        "题目中的二维码"
+      ],
+      "romanLabels": [
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        },
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        }
+      ],
+      "equations": [
+        "i2",
+        "i2"
+      ]
+    }
+  },
+  {
+    "layout": "grouped",
+    "native": {
+      "paragraphs": [
+        "图示题目",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。",
+        "图示解析",
+        "（1）讨论下列小问。",
+        "（I）已知变量 i，求 i2。",
+        "（II）观察题目中的二维码。",
+        "（i）保留小写编号。",
+        "（ii）验证结论。"
+      ],
+      "illustrations": [
+        "几何示意图",
+        "题目中的二维码",
+        "几何示意图",
+        "题目中的二维码"
+      ],
+      "romanLabels": [
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        },
+        {
+          "text": "I",
+          "italic": "false"
+        },
+        {
+          "text": "II",
+          "italic": "false"
+        },
+        {
+          "text": "i",
+          "italic": "false"
+        },
+        {
+          "text": "ii",
+          "italic": "false"
+        }
+      ],
+      "equations": [
+        "i2",
+        "i2"
+      ]
+    }
+  }
+]
