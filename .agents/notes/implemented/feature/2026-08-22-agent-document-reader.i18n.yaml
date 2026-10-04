@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-agent-document-reader.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-agent-document-reader.md
-2026-08-22-agent-document-reader.md: 3ad1c5201bf1ea33707d9173e41a8d7c7a2e372f
-2026-08-22-agent-document-reader.zh.md: 68c8456653cf246770707dc03f6ee445cbd02bb6
+/agent-note-agent-document-reading-through-ocr:
+  en: 73afd0af068d2627
+  zh: b8f689e56953d707
+/agent-note-agent-document-reading-through-ocr/problem:
+  en: f59e7588778f30f3
+  zh: cb26f90f15f7a860
+/agent-note-agent-document-reading-through-ocr/decision:
+  en: b26f1916556ac683
+  zh: de6ebe9e8474442c
+/agent-note-agent-document-reading-through-ocr/alternatives-considered:
+  en: a8921e8420262e14
+  zh: 441a4b8c2c11bb1b
+/agent-note-agent-document-reading-through-ocr/consequences:
+  en: a5fb3597f4e76533
+  zh: 3bb2c7ae0b84cb6e
+/agent-note-agent-document-reading-through-ocr/testing:
+  en: f6c55180c912600e
+  zh: 225be483d2fc2c7e

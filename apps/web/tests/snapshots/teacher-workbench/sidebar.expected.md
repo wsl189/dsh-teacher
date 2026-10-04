@@ -1,26 +1,19 @@
 - button "新建会话"
-- button "收起侧边栏":
-  - img
-- button "打开工作台":
-  - img
-  - text: 工作台
-  - img
+- button "收起侧边栏"
+- tablist "AI 生图面板（gpt-image-2 / glm-image / grok-imagine-image / nanobanana / seedream 系列）":
+  - button "新会话"
+  - button "生图"
+- button "打开工作台": 工作台
 - button "定时任务": 定时任务 0
 - navigation "全局面板":
   - button "插件"
+  - button "自动化任务"
 - text: 工作区
-- button "搜索会话":
-  - img
-- textbox "搜索会话…"
-- button "视图选项":
-  - img
-- button "添加工作区":
-  - img
+- button "搜索会话"
+- textbox "搜索会话名称"
+- button "视图选项"
+- button "添加工作区"
 - tree "会话":
-  - treeitem "document-upload" [expanded]:
-    - img
-    - text: document-upload
+  - treeitem "document-upload" [expanded]
   - treeitem "新会话" [selected]
-- button "设置":
-  - img
-  - text: 设置
+- button "设置"

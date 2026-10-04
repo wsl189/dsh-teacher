@@ -1,30 +1,15 @@
 - dialog "设置":
   - navigation:
     - text: 设置
-    - button "通用设置":
-      - img
-      - text: 通用设置
-    - button "模型":
-      - img
-      - text: 模型
-    - button "插件":
-      - img
-      - text: 插件
+    - button "通用设置"
+    - button "模型"
+    - button "插件"
     - button "技能"
     - button "MCP"
-    - button "Agent 预设":
-      - img
-      - text: Agent 预设
-    - button "IM机器人":
-      - img
-      - text: IM机器人
-    - button "已归档会话":
-      - img
-      - text: 已归档会话
+    - button "Agent 预设"
+    - button "IM机器人"
   - button "打开配置文件"
-  - button "关闭":
-    - img
-    - text: 关闭
+  - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
   - tablist "模型":

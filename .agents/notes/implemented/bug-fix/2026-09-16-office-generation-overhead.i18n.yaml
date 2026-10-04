@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-16-office-generation-overhead.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-16-office-generation-overhead.md
-2026-09-16-office-generation-overhead.md: 6b10907473dfc9c66e748473385835656ccf4f32
-2026-09-16-office-generation-overhead.zh.md: 8966fe12bbba5e2f901231161f57a4a61679ae44
+/agent-note-reduce-repeated-work-in-chat-office-generation:
+  en: a7baff50ac2a8577
+  zh: 49d459c6449ca36d
+/agent-note-reduce-repeated-work-in-chat-office-generation/problem:
+  en: 51aaa30351c9b82c
+  zh: b14c03ef2ac977c4
+/agent-note-reduce-repeated-work-in-chat-office-generation/decision:
+  en: ecd109f9d2e92f77
+  zh: 2079212edf1ad94e
+/agent-note-reduce-repeated-work-in-chat-office-generation/alternatives-considered:
+  en: 351b4a5cc6c05380
+  zh: d340f9680f2130f9
+/agent-note-reduce-repeated-work-in-chat-office-generation/consequences:
+  en: ca3e58a24102ea56
+  zh: 52baf9a04df88948
+/agent-note-reduce-repeated-work-in-chat-office-generation/verification:
+  en: 80c791bbf0f153b2
+  zh: c533a89c8d840eae

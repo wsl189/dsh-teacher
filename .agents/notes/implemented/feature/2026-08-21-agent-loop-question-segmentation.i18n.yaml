@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-21-agent-loop-question-segmentation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-21-agent-loop-question-segmentation.md
-2026-08-21-agent-loop-question-segmentation.md: 6055a45a23d95cd35b534d048574ed05911520a5
-2026-08-21-agent-loop-question-segmentation.zh.md: 7bd5cd37ef339ba75cb3712b52201341535fe353
+/agent-note-agent-loop-question-segmentation:
+  en: a6a8ab83ee53cbef
+  zh: 1e22497decc0b73c
+/agent-note-agent-loop-question-segmentation/problem:
+  en: 08e1bd4ae1385c3f
+  zh: d80eddb7ad04a59f
+/agent-note-agent-loop-question-segmentation/decision:
+  en: 08946478322961fe
+  zh: 68f2324194807013
+/agent-note-agent-loop-question-segmentation/alternatives-considered:
+  en: b9855db06789ff6b
+  zh: 8597c947e1498ac8
+/agent-note-agent-loop-question-segmentation/consequences:
+  en: e127205cd4b7e4de
+  zh: 6bcba8b4ecc6bfa1
+/agent-note-agent-loop-question-segmentation/testing:
+  en: e12c86a0a161fd90
+  zh: caf4f4a64178ddbd

@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-optional-question-save-directory.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-24-optional-question-save-directory.md
-2026-08-24-optional-question-save-directory.md: 50c521c646073bb284ecd8e0d98d3471fd7cc9e6
-2026-08-24-optional-question-save-directory.zh.md: a7d609df39fec74ea6521045a069432eedc05e0f
+/agent-note-optional-question-save-directory:
+  en: 764547cde374e1fb
+  zh: 98bbaf96cc5f4efe
+/agent-note-optional-question-save-directory/problem:
+  en: bcbbb83261585f99
+  zh: 5405d6550f618ded
+/agent-note-optional-question-save-directory/decision:
+  en: 461e8440a3172f46
+  zh: 34677a0f0658bd9c
+/agent-note-optional-question-save-directory/alternatives-considered:
+  en: 08e2a7a63266b778
+  zh: a3dffe7d7e42e497
+/agent-note-optional-question-save-directory/consequences:
+  en: a694d08447b2f3eb
+  zh: aa402518f310ac3e
+/agent-note-optional-question-save-directory/testing:
+  en: b3fbb89fd1616690
+  zh: 53700c204cd3a224

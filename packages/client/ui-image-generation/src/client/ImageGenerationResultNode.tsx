@@ -6,7 +6,7 @@ import type { CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import type { ImageAttachmentRef, ImageMediaType } from '@deepseek-ai/dsh-attachment'
 import {
-  IconCloseOutline16, IconDownloadOutline16,
+  IconCloseOutlineMedium, IconDownloadOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import css from './ImageGenerationResultNode.module.css'
@@ -218,7 +218,7 @@ function GeneratedImagePreview({
           disabled={saving}
           onClick={() => { void onDownload() }}
         >
-          <IconDownloadOutline16 size={16} />
+          <IconDownloadOutlineMedium size={16} />
         </button>
         <button
           ref={closeRef}
@@ -227,7 +227,7 @@ function GeneratedImagePreview({
           aria-label={t('image.closePreview')}
           onClick={onClose}
         >
-          <IconCloseOutline16 size={16} />
+          <IconCloseOutlineMedium size={16} />
         </button>
       </div>
       {saveError && <div className={css.previewError} role="alert">{t('image.downloadFailed')}</div>}
@@ -335,7 +335,7 @@ function GeneratedImage({
           disabled={saving}
           onClick={() => { void requestSave(state.blob, state.url) }}
         >
-          <IconDownloadOutline16 size={16} />
+          <IconDownloadOutlineMedium size={16} />
         </button>
         {saveError && !open && <span className={css.saveError} role="alert">{t('image.downloadFailed')}</span>}
       </div>

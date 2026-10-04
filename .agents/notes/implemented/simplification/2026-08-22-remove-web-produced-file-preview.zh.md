@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-产出文件标签和匹配的行内代码文件名使用现有 `openFile(path)` 操作。常驻详情栏继续用于检查工具调用；Host 支持原生路径时，**在文件夹中显示**仍然可用。[workspace 文件链接决策](../feature/2026-07-31-web-workspace-file-links.zh.md)负责原生打开、浏览器偏好、远程客户端范围和活动文档隔离。
+产出文件标签和匹配的行内代码文件名使用现有 `openFile(path)` 操作。常驻详情栏继续用于检查工具调用；Host 支持原生路径时，**在文件夹中显示**仍然可用。[workspace 文件链接决策](../../archived/feature/2026-07-31-web-workspace-file-links.zh.md)负责原生打开、浏览器偏好、远程客户端范围和活动文档隔离。
 
 产出文件路径不包含 `session.previewFile` RPC、`previewFileMaxBytes` 配置、`conversation.details.file` 插槽、预览选择状态或 Host 文件读取传输，也没有保留兼容路径或持久数据。原预览决策已完整合并至本记录，其英文／中文配对和一致性记录随之删除。
 

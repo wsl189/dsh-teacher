@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-per-region-question-crop-origin.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-24-per-region-question-crop-origin.md
-2026-08-24-per-region-question-crop-origin.md: e60c5ef29de2d1992f4c12d8597d1a70b4eb5394
-2026-08-24-per-region-question-crop-origin.zh.md: 06d34935dd97f65c14fde8851bd8c1797f86d5f0
+/agent-note-per-region-question-crop-origin:
+  en: c4bebc06df9d4f27
+  zh: 96ccb360d3e9e278
+/agent-note-per-region-question-crop-origin/problem:
+  en: 2ae2cface15aba83
+  zh: db476e4d392a288d
+/agent-note-per-region-question-crop-origin/decision:
+  en: 78b1a40793c40131
+  zh: 6bdcb2c65a452a13
+/agent-note-per-region-question-crop-origin/alternatives-considered:
+  en: a67074b456d4a108
+  zh: 16cb2ccc18eb9705
+/agent-note-per-region-question-crop-origin/consequences:
+  en: 6829b44f1868d6b3
+  zh: 4a408ea7ab7a47ae

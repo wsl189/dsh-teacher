@@ -1,11 +1,8 @@
 - textbox "描述你想要构建的内容, / 调用指令, @ 文件或对话"
-- button "添加文件或调用指令":
-  - img
+- button "添加文件或调用指令"
 - button "上传文件并用 MinerU OCR 识别"
 - button "Choose File"
 - button "停止语音输入" [pressed]
 - button "访问模式，当前：工作区内修改": 工作区内修改
-- button "选择模型，当前 DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "选择模型，当前 DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "发送消息" [disabled]

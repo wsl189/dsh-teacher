@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/speech/README.md
-README.md: 6aac931d61f8f7d28e6b8fea2b3140113c595717
-README.zh.md: 7f009e9de4e7671e0c6d48db763d20b4065649b9
+/:
+  en: b5db2fec5ef0ce42
+  zh: fe4ddd70bb300fe8
+/speech-browser-speech-transcription:
+  en: ac52a140ae68fe8f
+  zh: 9ede1017e99a9d90
+/speech-browser-speech-transcription/summary:
+  en: 1d3355d460b49dfd
+  zh: d17e6e9db8a2a377
+/speech-browser-speech-transcription/table-of-contents:
+  en: 1eb35b015a6c423f
+  zh: a8a3dceee2c9e943
+/speech-browser-speech-transcription/packages:
+  en: bce7a23a42d3f7f1
+  zh: f27dafd958b547a8
+/speech-browser-speech-transcription/related-documentation:
+  en: c010ecbe68626076
+  zh: af9c1cde602c0b31
+/speech-browser-speech-transcription/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

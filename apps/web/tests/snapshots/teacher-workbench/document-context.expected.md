@@ -1,41 +1,21 @@
-- button "系统提示词":
-  - img
-  - img
-  - text: 系统提示词
 - text: 请总结这份教学计划 {{clock}}
-- button "复制":
-  - img
-- button "已思考":
-  - text: 已思考
-  - img
+- button "复制"
+- status: 已完成
+- button "已完成，用时 {{duration}}" [disabled]
 - paragraph: 已收到教学计划。
-- button "复制":
-  - img
-- button "好的回答":
-  - img
-- button "有问题的回答":
-  - img
-- button "在新对话中分支":
-  - img
-- button "用时 {{duration}}":
-  - img
-  - text: 用时 {{duration}}
+- button "复制"
+- button "好的回答"
+- button "有问题的回答"
+- button "在新对话中分支"
 - text: {{clock}}
 - textbox "发消息或创建任务, / 调用指令, @ 文件或对话"
-- button "添加文件或调用指令":
-  - img
+- button "添加文件或调用指令"
 - button "上传文件并用 MinerU OCR 识别"
 - button "Choose File"
 - button "语音输入（也可长按空格）"
 - button "访问模式，当前：工作区内修改": 工作区内修改
-- button "选择模型，当前 DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "选择模型，当前 DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "发送消息" [disabled]
-- button "1 轮 1 步 · {{throughput}} tok/s":
-  - img
-  - text: 1 轮 1 步{{throughput}} tok/s
-- button "32 tok · 缓存命中 0%":
-  - img
-  - text: 32 tok缓存命中 0%
+- button "1 轮 1 步 · {{throughput}} tok/s": 1 轮 1 步{{throughput}} tok/s
+- button "32 tok · 缓存命中 0%": 32 tok缓存命中 0%
 - button "上下文已用 0%": 0%

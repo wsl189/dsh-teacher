@@ -130,12 +130,11 @@ describe('web e2e: dense grade timetable import', () => {
           webSnapshotMode(),
         )
       }
-      const initialRequests = adapter.requests.filter(request => request.messages.every(message => message.content.every(block => block.type !== 'tool-result')))
+      const initialRequests = adapter.requests.filter(request => request.messages.every(message => message.role !== 'tool'))
       expect(initialRequests).toHaveLength(2)
       expect(initialRequests[0]?.tools?.some(tool => tool.name.startsWith('timetable_image_'))).toBe(true)
       expect(initialRequests[1]?.tools?.some(tool => tool.name.startsWith('timetable_image_'))).toBe(false)
-      expect(adapter.requests.some(request => request.messages.flatMap(message => message.content)
-        .some(block => block.type === 'tool-result' && block.content.some(content => content.type === 'image')))).toBe(true)
+      expect(adapter.requests.some(request => request.messages.some(message => message.role === 'tool' && message.content.some(content => content.type === 'image')))).toBe(true)
 
     } finally {
       extraction.resolve(undefined)

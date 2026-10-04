@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-physical-only-question-library-tree.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-24-physical-only-question-library-tree.md
-2026-08-24-physical-only-question-library-tree.md: 99486b4b5ea422af4603fcb6c4659336a3d94c77
-2026-08-24-physical-only-question-library-tree.zh.md: 4fa29565e96716a7496d0689779bf89192f21192
+/agent-note-physical-only-question-library-tree:
+  en: 32dce3d4b5776638
+  zh: c75d871dd699b588
+/agent-note-physical-only-question-library-tree/problem:
+  en: 53de277923d18a29
+  zh: 5ffbf230853834ad
+/agent-note-physical-only-question-library-tree/decision:
+  en: f731e57db05d15c8
+  zh: 25623fbf624beeb9
+/agent-note-physical-only-question-library-tree/alternatives-considered:
+  en: 8a04572d26c22e37
+  zh: 9084f6ebf8cc6614
+/agent-note-physical-only-question-library-tree/consequences:
+  en: d3d36536eb35724a
+  zh: 697add88334d7ed2
+/agent-note-physical-only-question-library-tree/testing:
+  en: 3533dbace922e67a
+  zh: f09d439170f02593

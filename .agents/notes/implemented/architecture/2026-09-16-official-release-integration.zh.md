@@ -10,7 +10,7 @@ Status: implemented
 
 ## Decision
 
-集成以官方 `dsh-v0.1.6-alpha.2` 为基础，采用其 harness、Remote API、会话升级、原生系统支持和官方侧边栏。教师工作台包与模型设置保留原有用户操作、字段、默认值、存储位置和供应商分配；这些包中的修改仅适配上游 API。教师版 Electron 启动器和更新器保留现有应用标识及数据位置。
+集成以官方 `dsh-v0.2.1-alpha.1` 为基础，采用其 harness、Remote API、会话升级、原生系统支持和官方侧边栏。教师工作台包与模型设置保留原有用户操作、字段、默认值、存储位置和供应商分配；这些包中的修改适配上游 API。教师版 Electron 启动器和 GitHub 更新器保留现有应用标识及数据位置。
 
 Web profile 加载官方文件、文档和终端侧边栏插件。保留的 Office 预览插件通过官方文档预览服务注册。适配器提供占满高度的 flex 容器，因为 Office 预览器依赖父级的 flex 尺寸分配；块级父容器可能读入工作簿数据，却使表格画布高度为零。Univer 在销毁时负责移除其嵌套 React 根节点的 DOM；另外清空宿主容器会在切换标签时与该移除操作冲突。浏览器回归通过文件面板打开 DOCX、XLSX 和 PPTX，要求表格画布实际显示内容，并覆盖面板缩放和标签切换。发行版不包含 `dsh-better-sidebar` 包、草稿标签页适配器、Windows-MCP 包或私有 Python 运行时。
 
@@ -20,7 +20,11 @@ Windows 加载官方原生 Cua Driver 电脑操控提供方。发行检查仅允
 
 [内置扩展决策](../feature/2026-08-25-bundled-extensions-and-qq-speech.zh.md)、[机器人工作目录决策](../feature/2026-09-01-im-bot-desktop-workspaces.zh.md)和[供应商模型决策](2026-09-01-supplier-grouped-model-settings.zh.md)继续约束各自的数据与配置归属。此前 better-sidebar 和 Windows-MCP 的实现已移除，相应决策归档。
 
-alpha.2 集成包含官方插件管理器、侧边栏浏览器和子代理会话、回合文件修改、Office 转 PDF 预览，以及重启后恢复收件箱的行为。通用、模型和工作台设置保留已有命名空间。MinerU 和文档提取仍位于设置 → 插件 → 插件配置；终端、Agent 循环、子代理和 AnySearch 表单位于侧边栏的插件页面。
+集成包含官方插件创建与管理、公开 URL 支持、快捷键配置、模型模糊搜索、通过原生应用打开、跨行目标与排队输入、回合文件修改、Office 转 PDF 预览，以及重启后恢复收件箱的行为。通用、模型和工作台设置保留已有命名空间。MinerU 和文档提取仍位于设置 → 插件 → 插件配置；终端、Agent 循环、子代理和 AnySearch 表单位于侧边栏的插件页面。
+
+官方 profile 配置与教师版 `settings.yaml` 区段共用一个 Settings 服务。已注册的教师配置区段保留原子文件写入、注释、修订号、敏感信息隐藏及文件监听；其他区段使用上游 profile 编辑器。导入旧设置会保留原文件，并仅创建一次 `.settings.yaml.imported`。保存默认聊天模型会保留独立的工具、图片和语音模型分配。可选的上游语音转写 Remote 使用 `speechToText`，使工作台使用方继续使用教师版 `speech` Remote。
+
+工作区反射采用生成器已有的分批分析器。合并后的类型图保留相同的稳定类型标识，同时避免 Windows 构建中的单个 TypeScript 程序持有完整的教师版和上游依赖图。生成器等价性测试覆盖这一选择。
 
 技能/MCP 面板的固定兼容补丁在 Host 和 Client 两端使用 Typert 编解码器工厂。发布组合测试通过真实 Gateway 请求技能和 MCP 列表，避免将已安装但加载失败的插件判定为可用。主面板的会话导航继续发布发行版的导航事件，使选择会话能够关闭工作台覆盖层。
 

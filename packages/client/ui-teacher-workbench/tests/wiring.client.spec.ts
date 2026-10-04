@@ -3,13 +3,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { TeacherWorkbenchDocument, TeacherWorkbenchState } from '@deepseek-ai/dsh-api-remotes/client'
 import { PDFDocument } from 'pdf-lib'
-import {
-  apply as nodeApply,
-  QUESTION_CUTTING_SETTINGS_NAMESPACE,
-  TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
-  TeacherWorkbenchSettingsSchema,
-  validateTeacherWorkbenchSettings,
-} from '../src/index.ts'
+import { QUESTION_CUTTING_SETTINGS_NAMESPACE, TEACHER_WORKBENCH_SETTINGS_NAMESPACE } from '../src/settings.ts'
 import { apply, inject } from '../src/client/index.ts'
 import { createTeacherWorkbenchViewStore } from '../src/client/view-store.ts'
 
@@ -26,54 +20,6 @@ const emptyState = (): TeacherWorkbenchState => ({
 })
 
 afterEach(() => { vi.unstubAllGlobals() })
-
-describe('teacher-workbench node wiring', () => {
-  it('registers its settings namespace when the settings service appears', () => {
-    const register = vi.fn()
-    const ctx = {
-      inject: vi.fn((_dependencies: string[], install: (scope: unknown) => void) => {
-        install({ settings: { register } })
-      }),
-    }
-    nodeApply(ctx as never)
-    expect(ctx.inject).toHaveBeenCalledWith(['settings'], expect.any(Function))
-    expect(register).toHaveBeenCalledWith(
-      TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
-      TeacherWorkbenchSettingsSchema,
-      { validate: validateTeacherWorkbenchSettings },
-    )
-  })
-
-  it('rejects inverted score thresholds', () => {
-    expect(() => {
-      validateTeacherWorkbenchSettings({
-        academicYear: '2026',
-        teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '',
-        scoreFullMark: 100, excellentScore: 59, passScore: 60,
-        questionRenderScale: 2, questionCropPadding: 12,
-      })
-    }).toThrow('passScore')
-    expect(() => {
-      validateTeacherWorkbenchSettings({
-        academicYear: '2026',
-        teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '',
-        scoreFullMark: 100, excellentScore: 101, passScore: 60,
-        questionRenderScale: 2, questionCropPadding: 12,
-      })
-    }).toThrow('excellentScore')
-    expect(() => {
-      validateTeacherWorkbenchSettings({
-        academicYear: '2026',
-        teacherName: '', schoolName: '', defaultSubject: '',
-        weatherLocation: '',
-        scoreFullMark: 100, excellentScore: 85, passScore: 60,
-        questionRenderScale: 2, questionCropPadding: 12,
-      })
-    }).not.toThrow()
-  })
-})
 
 describe('teacher-workbench view store', () => {
   it('owns disclosure, active-module, and open state without persistence', () => {

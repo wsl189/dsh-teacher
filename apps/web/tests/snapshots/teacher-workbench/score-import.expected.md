@@ -1,7 +1,6 @@
 - dialog "上传并识别成绩表":
   - heading "上传并识别成绩表" [level=2]
-  - button "关闭工作台":
-    - img
+  - button "关闭工作台"
   - text: 考试名称
   - textbox "考试名称": 期中成绩
   - text: 考试日期

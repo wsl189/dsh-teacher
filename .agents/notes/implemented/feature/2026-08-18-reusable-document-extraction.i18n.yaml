@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-18-reusable-document-extraction.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-18-reusable-document-extraction.md
-2026-08-18-reusable-document-extraction.md: 3890c0c497554838bc3689d6d00902ebcf40a198
-2026-08-18-reusable-document-extraction.zh.md: 21e130e4ea779966f0ce36bcadbf1b02cd8e48c2
+/agent-note-reusable-document-extraction:
+  en: d6b13da4e9d00577
+  zh: bef7c6444f2c3f4e
+/agent-note-reusable-document-extraction/problem:
+  en: 6b5d89823467043f
+  zh: 676f42657422cb32
+/agent-note-reusable-document-extraction/decision:
+  en: 7b28520d9f7d4017
+  zh: ba26f6f00f2b91c8
+/agent-note-reusable-document-extraction/alternatives-considered:
+  en: 0f9a09ac91d34df8
+  zh: f9b3e5d42fefb722
+/agent-note-reusable-document-extraction/consequences:
+  en: 70c5a00b0e2e2ced
+  zh: 5a97bff87975ebfa
+/agent-note-reusable-document-extraction/testing:
+  en: fe882e1e8f519ba4
+  zh: fb0a5d0d2156dd07

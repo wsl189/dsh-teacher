@@ -200,7 +200,7 @@ describe('web e2e: durable teacher workbench', () => {
   })
 
   it('places Workbench in the first sidebar action row without a New Session capsule', async () => {
-    const newSession = page.getByRole('button', { name: '新建会话', exact: true })
+    const newSession = page.getByRole('button', { name: '新会话', exact: true })
     const workbench = page.getByRole('button', { name: '打开工作台', exact: true })
     expect(await newSession.count()).toBe(1)
     expect(await workbench.evaluate((button) => {
@@ -3138,12 +3138,24 @@ describe('web e2e: hidden MinerU conversation context', () => {
     await input.fill('请总结这份教学计划')
     const settled = scaffold.whenTurnSettled()
     await composer.getByRole('button', { name: '发送消息' }).click()
-    await settled
-    const conversationScroll = page.locator('[data-conversation-scroll]')
-    await conversationScroll.getByText('mineru-ocr', { exact: true }).first().waitFor({
-      state: 'attached',
-      timeout: 10_000,
+    const sessionId = await settled
+    const session = scaffold.ctx.agents.get(sessionId)?.session
+    const uploaded = session?.snapshotEvents().filter(event => (
+      event.type === 'user/message' && event.data.source?.kind === 'mineru-ocr'
+    ))
+    expect(uploaded).toHaveLength(1)
+    expect(uploaded?.[0]).toMatchObject({
+      data: {
+        source: { kind: 'mineru-ocr', form: 'notice', summary: 'OCR document: lesson-plan.docx' },
+      },
     })
+    const message = uploaded?.[0]
+    if (message?.type !== 'user/message') throw new Error('OCR user message missing')
+    const content = message.data.content[0]
+    if (content?.type !== 'text') throw new Error('OCR document text missing')
+    expect(content.text).toContain('第一章：函数与图像')
+    const conversationScroll = page.locator('[data-conversation-scroll]')
+    expect(await conversationScroll.getByText('第一章：函数与图像', { exact: true }).count()).toBe(0)
     await conversationScroll.getByText('请总结这份教学计划', { exact: true }).waitFor({ timeout: 10_000 })
     await conversationScroll.getByText('已收到教学计划。', { exact: true }).waitFor({ timeout: 10_000 })
     await compareOrRefreshGolden(

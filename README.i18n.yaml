@@ -1,6 +1,61 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write README.md
-README.md: 195e6805eaa1e946449f95544e9553331e18958e
-README.zh.md: be3dedebe27a7fc8a65e47044f61b0bafa040ecb
+/deepseek-harness:
+  en: f68c4f080ce55ff2
+  zh: 88a76d7f7f0b260e
+/deepseek-harness/developer-preview:
+  en: 4ef4d8a71ac143f0
+  zh: 1bfc3149ba8e5543
+/deepseek-harness/run:
+  en: ff62a0ed360b0e14
+  zh: 841823e958ac346c
+/deepseek-harness/run/windows-installer:
+  en: 0b071db3fc66d54a
+  zh: c51740cb16829142
+/deepseek-harness/run/run-from-source-recommended:
+  en: 0ead9ef3b481eda0
+  zh: b12a3be96a2dae3b
+/deepseek-harness/run/run-from-npm-official-release-only:
+  en: d9c301bb5589c343
+  zh: 84c0ffa0a975fb27
+/deepseek-harness/new-deployment-checklist:
+  en: 0475ff2e0849a227
+  zh: 15ab6f5db734b003
+/deepseek-harness/new-deployment-checklist/1-run-from-this-repository:
+  en: 01a9bc2236be94f0
+  zh: e5a36aacc843b319
+/deepseek-harness/new-deployment-checklist/2-built-in-image-generation-im-cron-skill-mcp-management-and-office:
+  en: f1cfaa4da6538524
+  zh: 592412612f5aa04b
+/deepseek-harness/new-deployment-checklist/3-configure-mineru-document-extraction:
+  en: ede1b0282725e3d6
+  zh: c58cf47198028e4d
+/deepseek-harness/new-deployment-checklist/4-configure-speech-recognition:
+  en: 544edc3fbc48ad49
+  zh: b405715cc861a04b
+/deepseek-harness/new-deployment-checklist/5-office-preview-and-authoring-formats:
+  en: a9975c4124f00e94
+  zh: 0d51d2e9ee7e43bb
+/deepseek-harness/new-deployment-checklist/windows-differences:
+  en: cf361b9e880e2ddb
+  zh: 6380f41564ecece5
+/deepseek-harness/new-deployment-checklist/6-verify:
+  en: a8258134a317485b
+  zh: 7552982cf15ffa64
+/deepseek-harness/community-and-support:
+  en: 20acf6451fdc869b
+  zh: d06246dd019ecef7
+/deepseek-harness/contributing:
+  en: cabc2d3e9f8898bd
+  zh: 83b6d238bae29ce3
+/deepseek-harness/development:
+  en: 803ca2b11b497bed
+  zh: 8b4071eb0e7783ef
+/deepseek-harness/citation:
+  en: 6704e9e5a8d49a91
+  zh: 85c9cdd8d56f8e9d
+/deepseek-harness/license:
+  en: 926995344fc1c72b
+  zh: c92fab5abf85932f

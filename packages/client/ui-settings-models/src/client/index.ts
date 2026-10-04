@@ -137,5 +137,6 @@ export function apply(ctx: ClientContext): void {
     id: 'deepseek-official',
     order: 0,
     inject: deepSeekOnboardingInjected,
+    children: { 'settings.models.sign-in': { kind: 'single', scope: 'root' } },
   }, DeepSeekOnboardingDialog))
 }

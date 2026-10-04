@@ -1,30 +1,15 @@
 - dialog "设置":
   - navigation:
     - text: 设置
-    - button "通用设置":
-      - img
-      - text: 通用设置
-    - button "模型":
-      - img
-      - text: 模型
-    - button "插件":
-      - img
-      - text: 插件
+    - button "通用设置"
+    - button "模型"
+    - button "插件"
     - button "技能"
     - button "MCP"
-    - button "Agent 预设":
-      - img
-      - text: Agent 预设
-    - button "IM机器人":
-      - img
-      - text: IM机器人
-    - button "已归档会话":
-      - img
-      - text: 已归档会话
+    - button "Agent 预设"
+    - button "IM机器人"
   - button "打开配置文件"
-  - button "关闭":
-    - img
-    - text: 关闭
+  - button "关闭"
   - heading "模型" [level=2]
   - paragraph: 先配置供应商接入，再为不同使用场景选择已接入的模型。
   - tablist "模型":
@@ -34,10 +19,13 @@
   - status: 已保存 Acme Gateway (acme-gateway)。
   - button "分配使用场景"
   - heading "已添加的连接" [level=3]
-  - button "添加服务":
-    - img
-    - text: 添加服务
+  - button "添加服务"
   - list:
+    - listitem:
+      - text: DeepSeek Account
+      - button "编辑 DeepSeek Account (deepseek-account)": 编辑
+      - text: 已配置 0 个模型 尚未分配使用场景
+      - button "分配使用场景"
     - listitem:
       - text: MiniMax · 标准 API 官方预设
       - button "编辑 MiniMax · 标准 API (minimax-cn)": 编辑

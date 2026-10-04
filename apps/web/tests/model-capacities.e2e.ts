@@ -26,7 +26,7 @@ const BUDGETS = [
 ] as const
 const INPUT = createUserMessage({
   content: [{ type: 'text', text: 'Reply with OK.' }],
-  source: { kind: 'plugin', plugin: 'capacity-test' },
+  source: { kind: 'user' },
 })
 const SNAPSHOT_DIR = fileURLToPath(new URL('./expected/model-capacities', import.meta.url))
 

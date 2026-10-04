@@ -134,7 +134,7 @@ const DEFAULT_DEEPSEEK_MODELS = [
 
 function wireNamespaces(): SettingsNamespaceView[] {
   return [
-    {
+    { autoGenerate: true,
       ns: 'llm-deepseek',
       schema: JSON.parse(JSON.stringify(DeepSeekConfig.toJSON())) as JsonValue,
       value: {
@@ -150,7 +150,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
       secrets: [],
       revision: 0,
     },
-    {
+    { autoGenerate: true,
       ns: 'llm-plain',
       schema: JSON.parse(JSON.stringify(Schema.object({
         profiles: Schema.dict(Schema.object({ note: Schema.string() })),
@@ -160,7 +160,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
       secrets: [],
       revision: 0,
     },
-    {
+    { autoGenerate: true,
       ns: 'llm-pi-ai',
       schema: JSON.parse(JSON.stringify(PiAiConfig.toJSON())) as JsonValue,
       value: { providers: { openai: { apiKeyEnv: 'OPENAI_API_KEY', baseURL: 'https://proxy', headers: { 'X-Team': 'a' } }, zombie: {} } },
@@ -169,7 +169,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
       secrets: [],
       revision: 0,
     },
-    {
+    { autoGenerate: true,
       ns: 'subagent-model-selection',
       schema: JSON.parse(JSON.stringify(Schema.object({ enabled: Schema.boolean().default(false) }).toJSON())) as JsonValue,
       value: { enabled: false },
@@ -177,7 +177,7 @@ function wireNamespaces(): SettingsNamespaceView[] {
       secrets: [],
       revision: 4,
     },
-    {
+    { autoGenerate: true,
       ns: 'model-service-settings',
       schema: JSON.parse(JSON.stringify(ModelServiceConfig.toJSON())) as JsonValue,
       value: { providers: QWEN_SERVICE_ROUTES },
@@ -476,7 +476,7 @@ describe('ModelsSection', () => {
 
   it('chooses the default conversation model from usable service routes', async () => {
     const scripted = scriptedFace()
-    const defaultModelNamespace: SettingsNamespaceView = {
+    const defaultModelNamespace: SettingsNamespaceView = { autoGenerate: true,
       ns: 'agent-default-model',
       schema: JSON.parse(JSON.stringify(Schema.object({
         provider: Schema.string(),
@@ -524,7 +524,7 @@ describe('ModelsSection', () => {
 
   it.each([true, false])('limits tool choices to configured vision models (vision available: %s)', async (hasVision) => {
     const scripted = scriptedFace()
-    const namespace: SettingsNamespaceView = {
+    const namespace: SettingsNamespaceView = { autoGenerate: true,
       ns: 'agent-default-model', schema: {}, applies: 'live', secrets: [], revision: 12,
       value: { provider: 'openai', model: 'text-only', toolProvider: 'openai', toolModel: 'text-only' },
     }
@@ -579,7 +579,7 @@ describe('ModelsSection', () => {
     const namespaces = wireNamespaces()
     const piAiNamespace = namespaces.find(view => view.ns === 'llm-pi-ai')!
     const modelServiceNamespace = namespaces.find(view => view.ns === 'model-service-settings')!
-    const defaultModelNamespace: SettingsNamespaceView = {
+    const defaultModelNamespace: SettingsNamespaceView = { autoGenerate: true,
       ns: 'agent-default-model',
       schema: JSON.parse(JSON.stringify(Schema.object({
         provider: Schema.string(),
@@ -985,7 +985,7 @@ describe('ModelsSection', () => {
     // and the catalog only looked restored after reopening the card.
     const { face } = scriptedFace()
     const stored = { models: [{ id: 'user-only-model', name: 'User Only' }] }
-    const overridden: SettingsNamespaceView = {
+    const overridden: SettingsNamespaceView = { autoGenerate: true,
       ns: 'llm-deepseek',
       schema: JSON.parse(JSON.stringify(DeepSeekConfig.toJSON())) as JsonValue,
       value: { ...stored, defaultContextWindow: 1_000_000 },
@@ -1149,7 +1149,7 @@ describe('ModelsSection', () => {
 
   it('pins the deepseek placeholder and clears typed input back to inherited', async () => {
     const { face } = scriptedFace()
-    const bare: SettingsNamespaceView = {
+    const bare: SettingsNamespaceView = { autoGenerate: true,
       ns: 'llm-deepseek',
       schema: JSON.parse(JSON.stringify(DeepSeekConfig.toJSON())) as JsonValue,
       value: {},

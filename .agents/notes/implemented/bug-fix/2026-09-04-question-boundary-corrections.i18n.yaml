@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-04-question-boundary-corrections.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-04-question-boundary-corrections.md
-2026-09-04-question-boundary-corrections.md: 3ddefd168b13218cc61c1d68e072a80b99eb10ac
-2026-09-04-question-boundary-corrections.zh.md: 9c380e0039ee66afe2bc8399d378e2d6698c4b9e
+/agent-note-correctable-question-boundary-decisions:
+  en: 487029ecfbab7e78
+  zh: 4b736a816d2a270f
+/agent-note-correctable-question-boundary-decisions/problem:
+  en: 228a0c21adcfed5c
+  zh: 66405dee08a52e4f
+/agent-note-correctable-question-boundary-decisions/decision:
+  en: c40f67de831b1d3b
+  zh: c1d27bf4809b9553
+/agent-note-correctable-question-boundary-decisions/alternatives-considered:
+  en: b0fb46899020677d
+  zh: 7b1d1db175575f90
+/agent-note-correctable-question-boundary-decisions/consequences:
+  en: 5ff832d4c51671b7
+  zh: 3540e435d460274b

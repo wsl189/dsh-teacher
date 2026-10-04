@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/core/agent-default-model/README.md
-README.md: df8b9c37ea58f4d35d2f9bda1f1e7001c8b2de59
-README.zh.md: d9d78452de9e0fa2a20bcc0bd9d16c41c69e1729
+/:
+  en: eaf7d3ea3e52ddfd
+  zh: 34028b95d994f15d
+/deepseek-ai-dsh-agent-default-model:
+  en: 87e9d106cedbbe08
+  zh: 5eb47e4bd7f5b51d
+/deepseek-ai-dsh-agent-default-model/summary:
+  en: 8cf3ccf68fe42970
+  zh: 4a56de11215261c4
+/deepseek-ai-dsh-agent-default-model/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-agent-default-model/use-this-package:
+  en: 426a019d26019bc7
+  zh: 89e57948e3ed9cf8
+/deepseek-ai-dsh-agent-default-model/use-this-package/configure-the-default:
+  en: 6ea88d91c7af1f27
+  zh: 3c9f7d483e45c124
+/deepseek-ai-dsh-agent-default-model/use-this-package/read-and-change-the-default:
+  en: 84f6049c038b2e53
+  zh: 26511878205db79e
+/deepseek-ai-dsh-agent-default-model/understand-the-implementation:
+  en: 592af7e68423bd1c
+  zh: a509b637f2a14687
+/deepseek-ai-dsh-agent-default-model/understand-the-implementation/design-concept:
+  en: 162e8bf736ef1539
+  zh: b7e0c7d0381a807c
+/deepseek-ai-dsh-agent-default-model/understand-the-implementation/source-map:
+  en: 34d2241b1177476a
+  zh: 4ed0b3780bd6f6e2
+/deepseek-ai-dsh-agent-default-model/understand-the-implementation/behavior-notes:
+  en: b96ca27ccd2962d5
+  zh: 2a1e8c04b987eda1
+/deepseek-ai-dsh-agent-default-model/further-exploration:
+  en: dfb65b5c22a8fe8a
+  zh: a9726dcdbebca3a0
+/deepseek-ai-dsh-agent-default-model/model-experience:
+  en: 1550007294eab687
+  zh: 39e797cb0ca691d7
+/deepseek-ai-dsh-agent-default-model/model-experience/kv-cache-effect:
+  en: 814ad1a657587419
+  zh: 5c1968a55beb1af4
+/deepseek-ai-dsh-agent-default-model/known-limitations-and-deferred-work:
+  en: b2ca47dc66112268
+  zh: 3152307b726e2336
+/deepseek-ai-dsh-agent-default-model/known-limitations-and-deferred-work/dev-note:
+  en: e67f633dc6fe7773
+  zh: 3bb0c20c93f16f98

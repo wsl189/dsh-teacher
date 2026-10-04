@@ -1,6 +1,6 @@
 {
-  "checkedAt": "2026-09-16",
-  "officialDshRelease": "dsh-v0.1.6-alpha.2",
+  "checkedAt": "2026-10-04",
+  "officialDshRelease": "dsh-v0.2.1-alpha.1",
   "plugins": [
     {
       "name": "@dickpy/dsh-imagegen",
@@ -31,8 +31,8 @@
       "version": "0.3.0",
       "tarball": "https://registry.npmjs.org/dsh-univer-office/-/dsh-univer-office-0.3.0.tgz",
       "integrity": "sha512-GTA2C8Yg0uolFQHqAbSh8Xn0ooyTyudUjQCC/DgcQzpQEa9vpGSinGTZO6t97jClmytTUF7oXT7ycx2DehdJCg==",
-      "shippedArtifact": "third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.8.tgz",
-      "shippedSha256": "4dffd9d449a366f8735656bc40ac17d176ed1f41988470735c916e6053ce19ed",
+      "shippedArtifact": "third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.9.tgz",
+      "shippedSha256": "ffdddef59b1e24b0a870b5feee3818df32335091e7af2cc5250dfe0fbb2b36d2",
       "nativeRuntimeDependencies": {
         "@univerjs-pro/engine-formula-rust-binding": "1.0.0-insiders.20260910-22fe9c7",
         "@univerjs-pro/exchange-node-binding": "0.1.2"
@@ -51,16 +51,16 @@
       "version": "0.1.4",
       "tarball": "https://registry.npmjs.org/@anysearch/anysearch-dsh/-/anysearch-dsh-0.1.4.tgz",
       "integrity": "sha512-v7jb1oTrMcfq+DxMoRvwDZQ8xVCvU/Pf4MJKnGXAKt35GUzsLFfJW8eKgSg837/kzEVZTGg64lM94UwgiNMUuQ==",
-      "shippedArtifact": "third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz",
-      "shippedSha256": "08d583857ec3b9307157f45c68bfbc91f7863a54c143a0f3e34079afff578079"
+      "shippedArtifact": "third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4-dsh.1.tgz",
+      "shippedSha256": "e7e8472c2251efe4e68d64ca72d519775163083564b83def1c3bea65a52fcb19"
     },
     {
       "name": "dsh-plugin-cron",
       "version": "0.1.3",
       "tarball": "https://registry.npmjs.org/dsh-plugin-cron/-/dsh-plugin-cron-0.1.3.tgz",
       "integrity": "sha512-afx7PFSuFzmtjNlx7MdjTW2QFYTuPyDmuA06Q4lPk+Eav+sNMnvHRWgWspaZY53ze6QdJ7rkpu0Dz9Xusf4Pmg==",
-      "shippedArtifact": "third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz",
-      "shippedSha256": "0f14d57ee8554231688e5d985c77e253327fda9e36d463efb7d6d12b17489d7b"
+      "shippedArtifact": "third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz",
+      "shippedSha256": "4ac2e5cadfe03cd3273f6ff435cce36597c82f44c1afeabd6593559035663e1c"
     }
   ],
   "bundledSkills": [

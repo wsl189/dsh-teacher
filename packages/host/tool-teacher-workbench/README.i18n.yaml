@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/tool-teacher-workbench/README.md
-README.md: 4c63ce4f79dee773474e4b9b5ca49be1cbbe3d2b
-README.zh.md: 07c065b5a1ea48c3a0fbbfdfaddcb957319523c0
+/:
+  en: 61b796427ebcc30e
+  zh: 241b710652919445
+/deepseek-ai-dsh-tool-teacher-workbench:
+  en: 0d1d9d33c51c7b90
+  zh: f6d51fab0e63067e
+/deepseek-ai-dsh-tool-teacher-workbench/summary:
+  en: 52d33ae8807496b4
+  zh: bb3eb717ebdbb7dc
+/deepseek-ai-dsh-tool-teacher-workbench/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7177e3097c880aa1
+/deepseek-ai-dsh-tool-teacher-workbench/use-this-package:
+  en: 89b86cd2842e9929
+  zh: 364b365c0e983c83
+/deepseek-ai-dsh-tool-teacher-workbench/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-tool-teacher-workbench/understand-the-implementation/extension-points:
+  en: b4032853906839d9
+  zh: b927b1123b18e599
+/deepseek-ai-dsh-tool-teacher-workbench/further-exploration:
+  en: cf1d20c71403b294
+  zh: a1abe318d402d902
+/deepseek-ai-dsh-tool-teacher-workbench/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-tool-teacher-workbench/model-experience/ordinary-conversation-workbench-operations:
+  en: 07cbff648d958434
+  zh: d28d522b57fe1f46
+/deepseek-ai-dsh-tool-teacher-workbench/model-experience/ordinary-conversation-workbench-operations/what-the-model-sees:
+  en: 5c551cd187003e47
+  zh: 51f0c8479c948e29
+/deepseek-ai-dsh-tool-teacher-workbench/model-experience/ordinary-conversation-workbench-operations/token-effect:
+  en: 730204e787222d9d
+  zh: 385185a593912b84
+/deepseek-ai-dsh-tool-teacher-workbench/model-experience/ordinary-conversation-workbench-operations/kv-cache-effect:
+  en: f2052bc454b50f82
+  zh: 98636f75c4b9adda
+/deepseek-ai-dsh-tool-teacher-workbench/known-limitations-and-deferred-work:
+  en: 41e8ca035a1de7a6
+  zh: 5393c80c42e891ac
+/deepseek-ai-dsh-tool-teacher-workbench/known-limitations-and-deferred-work/dev-note:
+  en: 87b084a4eb25af63
+  zh: a540f0bf18eeeb79

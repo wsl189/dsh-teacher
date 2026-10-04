@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-agent-classified-outside-question-boundaries.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-03-agent-classified-outside-question-boundaries.md
-2026-09-03-agent-classified-outside-question-boundaries.md: 2e2b0fea80beff63d361aa093072f05a63f6d6e7
-2026-09-03-agent-classified-outside-question-boundaries.zh.md: 2bffc65bf72b1f7b0dbe577e524f6a32ffd10caa
+/agent-note-agent-classified-outside-question-boundaries:
+  en: 94f84fc7d273379e
+  zh: 21445dce7d615c93
+/agent-note-agent-classified-outside-question-boundaries/problem:
+  en: defbf120444381d7
+  zh: 4b2d0d505f15f708
+/agent-note-agent-classified-outside-question-boundaries/decision:
+  en: 0875c53d5757403d
+  zh: 91447b93b8afd76f
+/agent-note-agent-classified-outside-question-boundaries/alternatives-considered:
+  en: d2a617b3e5926501
+  zh: 53212f157266d9d9
+/agent-note-agent-classified-outside-question-boundaries/consequences:
+  en: 573cc8c617fdd2f5
+  zh: 01d67f1867cfdf49
+/agent-note-agent-classified-outside-question-boundaries/testing:
+  en: a168401bb4597c14
+  zh: 84f51d4d6bc16910

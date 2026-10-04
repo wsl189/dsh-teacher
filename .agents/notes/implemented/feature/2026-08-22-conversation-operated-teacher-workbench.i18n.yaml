@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-conversation-operated-teacher-workbench.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-conversation-operated-teacher-workbench.md
-2026-08-22-conversation-operated-teacher-workbench.md: 9b3c95babc116d3648df8e55aef25cdbcc56535f
-2026-08-22-conversation-operated-teacher-workbench.zh.md: c61d6eeed48ec623f2245627ed11ecc5ade7cea1
+/agent-note-conversation-operated-teacher-workbench:
+  en: 90828c020c53b212
+  zh: 12acd5144ee1f175
+/agent-note-conversation-operated-teacher-workbench/problem:
+  en: 3dc6c50663f98e80
+  zh: 68a4448efa62a008
+/agent-note-conversation-operated-teacher-workbench/decision:
+  en: 26877cd90b71fe28
+  zh: 7804c50e95691b33
+/agent-note-conversation-operated-teacher-workbench/alternatives-considered:
+  en: a06935853977ff5d
+  zh: 07bb23399a18a8ee
+/agent-note-conversation-operated-teacher-workbench/consequences:
+  en: 36af8bde2e6911f9
+  zh: 31b9bd2e3ded713d
+/agent-note-conversation-operated-teacher-workbench/testing:
+  en: 29e8139e999639f9
+  zh: 7c837ae8e254396d

@@ -9,10 +9,10 @@ import type {
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  IconEditOutline16,
-  IconLinkOutline16,
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconEditOutlineMedium,
+  IconLinkOutlineMedium,
+  IconPlusOutlineMedium,
+  IconTrashOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
@@ -93,7 +93,7 @@ export function LessonPreparation({ state, commands, t }: LessonPreparationProps
           className={css.buttonPrimary}
           onClick={() => { setResourceDraft({ category, name: '', url: '', description: '' }) }}
         >
-          <IconPlusOutline16 />
+          <IconPlusOutlineMedium />
           {t('lesson.addResource')}
         </button>
       </div>
@@ -115,20 +115,20 @@ export function LessonPreparation({ state, commands, t }: LessonPreparationProps
                 aria-label={t('lesson.openLink')}
                 title={t('lesson.openLink')}
               >
-                <IconLinkOutline16 />
+                <IconLinkOutlineMedium />
               </a>
               <IconAction
                 label={t('edit')}
                 onClick={() => { setResourceDraft({ ...resource }) }}
               >
-                <IconEditOutline16 />
+                <IconEditOutlineMedium />
               </IconAction>
               <IconAction
                 label={t('delete')}
                 danger
                 onClick={() => { if (confirmDelete(t)) void commands.deleteResource(resource.id) }}
               >
-                <IconTrashOutline16 />
+                <IconTrashOutlineMedium />
               </IconAction>
             </div>
           </article>
@@ -144,7 +144,7 @@ export function LessonPreparation({ state, commands, t }: LessonPreparationProps
               className={css.buttonSecondary}
               onClick={() => { setTemplateDraft({ name: '', scene: '', fields: '' }) }}
             >
-              <IconPlusOutline16 />
+              <IconPlusOutlineMedium />
               {t('lesson.addTemplate')}
             </button>
           </div>
@@ -160,14 +160,14 @@ export function LessonPreparation({ state, commands, t }: LessonPreparationProps
                     label={t('edit')}
                     onClick={() => { setTemplateDraft({ ...template, fields: template.fields.join('\n') }) }}
                   >
-                    <IconEditOutline16 />
+                    <IconEditOutlineMedium />
                   </IconAction>
                   <IconAction
                     label={t('delete')}
                     danger
                     onClick={() => { if (confirmDelete(t)) void commands.deleteTemplate(template.id) }}
                   >
-                    <IconTrashOutline16 />
+                    <IconTrashOutlineMedium />
                   </IconAction>
                 </div>
               </div>

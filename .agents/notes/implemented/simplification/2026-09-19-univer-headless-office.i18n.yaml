@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-univer-headless-office.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-19-univer-headless-office.md
-2026-09-19-univer-headless-office.md: ddab004da1306a70d27e0ccbb5daf604dbe594c2
-2026-09-19-univer-headless-office.zh.md: 396221733df5b5469f44dbd4bcaf07be286f9aa9
+/agent-note-ship-univer-content-tools-without-its-visual-interface:
+  en: f0432f103a4753d4
+  zh: 39a6efc8df40684c
+/agent-note-ship-univer-content-tools-without-its-visual-interface/problem:
+  en: f8d2cfa179779123
+  zh: 1a071e5ae6077da4
+/agent-note-ship-univer-content-tools-without-its-visual-interface/decision:
+  en: 64ae535eabdc12f1
+  zh: f510c5d3197ec71e
+/agent-note-ship-univer-content-tools-without-its-visual-interface/alternatives-considered:
+  en: 9dd615355c9ae3b9
+  zh: 06795e231f11bde4
+/agent-note-ship-univer-content-tools-without-its-visual-interface/consequences:
+  en: 070b5cac856928e4
+  zh: 47710f5387fe438a
+/agent-note-ship-univer-content-tools-without-its-visual-interface/measurements-and-verification:
+  en: 9e6c9cbe53b26813
+  zh: 53f9fec1ef59e3a2

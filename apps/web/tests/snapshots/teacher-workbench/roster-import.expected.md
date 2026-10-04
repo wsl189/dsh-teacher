@@ -1,7 +1,6 @@
 - dialog "上传并识别学生名册":
   - heading "上传并识别学生名册" [level=2]
-  - button "关闭工作台":
-    - img
+  - button "关闭工作台"
   - strong: 高一（1）班
   - text: 高一一班名册.xlsx · 识别到 1 名学生，请确认后导入
   - table:

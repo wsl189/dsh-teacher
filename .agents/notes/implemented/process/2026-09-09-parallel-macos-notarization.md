@@ -16,7 +16,7 @@ The ZIP contains an individually stapled App. The DMG contains the signed App wi
 
 Both lanes settle before error propagation or temporary-directory cleanup. Only two successful lanes with the configured update feed allow promotion of the DMG, ZIP, ZIP blockmap, and channel metadata. The stapled App replaces the signed directory build, and the caller writes the release completion record last. Missing or mismatched App update configuration fails before promotion; any error leaves the record absent, so the existing upload validation rejects the incomplete release. Separate output directories also prevent concurrent writes to electron-builder diagnostics and channel metadata.
 
-This refines the notarization ordering in the [Desktop packaging decision](../architecture/2026-08-25-electron-desktop-packaging-and-updates.md); that note remains the owner of release identity, signatures, update ownership, and publishing requirements.
+This refines the notarization ordering in the [Desktop packaging decision](../../archived/architecture/2026-08-25-electron-desktop-packaging-and-updates.md); that note remains the owner of release identity, signatures, update ownership, and publishing requirements.
 
 ## Alternatives considered
 

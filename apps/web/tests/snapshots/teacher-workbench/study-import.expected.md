@@ -1,7 +1,6 @@
 - dialog "上传并识别课程表":
   - heading "上传并识别课程表" [level=2]
-  - button "关闭工作台":
-    - img
+  - button "关闭工作台"
   - group:
     - strong: 早读安排.jpg
     - text: 识别到 8 节，请确认班级、星期和节次后导入

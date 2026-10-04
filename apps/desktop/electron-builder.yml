@@ -17,7 +17,8 @@ extraResources:
       - '**/*'
   - from: build/icon.ico
     to: icon.ico
-npmRebuild: true
+# Shipped addons use Node-API prebuilds; verify:runtime tests them in Electron.
+npmRebuild: false
 afterPack: ./scripts/after-pack.mjs
 generateUpdatesFilesForAllChannels: true
 win:

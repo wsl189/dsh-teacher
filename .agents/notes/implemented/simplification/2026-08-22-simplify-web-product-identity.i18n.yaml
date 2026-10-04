@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-simplify-web-product-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-22-simplify-web-product-identity.md
-2026-08-22-simplify-web-product-identity.md: e59b2b632b4be4a73f77c81b7a7ea572d76def70
-2026-08-22-simplify-web-product-identity.zh.md: 77063f7802b32aeba4aed93e133d100edb5a0233
+/agent-note-simplify-web-product-identity:
+  en: 7cfeef714f384a1b
+  zh: a5bd9610e06ee3e5
+/agent-note-simplify-web-product-identity/problem:
+  en: 3aebf92aaa5142dd
+  zh: b3586be6c6f02bd7
+/agent-note-simplify-web-product-identity/decision:
+  en: 3c3364aa472fc772
+  zh: cb8214c80ad69449
+/agent-note-simplify-web-product-identity/alternatives-considered:
+  en: 44864236d9388c91
+  zh: 7a736532c6533e05
+/agent-note-simplify-web-product-identity/consequences:
+  en: a6cf00fb43a064e6
+  zh: 2f9c07b26104d8bd
+/agent-note-simplify-web-product-identity/testing:
+  en: 8f03240068434cfe
+  zh: ca64ecac334e2ea3

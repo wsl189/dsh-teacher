@@ -5,8 +5,7 @@
   - tab "早晚自习"
 - button "选择班级": 高一（1）班
 - button "添加班级"
-- button "删除班级":
-  - img
+- button "删除班级"
 - checkbox "仅显示"
 - text: 仅显示
 - textbox "筛选教师姓名":

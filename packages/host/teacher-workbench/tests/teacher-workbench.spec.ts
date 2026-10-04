@@ -180,7 +180,7 @@ function promptAgent(text: string, cwd?: string): Agent {
   const id = SessionId(`teacher-prompt-${String(randomCallId)}`)
   const session = cwd === undefined
     ? Session.create(id)
-    : Session.create(id, [], { version: 3, isSeeded: false, id, createdAt: Date.now(), cwd })
+    : Session.create(id, [], { version: 4, isSeeded: false, id, createdAt: Date.now(), cwd })
   session.append('turn/start', { turn: 1 })
   session.append('user/message', createUserMessage({
     content: [{ type: 'text', text }],

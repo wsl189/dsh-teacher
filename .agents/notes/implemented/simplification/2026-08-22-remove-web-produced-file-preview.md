@@ -10,7 +10,7 @@ The produced-file preview duplicated the Host-native file action with a browser-
 
 ## Decision
 
-Produced-file chips and matching inline-code mentions use the existing `openFile(path)` action. The resident details column remains the Tool-call inspector, and **Show in folder** remains available when the Host supports native paths. The [workspace file links decision](../feature/2026-07-31-web-workspace-file-links.md) owns native opening, browser preference, remote-client scope, and active-document isolation.
+Produced-file chips and matching inline-code mentions use the existing `openFile(path)` action. The resident details column remains the Tool-call inspector, and **Show in folder** remains available when the Host supports native paths. The [workspace file links decision](../../archived/feature/2026-07-31-web-workspace-file-links.md) owns native opening, browser preference, remote-client scope, and active-document isolation.
 
 The produced-file path has no `session.previewFile` RPC, `previewFileMaxBytes` configuration, `conversation.details.file` slot, preview selection state, or Host file-read transport. No compatibility path or durable data remains. The former preview decision is fully consolidated into this note and removed with its English/Chinese pair and consistency record.
 

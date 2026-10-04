@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-16-official-release-integration.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-16-official-release-integration.md
-2026-09-16-official-release-integration.md: fe3b2b6de5d0371f795b8d5530a41e0b7f9eef8e
-2026-09-16-official-release-integration.zh.md: c1b42b92ce3683a644fbb97a3b4c37423985157c
+/agent-note-official-release-integration-with-preserved-teacher-settings:
+  en: 0dcd5f46dba1aab2
+  zh: 66ecf020ec0a3d9e
+/agent-note-official-release-integration-with-preserved-teacher-settings/problem:
+  en: 59bf033916219bbe
+  zh: ef540fc66d6348ad
+/agent-note-official-release-integration-with-preserved-teacher-settings/decision:
+  en: 9a691be93a01ef65
+  zh: b887d301f7f114bc
+/agent-note-official-release-integration-with-preserved-teacher-settings/alternatives-considered:
+  en: 624aff6d967acf0f
+  zh: 483cf56b56ae92c7
+/agent-note-official-release-integration-with-preserved-teacher-settings/consequences:
+  en: accbbda2c87b23fd
+  zh: 3ef20745e15336d2

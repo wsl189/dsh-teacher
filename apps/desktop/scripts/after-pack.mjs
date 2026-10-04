@@ -1,4 +1,4 @@
-/** Stage dynamic HTML-conversion dependencies that pnpm's deduped graph can omit. */
+/** Stage runtime dependencies that pnpm's deduped graph can omit. */
 
 import { cp, lstat, mkdir, readdir, rm, unlink } from 'node:fs/promises'
 import { createRequire } from 'node:module'
@@ -29,11 +29,11 @@ function resolvePackageRoot(resolver, packageName) {
 }
 
 /** Copy one package's declared runtime subset into the unpacked Electron application. */
-async function copyRuntimePackage(appRoot, packageName, sourceRoot) {
+async function copyRuntimePackage(appRoot, packageName, sourceRoot, entries = PACKAGE_RUNTIME_ENTRIES) {
   const destination = join(appRoot, 'node_modules', ...packageName.split('/'))
   await removePackageDestination(destination)
   await mkdir(destination, { recursive: true })
-  for (const entry of PACKAGE_RUNTIME_ENTRIES) {
+  for (const entry of entries) {
     await cp(join(sourceRoot, entry), join(destination, entry), {
       recursive: true,
       dereference: true,
@@ -60,6 +60,14 @@ export async function copyDesktopRuntimePackages({ appDir, appOutDir }) {
   for (const [packageName, sourceRoot] of packages) {
     await copyRuntimePackage(appRoot, packageName, sourceRoot)
   }
+  // The same collector can omit this shared workspace peer even though the
+  // base bundle and settings service both need it to save profile values.
+  await copyRuntimePackage(
+    appRoot,
+    '@deepseek-ai/dsh-config-editor',
+    resolvePackageRoot(appResolver, '@deepseek-ai/dsh-config-editor'),
+    ['package.json', 'lib'],
+  )
 }
 
 /** Replace the high-file-count PPT Master tree with one deterministic archive. */

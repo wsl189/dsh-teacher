@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-01-remove-maintenance-actions-from-default-web-chrome.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-09-01-remove-maintenance-actions-from-default-web-chrome.md
-2026-09-01-remove-maintenance-actions-from-default-web-chrome.md: 46588c033aa3e21a6687ef5e3646ba3343dbc761
-2026-09-01-remove-maintenance-actions-from-default-web-chrome.zh.md: b105a84f0d83937b8013720a9cf86f10601260a7
+/agent-note-remove-maintenance-actions-from-default-web-chrome:
+  en: 4cc5caaea16ae15e
+  zh: 73361180cc99914a
+/agent-note-remove-maintenance-actions-from-default-web-chrome/problem:
+  en: efcf801e760ceac2
+  zh: 7f7f9dee88a7b55c
+/agent-note-remove-maintenance-actions-from-default-web-chrome/decision:
+  en: 416d7eb80a270848
+  zh: e397f8d465e4924a
+/agent-note-remove-maintenance-actions-from-default-web-chrome/alternatives-considered:
+  en: 152389b16d07b046
+  zh: f45f47d9b6e9b2f2
+/agent-note-remove-maintenance-actions-from-default-web-chrome/consequences:
+  en: 457c7e3101d22efb
+  zh: d4755154674661f9

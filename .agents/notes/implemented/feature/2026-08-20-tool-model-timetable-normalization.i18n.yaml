@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-tool-model-timetable-normalization.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-tool-model-timetable-normalization.md
-2026-08-20-tool-model-timetable-normalization.md: 6b11a5e1a89473b9c30c1765073161cb348dac9d
-2026-08-20-tool-model-timetable-normalization.zh.md: fe0ed53c561f45c333e8939a72f1d38bdc345307
+/agent-note-tool-model-timetable-normalization:
+  en: 8d0af6942b40e63f
+  zh: 882dd53c6731ddab
+/agent-note-tool-model-timetable-normalization/problem:
+  en: ab896a99353db754
+  zh: 239c3c557ae10834
+/agent-note-tool-model-timetable-normalization/decision:
+  en: be5f06ab431cd018
+  zh: e079bea5222d937e
+/agent-note-tool-model-timetable-normalization/alternatives-considered:
+  en: 78eec2fd1d93727a
+  zh: 0aa5223e7ace3c6c
+/agent-note-tool-model-timetable-normalization/consequences:
+  en: 204bb07c6d3a4f94
+  zh: 8dad4ef47d445f96
+/agent-note-tool-model-timetable-normalization/testing:
+  en: bb6d48e89366080f
+  zh: 420f543f42a4a3d6

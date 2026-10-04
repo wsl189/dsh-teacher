@@ -3,7 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import clsx from 'clsx'
 import { ChevronDown, FileUp, Plus } from 'lucide-react'
-import { IconTrashOutline16, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconTrashOutlineMedium, Menu, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {
   TeacherClass,
   TeacherClassId,
@@ -421,7 +421,7 @@ function TimetableFilters(props: {
             if (props.selectedClass !== undefined) props.onDeleteClass(props.selectedClass)
           }}
         >
-          <IconTrashOutline16 />
+          <IconTrashOutlineMedium />
         </IconAction>
       )}
       {props.view === 'week' && teacherFilter}
@@ -572,7 +572,7 @@ function GradeSchedule(props: {
                         danger
                         onClick={() => { props.onDeleteClass(owner) }}
                       >
-                        <IconTrashOutline16 />
+                        <IconTrashOutlineMedium />
                       </IconAction>
                     </div>
                   </th>

@@ -11,7 +11,7 @@ import type {
   TeacherStudentId,
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
-import { IconTrashOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconTrashOutlineMedium, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import {
@@ -149,7 +149,7 @@ export function ScoreAnalysis({ state, settings, commands, t }: ScoreAnalysisPro
               danger
               onClick={() => { if (confirmDelete(t)) void commands.deleteExam(exam.id) }}
             >
-              <IconTrashOutline16 />
+              <IconTrashOutlineMedium />
             </IconAction>
           )}
         </div>

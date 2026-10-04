@@ -2,7 +2,7 @@
 
 import { DOMParser, XMLSerializer, type Element as XmlElement } from '@xmldom/xmldom'
 import type { OcrExtractedImage } from '@deepseek-ai/dsh-ocr'
-import { Document, ImageRun, ImportedXmlComponent, Packer, Paragraph, TextRun, type ParagraphChild } from 'docx'
+import { Document, ImageRun, ImportedXmlComponent, Packer, Paragraph, TextRun, type ParagraphChild, type XmlComponent } from 'docx'
 import { strFromU8, unzipSync } from 'fflate'
 import katex from 'katex'
 import { fromMarkdown } from 'mdast-util-from-markdown'
@@ -17,6 +17,11 @@ import { exampleImageReferences, exampleImageRun, importExampleImage, restoreExa
 
 const WORD_NS = 'http://schemas.openxmlformats.org/wordprocessingml/2006/main'
 const MATH_NS = 'http://schemas.openxmlformats.org/officeDocument/2006/math'
+
+/** Assemble imported OMML and drawing runs through the documented XML subclass surface. */
+class ImportedWordParagraph extends Paragraph {
+  append(child: XmlComponent): void { this.root.push(child) }
+}
 
 interface Equation {
   readonly kind: 'equation'
@@ -100,7 +105,7 @@ export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): P
       if (element.namespaceURI !== WORD_NS || element.localName !== 'p') {
         throw new Error('Collection Word content must contain only generated paragraphs')
       }
-      const paragraph = new Paragraph({})
+      const paragraph = new ImportedWordParagraph({})
       let movedImage = false
       let bodyContent = false
       for (const child of Array.from(element.childNodes)) {
@@ -109,7 +114,7 @@ export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): P
         if (node.namespaceURI === WORD_NS && node.localName === 'r') {
           if (node.getElementsByTagNameNS(WORD_NS, 'drawing').length > 0) {
             if (exampleWordIsEdited(element)) {
-              paragraph.addChildElement(importExampleImage(node, entries))
+              paragraph.append(importExampleImage(node, entries))
               bodyContent = true
               continue
             }
@@ -124,14 +129,14 @@ export async function compileExampleWord(blocks: readonly ExampleWordBlock[]): P
                 figures.push(new Paragraph({ style: 'DshExampleFigure', children: [run] }))
                 movedImage = true
               } else {
-                paragraph.addChildElement(run)
+                paragraph.append(run)
                 bodyContent = true
               }
             }
             continue
           }
         }
-        paragraph.addChildElement(importWordElement(node))
+        paragraph.append(importWordElement(node))
         if (node.localName !== 'pPr') bodyContent = true
       }
       if (bodyContent || !movedImage) paragraphs.push(paragraph)

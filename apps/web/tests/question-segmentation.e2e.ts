@@ -154,9 +154,7 @@ class QuestionSegmentationAdapter extends LlmAdapter {
       const contextTool = options.tools?.find(tool => tool.name.startsWith('question_review_context_'))?.name
       if (contextTool === undefined) throw new Error('local repair context tool is missing')
       expect(options.tools?.map(tool => tool.name).sort()).toEqual([contextTool, localRepair].sort())
-      const contextText = options.messages.flatMap(message => message.content).flatMap(block => (
-        block.type === 'tool-result' ? block.content.filter(item => item.type === 'text').map(item => item.text) : []
-      )).findLast(text => text.startsWith('{') && text.includes('"targetId"'))
+      const contextText = options.messages.filter(message => message.role === 'tool').flatMap(message => message.content).flatMap(block => block.type === 'text' ? [block.text] : []).findLast(text => text.startsWith('{') && text.includes('"targetId"'))
       if (contextText === undefined) {
         yield * toolCall(contextTool, { targetId: 'crop-p0e0', chunk: 0 }, this.requests.length)
         return

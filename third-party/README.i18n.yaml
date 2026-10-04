@@ -1,6 +1,25 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write third-party/README.md
-README.md: 44029fcd2d32e287eda5f3ee53ded489381c7d82
-README.zh.md: a8caf0ee59e426f6b77d50ef94dffb084ae12b95
+/third-party-source-artifacts:
+  en: 41bd0e25a0d95cae
+  zh: ed570f92df3b205b
+/third-party-source-artifacts/inventory:
+  en: 56a3b4f3d94e8606
+  zh: 790ce5f4cd120405
+/third-party-source-artifacts/configuration-and-migration:
+  en: 000cd4c7b24f8f6a
+  zh: d16eceb7748e4699
+/third-party-source-artifacts/word-equations-and-fonts:
+  en: 4096c5a18591a14e
+  zh: 358ed83c1cf85308
+/third-party-source-artifacts/bot-workspaces:
+  en: 50d40f6b4cf3dc4d
+  zh: 8484ab9d3ad9b4e7
+/third-party-source-artifacts/artifact-notes:
+  en: 8aeabb228b775b06
+  zh: c8e030ce44bcdcec
+/third-party-source-artifacts/verification:
+  en: 3fce67f3c1156ff4
+  zh: 754373e0a181a350

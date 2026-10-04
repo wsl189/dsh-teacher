@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-08-example-collection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-08-example-collection.md
-2026-09-08-example-collection.md: 8ce8fadf7e5c0bab916aa08de0af3427df6b1977
-2026-09-08-example-collection.zh.md: 22e5e93b5a626759c08760e7783617ad8c3c6e74
+/agent-note-sqlite-example-collection:
+  en: 8014fafbfb0bd59e
+  zh: 1eef5fd0b3da3349
+/agent-note-sqlite-example-collection/problem:
+  en: 841dda4acec2bde2
+  zh: fc7acf922d0556c0
+/agent-note-sqlite-example-collection/decision:
+  en: 2104ef85ead3f8ac
+  zh: 55e6dc8c42491a0b
+/agent-note-sqlite-example-collection/alternatives-considered:
+  en: 4330dae2796c2f5d
+  zh: 8e2266338ab24051
+/agent-note-sqlite-example-collection/consequences:
+  en: 2904e913f6627fee
+  zh: ffffad0ef2b4270c
+/agent-note-sqlite-example-collection/testing:
+  en: dcb7db11dfcaae21
+  zh: c0ea8227bd80e2f4

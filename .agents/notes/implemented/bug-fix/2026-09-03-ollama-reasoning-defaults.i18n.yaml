@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-ollama-reasoning-defaults.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-03-ollama-reasoning-defaults.md
-2026-09-03-ollama-reasoning-defaults.md: 7917a49a1469b5fd8e721ab845787af071ea8da1
-2026-09-03-ollama-reasoning-defaults.zh.md: 9c7a101a2cd834d7f11842cba24cca8165334b1b
+/agent-note-ollama-reasoning-defaults-make-off-a-real-request-state:
+  en: da282bd3deb245f5
+  zh: 315961e4b943468b
+/agent-note-ollama-reasoning-defaults-make-off-a-real-request-state/problem:
+  en: 7cbf4f39c90becd1
+  zh: c6375a612ee33b6b
+/agent-note-ollama-reasoning-defaults-make-off-a-real-request-state/decision:
+  en: 26b112c2e197e265
+  zh: 3a3ff7ff0af8e667
+/agent-note-ollama-reasoning-defaults-make-off-a-real-request-state/alternatives-considered:
+  en: c9f0e3c2935f2cae
+  zh: 0d8f6dc27723ad74
+/agent-note-ollama-reasoning-defaults-make-off-a-real-request-state/consequences:
+  en: 8f65545573294382
+  zh: 7434127cee4d3381

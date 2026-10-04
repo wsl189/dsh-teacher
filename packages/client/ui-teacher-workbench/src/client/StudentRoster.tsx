@@ -8,10 +8,10 @@ import type {
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  IconEditOutline16,
-  IconPlusOutline16,
-  IconSearchOutline16,
-  IconTrashOutline16,
+  IconEditOutlineMedium,
+  IconPlusOutlineMedium,
+  IconSearchOutlineMedium,
+  IconTrashOutlineMedium,
   Modal,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchSettings } from '../settings.ts'
@@ -142,20 +142,20 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
             className={css.buttonSecondary}
             onClick={() => { setClassDraft({ name: '', grade: '', subject: settings.defaultSubject }) }}
           >
-            <IconPlusOutline16 />
+            <IconPlusOutlineMedium />
             {t('class.add')}
           </button>
           {selectedClass !== undefined && (
             <>
               <IconAction label={t('class.edit')} onClick={() => { setClassDraft({ ...selectedClass }) }}>
-                <IconEditOutline16 />
+                <IconEditOutlineMedium />
               </IconAction>
               <IconAction
                 label={t('delete')}
                 danger
                 onClick={() => { if (confirmDelete(t)) void commands.deleteClass(selectedClass.id) }}
               >
-                <IconTrashOutline16 />
+                <IconTrashOutlineMedium />
               </IconAction>
             </>
           )}
@@ -187,7 +187,7 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
             disabled={classId === ''}
             onClick={() => { setStudentDraft({ ...EMPTY_STUDENT }) }}
           >
-            <IconPlusOutline16 />
+            <IconPlusOutlineMedium />
             {t('student.add')}
           </button>
         </div>
@@ -203,7 +203,7 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
                 <span>{t('students.count', { count: state.students.filter(item => item.classId === classId).length })}</span>
               </div>
               <label className={css.searchBox}>
-                <IconSearchOutline16 />
+                <IconSearchOutlineMedium />
                 <input
                   aria-label={t('student.search')}
                   placeholder={t('student.search')}
@@ -235,14 +235,14 @@ export function StudentRoster({ state, settings, commands, t }: StudentRosterPro
                       <td>
                         <div className={css.rowActions}>
                           <IconAction label={t('edit')} onClick={() => { setStudentDraft({ ...student }) }}>
-                            <IconEditOutline16 />
+                            <IconEditOutlineMedium />
                           </IconAction>
                           <IconAction
                             label={t('delete')}
                             danger
                             onClick={() => { if (confirmDelete(t)) void commands.deleteStudent(student.id) }}
                           >
-                            <IconTrashOutline16 />
+                            <IconTrashOutlineMedium />
                           </IconAction>
                         </div>
                       </td>

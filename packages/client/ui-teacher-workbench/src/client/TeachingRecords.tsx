@@ -9,9 +9,9 @@ import type {
   TeacherWorkbenchState,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  IconEditOutline16,
-  IconPlusOutline16,
-  IconTrashOutline16,
+  IconEditOutlineMedium,
+  IconPlusOutlineMedium,
+  IconTrashOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { TeacherWorkbenchCommands } from './contracts.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
@@ -118,7 +118,7 @@ export function TeachingRecords({ state, commands, t }: TeachingRecordsProps) {
         <div className={css.toolbarActions}>
           <button type="button" className={css.buttonSecondary} onClick={() => { setManaging(true) }}>{t('record.manageTemplates')}</button>
           <button type="button" className={css.buttonPrimary} onClick={() => { beginRecord() }}>
-            <IconPlusOutline16 />
+            <IconPlusOutlineMedium />
             {t('record.add')}
           </button>
         </div>
@@ -151,13 +151,13 @@ export function TeachingRecords({ state, commands, t }: TeachingRecordsProps) {
               </div>
             </div>
             <div className={css.cardActions}>
-              <IconAction label={t('edit')} onClick={() => { beginRecord(record) }}><IconEditOutline16 /></IconAction>
+              <IconAction label={t('edit')} onClick={() => { beginRecord(record) }}><IconEditOutlineMedium /></IconAction>
               <IconAction
                 label={t('delete')}
                 danger
                 onClick={() => { if (confirmDelete(t)) void commands.deleteRecord(record.id) }}
               >
-                <IconTrashOutline16 />
+                <IconTrashOutlineMedium />
               </IconAction>
             </div>
           </article>
@@ -275,8 +275,8 @@ function TemplateManagementRow({ template, t, edit, remove }: {
     <div className={css.templateRow}>
       <div className={css.rowMain}><div className={css.rowTitle}>{template.name}</div><div className={css.rowDescription}>{template.scene || template.fields.join(' · ')}</div></div>
       <div className={css.rowActions}>
-        <IconAction label={t('edit')} onClick={edit}><IconEditOutline16 /></IconAction>
-        <IconAction label={t('delete')} danger onClick={remove}><IconTrashOutline16 /></IconAction>
+        <IconAction label={t('edit')} onClick={edit}><IconEditOutlineMedium /></IconAction>
+        <IconAction label={t('delete')} danger onClick={remove}><IconTrashOutlineMedium /></IconAction>
       </div>
     </div>
   )

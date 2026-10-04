@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-03-agent-owned-question-boundary-discovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-03-agent-owned-question-boundary-discovery.md
-2026-09-03-agent-owned-question-boundary-discovery.md: 950ef53e991d02e76782a0c1922c4c289ef130ee
-2026-09-03-agent-owned-question-boundary-discovery.zh.md: 48f45a469642842990facd34893cc99dbcc34969
+/agent-note-agent-owned-question-boundary-discovery:
+  en: f049b8eb8ccf6a8c
+  zh: d3b24d24e8a2d072
+/agent-note-agent-owned-question-boundary-discovery/problem:
+  en: 026e944946c3021c
+  zh: e0e7b9d268393f3e
+/agent-note-agent-owned-question-boundary-discovery/decision:
+  en: c9ecef37e9ad35cd
+  zh: 87ea0834041f3591
+/agent-note-agent-owned-question-boundary-discovery/alternatives-considered:
+  en: b4e1fd480c7409b6
+  zh: f2e5186073214682
+/agent-note-agent-owned-question-boundary-discovery/consequences:
+  en: 3e38016fa9f77ff4
+  zh: e70ac24a48fff9c9
+/agent-note-agent-owned-question-boundary-discovery/testing:
+  en: 9e378f9e373cb37c
+  zh: 32111c3d5657178b

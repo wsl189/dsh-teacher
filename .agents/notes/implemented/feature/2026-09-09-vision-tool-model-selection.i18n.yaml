@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-vision-tool-model-selection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-vision-tool-model-selection.md
-2026-09-09-vision-tool-model-selection.md: 401a27ac65f1ec8b39d811c6c92edf0bbc24fe72
-2026-09-09-vision-tool-model-selection.zh.md: 4b4cfa46e04cc54cd4da4aa7af02e45bc7b63570
+/agent-note-vision-only-tool-model-selection:
+  en: 1242f46785c7cc4a
+  zh: 0c1b8d1d85b570c3
+/agent-note-vision-only-tool-model-selection/problem:
+  en: a044a285e1dcff92
+  zh: a51446e3d89a2c66
+/agent-note-vision-only-tool-model-selection/decision:
+  en: 03851d36f43cf522
+  zh: f0780562611cc370
+/agent-note-vision-only-tool-model-selection/alternatives-considered:
+  en: c72c56e8a936de34
+  zh: bb912fd168ae2ea7
+/agent-note-vision-only-tool-model-selection/consequences:
+  en: d418852f6ac29eed
+  zh: 659c24e02101b1c1

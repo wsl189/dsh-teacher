@@ -6,10 +6,10 @@
  * the onboarding plugin's shared modal, so the key is entered once.
  */
 
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import type { ReactNode } from 'react'
 import type { SnapshotStore } from '@deepseek-ai/dsh-client-store'
-import type { InjectFace, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsRuntime, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ModelsSettingsState, ModelsSettingsStore, ModelsWire } from './store.ts'
 import { onboardingReadiness } from './store.ts'
 import type { SettingsSchemaOperations } from './schema-operations.ts'
@@ -36,7 +36,7 @@ export interface DeepSeekOnboardingInjected {
 
 /** Slot owner props plus the feature's injected dependencies. */
 export type DeepSeekOnboardingDialogProps =
-  PropsRuntime<'settings.onboarding'> & InjectFace<DeepSeekOnboardingInjected>
+  PropsRuntime<'settings.onboarding'> & Partial<PropsRenderSlots<'settings.models.sign-in'>> & InjectFace<DeepSeekOnboardingInjected>
 
 /* v8 ignore next 3 -- closed-union defaults only defend future source widening */
 function assertNever(_value: never): never {
@@ -50,7 +50,8 @@ function assertNever(_value: never): never {
  * @returns the onboarding modal or null when onboarding needs no intervention.
  */
 export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): ReactNode {
-  const { complete, controller, useModels, api, schema, t } = props
+  const { complete, controller, useModels, api, schema, t, renderSlot, explicit = false } = props
+  const [apiKey, setApiKey] = useState(explicit)
   const state = useModels(snapshot => snapshot)
   const readiness = onboardingReadiness(state)
 
@@ -61,17 +62,19 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
   useEffect(() => {
     if (
       readiness.kind === 'adapter-absent'
-      || readiness.kind === 'provider-ready'
+      || (!explicit && readiness.kind === 'provider-ready')
       || readiness.kind === 'unavailable'
     ) complete()
-  }, [complete, readiness.kind])
+  }, [complete, readiness.kind, explicit])
 
   switch (readiness.kind) {
     case 'loading':
     case 'adapter-absent':
-    case 'provider-ready':
     case 'unavailable':
       return null
+    case 'provider-ready':
+      if (!explicit) return null
+      break
     case 'credential-missing':
       break
     /* v8 ignore next -- every current readiness variant is handled above */
@@ -95,7 +98,7 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
     void controller.load()
   }
 
-  return (
+  const editor = (
     <OnboardingModal title={t('onboardingTitle')}>
       <p className={styles.description}>{t('onboardingDescription')}</p>
       <div className={styles.editor}>
@@ -120,4 +123,6 @@ export function DeepSeekOnboardingDialog(props: DeepSeekOnboardingDialogProps): 
       </div>
     </OnboardingModal>
   )
+  return apiKey || renderSlot === undefined ? editor
+    : renderSlot('settings.models.sign-in', { complete, useApiKey: () => { setApiKey(true) } }, { fallback: editor })
 }

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-01-supplier-grouped-model-settings.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-09-01-supplier-grouped-model-settings.md
-2026-09-01-supplier-grouped-model-settings.md: c5d28583f1f48d8e21c3e3de28ca58e54733af09
-2026-09-01-supplier-grouped-model-settings.zh.md: 73a5e071facf4ee99495137fbeb9da8fda026bf3
+/agent-note-supplier-grouped-model-settings:
+  en: f34692a3b3e1c672
+  zh: 1233abbeaccbec75
+/agent-note-supplier-grouped-model-settings/problem:
+  en: 63157745deabd096
+  zh: 242ddf97405d6e07
+/agent-note-supplier-grouped-model-settings/decision:
+  en: b5c27e08717cf34e
+  zh: cca8e563e47a6c48
+/agent-note-supplier-grouped-model-settings/alternatives-considered:
+  en: f2e358229b8d8e56
+  zh: 26b975eda99d74d3
+/agent-note-supplier-grouped-model-settings/consequences:
+  en: ddc49d0d1a32e5e0
+  zh: 75c5c06513e73c13

@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-vision-reviewed-question-segmentation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-24-vision-reviewed-question-segmentation.md
-2026-08-24-vision-reviewed-question-segmentation.md: f7fd18d8d70a6e380e149fb5c158093dbffdac77
-2026-08-24-vision-reviewed-question-segmentation.zh.md: 381a58c809e2bffd3b57b160c03dcecce761c072
+/agent-note-vision-reviewed-question-segmentation:
+  en: b814bb610e6c70d6
+  zh: 3ed4ed4c33e2653a
+/agent-note-vision-reviewed-question-segmentation/problem:
+  en: 6dc3d849ea42cb36
+  zh: e856d6b11a890537
+/agent-note-vision-reviewed-question-segmentation/decision:
+  en: 6f9d28a816fcd2a6
+  zh: 4181ec95be8abf30
+/agent-note-vision-reviewed-question-segmentation/alternatives-considered:
+  en: 982a39273444d893
+  zh: eacde17c4440c5be
+/agent-note-vision-reviewed-question-segmentation/consequences:
+  en: 08538fe49655feab
+  zh: ce8da7709a7fa882
+/agent-note-vision-reviewed-question-segmentation/testing:
+  en: 9558f8a4a08052f4
+  zh: 5caf761f8a763506

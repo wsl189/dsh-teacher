@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-15-accumulated-student-question-selections.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-15-accumulated-student-question-selections.md
-2026-09-15-accumulated-student-question-selections.md: 2536e8032664a8bc00eab2c6c6f0f3aa20565e16
-2026-09-15-accumulated-student-question-selections.zh.md: 27c645a2ce0d0d1011a3a2b8b5e617873dec5fe3
+/agent-note-accumulated-student-question-selections:
+  en: 83a5a1867bc47039
+  zh: 490b013496ac630c
+/agent-note-accumulated-student-question-selections/problem:
+  en: e14cd75887b97135
+  zh: aa40f8d0c697c50d
+/agent-note-accumulated-student-question-selections/decision:
+  en: 365ceea87ce732ad
+  zh: c6fbc3775d2093f3
+/agent-note-accumulated-student-question-selections/alternatives-considered:
+  en: 645542641466eb7b
+  zh: 29e4b6847e98549c
+/agent-note-accumulated-student-question-selections/consequences:
+  en: 9869f0590cc26455
+  zh: dd2028f8d0be4d14
+/agent-note-accumulated-student-question-selections/testing:
+  en: c10520b51749e2fe
+  zh: 29b6789a6e0e28f2

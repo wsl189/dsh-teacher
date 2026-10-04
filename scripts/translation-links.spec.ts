@@ -56,6 +56,21 @@ function expectUnchangedLinkInput(root: string, input: string): void {
 }
 
 describe('translation link locale validation', () => {
+  it('recognizes complete frozen triplets as targets without including them as authored sources', () => {
+    const root = fixture()
+    const prefix = '.agents/notes/archived/architecture/2026-01-01-example'
+    mkdirSync(join(root, '.agents/notes/archived/architecture'), { recursive: true })
+    for (const suffix of ['.md', '.zh.md', '.i18n.yaml']) writeFileSync(join(root, prefix + suffix), 'frozen\n')
+    const english = `[History](../${prefix}.md)\n`
+    const chinese = `[History](../${prefix}.zh.md)\n`
+    expect(normalizeTranslationMarkdownLinks(english, linkContext(root, 'docs/guide.md')))
+      .toBe(normalizeTranslationMarkdownLinks(chinese, linkContext(root, 'docs/guide.zh.md')))
+    expect(rewriteTranslationLinkLocales(english, linkContext(root, 'docs/guide.zh.md')).content).toBe(chinese)
+    expect(translationLinkLocaleViolations(english, linkContext(root, 'docs/guide.zh.md'))).toEqual([])
+    const incomplete = prefix + '-incomplete'
+    writeFileSync(join(root, incomplete + '.md'), 'only one side\n')
+    expect(rewriteTranslationLinkLocales(`[History](../${incomplete}.md)\n`, linkContext(root, 'docs/guide.zh.md')).rewritten).toBe(0)
+  })
   it('rejects a Chinese link to the English sibling with an exact diagnostic', () => {
     const root = fixture()
     expect(translationLinkLocaleViolations(

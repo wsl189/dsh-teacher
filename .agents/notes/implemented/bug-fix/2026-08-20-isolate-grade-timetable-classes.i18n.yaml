@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-isolate-grade-timetable-classes.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-20-isolate-grade-timetable-classes.md
-2026-08-20-isolate-grade-timetable-classes.md: d3187c134293363f02bc115a6c2580dc7a8aab8c
-2026-08-20-isolate-grade-timetable-classes.zh.md: d2590aa7fc5863b3f5e07e7242f64bbbe33290f5
+/agent-note-isolate-grade-timetable-classes:
+  en: 336fdad8e250aa34
+  zh: 8993585396f29e37
+/agent-note-isolate-grade-timetable-classes/problem:
+  en: 0cea5dd75aa788d5
+  zh: 6061f72fba18a459
+/agent-note-isolate-grade-timetable-classes/decision:
+  en: 182d609b65e0d382
+  zh: 5661440e9e4a71f1
+/agent-note-isolate-grade-timetable-classes/alternatives-considered:
+  en: 4ce06db000bdeb12
+  zh: ba1cabc812afb169
+/agent-note-isolate-grade-timetable-classes/consequences:
+  en: 71a1d0e53b455949
+  zh: 8c3568fd49567e91
+/agent-note-isolate-grade-timetable-classes/testing:
+  en: 17376b4bfabdc224
+  zh: 61a78ab00b5d2a7d

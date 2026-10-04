@@ -14,13 +14,13 @@ import {
 } from 'lucide-react'
 import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
-  IconChevronDownOutline14,
-  IconChevronRightOutline14,
-  IconChecklistOutline14,
-  IconDataOutline16,
-  IconFolderOpenOutline16,
-  IconListPenOutline16,
-  IconUserOutline16,
+  IconChevronDownOutlineRegular,
+  IconChevronRightOutlineRegular,
+  IconChecklistOutlineRegular,
+  IconDataOutlineMedium,
+  IconFolderOpenOutlineMedium,
+  IconListPenOutlineMedium,
+  IconUserOutlineMedium,
   Tooltip,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
@@ -52,10 +52,10 @@ const MODULES: readonly {
   { id: 'timetable', label: 'module.timetable', Icon: TimetableIcon },
   { id: 'questions', label: 'module.questions', Icon: QuestionsIcon },
   { id: 'examples', label: 'module.examples', Icon: ClassSummaryIcon },
-  { id: 'lesson', label: 'module.lesson', Icon: IconFolderOpenOutline16 },
-  { id: 'students', label: 'module.students', Icon: IconUserOutline16 },
-  { id: 'scores', label: 'module.scores', Icon: IconDataOutline16 },
-  { id: 'records', label: 'module.records', Icon: IconListPenOutline16 },
+  { id: 'lesson', label: 'module.lesson', Icon: IconFolderOpenOutlineMedium },
+  { id: 'students', label: 'module.students', Icon: IconUserOutlineMedium },
+  { id: 'scores', label: 'module.scores', Icon: IconDataOutlineMedium },
+  { id: 'records', label: 'module.records', Icon: IconListPenOutlineMedium },
   { id: 'family', label: 'module.family', Icon: FamilyIcon },
   { id: 'classRecords', label: 'module.classRecords', Icon: ClassRecordsIcon },
   { id: 'talkRecords', label: 'module.talkRecords', Icon: TalkRecordsIcon },
@@ -89,13 +89,13 @@ export function SidebarWorkbench({ wide, useStore, actions, t }: SidebarWorkbenc
           aria-label={t('open')}
           onClick={toggle}
         >
-          <IconChecklistOutline14 size={wide ? 16 : 18} />
+          <IconChecklistOutlineRegular size={wide ? 16 : 18} />
           {wide && (
             <>
               <span className={css.sidebarLabel}>{t('title')}</span>
               {expanded
-                ? <IconChevronDownOutline14 className={css.sidebarChevron} />
-                : <IconChevronRightOutline14 className={css.sidebarChevron} />}
+                ? <IconChevronDownOutlineRegular className={css.sidebarChevron} />
+                : <IconChevronRightOutlineRegular className={css.sidebarChevron} />}
             </>
           )}
         </button>

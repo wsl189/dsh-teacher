@@ -71,7 +71,7 @@ export class WorkspaceTypertGenerator {
       caches: this.caches,
       ...(faces === undefined ? {} : { faces }),
       ...(this.options.checkDiagnostics === undefined ? {} : { checkDiagnostics: this.options.checkDiagnostics }),
-    }).analyze()
+    }).analyzeInBatches()
     const artifacts: WorkspaceEmitResult[] = []
     for (const face of workspace.faces) {
       const emitter = new FaceModelEmitter(face)

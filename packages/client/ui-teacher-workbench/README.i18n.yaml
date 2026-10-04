@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-teacher-workbench/README.md
-README.md: e54003d1cd2dab5f0062345f35af7d73da541b26
-README.zh.md: 65bfd75ce76ec92038af532ac10aaa035e72a911
+/:
+  en: 71270739f7133b34
+  zh: 9ceceb49e0dee6b4
+/deepseek-ai-dsh-client-ui-teacher-workbench:
+  en: d4d0a540d86b5bc2
+  zh: 75a4adc7c88db43e
+/deepseek-ai-dsh-client-ui-teacher-workbench/summary:
+  en: 01a6a3249b1e3bab
+  zh: bd06f0fb6454018a
+/deepseek-ai-dsh-client-ui-teacher-workbench/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7177e3097c880aa1
+/deepseek-ai-dsh-client-ui-teacher-workbench/use-this-package:
+  en: b0fc1f02d26c9115
+  zh: ef572b6070bf43c1
+/deepseek-ai-dsh-client-ui-teacher-workbench/use-this-package/example-collection:
+  en: 16c86f3f2a6da9b6
+  zh: 15055f4aef0ee59a
+/deepseek-ai-dsh-client-ui-teacher-workbench/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-client-ui-teacher-workbench/understand-the-implementation/background-question-cutting:
+  en: 2727729026d8f909
+  zh: ff1d6303f621cc90
+/deepseek-ai-dsh-client-ui-teacher-workbench/understand-the-implementation/question-crop-scale:
+  en: 7a1783ff89dc689a
+  zh: d15b9e0956318e47
+/deepseek-ai-dsh-client-ui-teacher-workbench/understand-the-implementation/extension-points:
+  en: 29c5580a714a716d
+  zh: 9474a804da3875d5
+/deepseek-ai-dsh-client-ui-teacher-workbench/further-exploration:
+  en: 8b981dd68b2259ee
+  zh: f1d7e7083d5aca12
+/deepseek-ai-dsh-client-ui-teacher-workbench/model-experience:
+  en: 914d222caf7662b3
+  zh: e1b61492c443f285
+/deepseek-ai-dsh-client-ui-teacher-workbench/model-experience/kv-cache-effect:
+  en: 3362a14889e8927c
+  zh: 0e14abdf386389ab
+/deepseek-ai-dsh-client-ui-teacher-workbench/known-limitations-and-deferred-work:
+  en: de0b7b730fb0dcf3
+  zh: 6ecffbf96218b246
+/deepseek-ai-dsh-client-ui-teacher-workbench/known-limitations-and-deferred-work/dev-note:
+  en: f8faa501ad48d843
+  zh: 999af1730cc06980

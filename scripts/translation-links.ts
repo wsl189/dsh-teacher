@@ -138,8 +138,15 @@ function translationPairTarget(targetPath: string, context: TranslationLinkConte
   const source = targetPath.endsWith('.zh.md')
     ? targetPath.replace(/\.zh\.md$/, '.md')
     : targetPath.endsWith('.md') ? targetPath : undefined
-  if (source === undefined || !context.isTranslationPairSource(source)) return undefined
+  if (source === undefined) return undefined
   const zh = source.replace(/\.md$/, '.zh.md')
+  // Frozen notes are excluded from authored-source scans, but their complete
+  // triplets remain bilingual link targets for active documents.
+  const archivedPair = source.startsWith('.agents/notes/archived/')
+    && repositoryFileExists(context, source)
+    && repositoryFileExists(context, zh)
+    && repositoryFileExists(context, source.replace(/\.md$/, '.i18n.yaml'))
+  if (!context.isTranslationPairSource(source) && !archivedPair) return undefined
   return { source, zh }
 }
 
@@ -272,6 +279,9 @@ export function translationLinkLocaleViolations(
 ): TranslationLinkLocaleViolation[] {
   const violations: TranslationLinkLocaleViolation[] = []
   visitResolvedDocumentLinks(markdown, context, skipTargets, (node, destination, resolved) => {
+    // Historical references may intentionally select either frozen language.
+    // Normalize their identity for pairing without imposing a new locale policy.
+    if (!context.isTranslationPairSource(resolved.pair.source)) return
     if (hasExpectedLocale(resolved)) return
     violations.push({
       sourcePath: context.sourcePath,

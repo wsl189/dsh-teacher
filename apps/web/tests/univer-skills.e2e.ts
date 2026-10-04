@@ -11,7 +11,7 @@ import {
   type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import {
   assertFixtureInventory, fixtureUserPrompts, launchWebScaffold, recordFixture,
   webSnapshotMode, type WebScaffold,
@@ -151,9 +151,9 @@ for (const scenario of SCENARIOS) {
       const results = events.filter(event => event.type === 'tool/result')
       expect(results).toHaveLength(scenario.skills.length)
       for (const [index, event] of results.entries()) {
-        const block = event.data.message.content[0]
-        expect(block?.type).toBe('tool-result')
-        if (block?.type !== 'tool-result') throw new Error('Skill call has no recorded tool result')
+        const block = event.data.message
+        expect(block?.role).toBe('tool')
+        if (block?.role !== 'tool') throw new Error('Skill call has no recorded tool result')
         expect(block.isError).not.toBe(true)
         expect(block.content).toHaveLength(1)
         const content = block.content[0]

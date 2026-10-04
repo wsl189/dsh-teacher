@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-06-readable-question-image-file-names.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-06-readable-question-image-file-names.md
-2026-09-06-readable-question-image-file-names.md: 978a82c0520eca04d61429c2a5dc39010f46ec7d
-2026-09-06-readable-question-image-file-names.zh.md: a3ba130b91e855e41629a69815f161e352d9785c
+/agent-note-readable-question-image-file-names:
+  en: 6a50c70069bcb33d
+  zh: 9d4a6f03486f60d4
+/agent-note-readable-question-image-file-names/problem:
+  en: 1021bac7ec8b2021
+  zh: 0cd15472a6249c3d
+/agent-note-readable-question-image-file-names/decision:
+  en: f6a69994271803a8
+  zh: a9224bc8a504b7a0
+/agent-note-readable-question-image-file-names/alternatives-considered:
+  en: e496cff47cad710d
+  zh: 05e5c76a68577fc9
+/agent-note-readable-question-image-file-names/consequences:
+  en: 58d6b49badac6cab
+  zh: 4498fa5d21e77c64
+/agent-note-readable-question-image-file-names/testing:
+  en: 4b8d261caf7de5ca
+  zh: 12fa959767df4352

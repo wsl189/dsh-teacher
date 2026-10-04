@@ -136,5 +136,7 @@ registerProvider(provider: SpeechProvider): () => void
 async transcribeAbortable( request: SpeechTranscribeRequest, signal?: AbortSignal, ): Promise<SpeechTranscribeResult>
 ```
 
+Types: [SpeechProvider](voice-input.md)
+
 Source: [`packages/speech/speech/src/index.ts`](../../packages/speech/speech/src/index.ts)
 <!-- END GENERATED cordis-surface -->

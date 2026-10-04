@@ -41,6 +41,7 @@ function createFixture(): { appDir: string; appOutDir: string; dominoRoot: strin
     'turndown-plugin-gfm.cjs.js',
   )
   createRuntimePackage(join(appDir, 'node_modules'), 'turndown', 'turndown.cjs.js')
+  createRuntimePackage(join(appDir, 'node_modules'), '@deepseek-ai/dsh-config-editor', 'index.js')
   const dominoRoot = join(appDir, 'node_modules/turndown/node_modules')
   createRuntimePackage(dominoRoot, '@mixmark-io/domino', 'index.js')
   write(
@@ -76,6 +77,7 @@ describe('desktop after-pack runtime staging', () => {
       'node_modules/@joplin/turndown-plugin-gfm/lib/turndown-plugin-gfm.cjs.js',
       'node_modules/turndown/lib/turndown.cjs.js',
       'node_modules/@mixmark-io/domino/lib/index.js',
+      'node_modules/@deepseek-ai/dsh-config-editor/lib/index.js',
     ]
     for (const path of expected) {
       expect(readFileSync(join(appRoot, ...path.split('/')), 'utf8')).toContain('runtime')

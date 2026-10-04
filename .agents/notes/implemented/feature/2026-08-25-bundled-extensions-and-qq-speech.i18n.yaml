@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-25-bundled-extensions-and-qq-speech.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-25-bundled-extensions-and-qq-speech.md
-2026-08-25-bundled-extensions-and-qq-speech.md: 6dac5f2c7f2a87875b30924e245dc6dcfd36291c
-2026-08-25-bundled-extensions-and-qq-speech.zh.md: 3c514dfbb79b0e43a637e691b95c9bcf9696f694
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input:
+  en: f7d0aeaa4f8acd04
+  zh: 0c8b93c5eed38ac4
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input/problem:
+  en: 65ceb7c33737601f
+  zh: 56323dcb15c1a29f
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input/decision:
+  en: b0e6d7a79cfd0c92
+  zh: 67be9c90385636aa
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input/alternatives-considered:
+  en: 35d67fde445b9bd2
+  zh: cd71362274bd9cbf
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input/consequences:
+  en: f3d0c7c1495d5015
+  zh: b5eeb38a2d1b028a
+/agent-note-bundled-extensions-anysearch-image-generation-ppt-master-univer-office-and-shared-speech-input/testing:
+  en: 5e2d0ad5a818c3d0
+  zh: a5f50f40c79740c1

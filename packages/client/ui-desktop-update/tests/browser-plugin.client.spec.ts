@@ -6,7 +6,6 @@ import { LocaleRuntime } from '@deepseek-ai/dsh-client-locale/client'
 import { apply, inject } from '../src/client/index.ts'
 import { UpdateButton, type UpdateButtonInjected } from '../src/client/UpdateButton.tsx'
 import type { DesktopUpdateBridge } from '../src/client/bridge.ts'
-import { apply as nodeApply } from '../src/index.ts'
 
 const download = vi.fn(() => Promise.resolve())
 const install = vi.fn(() => Promise.resolve())
@@ -37,9 +36,8 @@ afterEach(() => {
 })
 
 describe('ui-desktop-update browser apply', () => {
-  it('declares its service use and keeps the node half inert', () => {
+  it('declares its service use', () => {
     expect(inject).toEqual(['slots', 'locale'])
-    expect(() => { nodeApply() }).not.toThrow()
   })
 
   it('leaves the desktop seat empty in an ordinary browser', async () => {

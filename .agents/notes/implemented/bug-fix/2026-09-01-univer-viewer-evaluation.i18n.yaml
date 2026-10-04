@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-01-univer-viewer-evaluation.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-01-univer-viewer-evaluation.md
-2026-09-01-univer-viewer-evaluation.md: 47317409fd42780bed14a5f0f2bb00dc158d0957
-2026-09-01-univer-viewer-evaluation.zh.md: 29deeaae8b3e665cf31607745b4cb2c05f362a5f
+/agent-note-univer-uses-upstream-evaluation-and-runtime-licenses:
+  en: 8563d895005a6f37
+  zh: 48e989a3036e4d4a
+/agent-note-univer-uses-upstream-evaluation-and-runtime-licenses/problem:
+  en: 5bbfe1bd3ac8f530
+  zh: 9bccd506704e8e8f
+/agent-note-univer-uses-upstream-evaluation-and-runtime-licenses/decision:
+  en: a1526e53bc9d859b
+  zh: b16b706c1bdb82b4
+/agent-note-univer-uses-upstream-evaluation-and-runtime-licenses/alternatives-considered:
+  en: 3bc73c99d9e40a07
+  zh: e3cd0ac61ec02fcd
+/agent-note-univer-uses-upstream-evaluation-and-runtime-licenses/consequences:
+  en: 017435c110c8d5c6
+  zh: 127a650417b5bd19

@@ -9,7 +9,7 @@ import {
   type GenerateOptions, type LlmResolvedModelInfo, type StreamChunk,
 } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import {
   assertFinalWorkspaceSnapshot, assertFixtureInventory, fixtureUserPrompts, launchWebScaffold,
   recordFixture, webSnapshotMode, type WebScaffold,
@@ -101,9 +101,9 @@ describe.skipIf(MODE === 'record')('bundled Office output ownership', () => {
     const results = events.filter(event => event.type === 'tool/result')
     expect(results).toHaveLength(CALLS.length)
     for (const event of results) {
-      const block = event.data.message.content[0]
-      expect(block).toMatchObject({ type: 'tool-result', isError: true })
-      if (block?.type !== 'tool-result') throw new Error('Output denial did not return a tool result')
+      const block = event.data.message
+      expect(block).toMatchObject({ role: 'tool', isError: true })
+      if (block?.role !== 'tool') throw new Error('Output denial did not return a tool result')
       expect(block.content).toHaveLength(1)
       const content = block.content[0]
       if (content?.type !== 'text') throw new Error('Output denial did not return text')

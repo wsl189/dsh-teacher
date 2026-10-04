@@ -34,8 +34,7 @@ export class TimetableAgentAdapter extends LlmAdapter {
   override async *stream(options: GenerateOptions): AsyncIterable<StreamChunk> {
     this.requests.push(options)
     await this.beforeResponse?.()
-    const results = options.messages.flatMap(message => message.content)
-      .filter(block => block.type === 'tool-result')
+    const results = options.messages.filter(message => message.role === 'tool')
     const resultText = results.flatMap(result => result.content).filter(block => block.type === 'text')
       .map(block => block.text).join('\n')
     const responses = resultText.split('\n').filter(line => line.startsWith('{')).map(line => JSON.parse(line) as {

@@ -1,7 +1,6 @@
 - dialog "上传并识别校历":
   - heading "上传并识别校历" [level=2]
-  - button "关闭工作台":
-    - img
+  - button "关闭工作台"
   - strong: school-calendar.xlsx
   - text: 识别到 2 项，请确认后导入
   - checkbox "全选" [checked]

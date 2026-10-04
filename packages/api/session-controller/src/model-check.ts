@@ -54,7 +54,7 @@ export async function checkModel(
       })
       const input = createUserMessage({
         content: [{ type: 'text', text: 'Reply with OK.' }],
-        source: { kind: 'plugin', plugin: 'dsh-api-session-controller' },
+        source: { kind: 'dsh-model-check' },
       })
       session.append('user/message', input, { surfaceOp: 'append' })
       const assembler = new BlockAssembler()

@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-20-teacher-workbench-ledger.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-20-teacher-workbench-ledger.md
-2026-08-20-teacher-workbench-ledger.md: 9f42c0e6babe30e279fefa6292e1caf9652a9431
-2026-08-20-teacher-workbench-ledger.zh.md: aea1856b9478e318f76f68984f24d4f15b4d89e6
+/agent-note-teacher-workbench-daily-ledger:
+  en: 5a2bbc223df7a6a3
+  zh: d9a51794f76bc462
+/agent-note-teacher-workbench-daily-ledger/problem:
+  en: 0d4164685fd7758f
+  zh: 93d690ecc3e04c6c
+/agent-note-teacher-workbench-daily-ledger/decision:
+  en: 17c89306f205186c
+  zh: b0354a83287fd72a
+/agent-note-teacher-workbench-daily-ledger/alternatives-considered:
+  en: 7af35c0a6b9e10c9
+  zh: 83848d9e3ade578a
+/agent-note-teacher-workbench-daily-ledger/consequences:
+  en: cb799de7b82ba4ad
+  zh: f34c4a849cc8a45d

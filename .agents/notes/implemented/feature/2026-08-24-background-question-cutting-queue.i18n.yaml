@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-background-question-cutting-queue.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-24-background-question-cutting-queue.md
-2026-08-24-background-question-cutting-queue.md: f6683b68e1b0ebd06a8baa98b0d3d77ad225c1ce
-2026-08-24-background-question-cutting-queue.zh.md: c6faa48c38fe2d06d1f8d20a63300b6eeb00bcb3
+/agent-note-background-question-cutting-queue:
+  en: f2f92b5222c32f60
+  zh: 9229f352daefa5ed
+/agent-note-background-question-cutting-queue/problem:
+  en: 76ef512197a2e8c8
+  zh: 879a9dece866b5a1
+/agent-note-background-question-cutting-queue/decision:
+  en: c3a73f1d9a35f0b2
+  zh: 7685ae7cca6e196e
+/agent-note-background-question-cutting-queue/alternatives-considered:
+  en: 728dde7c0dfb147e
+  zh: 66ea20c3050a7ca3
+/agent-note-background-question-cutting-queue/consequences:
+  en: d0c1bbe4a3aeda53
+  zh: 124df1df0d408fbd
+/agent-note-background-question-cutting-queue/testing:
+  en: 097500c7398a7a8c
+  zh: c0bacdf1f4565e28

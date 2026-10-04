@@ -6,7 +6,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, vi } from 'vit
 import type { AgentHandle } from '@deepseek-ai/dsh-agent'
 import { createUserMessage } from '@deepseek-ai/dsh-llm'
 import { SessionId } from '@deepseek-ai/dsh-session'
-import type {} from '@deepseek-ai/dsh-agent-presets'
+import type {} from '@deepseek-ai/dsh-agent-preset-registry'
 import type {} from '@deepseek-ai/dsh-client-modules'
 import type {} from '@deepseek-ai/dsh-settings'
 import {
@@ -43,7 +43,7 @@ describe('bundled Univer content tools without their own interface', () => {
     }
     const results = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
     expect(results).toHaveLength(1)
-    expect(results.every(event => event.data.message.content.every(block => !block.isError))).toBe(true)
+    expect(results.every(event => !event.data.message.isError)).toBe(true)
     browser = await chromium.launch()
     page = await newEnglishPage(browser)
     await page.goto(scaffold.authenticatedUrl, { waitUntil: 'load' })

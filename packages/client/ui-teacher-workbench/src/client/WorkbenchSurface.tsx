@@ -3,7 +3,7 @@
 import { useEffect } from 'react'
 import clsx from 'clsx'
 import type { InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
-import { IconRefreshOutline16 } from '@deepseek-ai/dsh-client-ui-primitives'
+import { IconRefreshOutlineMedium } from '@deepseek-ai/dsh-client-ui-primitives'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { DEFAULT_TEACHER_WORKBENCH_SETTINGS } from '../settings.ts'
 import type { TeacherWorkbenchInjected, TeacherWorkbenchCommands } from './contracts.ts'
@@ -166,7 +166,7 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
               <div className={css.errorBanner} role="alert">
                 <span>{props.t(errorKey)}</span>
                 <button type="button" className={css.buttonSecondary} onClick={() => { void props.ensure() }}>
-                  <IconRefreshOutline16 />
+                  <IconRefreshOutlineMedium />
                   {props.t('retry')}
                 </button>
               </div>

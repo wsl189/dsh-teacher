@@ -1,6 +1,52 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-settings-plugins/README.md
-README.md: 23d95081a20b2cac42e632e442adc2fa66869713
-README.zh.md: 6b9579f48a7553c127cbf0ee13131a621cd36097
+/:
+  en: 18b9efecbbef45b0
+  zh: 4edc2c8e757a1e3d
+/deepseek-ai-dsh-client-ui-settings-plugins:
+  en: 3ceabe2cdb5492f6
+  zh: 6ea0cb3f93e5bdf5
+/deepseek-ai-dsh-client-ui-settings-plugins/summary:
+  en: 246778b5b3ad7333
+  zh: 65b76b81c5f2b26d
+/deepseek-ai-dsh-client-ui-settings-plugins/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-settings-plugins/use-this-package:
+  en: 79e3f6e13e90e7a3
+  zh: 4a0b50a8808bf424
+/deepseek-ai-dsh-client-ui-settings-plugins/use-this-package/what-appears-here:
+  en: c002c5aee2b08143
+  zh: 70299eb27590f3c8
+/deepseek-ai-dsh-client-ui-settings-plugins/use-this-package/editing-and-saving:
+  en: 48a9228b2e48ab30
+  zh: 6c97722a49af1d82
+/deepseek-ai-dsh-client-ui-settings-plugins/use-this-package/secret-role-fields:
+  en: efaf33604f452db9
+  zh: 95b37626fdf2da0e
+/deepseek-ai-dsh-client-ui-settings-plugins/understand-the-implementation:
+  en: d54a02d4cb835342
+  zh: 8af458ce2f03f0a7
+/deepseek-ai-dsh-client-ui-settings-plugins/understand-the-implementation/the-registration-rule:
+  en: 2e18232f05148490
+  zh: 9342c3b42e2b0791
+/deepseek-ai-dsh-client-ui-settings-plugins/understand-the-implementation/the-write-path:
+  en: 4a41fb0383e2fc65
+  zh: 8f44d1f5dfa92cdd
+/deepseek-ai-dsh-client-ui-settings-plugins/further-exploration:
+  en: 07916105218b4beb
+  zh: 83ede8db167c73a3
+/deepseek-ai-dsh-client-ui-settings-plugins/model-experience:
+  en: 6b7c6f82ab6c8435
+  zh: 3328550d96a6368b
+/deepseek-ai-dsh-client-ui-settings-plugins/model-experience/kv-cache-effect:
+  en: ca75c51c89c2c9b0
+  zh: de54f3467ef3b9be
+/deepseek-ai-dsh-client-ui-settings-plugins/known-limitations-and-deferred-work:
+  en: 283660ff8b1efe24
+  zh: d9e22565a9143e52
+/deepseek-ai-dsh-client-ui-settings-plugins/known-limitations-and-deferred-work/dev-note:
+  en: 35e93a8e9d5ea44f
+  zh: ad7890eaadb81a5e

@@ -165,7 +165,7 @@
     "bold": "\\mathbf{\\subsetneqq}",
     "glyph": {
       "ascent": 766,
-      "descent": 79,
+      "descent": 78,
       "width": 778
     }
   },
@@ -175,7 +175,7 @@
     "bold": "\\mathbf{\\supsetneqq}",
     "glyph": {
       "ascent": 766,
-      "descent": 79,
+      "descent": 78,
       "width": 778
     }
   },
@@ -209,7 +209,7 @@
     "regular": "\\text{∁}_{U} A",
     "bold": "\\textbf{∁} _{\\mathbfit{U}} \\mathbfit{A}",
     "glyph": {
-      "ascent": 719,
+      "ascent": 703,
       "descent": 16,
       "width": 460
     },

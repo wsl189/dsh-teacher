@@ -1,6 +1,13 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for teacher-workbench.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/subsystems/teacher-workbench.md
-teacher-workbench.md: 6e507d786fe46df9de2d2a5573f961672b3ea9df
-teacher-workbench.zh.md: 83762a35264eebd9900390eb289cc5aac78922d9
+/teacher-workbench:
+  en: c124e12fadc89f1f
+  zh: d96b7722c45959b7
+/teacher-workbench/persistence-and-filesystem-roots:
+  en: 99377497f60b5536
+  zh: 921bb98fa6496f1b
+/teacher-workbench/operations:
+  en: 61c2fa853191660d
+  zh: a531f47036e54044

@@ -1,7 +1,6 @@
 - dialog "设置截止时间与提醒":
   - heading "设置截止时间与提醒" [level=2]
-  - button "关闭工作台":
-    - img
+  - button "关闭工作台"
   - text: 截止时间
   - textbox "截止时间": 2099-08-18T{{clock}}
   - group "定时提醒":

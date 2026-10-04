@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-curated-provider-presets.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-curated-provider-presets.md
-2026-09-09-curated-provider-presets.md: 46fcab666f4e78034f64ec631c4fded2fe7e2e55
-2026-09-09-curated-provider-presets.zh.md: 93143fc7e7cbcd63ed01646add917e856d5891db
+/agent-note-curated-provider-presets-and-official-artwork:
+  en: c2fae1217d5caf5e
+  zh: 7b2e1ec96105625a
+/agent-note-curated-provider-presets-and-official-artwork/problem:
+  en: 983bb6aa5c5a858c
+  zh: bc9cf4979d0adbed
+/agent-note-curated-provider-presets-and-official-artwork/decision:
+  en: fee61f86c8903292
+  zh: f7c6be7ac866f611
+/agent-note-curated-provider-presets-and-official-artwork/sources:
+  en: a1d3e8ab3bb6dbac
+  zh: 63ec62bed5702c30
+/agent-note-curated-provider-presets-and-official-artwork/alternatives-considered:
+  en: 9c54a719632b0aac
+  zh: a9f4ed35f389aad7
+/agent-note-curated-provider-presets-and-official-artwork/consequences:
+  en: 9470f6ace2fdd3c0
+  zh: 20f3ca5b966fe321

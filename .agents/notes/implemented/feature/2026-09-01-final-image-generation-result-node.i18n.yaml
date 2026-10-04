@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-01-final-image-generation-result-node.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-final-image-generation-result-node.md
-2026-09-01-final-image-generation-result-node.md: 011ffdd9f5a1a16d5c0183de8f44453959841cdb
-2026-09-01-final-image-generation-result-node.zh.md: c658e115aafe06eb7e7fc5a3bf4c1fcf38bbff4e
+/agent-note-final-image-generation-result-node:
+  en: fcf93779a0dd4a92
+  zh: be4635c7507138c5
+/agent-note-final-image-generation-result-node/problem:
+  en: 6d69c09e8552ad9e
+  zh: 326477fe5b77dc53
+/agent-note-final-image-generation-result-node/decision:
+  en: 2c90e9d20dc3931b
+  zh: c5106621addf622d
+/agent-note-final-image-generation-result-node/alternatives-considered:
+  en: 197ae6e1732d1d10
+  zh: 55f9a3fdb4edfa22
+/agent-note-final-image-generation-result-node/consequences:
+  en: d43b3ccccffde234
+  zh: e4f13d951b6c1953

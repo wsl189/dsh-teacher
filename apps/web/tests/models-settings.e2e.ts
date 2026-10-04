@@ -37,7 +37,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     scaffold = await launchWebScaffold({})
     scaffold.ctx.on('llm/stream', async function* (options, next) {
       const input = options.messages[0]
-      if (input?.source.kind !== 'plugin' || input.source.plugin !== 'dsh-api-session-controller') {
+      if (input?.source?.kind !== 'dsh-model-check') {
         yield* next()
         return
       }
@@ -131,7 +131,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await speechAssignment.selectOption(JSON.stringify(['zhipu-cn', 'glm-asr-2512']))
     await dialog.getByText('语音识别模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
 
-    const settings = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const settings = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(settings).toContain('zhipu-cn:')
     expect(settings).toContain('imageProvider: zhipu-cn')
     expect(settings).toContain('imageModel: glm-image')
@@ -232,7 +232,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
     expect(await dialog.getByRole('img', { name: 'API 密钥已配置' }).count()).toBe(0)
     expect(await dialog.getByRole('img', { name: 'API 密钥缺失' }).count()).toBe(0)
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('minimax-cn: {}')
     expect(document).not.toContain('MINIMAX_CN_API_KEY')
   }, 60_000)
@@ -258,7 +258,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByRole('button', { name: '编辑 MiniMax · 标准 API (minimax-cn)' }).click()
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('sk-e2e-minimax')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
-    // The profile lands in settings.yaml with only the derived reference, the
+    // The profile patch stores only the derived reference, the
     // key value lands in the harness home's .credentials.yaml, the dormant route
     // registers, and the topology frame invalidates the page into the row.
     await expect.poll(
@@ -267,7 +267,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     ).toBe(0)
     await expect.poll(() => checkedModels.some(model => model.startsWith('minimax-cn/'))).toBe(true)
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('minimax-cn:')
     expect(document).toContain('apiKeyEnv: MINIMAX_CN_API_KEY')
     expect(document).not.toContain('sk-e2e-minimax')
@@ -291,7 +291,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     // stored profile beside the reference.
     await expect.poll(async () => dialog.getByLabel('API 地址').count(), { timeout: 10_000 }).toBe(0)
     await dialog.getByText('已保存 minimax-cn。', { exact: true }).waitFor({ timeout: 10_000 })
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('baseURL: https://gateway.minimax.example/v1')
     expect(document).toContain('apiKeyEnv: MINIMAX_CN_API_KEY')
     await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
@@ -360,7 +360,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
 
     const row = dialog.getByText('Acme Gateway', { exact: true }).first()
     await row.waitFor({ timeout: 10_000 })
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('acme-gateway:')
     expect(document).toMatch(/input:\n\s+- text\n\s+- image/)
 
@@ -397,7 +397,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await imageModel.selectOption(JSON.stringify(['minimax-cn', 'image-01']))
     await dialog.getByText('生图模型已保存。', { exact: true }).waitFor({ timeout: 10_000 })
 
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('toolProvider: acme-gateway')
     expect(document).toContain('toolModel: acme-large')
     expect(document).toContain('imageProvider: minimax-cn')
@@ -424,7 +424,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     expect(await connection.getByText('测试模型：acme-large', { exact: true }).count()).toBe(1)
     expect(checkedModels).toEqual(previousChecks)
     expect(await connection.getByRole('alert').count()).toBe(0)
-    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('unavailable-model')
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain('unavailable-model')
     await connection.getByText('查看模型', { exact: true }).click()
     await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
     await dialog.getByText('模型目录与高级设置').click()
@@ -443,7 +443,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await dialog.getByLabel('模型 ID 1').fill('unavailable-model')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()
     await dialog.getByText('unavailable-model: Unknown model: unavailable-model', { exact: true }).waitFor()
-    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('unavailable-model')
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain('unavailable-model')
     await dialog.getByRole('button', { name: '重试验证', exact: true }).click()
     await expect.poll(() => checkedModels.filter(model => model === 'acme-gateway/unavailable-model').length).toBe(2)
     await dialog.getByRole('button', { name: '编辑 Acme Gateway (acme-gateway)' }).click()
@@ -488,7 +488,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     // The status line names the route as the refreshed directory reports it;
     // the target captured when the card opened still carries the old name.
     await dialog.getByText('已保存 Acme 网关 (acme-gateway)。', { exact: true }).waitFor({ timeout: 10_000 })
-    const document = await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')
+    const document = await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')
     expect(document).toContain('api: anthropic-messages')
     expect(document).toContain('displayName: Acme 网关')
     expect(tripwire.pageErrors).toEqual([])
@@ -508,12 +508,12 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await compareOrRefreshGolden(DELETE_EXPECTED, snapshot, MODE)
 
     await deleteDialog.getByRole('button', { name: '取消', exact: true }).click()
-    expect(await readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8')).toContain('minimax-cn:')
+    expect(await readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8')).toContain('minimax-cn:')
     await settingsDialog.getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
     await page.getByRole('dialog', { name: '删除 MiniMax · 标准 API (minimax-cn)？' })
       .getByRole('button', { name: '删除 MiniMax · 标准 API (minimax-cn)', exact: true }).click()
     await expect.poll(
-      async () => readFile(join(scaffold.harnessHome, 'settings.yaml'), 'utf8'),
+      async () => readFile(join(scaffold.harnessHome, 'profiles', 'scaffold', 'cordis.patch.yml'), 'utf8'),
       { timeout: 10_000 },
     ).not.toContain('minimax-cn:')
     expect(await readFile(join(scaffold.harnessHome, '.credentials.yaml'), 'utf8'))
@@ -566,7 +566,7 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
     await expect.poll(() => checkedModels).toContain('opencode-go/glm-5.2')
     await expect.poll(() => dialog.getByText('正在验证连接…', { exact: true }).count()).toBe(0)
     expect(checkedModels.filter(model => model.startsWith('opencode-go/'))).toEqual(['opencode-go/glm-5.2'])
-    const settings = scaffold.ctx.settings.get('llm-pi-ai')
+    const settings = scaffold.ctx.settings.describe().find(row => row.ns === 'llm-pi-ai')?.user
     expect(settings).toMatchObject({ providers: { 'opencode-go': { models: [
       { id: 'glm-5.2' }, { id: 'minimax-m3', input: ['text', 'image'] },
     ] } } })

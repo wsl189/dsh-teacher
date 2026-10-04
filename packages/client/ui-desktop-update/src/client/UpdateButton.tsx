@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from 'react'
 import {
-  IconDownloadOutline16, IconRefreshOutline16,
+  IconDownloadOutlineMedium, IconRefreshOutlineMedium,
 } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { DesktopUpdateKey } from './locales.ts'
@@ -132,8 +132,8 @@ export function UpdateButton({ wide, useUpdate, download, install, t }: UpdateBu
       onClick={invoke}
     >
       {view.install || state.status === 'error'
-        ? <IconRefreshOutline16 size={wide ? 16 : 18} />
-        : <IconDownloadOutline16 size={wide ? 16 : 18} />}
+        ? <IconRefreshOutlineMedium size={wide ? 16 : 18} />
+        : <IconDownloadOutlineMedium size={wide ? 16 : 18} />}
       {wide && <span className={css.label}>{view.label}</span>}
       {view.percent !== undefined && <span className={css.progress} style={{ width: `${String(view.percent)}%` }} />}
     </button>

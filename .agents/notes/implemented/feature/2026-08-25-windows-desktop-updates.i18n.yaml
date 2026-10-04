@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-25-windows-desktop-updates.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-25-windows-desktop-updates.md
-2026-08-25-windows-desktop-updates.md: 366ee9b6f945cc20e3e2b16bc283a78f3ae78413
-2026-08-25-windows-desktop-updates.zh.md: f14e1f504059d7661ec907707e98221b6253431c
+/agent-note-windows-desktop-distribution-and-release-updates:
+  en: 4383e15843bd66ca
+  zh: e53aba4eb06dd49c
+/agent-note-windows-desktop-distribution-and-release-updates/problem:
+  en: cadda799b0b1e33b
+  zh: 01e334c4cc73b4df
+/agent-note-windows-desktop-distribution-and-release-updates/decision:
+  en: 5c7cb4214f144c32
+  zh: 7e4024753cd50ea3
+/agent-note-windows-desktop-distribution-and-release-updates/alternatives-considered:
+  en: 5b3467f59f770f22
+  zh: 5ea20a4508624346
+/agent-note-windows-desktop-distribution-and-release-updates/consequences:
+  en: 0526b1de9a1968c5
+  zh: a8b3378a7354a526
+/agent-note-windows-desktop-distribution-and-release-updates/testing:
+  en: c20eb1dc13b1e992
+  zh: 261f422ae1a557fe

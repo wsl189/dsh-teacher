@@ -1,42 +1,11 @@
 {
-  "extends": "../../../tsconfig.base.client.json",
-  "compilerOptions": {
-    "rootDir": "src",
-    "outDir": "lib/types"
-  },
-  "include": [
-    "src"
-  ],
+  "files": [],
   "references": [
     {
-      "path": "../../../vendor/cordis"
+      "path": "tsconfig.host.json"
     },
     {
-      "path": "../../api/session-controller/tsconfig.client.json"
-    },
-    {
-      "path": "../../attachment/attachment"
-    },
-    {
-      "path": "../locale"
-    },
-    {
-      "path": "../ui-chat"
-    },
-    {
-      "path": "../ui-conversation"
-    },
-    {
-      "path": "../ui-primitives"
-    },
-    {
-      "path": "../ui-renderer"
-    },
-    {
-      "path": "../ui-slots"
-    },
-    {
-      "path": "../../core/session"
+      "path": "tsconfig.client.json"
     }
   ]
 }

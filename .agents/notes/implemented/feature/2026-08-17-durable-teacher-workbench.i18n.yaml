@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-17-durable-teacher-workbench.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-17-durable-teacher-workbench.md
-2026-08-17-durable-teacher-workbench.md: 20468e4327462fffe981779715ea14a7f4b7bc81
-2026-08-17-durable-teacher-workbench.zh.md: d6c1066e3347269b56ef5d6e16921b91463457e9
+/agent-note-durable-teacher-workbench:
+  en: 7b5e863bfa2264a0
+  zh: 0e190115d3473fa7
+/agent-note-durable-teacher-workbench/problem:
+  en: 6e80ca433d13b09c
+  zh: 32dfa0a43fe221a8
+/agent-note-durable-teacher-workbench/decision:
+  en: 768af43189eb6c23
+  zh: d357616a68a72c0b
+/agent-note-durable-teacher-workbench/alternatives-considered:
+  en: daa42877486be425
+  zh: f1392a2a91c8c2de
+/agent-note-durable-teacher-workbench/consequences:
+  en: 3d6a8df91fdb2388
+  zh: 40ad32b0bc198070
+/agent-note-durable-teacher-workbench/testing:
+  en: 326a8145b8f35ccb
+  zh: 826152915eaffc73

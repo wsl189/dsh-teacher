@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-office-generation-cleanup.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-19-office-generation-cleanup.md
-2026-09-19-office-generation-cleanup.md: 33fa228c87c2b35f8b3ab5dc053bb7ade0b86ce1
-2026-09-19-office-generation-cleanup.zh.md: 36fab8f17f8ad20de89926e1066eba9e9d8bd9a1
+/agent-note-clean-intermediate-office-generation-files:
+  en: 0abe82fb8165d6a8
+  zh: 1acc2ac74ddf0191
+/agent-note-clean-intermediate-office-generation-files/problem:
+  en: 6f4fef5fe0cf9666
+  zh: 67bdfb66e6ca444d
+/agent-note-clean-intermediate-office-generation-files/decision:
+  en: d837c19cd10782d8
+  zh: 7f42e42f476d448e
+/agent-note-clean-intermediate-office-generation-files/alternatives-considered:
+  en: 50e59f1f7e1fb9bb
+  zh: 6c62e896d7a82ea4
+/agent-note-clean-intermediate-office-generation-files/consequences:
+  en: 5763cf370b15cb47
+  zh: 2e489129d366a59a
+/agent-note-clean-intermediate-office-generation-files/verification:
+  en: 676fb7b633d9b0ab
+  zh: 84e1e3f0364d014f

@@ -5,7 +5,7 @@
 
 import { useState } from 'react'
 import type { ReactNode } from 'react'
-import { Button, IconPlusOutline16, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
+import { Button, IconPlusOutlineMedium, Modal } from '@deepseek-ai/dsh-client-ui-primitives'
 import type { InjectFace, PropsRenderSlots } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: pulls this package's SlotMap merge (the three Models child slots).
 import type {} from './slot-contract.ts'
@@ -785,7 +785,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
           <button type="button" className={styles['secondaryButton']} disabled={!state.writable}
             aria-expanded={choosingConnection}
             onClick={() => { setChoosingConnection(!choosingConnection) }}>
-            <IconPlusOutline16 size={14} />{t('add')}
+            <IconPlusOutlineMedium size={14} />{t('add')}
           </button>
         </div>
         {choosingConnection ? (
@@ -816,7 +816,7 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
                 setEditing(undefined)
                 setDeclaring(true)
                 setChoosingConnection(false)
-              }}><span className={styles['providerLogoFallback']} aria-hidden="true"><IconPlusOutline16 /></span>{t('customAdd')}</button>
+              }}><span className={styles['providerLogoFallback']} aria-hidden="true"><IconPlusOutlineMedium /></span>{t('customAdd')}</button>
           </div>
         ) : null}
         <ul className={styles['rows']}>

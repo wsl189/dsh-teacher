@@ -47,6 +47,7 @@ function deepSeekNamespace(apiKeyEnv: string | null): SettingsNamespaceView {
   const value = apiKeyEnv === null ? {} : { apiKeyEnv }
   return {
     ns: 'llm-deepseek',
+    autoGenerate: true,
     schema: JSON.parse(JSON.stringify(DeepSeekConfig.toJSON())) as JsonValue,
     value,
     base: value,
@@ -158,6 +159,25 @@ function harness(options: {
 }
 
 describe('DeepSeekOnboardingDialog', () => {
+  it('opens the API key editor for an explicit request with a configured provider', async () => {
+    const h = harness({ configured: () => true })
+    render(<DeepSeekOnboardingDialog {...h.props} explicit />)
+    expect(await screen.findByRole('dialog', { name: en.onboardingTitle })).toBeTruthy()
+    expect(h.complete).not.toHaveBeenCalled()
+  })
+
+  it('lets the account sign-in step hand off to the retained API key editor', async () => {
+    const h = harness()
+    const renderSlot: NonNullable<DeepSeekOnboardingDialogProps['renderSlot']> = (_name, owner) => {
+      if (!('useApiKey' in owner) || typeof owner.useApiKey !== 'function') throw new Error('Unexpected sign-in owner')
+      const useApiKey = owner.useApiKey as () => void
+      return <button onClick={() => { useApiKey() }}>Use API key</button>
+    }
+    render(<DeepSeekOnboardingDialog {...h.props} renderSlot={renderSlot} />)
+    fireEvent.click(await screen.findByRole('button', { name: 'Use API key' }))
+    expect(await screen.findByRole('dialog', { name: en.onboardingTitle })).toBeTruthy()
+  })
+
   it('renders when the shell root is absent', async () => {
     const h = harness()
     document.getElementById('root')!.remove()

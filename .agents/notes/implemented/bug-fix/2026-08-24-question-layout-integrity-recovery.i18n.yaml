@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-24-question-layout-integrity-recovery.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-08-24-question-layout-integrity-recovery.md
-2026-08-24-question-layout-integrity-recovery.md: f6af3218f7e6cfa82b1c8ad68fff899d70da70a4
-2026-08-24-question-layout-integrity-recovery.zh.md: 8ed588d5189806b8030197854c096c3ae2de503a
+/agent-note-question-layout-integrity-recovery:
+  en: 455a01549b5f2e3e
+  zh: ffac37dd43ecdb84
+/agent-note-question-layout-integrity-recovery/problem:
+  en: a28fbafcb6632ec1
+  zh: 8fefbb6ae6e0442c
+/agent-note-question-layout-integrity-recovery/decision:
+  en: 43048ffabbc68939
+  zh: de339057143185a1
+/agent-note-question-layout-integrity-recovery/alternatives-considered:
+  en: ad478be559efafe2
+  zh: 59c94f580b419f83
+/agent-note-question-layout-integrity-recovery/consequences:
+  en: 5d049d9292215c59
+  zh: 539e730435c0699d

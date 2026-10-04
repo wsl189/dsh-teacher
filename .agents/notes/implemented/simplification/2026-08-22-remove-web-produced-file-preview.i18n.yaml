@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-remove-web-produced-file-preview.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-08-22-remove-web-produced-file-preview.md
-2026-08-22-remove-web-produced-file-preview.md: 4e85266cdef81204e860f8868a17e5c8703d83e5
-2026-08-22-remove-web-produced-file-preview.zh.md: 5ab3c322552db9176267833f5baf837818af6a5b
+/agent-note-remove-in-product-produced-file-previews:
+  en: c22507fdfc5b7c35
+  zh: ffb30ae29757830d
+/agent-note-remove-in-product-produced-file-previews/problem:
+  en: 593465f8ef013abe
+  zh: 13454c744c7e4ee7
+/agent-note-remove-in-product-produced-file-previews/decision:
+  en: 85cd1938acae049e
+  zh: 93afa10abd042094
+/agent-note-remove-in-product-produced-file-previews/alternatives-considered:
+  en: c9b8e1055b6ddae2
+  zh: 50e725d5531a625f
+/agent-note-remove-in-product-produced-file-previews/verification:
+  en: 725c33147250d3f6
+  zh: 5a3a396eb0e6b141
+/agent-note-remove-in-product-produced-file-previews/consequences:
+  en: 3e76a602356bcbe6
+  zh: 10ff8a258e97f454

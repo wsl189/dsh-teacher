@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-model-capacity-selects.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-model-capacity-selects.md
-2026-09-09-model-capacity-selects.md: 9fa8c0b66a6fe84c506462754e41d7b3190d4e4c
-2026-09-09-model-capacity-selects.zh.md: 8f1e1963e254b5bd411868fe63613ba8727799c9
+/agent-note-model-capacity-choices-and-request-budgets:
+  en: 441749fe7ab2c0d5
+  zh: 9f3c833c927f2b70
+/agent-note-model-capacity-choices-and-request-budgets/problem:
+  en: 0b181b806400aab2
+  zh: 135eab6cbb6fdd04
+/agent-note-model-capacity-choices-and-request-budgets/decision:
+  en: 776db67da54a78cb
+  zh: 721ac6895ba9e27f
+/agent-note-model-capacity-choices-and-request-budgets/alternatives-considered:
+  en: b3c664968ac63d7b
+  zh: a9c4a782f6d23a10
+/agent-note-model-capacity-choices-and-request-budgets/consequences:
+  en: 28e3c46c10da7bb5
+  zh: 7d88cba81e136848

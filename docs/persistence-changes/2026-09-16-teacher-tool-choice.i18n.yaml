@@ -1,6 +1,28 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-16-teacher-tool-choice.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write docs/persistence-changes/2026-09-16-teacher-tool-choice.md
-2026-09-16-teacher-tool-choice.md: 44ed99e4ceae7b4b3e4e17dfe80e8e636abdedfb
-2026-09-16-teacher-tool-choice.zh.md: 2e613f68ca1deac87433b2d638bce477fa8ff50d
+/:
+  en: 3d5a424ae7d7e46b
+  zh: c22a8e4a62d8cc1a
+/2026-09-16-teacher-tool-choice:
+  en: 6d2803566924f392
+  zh: 0401013373ef0f9e
+/2026-09-16-teacher-tool-choice/summary:
+  en: 887b3ef53f04d536
+  zh: d586748cde6bb417
+/2026-09-16-teacher-tool-choice/table-of-contents:
+  en: 6cf314a069ceb451
+  zh: 9adff678e9ecab3b
+/2026-09-16-teacher-tool-choice/declaration:
+  en: 6907136f28e48c90
+  zh: 02f8298485f3d8e7
+/2026-09-16-teacher-tool-choice/compatibility:
+  en: 3a6de6aa9650a897
+  zh: 282c12564483b338
+/2026-09-16-teacher-tool-choice/verification:
+  en: fae3c88f73b1331b
+  zh: 1010911f8bbf2fa5
+/2026-09-16-teacher-tool-choice/dev-note:
+  en: b75c8458928b72b9
+  zh: 003ba4e17b4b5269

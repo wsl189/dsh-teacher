@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-19-office-final-files-survive-cleanup.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-19-office-final-files-survive-cleanup.md
-2026-09-19-office-final-files-survive-cleanup.md: 4ffbf23f8f9a8d744334aeb451146c188520a905
-2026-09-19-office-final-files-survive-cleanup.zh.md: 9e392ea8700589ed20cbf014ccb59d7b1072461a
+/agent-note-preserve-office-final-files-before-cleanup:
+  en: 263e52396c401506
+  zh: 0f0ef0d1c5071e27
+/agent-note-preserve-office-final-files-before-cleanup/problem:
+  en: d784a7622af28817
+  zh: 3838c20083e66afb
+/agent-note-preserve-office-final-files-before-cleanup/decision:
+  en: 68ba91ded49c0204
+  zh: 1b184a884fc4d806
+/agent-note-preserve-office-final-files-before-cleanup/alternatives-considered:
+  en: 998caced4cf166bd
+  zh: 1ce3b4eb1d370720
+/agent-note-preserve-office-final-files-before-cleanup/consequences:
+  en: 7a573391ac996b68
+  zh: 0b5c92fbae6cd322
+/agent-note-preserve-office-final-files-before-cleanup/verification:
+  en: f30bf9d45176aa43
+  zh: 105f33484ad3283e

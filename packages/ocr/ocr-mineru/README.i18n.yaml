@@ -1,6 +1,46 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/ocr/ocr-mineru/README.md
-README.md: 31408cb6d21df4c1751e791e4b54842ad4618e2e
-README.zh.md: 23c675b62261aaf26a5aed16664a9565b89637e4
+/:
+  en: e8333bce3e50fe0d
+  zh: c2bfa5e7fc0b951f
+/deepseek-ai-dsh-ocr-mineru:
+  en: 71bbeb5f2fb55a4e
+  zh: ea413ac803ff75ad
+/deepseek-ai-dsh-ocr-mineru/summary:
+  en: b3269ec4a48eeacf
+  zh: c0f0c0fa7fe0e30f
+/deepseek-ai-dsh-ocr-mineru/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7177e3097c880aa1
+/deepseek-ai-dsh-ocr-mineru/use-this-package:
+  en: 0aa667cf8287e54e
+  zh: 54c8f84542c9d045
+/deepseek-ai-dsh-ocr-mineru/use-this-package/configuration:
+  en: 7217dbe47043e5ac
+  zh: b1c6b5afcc3868af
+/deepseek-ai-dsh-ocr-mineru/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-ocr-mineru/understand-the-implementation/structured-layout:
+  en: 779bf4552595b1de
+  zh: 23033c9d940cfdf9
+/deepseek-ai-dsh-ocr-mineru/understand-the-implementation/formats-and-failures:
+  en: b3471870ce00cc71
+  zh: efe0b8311f68756e
+/deepseek-ai-dsh-ocr-mineru/further-exploration:
+  en: 43e01ee4ca859f32
+  zh: 4bdb6173d0087161
+/deepseek-ai-dsh-ocr-mineru/model-experience:
+  en: caa3a2e678547abd
+  zh: b03fd119994c2a7d
+/deepseek-ai-dsh-ocr-mineru/model-experience/kv-cache-effect:
+  en: 44f957a30cb70e32
+  zh: 78f9702b039f611d
+/deepseek-ai-dsh-ocr-mineru/known-limitations-and-deferred-work:
+  en: 019ca827ae6c3c9b
+  zh: 8edee099aa3d0038
+/deepseek-ai-dsh-ocr-mineru/known-limitations-and-deferred-work/dev-note:
+  en: bd2e58d5b760a0a9
+  zh: 8af0a10c88e8e8f1

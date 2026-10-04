@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-26-bounded-parallel-question-cutting.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-26-bounded-parallel-question-cutting.md
-2026-08-26-bounded-parallel-question-cutting.md: 3933a3a6a5da794327d4f1cc530d9e9cc266285d
-2026-08-26-bounded-parallel-question-cutting.zh.md: 3d440c2d5beccc8cac7078a315374a946e8b18cc
+/agent-note-bounded-parallel-question-cutting:
+  en: 2f2655cefa897799
+  zh: 69d46903821efd92
+/agent-note-bounded-parallel-question-cutting/problem:
+  en: 98ea798548c32df1
+  zh: c6468a76f204c693
+/agent-note-bounded-parallel-question-cutting/decision:
+  en: fd168f681dbb26cc
+  zh: f46009ea9d7f46b9
+/agent-note-bounded-parallel-question-cutting/alternatives-considered:
+  en: 4cf43b9f4907b6d1
+  zh: 83ea825d2999ff3f
+/agent-note-bounded-parallel-question-cutting/consequences:
+  en: 1f0882ecad250382
+  zh: a5702f749b5f19b3
+/agent-note-bounded-parallel-question-cutting/testing:
+  en: 5fc21a94e34bcda4
+  zh: b13c8022508ec4c4

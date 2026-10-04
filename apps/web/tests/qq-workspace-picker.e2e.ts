@@ -268,8 +268,8 @@ describe.skipIf(MODE === 'record')('web e2e: QQ bot workspace defaults and direc
     await scaffold.ctx.sessions.flush(handle.agent.session)
     const results = handle.agent.session.snapshotEvents().filter(event => event.type === 'tool/result')
     expect(results).toHaveLength(1)
-    const result = results[0]!.data.message.content[0]
-    if (result?.type !== 'tool-result') throw new Error('Missing Daily Management tool result')
+    const result = results[0]!.data.message
+    if (result?.role !== 'tool') throw new Error('Missing Daily Management tool result')
     expect(result.isError).not.toBe(true)
     const content = result.content[0]
     if (content?.type !== 'text') throw new Error('Missing Daily Management JSON')

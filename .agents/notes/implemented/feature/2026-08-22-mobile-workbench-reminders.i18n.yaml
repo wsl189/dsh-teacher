@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-08-22-mobile-workbench-reminders.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-08-22-mobile-workbench-reminders.md
-2026-08-22-mobile-workbench-reminders.md: b51c146b9dd446e7ba84cc5f5392bdd87df9b66e
-2026-08-22-mobile-workbench-reminders.zh.md: fa594c98018b14f27c4557791f2aeb0477252bee
+/agent-note-mobile-workbench-reminders:
+  en: f7e0921e2f22c5b4
+  zh: 4114f2095b67cb41
+/agent-note-mobile-workbench-reminders/problem:
+  en: efbd59229b3d500a
+  zh: 192197672f804c45
+/agent-note-mobile-workbench-reminders/decision:
+  en: e59928ed9d2e014e
+  zh: a183da870c5b4e85
+/agent-note-mobile-workbench-reminders/alternatives-considered:
+  en: 275225e478e51d82
+  zh: 112f7400b580a5a8
+/agent-note-mobile-workbench-reminders/consequences:
+  en: 614e9f2bf2c62689
+  zh: bfd7441ebebb7746
+/agent-note-mobile-workbench-reminders/testing:
+  en: 87e6f73d410c5fd1
+  zh: 1c8d58b209a4e72e

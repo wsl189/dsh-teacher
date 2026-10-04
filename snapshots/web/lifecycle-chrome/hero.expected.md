@@ -1,45 +1,26 @@
 - button "New session"
-- button "Collapse sidebar":
-  - img
-- button "Open workbench":
-  - img
-  - text: Workbench
-  - img
-- button "Scheduled Tasks": Scheduled Tasks 0
+- button "Collapse sidebar"
+- button "New session": New Session
+- navigation "Global panels":
+  - button "Plugins"
+  - button "Automation tasks"
 - text: Workspaces
-- button "Search sessions":
-  - img
-- textbox "Search sessions..."
-- button "View options":
-  - img
-- button "Add workspace":
-  - img
+- button "Search sessions"
+- textbox "Search session names"
+- button "View options"
+- button "Add workspace"
 - tree "Sessions":
-  - treeitem "workspace" [expanded]:
-    - img
-    - text: workspace
+  - treeitem "workspace" [expanded]
   - treeitem "New Session" [selected]
-- button "Settings":
-  - img
-  - text: Settings
-- text: Into the Unknown
-- button "Choose workspace":
-  - img
-  - text: workspace
-  - img
-- button "Standard mode":
-  - img
-  - text: Standard mode
-  - img
+- button "Settings"
+- banner:
+  - button "Open right sidebar"
+- text: Into the Unknown Preview
+- button "Choose workspace": workspace
+- button "Standard mode"
 - textbox "Describe what you want to build, / commands, @ files or sessions":
   - paragraph
-- button "Add files or run commands":
-  - img
-- button "Upload a file and extract it with MinerU OCR"
-- button "Choose File"
-- button "Voice input (or hold Space)"
+- button "Add files or run commands"
 - 'button "Access mode, current: Workspace Write"': Workspace Write
-- button "Select model, current DeepSeek-V4-Flash":
-  - text: DeepSeek-V4-Flash
-  - img
+- button "Select model, current DeepSeek-V4-Flash": DeepSeek-V4-Flash
 - button "Send message" [disabled]

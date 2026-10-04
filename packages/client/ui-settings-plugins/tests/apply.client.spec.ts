@@ -10,7 +10,6 @@ import { apply as settingsApply, inject as settingsInject } from '@deepseek-ai/d
 import { apply, inject } from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import type { PluginsSettingsSectionInjected } from '@deepseek-ai/dsh-client-ui-settings-plugins/client'
 import { SubagentModelSelectionCardController } from '../src/client/subagent-model-selection-card-controller.ts'
-import { apply as hostApply } from '../src/index.ts'
 
 // These specs assert the shipped Chinese copy. The lane has no jsdom `window`,
 // so browser-language detection never runs and a fresh LocaleRuntime opens on
@@ -67,10 +66,6 @@ function declareRoot(slots: SlotRegistry): () => void {
 }
 
 describe('ui-settings-plugins apply', () => {
-  it('keeps the host Loader entry inert', () => {
-    expect(hostApply).not.toThrow()
-  })
-
   it('declares the services it uses', () => {
     expect(inject).toEqual([
       'slots', 'locale', 'remote', 'remote.credentials', 'remote.session', 'settingsScope',
@@ -115,7 +110,7 @@ describe('ui-settings-plugins apply', () => {
     ])
     unsubscribe()
 
-    await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(4) })
+    await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(1) })
     for (const entry of slots.entries('plugins.item')) {
       const face = (entry as { inject?: () => unknown }).inject?.() as { hooks: Record<string, unknown> }
       expect(Object.keys(face.hooks)).toHaveLength(entry.options.id === 'subagent' ? 2 : 1)
@@ -128,10 +123,10 @@ describe('ui-settings-plugins apply', () => {
 
     await ctx.plugin({ inject: [...inject], apply }).await()
 
-    await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(4) })
+    await vi.waitFor(() => { expect(slots.entries('plugins.item')).toHaveLength(1) })
     const entries = slots.entries('plugins.item')
-    expect(entries.map(entry => entry.options.id)).toEqual(['bash', 'agent-loop', 'subagent', 'web-search'])
-    expect(entries.map(entry => resolveSlotLabel(entry.options.label))).toEqual(['终端', 'Agent 循环', 'Subagent', '网页搜索'])
+    expect(entries.map(entry => entry.options.id)).toEqual(['web-search'])
+    expect(entries.map(entry => resolveSlotLabel(entry.options.label))).toEqual(['网页搜索'])
     expect(entries.every(entry => entry.locale === 'settings.plugins')).toBe(true)
   })
 
@@ -139,15 +134,15 @@ describe('ui-settings-plugins apply', () => {
     ['subagent'],
     ['subagent-model-selection'],
     ['subagent', 'subagent-model-selection'],
-  ])('keeps one Subagent page while either namespace is served: %j', async (...served) => {
+  ])('leaves Subagent pages to the official owner while either former namespace is served: %j', async (...served) => {
     const { ctx, slots, describeSettings, remote } = await bench(served)
     onTestFinished(() => ctx.fiber.dispose())
     declareRoot(slots)
     await ctx.plugin({ inject: [...inject], apply }).await()
     await vi.waitFor(() => {
-      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual(['subagent'])
+      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual([])
     })
-    const entry = slots.entries('plugins.item')[0]
+    expect(slots.entries('plugins.item')).toEqual([])
     for (const namespaces of [['subagent-model-selection'], ['subagent'], []]) {
       describeSettings.mockResolvedValue({
         ok: true,
@@ -159,7 +154,7 @@ describe('ui-settings-plugins apply', () => {
       remote.emit('settings/document-updated', ['subagent', 1])
       await vi.waitFor(() => {
         expect(ctx.settingsScope.describe().getSnapshot().view?.namespaces.map(view => view.ns)).toEqual(namespaces)
-        expect(slots.entries('plugins.item')).toEqual(namespaces.length > 0 ? [entry] : [])
+        expect(slots.entries('plugins.item')).toEqual([])
       })
     }
   })
@@ -172,7 +167,7 @@ describe('ui-settings-plugins apply', () => {
     await ctx.plugin({ inject: [...inject], apply }).await()
 
     await vi.waitFor(() => {
-      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual(['agent-loop', 'web-search'])
+      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual(['web-search'])
     })
 
     describeSettings.mockResolvedValue({
@@ -186,7 +181,7 @@ describe('ui-settings-plugins apply', () => {
     remote.emit('settings/document-updated', ['web-search-anysearch', 1])
 
     await vi.waitFor(() => {
-      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual(['agent-loop'])
+      expect(slots.entries('plugins.item').map(entry => entry.options.id)).toEqual([])
     })
   })
 

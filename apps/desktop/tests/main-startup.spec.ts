@@ -1,371 +1,127 @@
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { join } from 'node:path'
-import { DESKTOP_IPC } from '../src/ipc.ts'
 
-const harness = await vi.hoisted(async () => {
+const harness = vi.hoisted(() => ({
+  app: undefined as EventEmitter | undefined,
+  windows: [] as Array<{
+    urls: string[]
+    show: ReturnType<typeof vi.fn>
+    focus: ReturnType<typeof vi.fn>
+    destroy: ReturnType<typeof vi.fn>
+  }>,
+  child: undefined as EventEmitter & {
+    exitCode: number | null
+    signalCode: null
+    connected: boolean
+    send: ReturnType<typeof vi.fn>
+  } | undefined,
+  singleInstance: true,
+  quit: vi.fn(),
+  fatal: vi.fn(),
+  identity: vi.fn(),
+}))
+
+vi.mock('electron', async () => {
   const { EventEmitter } = await import('node:events')
-  function deferred() {
-    let resolve!: () => void
-    let reject!: (error: Error) => void
-    const promise = new Promise<void>((accept, decline) => { resolve = accept; reject = decline })
-    return { promise, resolve, reject }
-  }
-  const windows: FakeWindow[] = []
-  const hosts: FakeHost[] = []
-  const managerRuntimes: unknown[] = []
-  const handlers = new Map<string, (event: { senderFrame: { url: string } }) => unknown>()
-  let pluginsEnabled = false
-  let preparing = deferred()
-  let prepared = deferred()
-  let hostStarted = deferred()
-  let navigated = deferred()
-  let errorPublished = deferred()
-  let quitCompleted = deferred()
-  class FakeWindow extends EventEmitter {
-    destroyed = false
-    readonly urls: string[] = []
-    readonly webContents = Object.assign(new EventEmitter(), {
-      setWindowOpenHandler: vi.fn(),
-      openDevTools: vi.fn(),
-      getURL: () => this.urls.at(-1) ?? '',
-      send: vi.fn((channel: string, state: { phase?: string }) => {
-        if (channel === 'dsh-desktop:backend-state' && state.phase === 'error') errorPublished.resolve()
-      }),
-    })
-    readonly show = vi.fn()
-    readonly focus = vi.fn()
-    readonly restore = vi.fn()
-    constructor(readonly options: { show: boolean }) { super(); windows.push(this) }
-    isDestroyed() { return this.destroyed }
-    isMinimized() { return false }
-    async loadURL(url: string) {
-      this.urls.push(url)
-      if (url === 'dsh-app://app/index.html') navigated.resolve()
-    }
-    static getAllWindows() { return windows.filter(window => !window.destroyed) }
-    close() { this.destroyed = true; this.emit('closed') }
-  }
-  class FakeHost {
-    readonly ready = deferred()
-    readonly exited = deferred()
-    readonly stopping = deferred()
-    readonly start = vi.fn(() => { hostStarted.resolve(); return this.ready.promise })
-    readonly stop = vi.fn(() => {
-      this.stopping.resolve()
-      this.ready.reject(new Error('child stopped'))
-      return this.exited.promise
-    })
-    constructor(readonly node: string, readonly runtime: string, readonly profile: string) { hosts.push(this) }
+  class Window extends EventEmitter {
+    urls: string[] = []
+    show = vi.fn()
+    focus = vi.fn()
+    destroy = vi.fn(() => { this.emit('closed') })
+    webContents = Object.assign(new EventEmitter(), { setWindowOpenHandler: vi.fn(), send: vi.fn() })
+    constructor() { super(); harness.windows.push(this) }
+    isDestroyed() { return false }
+    async loadURL(url: string) { this.urls.push(url) }
   }
   const app = Object.assign(new EventEmitter(), {
-    isPackaged: true,
-    name: 'Desktop test',
+    isPackaged: false,
     whenReady: () => Promise.resolve(),
-    getLocale: () => 'en-US',
-    getVersion: () => '1.0.0',
-    getAppPath: () => 'desktop-test-app',
-    requestSingleInstanceLock: () => true,
-    exit: vi.fn(),
-    relaunch: vi.fn(),
-    quit: vi.fn(() => {
-      const event = { preventDefault: vi.fn() }
-      app.emit('before-quit', event)
-      if (event.preventDefault.mock.calls.length === 0) quitCompleted.resolve()
-    }),
+    getLocale: () => 'zh-CN',
+    getVersion: () => '1.3.4',
+    getAppPath: () => 'E:/dsh/dsh-teacher/apps/desktop',
+    getPath: () => 'E:/dsh',
+    requestSingleInstanceLock: () => harness.singleInstance,
+    setAppUserModelId: harness.identity,
+    quit: harness.quit,
   })
+  harness.app = app
   return {
-    windows, hosts, managerRuntimes, handlers, app, FakeWindow, FakeHost,
-    dialog: { showErrorBox: vi.fn(), showMessageBox: vi.fn() },
-    applyRelease: vi.fn(() => { preparing.resolve(); return prepared.promise }),
-    assertProfileRuntime: vi.fn(),
-    canRecoverProfile: vi.fn(() => true),
-    get preparing() { return preparing }, get prepared() { return prepared },
-    get hostStarted() { return hostStarted }, get navigated() { return navigated },
-    get errorPublished() { return errorPublished }, get quitCompleted() { return quitCompleted },
-    nextHostStart() { hostStarted = deferred(); return hostStarted.promise },
-    get pluginsEnabled() { return pluginsEnabled },
-    set pluginsEnabled(value: boolean) { pluginsEnabled = value },
-    reset() {
-      windows.length = 0; hosts.length = 0; managerRuntimes.length = 0; handlers.clear(); app.removeAllListeners()
-      app.isPackaged = true
-      pluginsEnabled = false
-      preparing = deferred(); prepared = deferred(); hostStarted = deferred()
-      navigated = deferred(); errorPublished = deferred(); quitCompleted = deferred()
-    },
+    app, BrowserWindow: Window, dialog: { showErrorBox: harness.fatal },
+    shell: { openExternal: vi.fn() }, ipcMain: { handle: vi.fn() },
   }
 })
-
-vi.mock('electron', () => ({
-  app: harness.app,
-  BrowserWindow: harness.FakeWindow,
-  dialog: harness.dialog,
-  ipcMain: {
-    handle: (channel: string, handler: (event: { senderFrame: { url: string } }) => unknown) => { harness.handlers.set(channel, handler) },
-  },
-  Menu: { setApplicationMenu: vi.fn(), buildFromTemplate: vi.fn() },
-  protocol: { registerSchemesAsPrivileged: vi.fn(), handle: vi.fn() },
-}))
-vi.mock('../src/paths.ts', () => ({ resolveDesktopPaths: () => ({ profile: 'desktop-test-profile' }) }))
-vi.mock('../src/project-manager.ts', () => ({
-  DesktopProjectManager: class {
-    readonly applyRelease = harness.applyRelease
-    readonly assertProfileRuntime = harness.assertProfileRuntime
-    canRecoverProfile = harness.canRecoverProfile
-    constructor(_paths: unknown, runtime: unknown) { harness.managerRuntimes.push(runtime) }
-    async mutate(_mutation: unknown, hooks: { beforeChange(): Promise<void>; afterChange(): Promise<void> }) {
-      await hooks.beforeChange()
-      harness.pluginsEnabled = false
-      await hooks.afterChange()
-    }
-    async resetConfiguration(hooks: { beforeChange(): Promise<void>; afterChange(): Promise<void> }) {
-      await this.mutate(undefined, hooks)
-    }
-  },
-}))
-vi.mock('../src/host-process.ts', () => ({ DesktopHostProcess: harness.FakeHost }))
-vi.mock('../src/update-coordinator.ts', () => ({ DesktopUpdateCoordinator: vi.fn() }))
-
-function invoke(channel: string): unknown {
-  const handler = harness.handlers.get(channel)
-  if (handler === undefined) throw new Error(`missing handler ${channel}`)
-  return handler({ senderFrame: { url: 'dsh-app://shell/startup.html' } })
-}
+vi.mock('node:child_process', async () => {
+  const { EventEmitter } = await import('node:events')
+  return { fork: vi.fn(() => {
+    const child = Object.assign(new EventEmitter(), {
+      exitCode: null as number | null, signalCode: null, connected: true,
+      stdout: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
+      stderr: Object.assign(new EventEmitter(), { setEncoding: vi.fn() }),
+      send: vi.fn((_message: unknown, callback?: (error: Error | null) => void) => {
+        callback?.(null)
+        queueMicrotask(() => { child.exitCode = 0; child.emit('exit', 0, null) })
+      }),
+      kill: vi.fn(),
+    })
+    harness.child = child
+    return child
+  }) }
+})
+vi.mock('electron-log/main', () => ({ default: { info: vi.fn(), error: vi.fn(), warn: vi.fn() } }))
+vi.mock('../src/renderer-permissions.ts', () => ({ installRendererPermissions: () => () => {} }))
+vi.mock('../src/updater-runtime.ts', () => ({ autoUpdater: Object.assign(new EventEmitter(), { autoDownload: false, autoInstallOnAppQuit: false }) }))
 
 beforeEach(() => {
   vi.resetModules()
   vi.clearAllMocks()
-  vi.useFakeTimers()
-  harness.reset()
-  vi.stubEnv('DSH_DESKTOP_NODE_BINARY', 'test-node')
-  vi.stubEnv('DSH_DESKTOP_PNPM_ENTRY', 'test-pnpm')
-  vi.stubEnv('DSH_DESKTOP_DSH_DIR', 'test-runtime')
-  vi.stubGlobal('process', { ...process, resourcesPath: 'desktop-test-resources' })
-  vi.stubEnv('DSH_DESKTOP_HOST_INSPECT_PORT', undefined)
+  harness.windows.length = 0
+  harness.child = undefined
+  harness.app?.removeAllListeners()
+  harness.singleInstance = true
 })
-
 afterEach(async () => {
-  harness.prepared.resolve()
-  for (const host of harness.hosts) { host.ready.resolve(); host.exited.resolve() }
-  harness.app.quit()
-  await harness.quitCompleted.promise
-  vi.restoreAllMocks()
-  harness.canRecoverProfile.mockReturnValue(true)
-  vi.clearAllTimers()
-  vi.useRealTimers()
-  vi.unstubAllEnvs()
-  vi.unstubAllGlobals()
+  if (harness.child?.exitCode === null) {
+    harness.app?.emit('before-quit', { preventDefault: vi.fn() })
+    await vi.waitFor(() => { expect(harness.child?.exitCode).toBe(0) })
+  }
 })
 
-describe('desktop main startup', () => {
-  it('exits with a diagnostic when both initialization and emergency navigation fail', async () => {
-    const exited = Promise.withResolvers<undefined>()
-    vi.spyOn(harness.app, 'getLocale').mockImplementationOnce(() => { throw new Error('locale unavailable') })
-    vi.spyOn(harness.FakeWindow.prototype, 'loadURL').mockRejectedValueOnce(new Error('emergency navigation failed'))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
-    harness.app.exit.mockImplementationOnce(() => { exited.resolve(undefined) })
+describe('teacher Electron entry', () => {
+  it('keeps the installed identity and shows the startup card before backend readiness', async () => {
     await import('../src/main.ts')
-    await exited.promise
-    expect(harness.app.exit).toHaveBeenCalledWith(1)
-    expect(console.error).toHaveBeenCalledWith(expect.objectContaining({ message: 'emergency navigation failed' }))
-  })
-
-  it('withholds profile recovery after application resources fail to load', async () => {
-    harness.canRecoverProfile.mockReturnValue(false)
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.reject(new Error('runtime resources missing'))
-    await harness.errorPublished.promise
-    expect(invoke(DESKTOP_IPC.backendStatus)).toMatchObject({ phase: 'error', profileRecovery: false })
-    const window = harness.windows[0]!
-    window.webContents.emit('preload-error', {}, 'preload-app.cjs', new Error('preload unavailable'))
-    const html = decodeURIComponent(window.urls.at(-1)!)
-    expect(html).toContain('dsh-recovery://restart')
-    expect(html).not.toContain('dsh-recovery://reset')
-    expect(html).not.toContain('dsh-recovery://plugins')
-  })
-
-  it('reloads a crashed startup renderer in the same window', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    const window = harness.windows[0]!
-    window.webContents.emit('render-process-gone', {}, { reason: 'crashed' })
-    await harness.errorPublished.promise
-    expect(window.urls).toEqual(['dsh-app://shell/startup.html', 'dsh-app://shell/startup.html'])
-    expect(invoke(DESKTOP_IPC.backendStatus)).toMatchObject({ phase: 'error', message: 'Desktop renderer exited: crashed' })
-  })
-
-  it.each(['plugins', 'reset'])('runs %s recovery from a document with a broken preload', async (action) => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    const window = harness.windows[0]!
-    window.webContents.emit('preload-error', {}, 'preload-app.cjs', new Error('preload unavailable'))
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    harness.hosts[0]!.ready.resolve()
-    await Promise.resolve(invoke(DESKTOP_IPC.backendRetry))
-    const started = harness.nextHostStart()
-    const event = { preventDefault: vi.fn() }
-    window.webContents.emit('will-navigate', event, `dsh-recovery://${action}/?`)
-    await harness.hosts[0]!.stopping.promise
-    harness.hosts[0]!.exited.resolve()
-    await started
-    harness.hosts[1]!.ready.resolve()
-    await harness.navigated.promise
-    expect(event.preventDefault).toHaveBeenCalled()
-    expect(window.urls.at(-1)).toBe('dsh-app://app/index.html')
-  })
-
-  it('allows a full profile reset for an unclassified startup failure', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    harness.hosts[0]!.exited.resolve()
-    harness.hosts[0]!.ready.reject(new Error('Unknown startup failure'))
-    await harness.errorPublished.promise
-    const started = harness.nextHostStart()
-    const reset = Promise.resolve(invoke(DESKTOP_IPC.configurationReset))
-    await started
-    harness.hosts[1]!.ready.resolve()
-    await reset
-    expect(invoke(DESKTOP_IPC.backendStatus)).toEqual({ phase: 'ready' })
-  })
-
-  it('keeps a self-contained reinstall document in the main window after preload failure', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    const window = harness.windows[0]!
-    window.webContents.emit('preload-error', {}, 'preload-app.cjs', new Error('preload unavailable'))
-    expect(window.urls.at(-1)).toContain('data:text/html')
-    expect(decodeURIComponent(window.urls.at(-1)!)).toContain('preload unavailable')
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    harness.hosts[0]!.ready.resolve()
-    await Promise.resolve(invoke(DESKTOP_IPC.backendRetry))
+    await vi.waitFor(() => { expect(harness.child).toBeDefined() })
+    expect(harness.identity).toHaveBeenCalledWith('ai.deepseek.dsh.teacher')
     expect(harness.windows).toHaveLength(1)
-    expect(window.urls.at(-1)).toContain('data:text/html')
-    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
+    expect(harness.windows[0]?.show).toHaveBeenCalledOnce()
+    const url = 'http://127.0.0.1:43210/?token=' + 'a'.repeat(43)
+    harness.child!.emit('message', { type: 'ready', url })
+    await vi.waitFor(() => { expect(harness.windows[1]?.focus).toHaveBeenCalledOnce() })
+    expect(harness.windows[1]?.urls).toEqual([url])
+    expect(harness.windows[0]?.destroy).toHaveBeenCalledOnce()
   })
-
-  it('offers plugin recovery and disables plugins before restarting in the same window', async () => {
-    harness.pluginsEnabled = true
+  it('does not start another backend when an instance already owns the application', async () => {
+    harness.singleInstance = false
     await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    harness.hosts[0]!.exited.resolve()
-    harness.hosts[0]!.ready.reject(new Error('Plugin initialization failed'))
-    await harness.errorPublished.promise
-    expect(invoke(DESKTOP_IPC.backendStatus)).toMatchObject({ phase: 'error', profileRecovery: true })
-    const nextStarted = harness.nextHostStart()
-    const recovery = Promise.resolve(invoke(DESKTOP_IPC.pluginsDisableAll))
-    await nextStarted
-    expect(harness.pluginsEnabled).toBe(false)
-    harness.hosts[1]!.ready.resolve()
-    await recovery
+    expect(harness.quit).toHaveBeenCalledOnce()
+    expect(harness.windows).toHaveLength(0)
+    expect(harness.child).toBeUndefined()
+  })
+  it('waits for backend shutdown when quitting during startup', async () => {
+    await import('../src/main.ts')
+    await vi.waitFor(() => { expect(harness.child).toBeDefined() })
+    const preventDefault = vi.fn()
+    harness.app!.emit('before-quit', { preventDefault })
+    expect(preventDefault).toHaveBeenCalledOnce()
+    await vi.waitFor(() => { expect(harness.quit).toHaveBeenCalledOnce() })
+    expect(harness.child?.send).toHaveBeenCalledWith({ type: 'shutdown' }, expect.any(Function))
     expect(harness.windows).toHaveLength(1)
-    expect(invoke(DESKTOP_IPC.backendStatus)).toEqual({ phase: 'ready' })
   })
-
-  it('waits for Host exit before relaunching the application', async () => {
+  it('reports a backend startup failure and stops the failed child', async () => {
     await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    harness.hosts[0]!.ready.resolve()
-    await harness.navigated.promise
-    const restart = Promise.resolve(invoke(DESKTOP_IPC.applicationRestart))
-    await harness.hosts[0]!.stopping.promise
-    expect(harness.app.relaunch).not.toHaveBeenCalled()
-    harness.hosts[0]!.exited.resolve()
-    await restart
-    expect(harness.app.relaunch).toHaveBeenCalledOnce()
-  })
-
-  it('shows the loading window before profile preparation and starts one actual Host', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    expect(harness.windows).toHaveLength(1)
-    const window = harness.windows[0]!
-    expect(window.options.show).toBe(true)
-    expect(window.urls).toEqual(['dsh-app://shell/startup.html'])
-    expect(harness.hosts).toHaveLength(0)
-    const retry = invoke(DESKTOP_IPC.backendRetry)
-    const secondRetry = invoke(DESKTOP_IPC.backendRetry)
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    expect(harness.hosts).toHaveLength(1)
-    expect(window.urls).toEqual(['dsh-app://shell/startup.html'])
-    harness.hosts[0]!.ready.resolve()
-    await Promise.all([retry, secondRetry, harness.navigated.promise])
-    expect(harness.applyRelease).toHaveBeenCalledTimes(1)
-    expect(harness.assertProfileRuntime).toHaveBeenCalledWith('desktop-test-profile')
-    expect(harness.hosts[0]).toMatchObject({
-      node: process.execPath,
-      runtime: join(harness.app.getAppPath(), 'dsh'),
-      profile: 'desktop-test-profile',
-    })
-    expect(harness.managerRuntimes[0]).toMatchObject({ profileResolution: 'runtime' })
-    expect(harness.hosts[0]!.start).toHaveBeenCalledTimes(1)
-    expect(harness.windows).toHaveLength(1)
-    expect(window.urls).toEqual(['dsh-app://shell/startup.html', 'dsh-app://app/index.html'])
-    expect(invoke(DESKTOP_IPC.backendStatus)).toEqual({ phase: 'ready' })
-  })
-
-  it('starts the unpackaged Host from the application development directory', async () => {
-    harness.app.isPackaged = false
-    await import('../src/main.ts')
-    await harness.hostStarted.promise
-    const project = join(harness.app.getAppPath(), '.desktop-build', 'development', 'project')
-    expect(harness.hosts[0]).toMatchObject({ node: 'test-node', runtime: project, profile: project })
-    expect(harness.applyRelease).not.toHaveBeenCalled()
-    expect(harness.assertProfileRuntime).not.toHaveBeenCalled()
-    harness.hosts[0]!.ready.resolve()
-    await harness.navigated.promise
-    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
-  })
-
-  it('keeps startup errors and a successful retry in the same window', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    const first = harness.hosts[0]!
-    const failedRetry = expect(Promise.resolve(invoke(DESKTOP_IPC.backendRetry))).rejects.toThrow('plugin composition failed')
-    first.exited.resolve()
-    first.ready.reject(new Error('plugin composition failed'))
-    await harness.errorPublished.promise
-    await failedRetry
-    expect(invoke(DESKTOP_IPC.backendStatus)).toEqual({ phase: 'error', message: 'plugin composition failed', profileRecovery: true })
-    expect(harness.windows[0]!.urls).toEqual(['dsh-app://shell/startup.html'])
-    const nextStarted = harness.nextHostStart()
-    const retry = Promise.resolve(invoke(DESKTOP_IPC.backendRetry))
-    await nextStarted
-    expect(harness.hosts).toHaveLength(2)
-    harness.hosts[1]!.ready.resolve()
-    await retry
-    expect(harness.windows).toHaveLength(1)
-    expect(harness.windows[0]!.urls.at(-1)).toBe('dsh-app://app/index.html')
-    expect(harness.dialog.showErrorBox).not.toHaveBeenCalled()
-  })
-
-  it('waits for a pending child to exit on quit without late window navigation', async () => {
-    await import('../src/main.ts')
-    await harness.preparing.promise
-    harness.prepared.resolve()
-    await harness.hostStarted.promise
-    const window = harness.windows[0]!
-    const host = harness.hosts[0]!
-    host.stop.mockImplementation(() => { host.stopping.resolve(); return host.exited.promise })
-    window.close()
-    harness.app.quit()
-    await host.stopping.promise
-    expect(harness.app.quit).toHaveBeenCalledTimes(1)
-    host.ready.resolve()
-    host.exited.resolve()
-    await harness.quitCompleted.promise
-    expect(host.stop).toHaveBeenCalledTimes(1)
-    expect(window.urls).toEqual(['dsh-app://shell/startup.html'])
-    expect(harness.windows).toHaveLength(1)
+    await vi.waitFor(() => { expect(harness.child).toBeDefined() })
+    harness.child!.emit('message', { type: 'fatal', message: 'fixture startup failure' })
+    await vi.waitFor(() => { expect(harness.quit).toHaveBeenCalledOnce() })
+    expect(harness.fatal).toHaveBeenCalledWith('DSH Teacher 启动失败', 'fixture startup failure')
+    expect(harness.child?.exitCode).toBe(0)
   })
 })

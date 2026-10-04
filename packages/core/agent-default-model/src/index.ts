@@ -3,12 +3,15 @@
  *
  * @module @deepseek-ai/dsh-agent-default-model
  */
+import type {} from '@deepseek-ai/dsh-settings'
+
+import type { Volatile } from '@deepseek-ai/cordis'
 
 import { Context, Service } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import type { ModelSelection } from '@deepseek-ai/dsh-agent'
 import { ReasoningEffortId } from '@deepseek-ai/dsh-llm'
-import type {} from '@deepseek-ai/dsh-settings'
+import type {} from '@deepseek-ai/dsh-config-editor'
 
 declare module '@deepseek-ai/cordis' {
   interface Context {
@@ -65,16 +68,31 @@ export const AGENT_DEFAULT_MODEL_SETTINGS_SCHEMA: z<AgentDefaultModelSettings> =
   speechModel: z.string(),
 })
 
-/** Composition entry for the default model selection. */
+
+/** Default model selection supplied by plugin configuration. */
 export interface Config {
   /** Registered provider route. */
-  provider: string
+  provider: Volatile<string>
   /** Provider-owned model id. */
-  model: string
+  model: Volatile<string>
+  /** Adapter-owned reasoning effort; omission follows the provider default. */
+  reasoningEffort: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  toolProvider: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  toolModel: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  imageProvider: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  imageModel: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  speechProvider: Volatile<string | undefined>
+  /** Teacher task model assignment. */
+  speechModel: Volatile<string | undefined>
 }
 
 /** Project stored settings onto the Agent-facing selection type. */
-function selection(settings: AgentDefaultModelSettings): ModelSelection {
+function selection(settings: { provider: string; model: string; reasoningEffort?: string }): ModelSelection {
   return {
     provider: settings.provider,
     model: settings.model,
@@ -86,40 +104,27 @@ function selection(settings: AgentDefaultModelSettings): ModelSelection {
 
 /**
  * Owns the default model selection independently of any Host or transport.
- * The composition entry remains usable without a settings provider; when one
- * is mounted, its user layer is read live.
+ * Each operation reads the owning Config references.
  */
 export class AgentDefaultModelConfig extends Service {
-  static Config: z<Config> = z.object({
-    provider: z.string().required(),
-    model: z.string().required(),
+  private saves: Promise<void> = Promise.resolve()
+
+  static Config = z.object({
+    provider: z.string().required().volatile(),
+    model: z.string().required().volatile(),
+    reasoningEffort: z.string().volatile(),
+    toolProvider: z.string().volatile(),
+    toolModel: z.string().volatile(),
+    imageProvider: z.string().volatile(),
+    imageModel: z.string().volatile(),
+    speechProvider: z.string().volatile(),
+    speechModel: z.string().volatile(),
   })
 
-  private source: () => AgentDefaultModelSettings
+  constructor(private readonly ownerContext: Context, private config: Config) {
+    super(ownerContext, 'agentDefaultModel')
 
-  constructor(ctx: Context, config: Config) {
-    super(ctx, 'agentDefaultModel')
-    const entry: AgentDefaultModelSettings = { provider: config.provider, model: config.model }
-    this.source = () => entry
-    ctx.inject(['settings'], (settingsCtx) => {
-      settingsCtx.settings.installSection(ctx, AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, AGENT_DEFAULT_MODEL_SETTINGS_SCHEMA, entry, {
-        setSource: (current) => { this.source = current },
-        // Every consumer reads through currentSelection(), so no registration-level fact
-        // needs rebuilding when the settings document changes.
-        onChange: () => {},
-        validate: (current) => {
-          if ((current.toolProvider === undefined) !== (current.toolModel === undefined)) {
-            throw new Error('agent-default-model: toolProvider and toolModel must be set together')
-          }
-          if ((current.imageProvider === undefined) !== (current.imageModel === undefined)) {
-            throw new Error('agent-default-model: imageProvider and imageModel must be set together')
-          }
-          if ((current.speechProvider === undefined) !== (current.speechModel === undefined)) {
-            throw new Error('agent-default-model: speechProvider and speechModel must be set together')
-          }
-        },
-      })
-    })
+    ownerContext.inject(['settings'], (child) => { child.effect(() => child.settings.configure({ auto: false }, ownerContext.fiber)) })
   }
 
   /**
@@ -127,7 +132,29 @@ export class AgentDefaultModelConfig extends Service {
    * @returns a detached provider, model, and optional reasoning selection.
    */
   currentSelection(): ModelSelection {
-    return selection(this.source())
+    const reasoningEffort = this.config.reasoningEffort.get()
+    return selection({
+      provider: this.config.provider.get(), model: this.config.model.get(),
+      ...reasoningEffort === undefined ? {} : { reasoningEffort },
+    })
+  }
+
+  private teacherSelection(): AgentDefaultModelSettings {
+    const toolProvider = this.config.toolProvider.get()
+    const toolModel = this.config.toolModel.get()
+    const imageProvider = this.config.imageProvider.get()
+    const imageModel = this.config.imageModel.get()
+    const speechProvider = this.config.speechProvider.get()
+    const speechModel = this.config.speechModel.get()
+    return {
+      provider: this.config.provider.get(), model: this.config.model.get(),
+      ...toolProvider === undefined ? {} : { toolProvider },
+      ...toolModel === undefined ? {} : { toolModel },
+      ...imageProvider === undefined ? {} : { imageProvider },
+      ...imageModel === undefined ? {} : { imageModel },
+      ...speechProvider === undefined ? {} : { speechProvider },
+      ...speechModel === undefined ? {} : { speechModel },
+    }
   }
 
   /**
@@ -137,7 +164,7 @@ export class AgentDefaultModelConfig extends Service {
    * @returns a detached provider and model selection.
    */
   currentToolSelection(): ToolModelSelection {
-    const current = this.source()
+    const current = this.teacherSelection()
     return current.toolProvider === undefined || current.toolModel === undefined
       ? { provider: current.provider, model: current.model }
       : { provider: current.toolProvider, model: current.toolModel }
@@ -148,7 +175,7 @@ export class AgentDefaultModelConfig extends Service {
    * @returns a detached provider and model selection, or undefined when unset.
    */
   currentImageSelection(): ToolModelSelection | undefined {
-    const current = this.source()
+    const current = this.teacherSelection()
     return current.imageProvider === undefined || current.imageModel === undefined
       ? undefined
       : { provider: current.imageProvider, model: current.imageModel }
@@ -159,31 +186,35 @@ export class AgentDefaultModelConfig extends Service {
    * @returns a detached provider and model selection, or undefined when unset.
    */
   currentSpeechSelection(): ToolModelSelection | undefined {
-    const current = this.source()
+    const current = this.teacherSelection()
     return current.speechProvider === undefined || current.speechModel === undefined
       ? undefined
       : { provider: current.speechProvider, model: current.speechModel }
   }
 
   /**
-   * Save the complete default model selection. A deployment without a settings
-   * provider keeps its composition entry.
+   * Save the complete default model selection. A deployment without a configuration
+   * editor keeps its composition entry. Saves commit in submission order; a failed
+   * save rejects its caller without blocking later saves.
    * @param next - resolved selection accepted by an entry point.
-   * @returns fulfillment after the optional settings write settles.
+   * @returns fulfillment after the optional profile write settles.
    */
   async saveSelection(next: ModelSelection): Promise<void> {
-    const current = this.source()
-    await this.ctx.get('settings')?.replace(AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE, {
-      provider: next.provider,
-      model: next.model,
+    const entry = this.ownerContext.fiber.entry
+    if (entry === undefined) return
+    const editor = this.ctx.get('configEditor')
+    if (editor === undefined) return
+    const config = {
+      provider: next.provider, model: next.model,
       ...next.reasoningEffort === undefined ? {} : { reasoningEffort: String(next.reasoningEffort) },
-      ...current.toolProvider === undefined ? {} : { toolProvider: current.toolProvider },
-      ...current.toolModel === undefined ? {} : { toolModel: current.toolModel },
-      ...current.imageProvider === undefined ? {} : { imageProvider: current.imageProvider },
-      ...current.imageModel === undefined ? {} : { imageModel: current.imageModel },
-      ...current.speechProvider === undefined ? {} : { speechProvider: current.speechProvider },
-      ...current.speechModel === undefined ? {} : { speechModel: current.speechModel },
-    })
+    }
+    const saved = this.saves.then(() => editor.edit(entry, (current) => {
+      const preserved = { ...current }
+      Reflect.deleteProperty(preserved, 'reasoningEffort')
+      return { ...preserved, ...config }
+    }))
+    this.saves = saved.catch(() => {})
+    await saved
   }
 }
 

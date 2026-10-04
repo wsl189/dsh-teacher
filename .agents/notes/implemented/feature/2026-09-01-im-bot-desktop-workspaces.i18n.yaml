@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-01-im-bot-desktop-workspaces.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-01-im-bot-desktop-workspaces.md
-2026-09-01-im-bot-desktop-workspaces.md: c10650b3f20fd430980698dffe0a8ce0ad44bd19
-2026-09-01-im-bot-desktop-workspaces.zh.md: 6c44e31d34955ac6ea3991e31970d30e6dea24ea
+/agent-note-desktop-workspaces-for-new-im-bots:
+  en: 6f40e38d7072e8e9
+  zh: 8fa30056818d2cc3
+/agent-note-desktop-workspaces-for-new-im-bots/problem:
+  en: ba73761a1c58f0df
+  zh: a00a8cabab471348
+/agent-note-desktop-workspaces-for-new-im-bots/decision:
+  en: 11234dd250d0b881
+  zh: bdd20d2ad1beb536
+/agent-note-desktop-workspaces-for-new-im-bots/alternatives-considered:
+  en: c7f357e7339daa44
+  zh: 8c908abb1456abab
+/agent-note-desktop-workspaces-for-new-im-bots/consequences:
+  en: d90beec6185fb518
+  zh: e9752aefb8413c46
+/agent-note-desktop-workspaces-for-new-im-bots/testing:
+  en: 1499889b2bff9db1
+  zh: 5d801832e6487d4c

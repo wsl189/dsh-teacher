@@ -12,7 +12,6 @@ import { zh as conversationZh } from '@deepseek-ai/dsh-client-ui-conversation/sr
 import { ImageGenerationResultNode, generatedImageUrl } from '../src/client/ImageGenerationResultNode.tsx'
 import { apply, inject } from '../src/client/index.ts'
 import { IMAGE_GENERATION_RESULT_KIND } from '../src/client/image-result-node.ts'
-import { apply as nodeApply } from '../src/index.ts'
 
 afterEach(() => {
   cleanup()
@@ -328,7 +327,4 @@ describe('generated-image browser plugin', () => {
     expect(b.entry()).toBeUndefined()
   })
 
-  it('keeps the node half as an inert Loader seat', () => {
-    expect(() => { nodeApply() }).not.toThrow()
-  })
 })

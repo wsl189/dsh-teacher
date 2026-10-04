@@ -38,5 +38,6 @@ Markdown 预览支持本地图片、经过净化的内联 HTML 与目录。图�
 
 - [配置模型](./providers.zh.md)
 - [使用 Python SDK](./python-sdk.zh.md)
+- [在反向代理之后发布 Web UI](./public-deployments.zh.md)
 - [使用其他 CLI 模式](../../../apps/cli/README.zh.md)
 - [开发插件](../develop/basic/index.zh.md)

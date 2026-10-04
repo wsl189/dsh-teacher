@@ -22,8 +22,6 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import { resolveSlotLabel } from '@deepseek-ai/dsh-client-ui-slots'
 // Type-only: the ctx.remote Context merge and the forwarded-event key face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import { AgentLoopCard } from './AgentLoopCard.tsx'
-import { BashCard } from './BashCard.tsx'
 import { ConfigurablePluginsTab } from './ConfigurablePluginsTab.tsx'
 import { ConfigurablePluginsTabController } from './tab-store.ts'
 import { MinerUCard } from './MinerUCard.tsx'
@@ -31,15 +29,7 @@ import { MINERU_NS, MinerUCardController } from './mineru-card-controller.ts'
 import { TeacherWorkbenchCard } from './TeacherWorkbenchCard.tsx'
 import { PluginsSettingsSection } from './PluginsSettingsSection.tsx'
 import type { PluginsSettingsSectionInjected, PluginsSettingsTabEntry } from './PluginsSettingsSection.tsx'
-import { SubagentCard } from './SubagentCard.tsx'
-import { subagentCardFace } from './subagent-card-controller.ts'
-import { SubagentLimitsCardController } from './subagent-limits-card-controller.ts'
 import { WebSearchCard } from './WebSearchCard.tsx'
-import { AGENT_LOOP_NS, AgentLoopCardController } from './agent-loop-card-controller.ts'
-import { SHELL_NS, BashCardController } from './bash-card-controller.ts'
-import {
-  SUBAGENT_MODEL_SELECTION_NS, SubagentModelSelectionCardController,
-} from './subagent-model-selection-card-controller.ts'
 import { WEB_SEARCH_NS, WebSearchCardController } from './web-search-card-controller.ts'
 import { TEACHER_WORKBENCH_NS, TeacherWorkbenchCardController } from './teacher-workbench-card-controller.ts'
 import { en, zh } from './locales.ts'
@@ -73,21 +63,12 @@ export function apply(ctx: ClientContext): void {
   const t = ctx.locale.bind(NS)
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'ui-settings-plugins: section dictionaries')
 
-  const bash = new BashCardController(ctx.settingsScope.bind({ namespace: SHELL_NS }))
-  const agentLoop = new AgentLoopCardController(ctx.settingsScope.bind({ namespace: AGENT_LOOP_NS }))
   const webSearch = new WebSearchCardController(
     ctx.settingsScope.bind({ namespace: WEB_SEARCH_NS }), ctx)
   const mineru = new MinerUCardController(ctx.settingsScope.bind({ namespace: MINERU_NS }))
   const teacherWorkbench = new TeacherWorkbenchCardController(
     ctx.settingsScope.bind({ namespace: TEACHER_WORKBENCH_NS }),
   )
-  const subagentLimits = new SubagentLimitsCardController(ctx.settingsScope.bind({ namespace: 'subagent' }))
-  const subagentModelSelection = new SubagentModelSelectionCardController(
-    ctx.settingsScope.bind({ namespace: SUBAGENT_MODEL_SELECTION_NS }),
-    ctx,
-  )
-  const subagentLimitsFace = subagentLimits.inject()
-  const subagentModelsFace = subagentModelSelection.inject()
 
   // The credential a page reports is not part of any settings section, so its
   // scope publishes nothing when one is written. This is the only signal that
@@ -96,39 +77,12 @@ export function apply(ctx: ClientContext): void {
     () => ctx.remote.$on('credentials/reference-updated', (ref) => { webSearch.refreshCredential(ref) }),
     'ui-settings-plugins: credential invalidations',
   )
-  ctx.effect(
-    () => ctx.remote.$on('llm/adapters-updated', () => { subagentModelSelection.refreshCatalog() }),
-    'ui-settings-plugins: subagent adapter invalidations',
-  )
-  ctx.effect(
-    () => ctx.remote.$on('settings/document-updated', () => { subagentModelSelection.refreshCatalog() }),
-    'ui-settings-plugins: subagent settings invalidations',
-  )
-  ctx.effect(
-    () => ctx.on('connection/reset', () => { subagentModelSelection.resetConnection() }),
-    'ui-settings-plugins: subagent connection generation',
-  )
-  ctx.effect(() => () => { subagentModelSelection.dispose() }, 'ui-settings-plugins: subagent preference')
 
   // Configuration pages register while the Host serves their namespaces.
   // A deployment without those plugins shows no trace of them. Card registration order is the page order, not the
   // Host's description order, which follows plugin activation and can change
   // between boots.
   const pages: ReadonlyArray<readonly [namespaces: readonly [string, ...string[]], register: () => () => void]> = [
-    [[SHELL_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-      name: 'plugins.item', id: 'bash', order: 10, label: () => t('bashTitle'), locale: NS, inject: () => bash.inject(),
-    }, BashCard))],
-    [[AGENT_LOOP_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-      name: 'plugins.item', id: 'agent-loop', order: 20, label: () => t('agentLoopTitle'), locale: NS, inject: () => agentLoop.inject(),
-    }, AgentLoopCard))],
-    [['subagent', SUBAGENT_MODEL_SELECTION_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
-      name: 'plugins.item',
-      id: 'subagent',
-      order: 30,
-      label: () => t('subagentTitle'),
-      locale: NS,
-      inject: () => subagentCardFace(subagentLimitsFace, subagentModelsFace),
-    }, SubagentCard))],
     [[WEB_SEARCH_NS], () => ctx.slots.inject('plugins.item', () => ctx.slots.register({
       name: 'plugins.item', id: 'web-search', order: 40, label: () => t('webSearchTitle'), locale: NS, inject: () => webSearch.inject(),
     }, WebSearchCard))],

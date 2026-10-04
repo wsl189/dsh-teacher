@@ -16,7 +16,7 @@ ZIP 包含已单独钉票的 App。DMG 包含已签名但未单独附加票据�
 
 错误传播和临时目录清理前必须等待两路均结束。只有两路均成功且使用已配置更新源时，才允许移入 DMG、ZIP、ZIP blockmap 和频道元数据。已钉票的 App 替换签名目录构建，调用方最后写入发布完成记录。App 更新配置缺失或不匹配会在移入前失败；任何错误都会使该记录保持缺失，现有上传校验因而会拒绝不完整发布。独立输出目录还避免了 electron-builder 诊断文件与频道元数据的并发写入。
 
-本决策细化了 [Desktop 打包决策](../architecture/2026-08-25-electron-desktop-packaging-and-updates.zh.md)中的公证顺序；原决策继续负责发布身份、签名、更新归属与发布要求。
+本决策细化了 [Desktop 打包决策](../../archived/architecture/2026-08-25-electron-desktop-packaging-and-updates.zh.md)中的公证顺序；原决策继续负责发布身份、签名、更新归属与发布要求。
 
 ## 考虑过的替代方案
 

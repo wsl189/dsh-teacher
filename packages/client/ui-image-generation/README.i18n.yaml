@@ -1,6 +1,43 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/client/ui-image-generation/README.md
-README.md: fe3526bef6718ae9918bae720a0b8da28925e6de
-README.zh.md: 97f773b6c392d5c53d54fa80691bb8ee5abe856e
+/:
+  en: e0b83c380bc6325e
+  zh: 329cfdae4c2b72b5
+/deepseek-ai-dsh-client-ui-image-generation:
+  en: b55b6cb8b5ddc14a
+  zh: e41363cc2ae0257c
+/deepseek-ai-dsh-client-ui-image-generation/summary:
+  en: 57b03e1174ffc5f0
+  zh: 0c7ce128bfb4c603
+/deepseek-ai-dsh-client-ui-image-generation/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-client-ui-image-generation/use-this-package:
+  en: b03fd56bc2866770
+  zh: a3c05d4ac80f08b9
+/deepseek-ai-dsh-client-ui-image-generation/use-this-package/preview-placement:
+  en: 3394e7c21cf4a694
+  zh: 3100544a7763d130
+/deepseek-ai-dsh-client-ui-image-generation/use-this-package/preview-save-and-recovery:
+  en: f8534ee756fe8c4a
+  zh: a00117e281d1b8d2
+/deepseek-ai-dsh-client-ui-image-generation/understand-the-implementation:
+  en: cf001d035d8ff61c
+  zh: 491033be08c3a6bc
+/deepseek-ai-dsh-client-ui-image-generation/further-exploration:
+  en: 80df48337b740712
+  zh: 19df77e11bb90c3b
+/deepseek-ai-dsh-client-ui-image-generation/model-experience:
+  en: dda03addafb8dc62
+  zh: 9247bd4d2a53bf46
+/deepseek-ai-dsh-client-ui-image-generation/model-experience/kv-cache-effect:
+  en: 06eb49ee74783389
+  zh: c552484f324b95a4
+/deepseek-ai-dsh-client-ui-image-generation/known-limitations-and-deferred-work:
+  en: 24ab7334babf6054
+  zh: 20ae62f3b4b6361a
+/deepseek-ai-dsh-client-ui-image-generation/known-limitations-and-deferred-work/dev-note:
+  en: 1920bdb4b545b2d0
+  zh: d0beed3373c65e18

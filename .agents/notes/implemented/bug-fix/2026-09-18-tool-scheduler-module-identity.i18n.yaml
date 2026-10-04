@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-18-tool-scheduler-module-identity.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-18-tool-scheduler-module-identity.md
-2026-09-18-tool-scheduler-module-identity.md: 1d69de5c81592981e463e37c5568206da0af8a1a
-2026-09-18-tool-scheduler-module-identity.zh.md: 99bcd3cc5f14f96ccfb776c2a90e9ad21aa7bbc0
+/agent-note-tool-scheduler-identity-across-source-and-built-imports:
+  en: 286d2f03e096fca3
+  zh: cea9e997a718c466
+/agent-note-tool-scheduler-identity-across-source-and-built-imports/problem:
+  en: e05f0536c63ed17b
+  zh: 37f4b7d77cc8006e
+/agent-note-tool-scheduler-identity-across-source-and-built-imports/decision:
+  en: c0ce368d4b2360c6
+  zh: e3f5a2a1a82d637c
+/agent-note-tool-scheduler-identity-across-source-and-built-imports/alternatives-considered:
+  en: 10cd416a07732ff9
+  zh: f10e64fde154376a
+/agent-note-tool-scheduler-identity-across-source-and-built-imports/consequences:
+  en: c1ec50c4a467782f
+  zh: 6cafbaa670a9f100

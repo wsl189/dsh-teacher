@@ -1,6 +1,19 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-09-automatic-model-connection-verification.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/feature/2026-09-09-automatic-model-connection-verification.md
-2026-09-09-automatic-model-connection-verification.md: 4fa15636293e3b27d68c82515684054f433c6bad
-2026-09-09-automatic-model-connection-verification.zh.md: 8582e2d4b3a5d6e87ce5dd81ec2c892515c75855
+/agent-note-automatic-model-connection-verification:
+  en: 4558179a0a6a5bce
+  zh: 4e09ffdfb6829fcf
+/agent-note-automatic-model-connection-verification/problem:
+  en: ed9a03ce09f9bd5f
+  zh: 571c0bd2e8eafd63
+/agent-note-automatic-model-connection-verification/decision:
+  en: eda6bc13e7ab4e33
+  zh: 08b873dd2aec224a
+/agent-note-automatic-model-connection-verification/alternatives-considered:
+  en: 330e9d9decb597f2
+  zh: ba60c519d85b8de0
+/agent-note-automatic-model-connection-verification/consequences:
+  en: 8584a84792163387
+  zh: cbb3f4e67ac6411a

@@ -3,20 +3,13 @@
     - heading "学生名册" [level=1]
     - combobox "选择班级":
       - option "高一（1）班" [selected]
-    - button "新建班级":
-      - img
-      - text: 新建班级
-    - button "编辑班级":
-      - img
-    - button "删除":
-      - img
+    - button "新建班级"
+    - button "编辑班级"
+    - button "删除"
     - button "导入名册"
-    - button "添加学生":
-      - img
-      - text: 添加学生
+    - button "添加学生"
     - heading "高一（1）班" [level=3]
     - text: 2 名学生
-    - img
     - textbox "搜索姓名、学号或监护人"
     - table:
       - rowgroup:
@@ -35,10 +28,8 @@
           - cell "张女士"
           - cell "—"
           - cell "编辑 删除":
-            - button "编辑":
-              - img
-            - button "删除":
-              - img
+            - button "编辑"
+            - button "删除"
         - row "002 李同学 女 李女士 13800000000 编辑 删除":
           - cell "002"
           - cell "李同学"
@@ -46,7 +37,5 @@
           - cell "李女士"
           - cell "13800000000"
           - cell "编辑 删除":
-            - button "编辑":
-              - img
-            - button "删除":
-              - img
+            - button "编辑"
+            - button "删除"

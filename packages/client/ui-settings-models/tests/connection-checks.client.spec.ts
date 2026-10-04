@@ -22,7 +22,7 @@ function harness() {
     ] },
     { id: 'saved-coding', name: 'Saved Coding', models: [{ id: 'first', name: 'First' }] },
   ]
-  let namespace: SettingsNamespaceView = {
+  let namespace: SettingsNamespaceView = { autoGenerate: true,
     ns: 'llm-pi-ai', schema: {}, applies: 'live', secrets: [], revision: 1,
     value: { providers: { saved: SAVED_PROFILE, 'saved-coding': CODING_PROFILE } },
   }

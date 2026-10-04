@@ -1,6 +1,22 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for 2026-09-05-im-modern-host-connection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write .agents/notes/implemented/bug-fix/2026-09-05-im-modern-host-connection.md
-2026-09-05-im-modern-host-connection.md: be67fc7fc1f40e8198936b236372c48240a2f5b6
-2026-09-05-im-modern-host-connection.zh.md: 1d14c5c08cac50219e5f74b63e7ad508c5f78b79
+/agent-note-modern-host-connections-for-bundled-im-channels:
+  en: 172de962322936ec
+  zh: 839d55255bdb0fb9
+/agent-note-modern-host-connections-for-bundled-im-channels/problem:
+  en: 55980a546bbbaf76
+  zh: ea31d2a13029eaa6
+/agent-note-modern-host-connections-for-bundled-im-channels/decision:
+  en: 80fbce124f7db839
+  zh: f40c05f072584eaa
+/agent-note-modern-host-connections-for-bundled-im-channels/alternatives-considered:
+  en: 750849224bd3f35d
+  zh: ce01f67f72f729c6
+/agent-note-modern-host-connections-for-bundled-im-channels/consequences:
+  en: bd8caae3869fa6b7
+  zh: 87e730f42690b3de
+/agent-note-modern-host-connections-for-bundled-im-channels/testing:
+  en: 12adb2d5a3cbbf98
+  zh: 38cd91391ff36df1

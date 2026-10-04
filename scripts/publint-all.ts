@@ -19,13 +19,13 @@ const repositoryRoot = resolve(import.meta.dirname, '..')
 // path-and-spec matching makes any artifact update fail publint until audited.
 const authorizedLocalDependencies: Readonly<Record<string, Readonly<Record<string, string>>>> = {
   'packages/bundle/web-app': {
-    '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz',
+    '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4-dsh.1.tgz',
     '@dickpy/dsh-imagegen': 'file:../../../third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.12.tgz',
     '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz',
     '@huanlin/dsh-plugin-better-sidebar-plugin-office': 'file:../../../third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz',
-    'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
+    'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz',
     'dsh-skill-mcp-panel': 'file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz',
-    'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.8.tgz',
+    'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.9.tgz',
   },
 }
 const { values: options } = parseArgs({
@@ -69,7 +69,7 @@ function workspacePackages(): PackageTarget[] {
     .map((manifestPath) => {
       const absoluteManifestPath = resolve(packagesRoot, manifestPath)
       const manifest = JSON.parse(readFileSync(absoluteManifestPath, 'utf8')) as PackageManifest
-      return { path: dirname(manifestPath), directory: dirname(absoluteManifestPath), manifest }
+      return { path: dirname(manifestPath).split(sep).join('/'), directory: dirname(absoluteManifestPath), manifest }
     })
 }
 
@@ -283,4 +283,8 @@ console.log(`publint-all: linting ${packages.length} package(s) with ${concurren
 const results = await runAll(packages, concurrency)
 for (const result of results) printResult(result)
 
-if (results.some(result => result.status === 'failed')) process.exit(1)
+const failed = results.filter(result => result.status === 'failed')
+if (failed.length > 0) {
+  console.error(`publint-all: failed packages: ${failed.map(result => result.path).join(', ')}`)
+  process.exit(1)
+}

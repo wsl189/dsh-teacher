@@ -1,6 +1,106 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/host/teacher-workbench/README.md
-README.md: f73b33e1299ab68a3fe3474ebccf5ca244ffead0
-README.zh.md: 581c187f0c6a16ace498bc1174e5e233803116b1
+/:
+  en: 5c51bfb22e5fd0d9
+  zh: 3378eabbfc9a5f50
+/deepseek-ai-dsh-host-teacher-workbench:
+  en: d5ec7331d36e791f
+  zh: e1b4f7cf60b7c583
+/deepseek-ai-dsh-host-teacher-workbench/summary:
+  en: 35f21bda31265bb7
+  zh: b35969da880f2dd5
+/deepseek-ai-dsh-host-teacher-workbench/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 7177e3097c880aa1
+/deepseek-ai-dsh-host-teacher-workbench/use-this-package:
+  en: 419ae4cd3636a58a
+  zh: e52f49a73636ba4d
+/deepseek-ai-dsh-host-teacher-workbench/question-image-storage-and-output:
+  en: e3035a52d246bbe2
+  zh: 8e7c19ddaf4b7661
+/deepseek-ai-dsh-host-teacher-workbench/configuration:
+  en: 3d785421d69948d2
+  zh: 068079ae083ed41b
+/deepseek-ai-dsh-host-teacher-workbench/configuration/example-collection:
+  en: a2cf862d047ef5c0
+  zh: d6807020ba2bd3ab
+/deepseek-ai-dsh-host-teacher-workbench/understand-the-implementation:
+  en: 42b15ac6321706aa
+  zh: 4ed0861911abaf5d
+/deepseek-ai-dsh-host-teacher-workbench/understand-the-implementation/extension-points:
+  en: d483ed4606aac6f0
+  zh: b6eaacbba7a99a96
+/deepseek-ai-dsh-host-teacher-workbench/further-exploration:
+  en: 15963d0d57059e21
+  zh: aa66bf785b4fbcad
+/deepseek-ai-dsh-host-teacher-workbench/model-experience:
+  en: 215e7ba838619b7b
+  zh: a311da3843709f90
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/ordinary-conversation-workbench-tools:
+  en: f190f6e4f7d6613c
+  zh: 950152aa14361ab5
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/ordinary-conversation-workbench-tools/what-the-model-sees:
+  en: 9fb05ca8e03e9399
+  zh: cea4444a768cd222
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/ordinary-conversation-workbench-tools/token-effect:
+  en: adabe038f21434d8
+  zh: 0cde0b09c7d71322
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/ordinary-conversation-workbench-tools/kv-cache-effect:
+  en: 80db2ba893b4ae8c
+  zh: 3f5cc7cd6f40646b
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/example-proofreading-child:
+  en: 851483fc6d1e79df
+  zh: 25657a97bf266d4c
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/example-proofreading-child/what-the-model-sees:
+  en: bb32800d6fe6f8e0
+  zh: 1e923eef3118e3a4
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/example-proofreading-child/token-effect:
+  en: fc51f5e803af9cae
+  zh: f49c4527b72704e4
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/example-proofreading-child/kv-cache-effect:
+  en: 57f466def84ccce7
+  zh: dafd4a03d649120b
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/timetable-normalization-child:
+  en: ee106af1a46361e2
+  zh: d34811f18ffa74b7
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/timetable-normalization-child/what-the-model-sees:
+  en: 8f6e4cd2dcbd8653
+  zh: 5c2649dbf136f127
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/timetable-normalization-child/token-effect:
+  en: a2d6bf13ef0e4acd
+  zh: 4524b0efa900f341
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/timetable-normalization-child/kv-cache-effect:
+  en: 3205de7ddaf5f724
+  zh: 316bc7f2d1bbd7d1
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child:
+  en: c5faf4428bbd7d1b
+  zh: 59822e6b7db0225a
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/what-the-model-sees:
+  en: c7ebaded9612888c
+  zh: 9812f115b4ac8a57
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/what-the-model-sees/local-repair-submission:
+  en: b3caff6914f0b931
+  zh: c9a82b12045a22a2
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/what-the-model-sees/outside-block-ownership-guidance:
+  en: 5616996996005d73
+  zh: 249e2afa7155fb3e
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/what-the-model-sees/crop-edge-evidence-guidance:
+  en: 35549812d229a03f
+  zh: 173579e11b9311e6
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/what-the-model-sees/core-page-ownership-guidance:
+  en: 633e7c39d5e9498b
+  zh: b721fa6b1e1b9c2b
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/token-effect:
+  en: bce52a6b1e63a557
+  zh: f072261842c89294
+/deepseek-ai-dsh-host-teacher-workbench/model-experience/question-segmentation-child/kv-cache-effect:
+  en: 354f6602bb17c422
+  zh: 206c556c6312ccc8
+/deepseek-ai-dsh-host-teacher-workbench/known-limitations-and-deferred-work:
+  en: 5c0476f29438825c
+  zh: 2d600502b44e8a43
+/deepseek-ai-dsh-host-teacher-workbench/known-limitations-and-deferred-work/dev-note:
+  en: 9cba08a1c02bc083
+  zh: 8412a1be9467f7b5

@@ -1,6 +1,49 @@
-# Bilingual-pair consistency record (docs/i18n/README.md): the git blob hash of each
-# side as of the last confirmed-consistent state. Both languages carry equal authority;
-# after editing either side, bring the other along and re-record with:
+# Bilingual-pair consistency record for README.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
 #   pnpm run verify-translation-pairing --write packages/skill/skill-ppt-master/README.md
-README.md: d836d15928a33d9b7b39d4ad6dced63698d1e87a
-README.zh.md: dbcdb0043b5ba4f74f1732e59be9b65546de3b0e
+/:
+  en: ddafa701ca95a5fe
+  zh: bbd6c98d4568a74e
+/deepseek-ai-dsh-skill-ppt-master:
+  en: 54ec7bb983c224ba
+  zh: 4e2bab1351720c92
+/deepseek-ai-dsh-skill-ppt-master/summary:
+  en: 5a5b1485e81c7219
+  zh: 114a997787a839be
+/deepseek-ai-dsh-skill-ppt-master/table-of-contents:
+  en: d152484eb41ac6b4
+  zh: 09388d293f9be9cb
+/deepseek-ai-dsh-skill-ppt-master/use-this-package:
+  en: 852c95923bde197e
+  zh: a225c55d6b14bd5d
+/deepseek-ai-dsh-skill-ppt-master/use-this-package/configuration:
+  en: 14d97eb6e1e9aacf
+  zh: df5d06e3138ceb1f
+/deepseek-ai-dsh-skill-ppt-master/use-this-package/runtime-requirements:
+  en: 37b5eb73d88a2edd
+  zh: b0b2b0c62d169656
+/deepseek-ai-dsh-skill-ppt-master/use-this-package/observable-success-and-failures:
+  en: 804345e6cf5620ab
+  zh: 6654a622da9849d8
+/deepseek-ai-dsh-skill-ppt-master/understand-the-implementation:
+  en: 9393ed37ce02002e
+  zh: 4828644b22b0cffd
+/deepseek-ai-dsh-skill-ppt-master/understand-the-implementation/source-map:
+  en: 150e8b3397fe3e28
+  zh: 7571e51a6245075f
+/deepseek-ai-dsh-skill-ppt-master/further-exploration:
+  en: 148cd16f922302e6
+  zh: e6bf59ad771139da
+/deepseek-ai-dsh-skill-ppt-master/model-experience:
+  en: da9ce3cf101e0ae1
+  zh: fbea2f6caa651058
+/deepseek-ai-dsh-skill-ppt-master/model-experience/kv-cache-effect:
+  en: 539652e3805ce0de
+  zh: 27fdb3e61747bf13
+/deepseek-ai-dsh-skill-ppt-master/known-limitations-and-deferred-work:
+  en: 62da65c2b24af76f
+  zh: 5e660fa13a81f9f4
+/deepseek-ai-dsh-skill-ppt-master/known-limitations-and-deferred-work/dev-note:
+  en: 43fd9082ff0207ec
+  zh: f99233716470b267

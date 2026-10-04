@@ -1,18 +1,14 @@
-import { cpSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { join, resolve } from 'node:path'
 import { tmpdir } from 'node:os'
 import { describe, expect, it } from 'vitest'
+import primaryRuntimeLock from './primary-runtime/lock.json' with { type: 'json' }
 import {
   CLAUDE_AGENT_SDK_PACKAGE,
-  MATHML_PACKAGE,
-  OFFICE_VIEWER_PACKAGE,
-  UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256,
-  UNIVER_OFFICE_PACKAGE,
-  UNIVER_PRO_RUNTIME_PACKAGES,
+  assertRuntimeLicenses,
   claudeDistributionFromManifest,
   collectPythonDependencies,
-  assertRuntimeLicenses,
-  collectDesktopPythonDependencies,
+  collectBundledPythonDependencies,
   isOwnerAuthorizedRuntime,
   isPermissive,
   type Manifest,
@@ -21,10 +17,7 @@ import {
   parseVendoredRows,
   render,
   tierExternalDeps,
-  univerBundledReviewManifestHash,
-  univerCommercialDistributionFromManifests,
   virtualManifest,
-  verifyMathmlDistribution,
 } from './gen-third-party-notices.ts'
 
 const root = resolve(import.meta.dirname, '..')
@@ -40,14 +33,11 @@ describe('THIRD_PARTY_NOTICES.md', () => {
   }, async () => {
     const generated = await render()
     expect(generated).toContain('It depends on the third-party software listed below.')
-    expect(generated).toContain('## Bundled skill distributions')
-    expect(generated).toContain('[`PPT Master`](https://github.com/hugohe3/ppt-master) 6.4.0')
-    expect(generated).toContain('12,981-file, 83,654,741-byte upstream Skill directory')
-    expect(generated).toContain('## Editable Word equations')
-    expect(generated).toContain('mathml2omml-0.5.0-source.tar.gz')
-    expect(generated).toContain('Users may modify it and reverse engineer the combined application')
+    expect(generated).toContain(`| [\`numpy\`](https://github.com/numpy/numpy) | ${primaryRuntimeLock.pythonPackages.numpy} | BSD-3-Clause |`)
     expect(generated).toContain('## LibreOffice conversion kit')
     expect(generated).toContain('Recipients must have access to those corresponding sources and notices.')
+    expect(generated.split('## Development-only npm dependencies')[0]).toContain('| [`chrome-devtools-frontend`]')
+    expect(generated).toContain('third-party license and notice files supplied by the npm source')
     expect(readFileSync(resolve(root, 'THIRD_PARTY_NOTICES.md'), 'utf8'), 'stale notices — run `pnpm run gen-third-party-notices`').toBe(generated)
   })
 })
@@ -335,22 +325,22 @@ describe('collectPythonDependencies', () => {
   })
 })
 
-describe('collectDesktopPythonDependencies', () => {
-  it('discloses supplied Python distributions with their exact locked versions', () => {
-    const dependencies = collectDesktopPythonDependencies({ Pillow: '12.3.0', typing_extensions: '4.16.0' })
-    expect(dependencies).toHaveLength(2)
+describe('collectBundledPythonDependencies', () => {
+  it('discloses the committed bundled Python closure with its exact locked versions', () => {
+    const dependencies = collectBundledPythonDependencies(primaryRuntimeLock.pythonPackages)
+    expect(dependencies).toHaveLength(Object.keys(primaryRuntimeLock.pythonPackages).length)
     expect(dependencies).toContainEqual({
-      name: 'pillow', version: '12.3.0',
+      name: 'pillow', version: primaryRuntimeLock.pythonPackages.Pillow,
       license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow',
     })
     expect(dependencies).toContainEqual({
-      name: 'typing-extensions', version: '4.16.0',
+      name: 'typing-extensions', version: primaryRuntimeLock.pythonPackages.typing_extensions,
       license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions',
     })
   })
 
   it('normalizes names while preserving pinned version strings', () => {
-    expect(collectDesktopPythonDependencies({ 'typing_extensions': '4.16.0', 'Pillow': '12.3.0' }))
+    expect(collectBundledPythonDependencies({ 'typing_extensions': '4.16.0', 'Pillow': '12.3.0' }))
       .toEqual([
         { name: 'pillow', version: '12.3.0', license: 'MIT-CMU', repo: 'https://github.com/python-pillow/Pillow' },
         { name: 'typing-extensions', version: '4.16.0', license: 'PSF-2.0', repo: 'https://github.com/python/typing_extensions' },
@@ -358,18 +348,18 @@ describe('collectDesktopPythonDependencies', () => {
   })
 
   it('rejects duplicate normalized distribution names with the same locked version', () => {
-    expect(() => collectDesktopPythonDependencies({ typing_extensions: '4.16.0', 'typing.extensions': '4.16.0' }))
+    expect(() => collectBundledPythonDependencies({ typing_extensions: '4.16.0', 'typing.extensions': '4.16.0' }))
       .toThrow('duplicate normalized names')
   })
 
   it('rejects missing distribution metadata and conflicting normalized versions', () => {
-    expect(() => collectDesktopPythonDependencies({ missing: '1.0' })).toThrow('missing from PYTHON_METADATA')
-    expect(() => collectDesktopPythonDependencies({ Pillow: '12.3.0', pillow: '12.4.0' })).toThrow('conflicting locked versions')
+    expect(() => collectBundledPythonDependencies({ missing: '1.0' })).toThrow('missing from PYTHON_METADATA')
+    expect(() => collectBundledPythonDependencies({ Pillow: '12.3.0', pillow: '12.4.0' })).toThrow('conflicting locked versions')
   })
 
   it('applies the runtime license check to bundled Python distributions', () => {
-    expect(() => { assertRuntimeLicenses(collectDesktopPythonDependencies({ Pillow: '12.3.0', typing_extensions: '4.16.0' })) }).not.toThrow()
-    const dependencies = collectDesktopPythonDependencies({ 'copyleft-wheel': '1.0' }, {
+    expect(() => { assertRuntimeLicenses(collectBundledPythonDependencies(primaryRuntimeLock.pythonPackages)) }).not.toThrow()
+    const dependencies = collectBundledPythonDependencies({ 'copyleft-wheel': '1.0' }, {
       'copyleft-wheel': { license: 'GPL-3.0-only', repo: 'https://example.com/project' },
     })
     expect(() => { assertRuntimeLicenses(dependencies) }).toThrow('copyleft-wheel (GPL-3.0-only)')
@@ -408,47 +398,13 @@ describe('isPermissive', () => {
   })
 })
 
-describe('owner-authorized runtime distributions', () => {
-  it('authorizes only recorded package identities without relabeling their licenses', () => {
+describe('official Claude distribution authorization', () => {
+  it('authorizes only the direct SDK identity without relabeling its license', () => {
     expect(isOwnerAuthorizedRuntime(CLAUDE_AGENT_SDK_PACKAGE)).toBe(true)
-    expect(isOwnerAuthorizedRuntime(OFFICE_VIEWER_PACKAGE)).toBe(true)
-    expect(isOwnerAuthorizedRuntime(MATHML_PACKAGE)).toBe(true)
-    expect(isOwnerAuthorizedRuntime(`${MATHML_PACKAGE}-fork`)).toBe(false)
-    expect(UNIVER_PRO_RUNTIME_PACKAGES.every(isOwnerAuthorizedRuntime)).toBe(true)
     expect(isOwnerAuthorizedRuntime(`${CLAUDE_AGENT_SDK_PACKAGE}-linux-x64`))
       .toBe(false)
-    expect(isOwnerAuthorizedRuntime(`${OFFICE_VIEWER_PACKAGE}-fork`)).toBe(false)
-    expect(isOwnerAuthorizedRuntime(`${UNIVER_PRO_RUNTIME_PACKAGES[0]}-win32-x64-msvc`)).toBe(false)
     expect(isOwnerAuthorizedRuntime('@anthropic-ai/unrelated')).toBe(false)
     expect(isPermissive('SEE LICENSE IN README.md')).toBe(false)
-    expect(isPermissive('AGPL-3.0')).toBe(false)
-    expect(isPermissive('LGPL-3.0-or-later')).toBe(false)
-  })
-
-  it('requires the reviewed equation converter version and complete source and license packet', () => {
-    const source = resolve(root, 'packages/host/teacher-workbench/third-party/mathml2omml')
-    const manifest: Manifest = { name: MATHML_PACKAGE, version: '0.5.0', license: 'LGPL-3.0-or-later' }
-    expect(() => { verifyMathmlDistribution(manifest, source) }).not.toThrow()
-    for (const changed of [{ name: 'mathml2omml-fork' }, { version: '0.6.0' }, { license: 'MIT' }]) {
-      expect(() => { verifyMathmlDistribution({ ...manifest, ...changed }, source) })
-        .toThrow('identity, version, or license changed')
-    }
-    const directory = mkdtempSync(join(tmpdir(), 'dsh-mathml-notices-'))
-    try {
-      cpSync(source, directory, { recursive: true })
-      for (const file of readdirSync(directory)) {
-        const target = join(directory, file)
-        const original = readFileSync(target)
-        rmSync(target)
-        expect(() => { verifyMathmlDistribution(manifest, directory) }).toThrow()
-        writeFileSync(target, '')
-        expect(() => { verifyMathmlDistribution(manifest, directory) }).toThrow()
-        writeFileSync(target, original)
-      }
-      expect(() => { verifyMathmlDistribution(manifest, directory) }).not.toThrow()
-    } finally {
-      rmSync(directory, { recursive: true, force: true })
-    }
   })
 
   it('derives version-independent platform payloads from the official SDK manifest', () => {
@@ -499,94 +455,6 @@ describe('owner-authorized runtime distributions', () => {
         '@anthropic-ai/unrelated': '1.0.0',
       },
     })).toThrow('outside its authorized platform-payload identity')
-  })
-
-  it('derives the exact commercial Univer roots and bundled modules', () => {
-    expect(univerCommercialDistributionFromManifests({
-      name: UNIVER_OFFICE_PACKAGE,
-      version: '0.3.0',
-      dependencies: {
-        '@univerjs-pro/cli-assets': '0.1.0',
-        '@univerjs-pro/engine-formula-rust-binding': '1.0.0',
-        '@univerjs-pro/exchange-node-binding': '0.1.2',
-      },
-      devDependencies: {
-        '@univer-cli/content-execution': '9.8.7',
-        '@univerjs-pro/sheets': '9.8.7',
-        'react': '18.3.1',
-      },
-    }, [
-      { name: '@univerjs-pro/cli-assets', version: '0.1.0' },
-      {
-        name: '@univerjs-pro/engine-formula-rust-binding',
-        version: '1.0.0',
-        optionalDependencies: { '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc': '1.0.0' },
-      },
-      {
-        name: '@univerjs-pro/exchange-node-binding',
-        version: '0.1.2',
-        optionalDependencies: { '@univerjs-pro/exchange-node-binding-win32-x64-msvc': '0.1.2' },
-      },
-    ])).toEqual({
-      pluginVersion: '0.3.0',
-      packages: [
-        { name: '@univer-cli/content-execution', version: '9.8.7', role: 'bundled artifact module' },
-        { name: '@univerjs-pro/cli-assets', version: '0.1.0', role: 'runtime dependency' },
-        { name: '@univerjs-pro/engine-formula-rust-binding', version: '1.0.0', role: 'runtime dependency' },
-        { name: '@univerjs-pro/engine-formula-rust-binding-win32-x64-msvc', version: '1.0.0', role: 'optional platform payload' },
-        { name: '@univerjs-pro/exchange-node-binding', version: '0.1.2', role: 'runtime dependency' },
-        { name: '@univerjs-pro/exchange-node-binding-win32-x64-msvc', version: '0.1.2', role: 'optional platform payload' },
-        { name: '@univerjs-pro/sheets', version: '9.8.7', role: 'bundled artifact module' },
-      ],
-    })
-  })
-
-  it('rejects a changed Univer commercial identity set, version, or payload namespace', () => {
-    const dependencies = Object.fromEntries(UNIVER_PRO_RUNTIME_PACKAGES.map(name => [name, '1.0.0']))
-    const devDependencies = {
-      '@univer-cli/content-execution': '1.0.0',
-      '@univerjs-pro/sheets': '1.0.0',
-    }
-    const roots: Manifest[] = UNIVER_PRO_RUNTIME_PACKAGES.map(name => ({
-      name,
-      version: '1.0.0',
-      ...(name.endsWith('binding')
-        ? { optionalDependencies: { [`${name}-win32-x64-msvc`]: '1.0.0' } }
-        : {}),
-    }))
-
-    expect(() => univerCommercialDistributionFromManifests({
-      name: UNIVER_OFFICE_PACKAGE,
-      version: '1.0.0',
-      dependencies: { ...dependencies, '@univerjs-pro/new-runtime': '1.0.0' },
-      devDependencies,
-    }, roots)).toThrow('commercial runtime set')
-    expect(() => univerCommercialDistributionFromManifests({
-      name: UNIVER_OFFICE_PACKAGE,
-      version: '1.0.0',
-      dependencies,
-      devDependencies,
-    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[0]
-      ? { ...root, version: '2.0.0' }
-      : root))).toThrow('does not match the 1.0.0 version')
-    expect(() => univerCommercialDistributionFromManifests({
-      name: UNIVER_OFFICE_PACKAGE,
-      version: '1.0.0',
-      dependencies,
-      devDependencies,
-    }, roots.map(root => root.name === UNIVER_PRO_RUNTIME_PACKAGES[0]
-      ? { ...root, optionalDependencies: { '@univerjs-pro/unrelated': '1.0.0' } }
-      : root))).toThrow('outside its authorized platform-payload identity')
-  })
-
-  it('pins the exact module declarations in the bundled Univer artifact', () => {
-    const manifest = JSON.parse(readFileSync(resolve(
-      root,
-      'packages/bundle/web-app/node_modules/dsh-univer-office/package.json',
-    ), 'utf8')) as Manifest
-
-    expect(univerBundledReviewManifestHash(manifest))
-      .toBe(UNIVER_BUNDLED_REVIEW_MANIFEST_SHA256)
   })
 })
 
