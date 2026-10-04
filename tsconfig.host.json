@@ -1084,6 +1084,9 @@
       "path": "packages/client/ui-settings-plugins/tsconfig.host.json"
     },
     {
+      "path": "packages/client/ui-settings-models/tsconfig.host.json"
+    },
+    {
       "path": "packages/client/ui-teacher-workbench/tsconfig.host.json"
     }
   ]
