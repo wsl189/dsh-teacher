@@ -1,0 +1,22 @@
+- region "自动化任务":
+  - heading "自动化任务" [level=1]
+  - button "新建"
+  - group "任务状态":
+    - button "全部" [pressed]
+    - button "已开启"
+    - button "已结束"
+  - searchbox "搜索任务"
+  - region "工作台提醒":
+    - heading "工作台提醒" [level=2]
+    - button "在工作台中管理"
+    - list:
+      - listitem:
+        - button "自动化页面测试提醒":
+          - strong: 自动化页面测试提醒
+          - text: 待办 · 微信 · 自动化测试机器人 截止前 30 分钟提醒一次 · 下次提醒：
+          - time: 2099/8/18 {{clock}}
+  - heading "会话任务" [level=2]
+  - status:
+    - heading "还没有会话任务，在会话中创建的任务会显示在这里" [level=2]
+    - button "新建自动化任务"
+  - list "任务列表"

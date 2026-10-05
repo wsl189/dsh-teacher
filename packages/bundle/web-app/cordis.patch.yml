@@ -224,9 +224,6 @@
     - id: xmanrui-dsh-im
       name: '@xmanrui/dsh-im'
 
-    - id: dsh-plugin-cron
-      name: dsh-plugin-cron
-
     - id: dsh-skill-mcp-panel
       name: dsh-skill-mcp-panel
 

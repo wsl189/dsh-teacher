@@ -39,18 +39,9 @@ nsis:
   createStartMenuShortcut: true
   shortcutName: DSH Teacher
   deleteAppDataOnUninstall: false
-  preCompressedFileExtensions:
-    - .avi
-    - .mov
-    - .m4v
-    - .mp4
-    - .m4p
-    - .qt
-    - .mkv
-    - .webm
-    - .vmdk
-    - .tgz
-    - .zip
+  # NSIS's separate precompressed-file copier skips node_modules.
+  # Keep dependency assets in the ordinary application archive.
+  preCompressedFileExtensions: []
 publish:
   provider: github
   owner: wsl189

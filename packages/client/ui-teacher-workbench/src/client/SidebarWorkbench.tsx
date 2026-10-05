@@ -12,7 +12,7 @@ import {
   MessageCircle,
   Scissors,
 } from 'lucide-react'
-import type { PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale, PropsRuntime, PropsStore } from '@deepseek-ai/dsh-client-ui-slots'
 import {
   IconChevronDownOutlineRegular,
   IconChevronRightOutlineRegular,
@@ -26,6 +26,7 @@ import {
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
 import type { createTeacherWorkbenchViewStore, TeacherWorkbenchModule } from './view-store.ts'
 import type { TeacherWorkbenchKey } from './locales.ts'
+import { WORKBENCH_PANEL_ID } from './panel.ts'
 import css from './TeacherWorkbench.module.css'
 
 const DailyIcon: ComponentType<{ size?: number; className?: string }> = props => <LayoutDashboard {...props} />
@@ -42,6 +43,7 @@ export type SidebarWorkbenchProps =
   PropsRuntime<'sidebar.primary.section'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
+  & InjectFace<{ readonly openWorkbench: () => void }>
 
 const MODULES: readonly {
   id: TeacherWorkbenchModule
@@ -68,13 +70,17 @@ const MODULES: readonly {
  * @param props - composed sidebar slot props.
  * @returns the sidebar entry tree.
  */
-export function SidebarWorkbench({ wide, useStore, actions, t }: SidebarWorkbenchProps) {
+export function SidebarWorkbench({ wide, useStore, usePanelInfo, actions, openWorkbench, t }: SidebarWorkbenchProps) {
   const expanded = useStore(state => state.expanded)
   const active = useStore(state => state.active)
-  const open = useStore(state => state.open)
+  const open = usePanelInfo(info => info.activePanelId === WORKBENCH_PANEL_ID)
+  const openModule = (module: TeacherWorkbenchModule): void => {
+    actions.openModule(module)
+    openWorkbench()
+  }
   const toggle = (): void => {
     if (!wide) {
-      actions.openModule(active)
+      openModule(active)
       return
     }
     actions.setExpanded(!expanded)
@@ -107,7 +113,7 @@ export function SidebarWorkbench({ wide, useStore, actions, t }: SidebarWorkbenc
               key={id}
               type="button"
               className={clsx(css.sidebarModule, open && active === id && css.sidebarModuleActive)}
-              onClick={() => { actions.openModule(id) }}
+              onClick={() => { openModule(id) }}
             >
               <Icon size={16} />
               <span>{t(label)}</span>

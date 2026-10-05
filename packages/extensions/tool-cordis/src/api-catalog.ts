@@ -3249,8 +3249,8 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'Credential-free platform and bot identities with live connection state.',
       },
       {
-        signature: 'listScheduledReminders(): readonly TeacherScheduledReminderTask[]',
-        description: 'Project active workbench reminders for an optional shared scheduled-task list.',
+        signature: '@Remote(\'listScheduledReminders\') listScheduledReminders(): readonly TeacherScheduledReminderTask[]',
+        description: 'Project active workbench reminders for the Automation tasks page.',
         parameters: [],
         returns: 'Credential-free task rows derived from the current durable document.',
       },
@@ -4652,6 +4652,14 @@ export const EVENT_API: readonly EventApiEntry[] = [
     signature: '\'system-prompt/change\'(): void',
     summary: 'Emitted when any prompt provider changes.',
     description: 'Emitted when any prompt provider changes. This registry notification is unfiltered because a global change affects every scope.',
+    parameters: [],
+  },
+  {
+    name: 'teacherWorkbench/changed',
+    mode: 'emit',
+    signature: '\'teacherWorkbench/changed\': () => void',
+    summary: 'A workbench document or delivered reminder has been durably committed.',
+    description: 'A workbench document or delivered reminder has been durably committed.',
     parameters: [],
   },
   {

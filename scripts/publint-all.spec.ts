@@ -170,13 +170,12 @@ describe('publint package runner', () => {
 
   it('accepts only the exact reviewed local artifacts in the Web distribution bundle', async ({ signal }) => {
     const dependencies = {
-      '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4.tgz',
+      '@anysearch/anysearch-dsh': 'file:../../../third-party/anysearch-dsh/anysearch-anysearch-dsh-0.1.4-dsh.1.tgz',
       '@dickpy/dsh-imagegen': 'file:../../../third-party/dsh-imagegen/dickpy-dsh-imagegen-1.5.12.tgz',
       '@xmanrui/dsh-im': 'file:../../../third-party/dsh-im/xmanrui-dsh-im-4.21.1.tgz',
       '@huanlin/dsh-plugin-better-sidebar-plugin-office': 'file:../../../third-party/office-preview/huanlin-dsh-plugin-better-sidebar-plugin-office-0.2.0.tgz',
-      'dsh-plugin-cron': 'file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3.tgz',
       'dsh-skill-mcp-panel': 'file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz',
-      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.8.tgz',
+      'dsh-univer-office': 'file:../../../third-party/dsh-univer-office/dsh-univer-office-0.3.0-dsh.9.tgz',
     }
     const accepted = await run(fixture({ packagePath: 'packages/bundle/web-app', dependencies }), signal)
     expect(accepted.exitCode, accepted.stdout + accepted.stderr).toBe(0)

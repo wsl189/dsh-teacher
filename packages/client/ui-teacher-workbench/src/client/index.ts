@@ -12,6 +12,7 @@ import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-schedule/client'
 import {
   QUESTION_CUTTING_SETTINGS_NAMESPACE,
   TEACHER_WORKBENCH_SETTINGS_NAMESPACE,
@@ -27,6 +28,9 @@ import { extractWorkbenchDocument, extractWorkbenchLayout } from './extract-docu
 import { bytesToBase64 } from './document-bytes.ts'
 import { fetchTeacherWeather } from './weather.ts'
 import { createTeacherWorkbenchViewStore } from './view-store.ts'
+import { WORKBENCH_PANEL_ID } from './panel.ts'
+import { createReminderCatalog } from './reminder-catalog.ts'
+import { WorkbenchTaskSource } from './WorkbenchTaskSource.tsx'
 import { SidebarWorkbench } from './SidebarWorkbench.tsx'
 import { WorkbenchSurface } from './WorkbenchSurface.tsx'
 import { TeacherWorkbenchSettingsRow } from './TeacherWorkbenchSettingsRow.tsx'
@@ -83,7 +87,7 @@ const NS = 'teacherWorkbench'
 
 /** Services required by the browser plugin. */
 export const inject = [
-  'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
+  'slots', 'locale', 'layout', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
 ]
 
 /**
@@ -187,12 +191,18 @@ export function apply(ctx: ClientContext): void {
     extractDocument, normalizeTimetable, importTimetableEntries: inputs => controller.importTimetableEntries(inputs),
   })
   const viewStore = createTeacherWorkbenchViewStore()
+  const reminderCatalog = createReminderCatalog({
+    list: () => ctx.remote.teacherWorkbench.listScheduledReminders(),
+    subscribeChanged: listener => ctx.remote.$on('teacherWorkbench/changed', listener),
+    subscribeReset: listener => ctx.on('connection/reset', listener),
+  })
 
   ctx.effect(() => async () => {
     timetableImport.dispose()
     await examples.dispose()
     await questionCutting.dispose()
     controller.dispose()
+    reminderCatalog.dispose()
   }, 'ui-teacher-workbench: object layer and question-cutting queue')
   ctx.on('connection/reset', () => {
     if (examples.getSnapshot().loaded) void examples.commands.refresh()
@@ -211,7 +221,6 @@ export function apply(ctx: ClientContext): void {
     timetableImportCommands: timetableImport.commands,
     exampleCommands: examples.commands,
     ensure: () => controller.refresh(),
-    subscribeSessionNavigation: listener => ctx.on('sessions/navigate', () => { listener() }),
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),
     setQuestionCuttingReasoningEnabled: enabled => (
@@ -298,16 +307,30 @@ export function apply(ctx: ClientContext): void {
     order: 10,
     locale: NS,
     store: viewStore,
+    inject: () => ({ openWorkbench: () => { ctx.layout.selectPanel(WORKBENCH_PANEL_ID) } }),
   }, SidebarWorkbench))
-  ctx.slots.inject('shell.overlay', () => ctx.slots.register({
-    name: 'shell.overlay',
+  ctx.slots.inject('main', () => ctx.slots.register({
+    name: 'main',
     children: { 'teacherWorkbench.saveDirectoryFlow': { kind: 'single', scope: 'root' } },
-    id: 'teacher-workbench',
-    order: 20,
+    key: WORKBENCH_PANEL_ID,
     locale: NS,
     store: viewStore,
     inject: surfaceInjected,
   }, WorkbenchSurface))
+  ctx.slots.inject('schedule.manager.sources', () => ctx.slots.register({
+    name: 'schedule.manager.sources',
+    id: 'teacher-workbench',
+    locale: NS,
+    store: viewStore,
+    inject: actions => ({
+      hooks: { reminders: reminderCatalog },
+      retry: reminderCatalog.refresh,
+      openWorkbench: () => {
+        actions.openModule('daily')
+        ctx.layout.selectPanel(WORKBENCH_PANEL_ID)
+      },
+    }),
+  }, WorkbenchTaskSource))
   ctx.slots.inject('settings.general.item', () => ctx.slots.register({
     name: 'settings.general.item',
     id: 'teacher-workbench',

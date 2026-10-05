@@ -25,7 +25,7 @@ Models settings lists saved connections together, including official Standard AP
 <a id="use-this-package"></a>
 ## Use this package
 
-Open Models from Settings. In **Service access**, choose **Add connection**, select a supplier and access plan, and save its configuration. Every plan is a separate connection. Official and custom connections share one list with bounded inline editors. A saved connection exposes **Assign use cases**, which opens the four direct model assignments; saving connectivity does not change an existing assignment. Provider-owned media configuration remains in Service access.
+Open Models from Settings. In **Service access**, choose **Add connection**, select a supplier and access plan, and save its configuration. Every plan is a separate connection. Official and custom connections share one list with bounded inline editors. DeepSeek Account is omitted from this list; account sign-in is managed by the account interface. A saved connection exposes **Assign use cases**, which opens the four direct model assignments; saving connectivity does not change an existing assignment. Provider-owned media configuration remains in Service access.
 
 **Tool model** offers only added, usable models whose resolved input capabilities include images. Text-only models and models with unknown capabilities are excluded, regardless of their names. If no vision model is available, the disabled selector directs the user to add one under Service access; a saved selection that no longer qualifies shows the selection prompt. Default conversation keeps the complete usable model catalog.
 

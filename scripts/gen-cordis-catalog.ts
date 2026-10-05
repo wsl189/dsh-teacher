@@ -238,6 +238,7 @@ export const EVENT_SCOPE_PAGE: Record<string, string> = {
   'fs': 'filesystem.md',
   'goal': 'goal.md',
   'schedule': 'schedule.md',
+  'teacherWorkbench': 'teacher-workbench.md',
   'llm': 'llm-streaming.md',
   'permission-presets': 'permission-presets.md',
   'session': 'session.md',

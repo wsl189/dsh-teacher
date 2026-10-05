@@ -11,7 +11,6 @@
 | `@anysearch/anysearch-dsh` | 0.1.4 | Web 搜索、内容提取、能力发现和批量搜索。 |
 | `@dickpy/dsh-imagegen` | 1.5.12 | 生图工作室、画布、图库、模板和生图工具。 |
 | `@xmanrui/dsh-im` | 4.21.1 | 十一个 IM 平台、文件发送、提醒及共用的 QQ 语音输入。 |
-| `dsh-plugin-cron` | 0.1.3 | 持久化定时任务、模型工具和浏览器管理。 |
 | `dsh-skill-mcp-panel` | 2.0.4 | 技能与 profile MCP 管理。 |
 | `dsh-univer-office` | 0.3.0，DSH 重打包 8 | 无界面的 Sheet、Doc、Slide、Base、Board 编辑、校验和导入导出。 |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | 官方侧边栏中的 DOCX、XLSX 和 PPTX 预览。 |
@@ -31,7 +30,7 @@ Word 页面和 Excel 有内容的列默认适应预览宽度，最低缩放为 1
 
 日常管理提醒从内置 IM 插件列出已配置机器人，包括标注连接状态的离线机器人。兼容补丁在上游主动投递功能之外提供工作台通知服务，保留机器人别名，并把私聊收件人与凭据留在 IM 内部。QQ 提醒使用最近记住的私聊会话；没有记住私聊时使用绑定的所有者。发送需要机器人已连接且存在可用的私聊收件人。
 
-可执行来源包不包含用户凭据或文档。机器人状态、cron 任务、技能、MCP 设置、Univer 文件和工作树仍保存在原有用户目录中。生图历史与缓存仍位于 `~/.dsh/dsh-imagegen`。迁移应用时，另行迁移所需的 `DSH_HOME`、生图历史及工作区数据。
+可执行来源包不包含用户凭据或文档。机器人状态、技能、MCP 设置、Univer 文件和工作树仍保存在原有用户目录中。生图历史与缓存仍位于 `~/.dsh/dsh-imagegen`。迁移应用时，另行迁移所需的 `DSH_HOME`、生图历史及工作区数据。
 
 Univer profile 关闭遥测，并将运行时的 `UNIVER_LICENSE` 转发给内容 worker；重打包移除了内嵌的开发许可证兜底值。授权功能仍受上游条款约束。浏览器渲染操作可能需要 Chrome 或 Chromium，可通过 `UNIVER_RENDER_BROWSER` 指定。Office 预览包保留 AGPL-3.0 许可证，Univer 包含的独立授权模块记录在[第三方声明](../THIRD_PARTY_NOTICES.md)中。
 

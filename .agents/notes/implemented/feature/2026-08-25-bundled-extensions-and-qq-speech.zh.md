@@ -14,13 +14,13 @@
 
 Web 与桌面组合包含从用户提供的源码构建、固定在 `third-party/` 下的 MIT `@anysearch/anysearch-dsh` 0.1.4 产物。它为 `web_search` 与 `web_fetch` 选择 AnySearch，base、headless 与 SDK 的默认值保持不变。Web patch 会禁用继承的 `web-search-deepseek` 配置项，因此 Web 与桌面版不会注册一个未使用的第二搜索提供方，也不会暴露其 settings 分节。插件的三项高级工具全局注册；经过审阅的兼容补丁移除其全局 `web_fetch` 回退注册，使各会话 preset 继续持有标准工具的可用性与指导。限定范围的 peer 覆盖让经过测试的 workspace 服务保持为唯一实现。「网页搜索」设置卡经由 DSH credential store 写入可选凭据，并经由 `web-search-anysearch` settings 分节写入服务地址；客户端会为每次操作对两者取一次快照。每次操作都会解析可选的 `ANYSEARCH_API_KEY`；缺失时使用匿名远程访问，不代表离线服务或安装器自动申请账户。查询与正文提取 URL 会离开本机并发往配置端点，该端点的配额与认证失败会直接显示，不会自动切换提供方。
 
-`@deepseek-ai/dsh-web-app` 直接加载[第三方清单](../../../../third-party/README.zh.md)固定的经审阅插件。生图、IM、cron、技能／MCP 管理、Office 预览和 Univer 创作均包含在 Windows 安装器中。其凭据、机器人状态、调度、文档、工作树和缓存仍位于用户目录，生图历史仍在 `~/.dsh/dsh-imagegen`。[官方集成决策](../architecture/2026-09-16-official-release-integration.zh.md)负责侧边栏与电脑操控组合。
+`@deepseek-ai/dsh-web-app` 直接加载[第三方清单](../../../../third-party/README.zh.md)固定的经审阅插件。生图、IM、技能／MCP 管理、Office 预览和 Univer 创作均包含在 Windows 安装器中。其凭据、机器人状态、调度、文档、工作树和缓存仍位于用户目录，生图历史仍在 `~/.dsh/dsh-imagegen`。[官方集成决策](../architecture/2026-09-16-official-release-integration.zh.md)负责侧边栏与电脑操控组合。 [统一任务页面决策](../simplification/2026-10-05-unified-workbench-tasks.zh.md)移除内置 cron 命令调度器，同时保留原生提醒与旧用户记录。
 
 同一 Web 组合会挂载 `@deepseek-ai/dsh-skill-ppt-master`，即上游 PPT Master 6.4.0 skill 的不可变提供方。该包保留完整上游目录，包括脚本、参考资料、布局、图片、声音、许可证、赞助记录、依赖声明与完整性门禁，并从已安装包派生 `path` 与 `resourceBase`，而不是把资源复制到 `DSH_HOME`。因此源码构建与桌面 EXE 都会从相同的包相对布局加载一个固定的 `bundled` 目录条目。安装器不会创建 Python 环境或安装工作流专用软件包；运维者需要提供兼容的 `python3` 运行时和所选 PPT Master 路由要求的依赖。
 
 生图兼容补丁为每项任务从模型设置解析所选模型、完整端点、协议和凭据，明确使用 OpenAI Images、DashScope 或 MiniMax 格式。技能／MCP 面板采用当前 renderer 和 session-controller API。Univer 重打包移除内嵌开发许可证兜底值，仅向其进程传递运行时 `UNIVER_LICENSE`，并关闭遥测。声明生成器记录外部和产物内联的商业模块，浏览器渲染仍保留上游 Chrome／Chromium 前置条件。
 
-上游插件管理各自的操作和状态生命周期。共享模型设置管理媒体线路和凭据，IM 管理平台连接和文件发送，cron 管理通用调度，技能／MCP 面板管理 profile 配置，Univer 管理编辑与审阅生命周期。工作台提醒仍归[工作台文档](2026-08-22-mobile-workbench-reminders.zh.md)管理。发行版保留 Office 预览器的 AGPL-3.0 义务和 Univer 的独立商业义务。
+上游插件管理各自的操作和状态生命周期。共享模型设置管理媒体线路和凭据，IM 管理平台连接和文件发送，技能／MCP 面板管理 profile 配置，Univer 管理编辑与审阅生命周期。工作台提醒仍归[工作台文档](2026-08-22-mobile-workbench-reminders.zh.md)管理。发行版保留 Office 预览器的 AGPL-3.0 义务和 Univer 的独立商业义务。
 
 `@deepseek-ai/dsh-speech` 定义选择提供方的 Host 能力与带类型的 `speech.transcribe` Remote。`@deepseek-ai/dsh-speech-model-settings` 注册 `model-settings` 提供方。每次录音时，它都会从 `agent-default-model` 读取当前语音分配，从 `llm-pi-ai` 重新加载供应商 profile，并通过 credentials 服务解析该线路的凭据，因此在**设置 → 模型**中保存的变更无需重启 Host 即可影响下一次请求。适配器会按准确且受维护的操作格式调用所选智谱 GLM-ASR 或 Qwen-ASR 模型，只返回规范化非空文本与提供方标识。内置 IM Host 会把 QQ WAV 附件交给同一项语音操作；QQ 已提供的转写文本则保留在本地并绕过提供方。dsh-im 持有平台连接与附件下载，不再持有第二份 ASR 配置或模型卡片。[按供应商分组的模型设置决策](../architecture/2026-09-01-supplier-grouped-model-settings.zh.md)持有线路与分配配置。
 
@@ -56,7 +56,7 @@ Web 与桌面组合包含从用户提供的源码构建、固定在 `third-party
 
 ## 后果
 
-- 标准 Web 源码构建或 Windows 安装器无需 `dsh plugin add` 即可提供 AI 生图工作室、四项生图工具、IM、通用 cron、技能／MCP 管理、Office 预览、Univer 创作与完整 `ppt-master` skill；发行组合测试固定其 Host 工具、全部六个客户端模块与随包 skill 条目，因此组合遗漏会在发布前失败。
+- 标准 Web 源码构建或 Windows 安装器无需 `dsh plugin add` 即可提供 AI 生图工作室、四项生图工具、IM、技能／MCP 管理、Office 预览、Univer 创作与完整 `ppt-master` skill；发行组合测试固定其 Host 工具、全部六个客户端模块与随包 skill 条目，因此组合遗漏会在发布前失败。
 - PPT Master 由 12,981 个文件、83,654,741 个逻辑字节组成的资源树会增加应用依赖闭包与安装器输入。安装器压缩可以减小 artifact，但发布存储与 Windows 解压仍需处理完整资源树。
 - 安装后可以立即加载 PPT Master 指令。执行具体路由仍需外部兼容 Python 运行时，以及该路由选中的可选软件包或可执行程序。
 - 迁移完整工作环境仍需复制有意保留的 `DSH_HOME` 状态与 `~/.dsh/dsh-imagegen`，并准备可访问的生图、供应商语音、MinerU 与模型服务。只安装 EXE 会迁移应用代码，不会迁移私有数据或 GPU 服务。

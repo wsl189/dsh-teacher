@@ -58,6 +58,9 @@
       "path": "../ui-sidebar"
     },
     {
+      "path": "../ui-schedule"
+    },
+    {
       "path": "../ui-slots"
     },
     {

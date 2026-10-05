@@ -163,7 +163,7 @@ Markdown 插图引用仅从请求返回的 OCR 图片字节解析，并转成保
 
 ### 扩展点
 
-插件提供 `ctx.teacherWorkbench`，并可选消费 `ctx.mobileNotifications`；后者的 `listTargets()` 与 `send()` 由 dsh-im 实现，不暴露凭据或私聊标识。浏览器端消费者通过 `@deepseek-ai/dsh-api-remotes` 使用生成的 Remote contribution，而不导入宿主端运行时代码。可选的同进程定时任务界面可以调用 `listScheduledReminders()`，读取从活动工作台提醒派生出的只读且不含凭据的行；该投影不会转移执行或持久化所有权。
+插件提供 `ctx.teacherWorkbench`，并可选消费 `ctx.mobileNotifications`；后者的 `listTargets()` 与 `send()` 由 dsh-im 实现，不暴露凭据或私聊标识。浏览器端消费者通过 `@deepseek-ai/dsh-api-remotes` 使用生成的 Remote contribution，而不导入宿主端运行时代码。`teacherWorkbench/listScheduledReminders` 把活动提醒投影到自动化任务页面；持久修改或发送确认后的 `teacherWorkbench/changed` 事件会使该投影失效并刷新。这个只读投影不会转移执行或持久化所有权。
 
 `geocodingEndpoint` 选择兼容 Nominatim 的搜索端点，`geocodingCacheEntries` 限制内存中的地点缓存数量。缓存未命中时，地理编码请求按每秒不超过一次串行发送；重复刷新天气会复用已解析的坐标，并重新获取当前预报。
 

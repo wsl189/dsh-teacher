@@ -19,6 +19,12 @@
   min-height: 0;
 }
 
+.sourceHeading {
+  margin: 20px 0 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+
 /* The mock's `.page-scroll` with `.automation-content` inside it: the content
    column takes the whole scroll viewport so the mock's centered 960px column
    reaches the scrollbar, while the heading, the filters, the search field, the

@@ -163,7 +163,7 @@ Collection metadata operations expose no model tool. Proofreading and heading id
 
 ### Extension Points
 
-The plugin provides `ctx.teacherWorkbench` and optionally consumes `ctx.mobileNotifications`, whose `listTargets()` and `send()` methods are implemented by dsh-im without exposing credentials or private conversation identifiers. Browser consumers use the generated Remote contribution through `@deepseek-ai/dsh-api-remotes` rather than importing Host runtime code. Optional same-process scheduled-task UIs may call `listScheduledReminders()` to obtain read-only, credential-free rows derived from active workbench reminders; that projection does not transfer execution or persistence ownership.
+The plugin provides `ctx.teacherWorkbench` and optionally consumes `ctx.mobileNotifications`, whose `listTargets()` and `send()` methods are implemented by dsh-im without exposing credentials or private conversation identifiers. Browser consumers use the generated Remote contribution through `@deepseek-ai/dsh-api-remotes` rather than importing Host runtime code. `teacherWorkbench/listScheduledReminders` projects active reminders into the Automation tasks page; `teacherWorkbench/changed` invalidates that projection after a durable edit or delivery acknowledgement. This read-only projection does not transfer execution or persistence ownership.
 
 `geocodingEndpoint` selects the Nominatim-compatible search endpoint, and `geocodingCacheEntries` bounds the in-memory location cache. Cache misses are serialized at no more than one geocoding request per second; repeat weather refreshes reuse the resolved coordinates while fetching current forecast data again.
 

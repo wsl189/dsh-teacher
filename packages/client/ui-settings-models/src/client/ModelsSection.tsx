@@ -467,7 +467,8 @@ function Loaded({ injected, renderSlot }: { injected: ModelsSectionFace; renderS
   // One fact decides both first-run postures on this page and the onboarding
   // step: whether the user already has a provider to talk to.
   const anyUsable = state.rows.some(providerUsable)
-  const configured = state.rows.filter(row => row.configured)
+  // Account sign-in is managed by the account interface.
+  const configured = state.rows.filter(row => row.configured && row.entry.provider !== 'deepseek-account')
   const presetRows = new Map(state.rows
     .filter(row => PRESET_PROVIDER_IDS.has(row.entry.provider))
     .map(row => [row.entry.provider, row] as const))

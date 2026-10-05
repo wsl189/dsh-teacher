@@ -5,6 +5,36 @@
 
 import type { Branded } from '@deepseek-ai/dsh-brand'
 
+declare module '@deepseek-ai/cordis' {
+  interface Events {
+    /**
+     * A workbench document or delivered reminder has been durably committed.
+     * @mode emit
+     */
+    'teacherWorkbench/changed': () => void
+  }
+}
+
+/** Credential-free active reminder projected from its owning workbench item. */
+export interface TeacherScheduledReminderTask {
+  /** Stable key derived from the workbench row identity. */
+  readonly key: string
+  /** Kind of workbench row that owns the reminder. */
+  readonly owner: 'todo' | 'memo' | 'ledger' | 'calendar'
+  /** User-visible row title. */
+  readonly title: string
+  /** Local deadline displayed by the workbench. */
+  readonly deadline: string
+  /** UTC instant of the next eligible occurrence. */
+  readonly nextRun: string
+  /** Platform selected for delivery. */
+  readonly channel: TeacherMobileChannel
+  /** Last known selected bot label. */
+  readonly botLabel: string
+  /** One-shot lead or repeat interval. */
+  readonly rule: TeacherReminder['rule']
+}
+
 export type * from './example-types.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 

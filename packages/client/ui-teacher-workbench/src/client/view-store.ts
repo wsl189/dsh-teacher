@@ -22,8 +22,6 @@ export type TeacherWorkbenchModule =
 export interface TeacherWorkbenchViewState {
   /** Whether the sidebar function list is expanded. */
   expanded: boolean
-  /** Whether the workbench main surface is open. */
-  open: boolean
   /** Module shown in the workbench main surface. */
   active: TeacherWorkbenchModule
 }
@@ -31,7 +29,6 @@ export interface TeacherWorkbenchViewState {
 type TeacherWorkbenchViewActions = {
   setExpanded: (draft: TeacherWorkbenchViewState, expanded: boolean) => void
   openModule: (draft: TeacherWorkbenchViewState, module: TeacherWorkbenchModule) => void
-  close: (draft: TeacherWorkbenchViewState) => void
 }
 
 /**
@@ -40,14 +37,12 @@ type TeacherWorkbenchViewActions = {
  */
 export function createTeacherWorkbenchViewStore(): EngineStoreHandle<TeacherWorkbenchViewState, TeacherWorkbenchViewActions> {
   return defineStore({
-    init: (): TeacherWorkbenchViewState => ({ expanded: false, open: false, active: 'daily' }),
+    init: (): TeacherWorkbenchViewState => ({ expanded: false, active: 'daily' }),
     actions: {
       setExpanded: (draft, expanded) => { draft.expanded = expanded },
       openModule: (draft, module) => {
         draft.active = module
-        draft.open = true
       },
-      close: (draft) => { draft.open = false },
     },
   })
 }

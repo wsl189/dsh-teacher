@@ -624,9 +624,10 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   }
 
   /**
-   * Project active workbench reminders for an optional shared scheduled-task list.
+   * Project active workbench reminders for the Automation tasks page.
    * @returns Credential-free task rows derived from the current durable document.
    */
+  @Remote('listScheduledReminders')
   listScheduledReminders(): readonly TeacherScheduledReminderTask[] {
     return listScheduledReminderTasks(this.requireGlobal().get().state, Date.now())
   }
@@ -671,6 +672,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       )
       try {
         await global.set(next)
+        this.ctx.emit('teacherWorkbench/changed')
       } catch (error) {
         await preparedDirectories.rollback()
         throw error
@@ -1530,6 +1532,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     }
     const next = snapshotDocument({ revision: current.revision + 1, state: parsed.data })
     await global.set(next)
+    this.ctx.emit('teacherWorkbench/changed')
     return next
   }
 
@@ -1566,6 +1569,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
             : { ...current.state, calendarItems: current.state.calendarItems.map(update) }
       const parsed = teacherWorkbenchStateSchema.parse(state)
       await global.set(snapshotDocument({ revision: current.revision + 1, state: parsed }))
+      this.ctx.emit('teacherWorkbench/changed')
       this.reminderRuntime.requestDrive()
     })
     this.operationTail = operation.then(() => {}, () => {})

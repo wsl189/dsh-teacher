@@ -106,7 +106,6 @@ External packages installed for runtime use or distributed inside the prebuilt b
 | [`docx`](https://github.com/dolanmiu/docx) | MIT |
 | [`docx-preview`](https://github.com/VolodymyrBaydalka/docxjs) | Apache-2.0 |
 | [`dompurify`](https://github.com/cure53/DOMPurify) | (MPL-2.0 OR Apache-2.0) |
-| [`dsh-plugin-cron`](https://github.com/abiaoa1314/dsh-plugin-cron) | MIT |
 | [`dsh-skill-mcp-panel`](https://github.com/Fishquito7/dsh-skill-mcp-panel) | MIT |
 | [`dsh-univer-office`](https://github.com/dream-num/dsh-univer-office) | Apache-2.0 |
 | [`electron-log`](https://github.com/megahertz/electron-log) | MIT |
@@ -197,7 +196,6 @@ pnpm applies local patches to the following packages at install time, so shipped
 - `exceljs@4.4.0` — [`patches/exceljs@4.4.0.patch`](patches/exceljs@4.4.0.patch)
 - `node-pty@1.2.0-beta.15` — [`patches/node-pty@1.2.0-beta.15.patch`](patches/node-pty@1.2.0-beta.15.patch)
 - `@anysearch/anysearch-dsh@0.1.4` — [`patches/anysearch-anysearch-dsh@0.1.4.patch`](patches/anysearch-anysearch-dsh@0.1.4.patch)
-- `dsh-plugin-cron@0.1.3` — [`patches/dsh-plugin-cron@0.1.3.patch`](patches/dsh-plugin-cron@0.1.3.patch)
 - `mathml2omml@0.5.0` — [`patches/mathml2omml@0.5.0.patch`](patches/mathml2omml@0.5.0.patch)
 - `mathml-to-latex@1.8.0` — [`patches/mathml-to-latex@1.8.0.patch`](patches/mathml-to-latex@1.8.0.patch)
 - `katex@0.16.47` — [`patches/katex@0.16.47.patch`](patches/katex@0.16.47.patch)

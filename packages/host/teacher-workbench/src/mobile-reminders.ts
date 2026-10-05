@@ -10,8 +10,11 @@ import type {
   TeacherNotificationTarget,
   TeacherQuickNote,
   TeacherReminder,
+  TeacherScheduledReminderTask,
   TeacherWorkbenchState,
 } from './types.ts'
+
+export type { TeacherScheduledReminderTask } from './types.ts'
 
 const MAX_TIMER_DELAY_MS = 2_147_483_647
 const MOBILE_CHANNELS = new Set<TeacherMobileChannel>([
@@ -87,26 +90,6 @@ export interface ReminderOccurrence {
   readonly reminder: TeacherReminder
   /** UTC timestamp for this occurrence. */
   readonly occurrenceAt: string
-}
-
-/** Credential-free scheduled reminder projected for a shared task list. */
-export interface TeacherScheduledReminderTask {
-  /** Stable key derived from the workbench row identity. */
-  readonly key: string
-  /** Kind of workbench row that owns the reminder. */
-  readonly owner: 'todo' | 'memo' | 'ledger' | 'calendar'
-  /** User-visible row title. */
-  readonly title: string
-  /** Local deadline displayed by the workbench. */
-  readonly deadline: string
-  /** UTC instant of the next eligible occurrence. */
-  readonly nextRun: string
-  /** Platform selected for delivery. */
-  readonly channel: TeacherMobileChannel
-  /** Last known selected bot label. */
-  readonly botLabel: string
-  /** One-shot lead or repeat interval. */
-  readonly rule: TeacherReminder['rule']
 }
 
 /** Process-local projection of durable workbench reminders. */

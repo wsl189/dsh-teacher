@@ -24,7 +24,7 @@ import css from './TeacherWorkbench.module.css'
 
 /** Full main-surface component props. */
 export type WorkbenchSurfaceProps =
-  PropsRuntime<'shell.overlay'>
+  PropsRuntime<'main'>
   & PropsRenderSlots<'teacherWorkbench.saveDirectoryFlow'>
   & PropsStore<ReturnType<typeof createTeacherWorkbenchViewStore>>
   & PropsLocale<'teacherWorkbench'>
@@ -52,10 +52,9 @@ const MODULE_LABELS: Record<TeacherWorkbenchModule, TeacherWorkbenchKey> = {
 /**
  * Render daily management, timetable, and the four teaching modules in the main column.
  * @param props - composed slot props, object-layer hooks, and commands.
- * @returns the active workbench module, or nothing while the workbench is closed.
+ * @returns the active workbench module; Layout owns mounting and navigation.
  */
 export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
-  const open = props.useStore(state => state.open)
   const active = props.useStore(state => state.active)
   const snapshot = props.useWorkbench(state => state)
   const settings = props.useTeacherSettings(state => state.value ?? DEFAULT_TEACHER_WORKBENCH_SETTINGS)
@@ -65,14 +64,8 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     writable: state.writable,
   }))
   useEffect(() => {
-    if (open) void props.ensure()
-  }, [active, open, props.ensure])
-  useEffect(
-    () => props.subscribeSessionNavigation(() => { props.actions.close() }),
-    [props.actions, props.subscribeSessionNavigation],
-  )
-
-  if (!open) return null
+    void props.ensure()
+  }, [active, props.ensure])
 
   const commands: TeacherWorkbenchCommands = {
     listNotificationTargets: props.listNotificationTargets,
@@ -148,7 +141,6 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
       role="region"
       aria-label={props.t('title')}
       data-workbench-surface
-      style={{ left: props.sidebarWidth, right: props.detailsWidth }}
     >
       <div className={css.workbenchShell}>
         <div className={css.workbenchBody}>

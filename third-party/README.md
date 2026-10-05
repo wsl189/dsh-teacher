@@ -11,7 +11,6 @@ This directory pins third-party plugins in the dsh-teacher Web and Windows distr
 | `@anysearch/anysearch-dsh` | 0.1.4 | Web search, extraction, capability discovery, and batches. |
 | `@dickpy/dsh-imagegen` | 1.5.12 | Image studio, canvas, gallery, templates, and generation tools. |
 | `@xmanrui/dsh-im` | 4.21.1 | Eleven IM platforms, file delivery, reminders, and shared QQ speech input. |
-| `dsh-plugin-cron` | 0.1.3 | Durable schedules, model tools, and browser management. |
 | `dsh-skill-mcp-panel` | 2.0.4 | Skill and profile MCP management. |
 | `dsh-univer-office` | 0.3.0, DSH repack 8 | Headless Sheet, Doc, Slide, Base, and Board editing, validation, and import/export. |
 | `@huanlin/dsh-plugin-better-sidebar-plugin-office` | 0.2.0 | DOCX, XLSX, and PPTX previews in the official sidebar. |
@@ -31,7 +30,7 @@ Configure bots under **Settings → IM bots**, skills under **Settings → Skill
 
 Daily Management reminders list configured bots from the bundled IM plugin, including offline bots with their connection state. The compatibility patch supplies the workbench notification service alongside upstream proactive delivery; it preserves bot aliases and keeps private recipients and credentials inside IM. QQ reminders use the most recently remembered private conversation, or the bound owner when no private conversation is remembered. Delivery requires a connected bot and an available private recipient.
 
-Executable artifacts contain no user credentials or documents. Bot state, cron jobs, skills, MCP settings, Univer files and worktrees remain under their existing user directories. Image history and caches remain under `~/.dsh/dsh-imagegen`. Migrate the required `DSH_HOME`, image history, and workspace data separately from the application.
+Executable artifacts contain no user credentials or documents. Bot state, skills, MCP settings, Univer files and worktrees remain under their existing user directories. Image history and caches remain under `~/.dsh/dsh-imagegen`. Migrate the required `DSH_HOME`, image history, and workspace data separately from the application.
 
 The Univer profile disables telemetry and forwards runtime `UNIVER_LICENSE` to content workers; the repack removes the embedded development-license fallback. Its licensed features remain subject to upstream terms. Browser-rendered operations may require Chrome or Chromium, selectable with `UNIVER_RENDER_BROWSER`. The Office preview package retains AGPL-3.0, while Univer includes separately licensed bundled modules recorded in [third-party notices](../THIRD_PARTY_NOTICES.md).
 

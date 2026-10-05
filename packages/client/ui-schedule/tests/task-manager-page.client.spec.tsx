@@ -164,6 +164,7 @@ function mount(
     records, status: 'ready', deleting: [], settled: true, readRequest: 0, readSettled: 0, ...initial,
   }
   const props: TaskManagerPageProps = {
+    renderSlot: () => null,
     useCatalog: select => select(snapshot),
     useSessions: select => select(sessions),
     useWorkspaces: select => select(workspaces),

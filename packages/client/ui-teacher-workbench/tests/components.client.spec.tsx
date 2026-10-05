@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import type {
   TeacherClassId,
   TeacherRecordId,
@@ -18,6 +18,7 @@ import { TeachingRecords } from '../src/client/TeachingRecords.tsx'
 import { SidebarWorkbench, type SidebarWorkbenchProps } from '../src/client/SidebarWorkbench.tsx'
 import { TeacherWorkbenchSettingsRow } from '../src/client/TeacherWorkbenchSettingsRow.tsx'
 import { WorkbenchSurface, type WorkbenchSurfaceProps } from '../src/client/WorkbenchSurface.tsx'
+import { WorkbenchTaskSource, type WorkbenchTaskSourceProps } from '../src/client/WorkbenchTaskSource.tsx'
 import { formatMetric } from '../src/client/shared.tsx'
 import { EMPTY_QUESTION_CUTTING_VIEW } from '../src/client/question-cutting-controller.ts'
 import { EMPTY_TIMETABLE_IMPORT_VIEW } from '../src/client/timetable-import-controller.ts'
@@ -46,7 +47,7 @@ const globalProps: Pick<
   'useSessions' | 'useSessionStatus' | 'useSessionRetainInfo' | 'useWorkspaces' | 'expandSidebar' | 'usePanelInfo' | 'useResource'
 > = {
   expandSidebar: vi.fn(),
-  usePanelInfo: () => { throw new Error('unused panel hook') },
+  usePanelInfo: selector => selector({ activePanelId: null }),
   useResource: () => { throw new Error('unused resource hook') },
   useSessions: (() => undefined) as SidebarWorkbenchProps['useSessions'],
   useSessionStatus: selector => selector(noAttention),
@@ -80,20 +81,24 @@ it('formats fractional metrics to one decimal place', () => {
 
 describe('SidebarWorkbench', () => {
   it('expands thirteen functions inside one scroll region and opens the selected module', () => {
-    const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
-    const state = { expanded: true, active: 'lesson' as const, open: true }
+    const actions = { setExpanded: vi.fn(), openModule: vi.fn() }
+    const openWorkbench = vi.fn()
+    const state = { expanded: true, active: 'lesson' as const }
     const rendered = render(
-      <SidebarWorkbench {...globalProps} wide useStore={selector => selector(state)} actions={actions} t={t} />,
+      <SidebarWorkbench {...globalProps} openWorkbench={openWorkbench} wide
+        useStore={selector => selector(state)} actions={actions} t={t} />,
     )
     expect(screen.getAllByRole('button')).toHaveLength(14)
     expect(screen.getByLabelText('教学工作').className).toContain('sidebarModules')
     fireEvent.click(screen.getByRole('button', { name: '学生名册' }))
     expect(actions.openModule).toHaveBeenCalledWith('students')
+    expect(openWorkbench).toHaveBeenCalledOnce()
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
     expect(actions.setExpanded).toHaveBeenCalledWith(false)
     rendered.rerender(
       <SidebarWorkbench
         {...globalProps}
+        openWorkbench={openWorkbench}
         wide
         useStore={selector => selector({ ...state, expanded: false })}
         actions={actions}
@@ -104,10 +109,39 @@ describe('SidebarWorkbench', () => {
   })
 
   it('opens the active module from the collapsed rail', () => {
-    const actions = { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() }
-    render(<SidebarWorkbench {...globalProps} wide={false} useStore={selector => selector({ expanded: false, active: 'lesson', open: false })} actions={actions} t={t} />)
+    const actions = { setExpanded: vi.fn(), openModule: vi.fn() }
+    const openWorkbench = vi.fn()
+    render(<SidebarWorkbench {...globalProps} openWorkbench={openWorkbench} wide={false} useStore={selector => selector({ expanded: false, active: 'lesson' })} actions={actions} t={t} />)
     fireEvent.click(screen.getByRole('button', { name: '打开工作台' }))
     expect(actions.openModule).toHaveBeenCalledWith('lesson')
+    expect(openWorkbench).toHaveBeenCalledOnce()
+  })
+})
+
+describe('WorkbenchTaskSource', () => {
+  it('shares search and status filters across all four reminder owners and opens their Workbench', () => {
+    const snapshot: Parameters<Parameters<WorkbenchTaskSourceProps['useReminders']>[0]>[0] = {
+      status: 'ready',
+      records: (['todo', 'memo', 'ledger', 'calendar'] as const).map(owner => ({
+        key: `teacher-workbench:${owner}:a`, owner, title: `测试${owner}`,
+        deadline: '2099-08-18T18:30', nextRun: '2099-08-18T10:00:00Z',
+        channel: 'weixin', botLabel: '测试机器人', rule: { kind: 'repeat', everyMinutes: 120 },
+      })),
+    }
+    const useReminders: WorkbenchTaskSourceProps['useReminders'] = selector => selector(snapshot)
+    const openWorkbench = vi.fn()
+    const props = { ...globalProps, t, useReminders, openWorkbench, retry: vi.fn(async () => {}), search: '', statusFilter: 'all' as const }
+    const view = render(<WorkbenchTaskSource {...props} />)
+    expect(screen.getAllByRole('listitem')).toHaveLength(4)
+    expect(screen.getAllByText(/每 120 分钟提醒/)).toHaveLength(4)
+    fireEvent.click(screen.getByRole('button', { name: '测试memo' }))
+    expect(openWorkbench).toHaveBeenCalledOnce()
+    view.rerender(<WorkbenchTaskSource {...props} search="记账" />)
+    expect(screen.getAllByRole('listitem')).toHaveLength(1)
+    expect(screen.getByRole('button', { name: '测试ledger' })).toBeTruthy()
+    view.rerender(<WorkbenchTaskSource {...props} statusFilter="inactive" />)
+    expect(screen.queryAllByRole('listitem')).toHaveLength(0)
+    expect(screen.getByText('没有符合筛选条件的工作台提醒')).toBeTruthy()
   })
 })
 
@@ -393,7 +427,7 @@ describe('WorkbenchSurface', () => {
     value = DEFAULT_TEACHER_WORKBENCH_SETTINGS,
   ): WorkbenchSurfaceProps => {
     const c = commands()
-    const view = { expanded: true, open: true, active }
+    const view = { expanded: true, active }
     const settings = {
       status: 'ready' as const,
       value,
@@ -401,7 +435,7 @@ describe('WorkbenchSurface', () => {
     }
     return {
       useStore: selector => selector(view),
-      actions: { setExpanded: vi.fn(), openModule: vi.fn(), close: vi.fn() },
+      actions: { setExpanded: vi.fn(), openModule: vi.fn() },
       useWorkbench: selector => selector(snapshot),
       useTeacherSettings: selector => selector(settings),
       useQuestionCuttingSettings: selector => selector({
@@ -415,33 +449,23 @@ describe('WorkbenchSurface', () => {
       useTimetableImport: selector => selector(EMPTY_TIMETABLE_IMPORT_VIEW),
       timetableImportCommands: { start: vi.fn(), updateItems: vi.fn(), discard: vi.fn(), importSelected: vi.fn() },
       ensure: vi.fn(async () => ({ ok: true })),
-      subscribeSessionNavigation: vi.fn(() => () => {}),
       setWeatherLocation: vi.fn(async () => {}),
       setTeacherName: vi.fn(async () => {}),
       setQuestionCuttingReasoningEnabled: vi.fn(async () => {}),
       loadWeather: vi.fn(async () => { throw new Error('weather is not configured') }),
       ...c.value,
       t,
-      sidebarWidth: 280,
-      detailsWidth: 0,
     } as WorkbenchSurfaceProps
   }
 
-  it('loads in the main area without a duplicate header and closes on Session navigation', async () => {
+  it('loads in the Layout-owned main area without a duplicate header', async () => {
     const loading = propsFor('lesson', { status: 'loading', document: null, error: null })
-    let navigate: (() => void) | undefined
-    loading.subscribeSessionNavigation = vi.fn((listener: () => void) => {
-      navigate = listener
-      return () => { navigate = undefined }
-    })
     const rendered = render(<WorkbenchSurface {...loading} />)
     expect(screen.getByRole('region', { name: '工作台' })).toBeTruthy()
     expect(screen.queryByText('工作台')).toBeNull()
     expect(screen.queryByRole('button', { name: '关闭工作台' })).toBeNull()
     expect(screen.getByText('正在载入工作台…')).toBeTruthy()
     await waitFor(() => { expect(loading.ensure).toHaveBeenCalled() })
-    act(() => { navigate?.() })
-    expect(loading.actions.close).toHaveBeenCalled()
 
     const saving = propsFor('lesson', {
       status: 'saving', document: { revision: 1, state: emptyState() }, error: null,
@@ -500,16 +524,15 @@ describe('WorkbenchSurface', () => {
     await waitFor(() => { expect(first.ensure).toHaveBeenCalledTimes(2) })
   })
 
-  it('does not load while closed and falls back to default settings', () => {
+  it('loads when mounted by Layout and falls back to default settings', () => {
     const closed = propsFor('lesson', {
       status: 'ready', document: { revision: 1, state: emptyState() }, error: null,
     })
-    closed.useStore = selector => selector({ expanded: true, open: false, active: 'lesson' })
     closed.useTeacherSettings = selector => selector({
       status: 'ready', value: undefined, base: {}, user: {}, revision: 1, writable: true, mode: 'host',
     })
     render(<WorkbenchSurface {...closed} />)
-    expect(closed.ensure).not.toHaveBeenCalled()
-    expect(screen.queryByRole('region', { name: '工作台' })).toBeNull()
+    expect(closed.ensure).toHaveBeenCalled()
+    expect(screen.getByRole('region', { name: '工作台' })).toBeTruthy()
   })
 })

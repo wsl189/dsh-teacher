@@ -4,7 +4,6 @@
   - button "新会话"
   - button "生图"
 - button "打开工作台": 工作台
-- button "定时任务": 定时任务 0
 - navigation "全局面板":
   - button "插件"
   - button "自动化任务"

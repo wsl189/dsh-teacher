@@ -17,9 +17,6 @@ overrides:
   '@dickpy/dsh-imagegen>@deepseek-ai/dsh-agent-default-model': link:packages/core/agent-default-model
   '@dickpy/dsh-imagegen>@deepseek-ai/dsh-credentials': link:packages/credentials/credentials
   '@dickpy/dsh-imagegen>@deepseek-ai/dsh-model-service-settings': link:packages/settings/model-service-settings
-  dsh-plugin-cron>@deepseek-ai/dsh-tools: link:packages/core/tools
-  dsh-plugin-cron>@deepseek-ai/dsh-shell: link:packages/shell/shell
-  dsh-plugin-cron>@deepseek-ai/dsh-storage: link:packages/storage/storage
   dsh-skill-mcp-panel>@deepseek-ai/dsh-home-paths: link:packages/util/home-paths
   dsh-skill-mcp-panel>@deepseek-ai/dsh-subprocess: link:packages/subprocess/subprocess
   dsh-skill-mcp-panel>@deepseek-ai/dsh-typert-protocol: link:packages/typert/protocol
@@ -42,7 +39,6 @@ patchedDependencies:
   '@huanlin/dsh-plugin-better-sidebar-plugin-office@0.2.0': 4a1d6017b14d6aff4cb16e72a84843876966a62544f630b9f96b579043b54a0d
   '@xmanrui/dsh-im@4.21.1': c17fe1ce7f5e83221c3cc91eb1f3da575368e70566b96237cd817dd91548ae64
   '@yao-pkg/pkg@6.21.0': 75891fc22b277c145cafeab83e41baf4a70f5b8fe6dc0801c6a0b922d7ee88c7
-  dsh-plugin-cron@0.1.3: f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88
   dsh-skill-mcp-panel@2.0.4: 975325f6882a27ef97c1363ad0e3beaa60038dd5e1df5bf7c5afa71a9808d61f
   exceljs@4.4.0: c1bf8ac8f319dab382f08e3a669b715e691d46c703ac5a4163eb383fbedd1d48
   katex@0.16.47: 549206e6bbf183ebabcf805041cdac0ac488c1f212cdb007305244fcf3cbcc85
@@ -3020,9 +3016,6 @@ importers:
       commander:
         specifier: ^15.0.0
         version: 15.0.0
-      dsh-plugin-cron:
-        specifier: file:../../../third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz
-        version: file:third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz(patch_hash=f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-shell@packages+shell+shell)(@deepseek-ai/dsh-storage@packages+storage+storage)
       dsh-skill-mcp-panel:
         specifier: file:../../../third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz
         version: file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz(patch_hash=975325f6882a27ef97c1363ad0e3beaa60038dd5e1df5bf7c5afa71a9808d61f)(supports-color@9.4.0)
@@ -6237,6 +6230,9 @@ importers:
       '@deepseek-ai/dsh-client-ui-renderer':
         specifier: workspace:*
         version: link:../ui-renderer
+      '@deepseek-ai/dsh-client-ui-schedule':
+        specifier: workspace:*
+        version: link:../ui-schedule
       '@deepseek-ai/dsh-client-ui-settings':
         specifier: workspace:*
         version: link:../ui-settings
@@ -21147,14 +21143,6 @@ packages:
     resolution: {integrity: sha512-uBq4egWHTcTt33a72vpSG0z3HnPuIl6NqYcTrKEg2azoEyl2hpW0zqlxysq2pK9HlDIHyHyakeYaYnSAwd8bow==}
     engines: {node: '>=12'}
 
-  dsh-plugin-cron@file:third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz:
-    resolution: {integrity: sha512-BhUkoTOWBfky+G8FkRmC8f0sW+oLE1rjwVZ2Ff5qQk1G7d2pUfKQEe7EM6DArsa19meAoYCahWH8XR1F3cRG8A==, tarball: file:third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz}
-    version: 0.1.3
-    peerDependencies:
-      '@deepseek-ai/cordis': ^4.0.1
-      '@deepseek-ai/dsh-shell': ^0.1.0-rc.7 || 1.3.4
-      '@deepseek-ai/dsh-storage': ^0.1.0-rc.7 || 1.3.4
-
   dsh-skill-mcp-panel@file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz:
     resolution: {integrity: sha512-VmOy6RrlMjMxPoenKSLDLkusf0Qj6ZcWZUD5l6Zm29XL2THLcmAeL9uvBVctWej9iDIXwwsEX2z1/X4+Rq5hVg==, tarball: file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz}
     version: 2.0.4
@@ -31021,14 +31009,6 @@ snapshots:
       dotenv: 16.6.1
 
   dotenv@16.6.1: {}
-
-  dsh-plugin-cron@file:third-party/dsh-plugin-cron/dsh-plugin-cron-0.1.3-dsh.1.tgz(patch_hash=f91c6810bd805fbee81eed7a3fdd5ffa7d037e4fa699463ed4d7fd843f869e88)(@deepseek-ai/cordis@vendor+cordis)(@deepseek-ai/dsh-shell@packages+shell+shell)(@deepseek-ai/dsh-storage@packages+storage+storage):
-    dependencies:
-      '@deepseek-ai/cordis': link:vendor/cordis
-      '@deepseek-ai/dsh-shell': link:packages/shell/shell
-      '@deepseek-ai/dsh-storage': link:packages/storage/storage
-      '@deepseek-ai/dsh-tools': link:packages/core/tools
-      '@deepseek-ai/schemastery': link:vendor/schemastery
 
   dsh-skill-mcp-panel@file:third-party/dsh-skill-mcp-panel/dsh-skill-mcp-panel-2.0.4.tgz(patch_hash=975325f6882a27ef97c1363ad0e3beaa60038dd5e1df5bf7c5afa71a9808d61f)(supports-color@9.4.0):
     dependencies:

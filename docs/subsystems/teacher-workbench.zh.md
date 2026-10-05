@@ -136,10 +136,10 @@ Host service owning the revisioned workbench document.
 @Remote('listNotificationTargets') listNotificationTargets(_request: Record<never, never>): Promise<readonly TeacherNotificationTarget[]>
 
 /**
- * Project active workbench reminders for an optional shared scheduled-task list.
+ * Project active workbench reminders for the Automation tasks page.
  * @returns Credential-free task rows derived from the current durable document.
  */
-listScheduledReminders(): readonly TeacherScheduledReminderTask[]
+@Remote('listScheduledReminders') listScheduledReminders(): readonly TeacherScheduledReminderTask[]
 
 /**
  * Replace the complete state after comparing the observed revision.
@@ -309,4 +309,24 @@ questionDocumentLimits(): { readonly maxImageBytes: number; readonly maxBatchByt
 ```
 
 Source: [`packages/host/teacher-workbench/src/index.ts`](../../packages/host/teacher-workbench/src/index.ts)
+
+<a id="teacherworkbench-events"></a>
+
+### `teacherWorkbench/*` events
+
+<a id="teacherworkbenchchanged--emit"></a>
+
+#### `teacherWorkbench/changed` — emit
+
+A workbench document or delivered reminder has been durably committed.
+
+```ts cordis-catalog
+/**
+ * A workbench document or delivered reminder has been durably committed.
+ * @mode emit
+ */
+'teacherWorkbench/changed': () => void
+```
+
+Source: [`packages/host/teacher-workbench/src/types.ts`](../../packages/host/teacher-workbench/src/types.ts)
 <!-- END GENERATED cordis-surface -->

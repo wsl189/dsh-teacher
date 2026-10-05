@@ -99,12 +99,17 @@ describe('web e2e: Models settings page configures supplier and custom routes', 
 
     await dialog.getByRole('tab', { name: '服务接入', exact: true }).click()
     await dialog.getByRole('button', { name: '添加服务', exact: true }).waitFor({ timeout: 10_000 })
+    expect(await dialog.getByText('DeepSeek Account', { exact: true }).count()).toBe(0)
     expect(await dialog.getByRole('button', { name: '展开: 生图模型' }).count()).toBe(0)
     expect(await dialog.getByRole('button', { name: '展开设置: 语音模型' }).count()).toBe(0)
     expect(await dialog.getByLabel('ASR Base URL').count()).toBe(0)
     expect(await dialog.getByText('渠道', { exact: true }).count()).toBe(0)
 
     await dialog.getByRole('button', { name: '添加服务', exact: true }).click()
+    await expect.poll(
+      () => dialog.getByRole('button', { name: 'DeepSeek · 标准 API', exact: true }).isVisible(),
+      { timeout: 10_000 },
+    ).toBe(true)
     await dialog.getByRole('button', { name: '智谱 GLM · 标准 API', exact: true }).click()
     await dialog.getByRole('textbox', { name: 'API 密钥', exact: true }).fill('zhipu-speech-e2e-key')
     await dialog.getByRole('button', { name: '保存', exact: true }).click()

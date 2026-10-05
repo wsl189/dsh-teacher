@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-05-unified-workbench-tasks.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/simplification/2026-10-05-unified-workbench-tasks.md
+/agent-note-unified-workbench-navigation-and-tasks:
+  en: b5a51f7f2b3d2273
+  zh: f30077404e16ea56
+/agent-note-unified-workbench-navigation-and-tasks/problem:
+  en: 544e25a779551f7d
+  zh: e3d9e5bbff640f61
+/agent-note-unified-workbench-navigation-and-tasks/decision:
+  en: f36d5d2d60825f8c
+  zh: a269248e5ad41631
+/agent-note-unified-workbench-navigation-and-tasks/alternatives-considered:
+  en: 8a65426da4bbddcc
+  zh: 8e66a9c2fe6c7d25
+/agent-note-unified-workbench-navigation-and-tasks/consequences:
+  en: 94be34c08a385366
+  zh: 771bb00c576e3011
+/agent-note-unified-workbench-navigation-and-tasks/testing:
+  en: 51a62089d2a96520
+  zh: 5b020e9578cd0c4f

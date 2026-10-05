@@ -247,8 +247,6 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
   }
   /** Load or retry the durable document. */
   ensure: () => Promise<TeacherWorkbenchActionResult>
-  /** Close the workbench when explicit Session navigation takes over the main area. */
-  subscribeSessionNavigation: (listener: () => void) => () => void
   /** Persist the teacher-name filter in the feature settings scope. */
   setTeacherName: (name: string) => Promise<void>
   /** Persist the weather location query in the feature settings scope. */

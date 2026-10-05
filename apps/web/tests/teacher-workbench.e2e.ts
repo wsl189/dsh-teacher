@@ -10,6 +10,7 @@ import { afterAll, beforeAll, describe, expect, it, onTestFailed, onTestFinished
 import { AGENT_DEFAULT_MODEL_SETTINGS_NAMESPACE } from '@deepseek-ai/dsh-agent-default-model'
 import type { SessionEvent } from '@deepseek-ai/dsh-session'
 import type {} from '@deepseek-ai/dsh-host-teacher-workbench'
+import type { TeacherDailyTodoId, TeacherMobileBotId } from '@deepseek-ai/dsh-host-teacher-workbench/types'
 import type {} from '@deepseek-ai/dsh-settings'
 import {
   captureStableAria,
@@ -90,8 +91,11 @@ describe('web e2e: durable teacher workbench', () => {
   let minerUImages: Record<string, string> = {}
   let minerUMiddleJson = ''
   let minerUResponseGate: Promise<void> | null = null
+  let currentSessionRowKey: string | null = null
 
   async function openModule(name: string): Promise<void> {
+    const selectedSession = page.locator('[data-row-key^="session:"][aria-selected="true"]').last()
+    if (await selectedSession.count() > 0) currentSessionRowKey = await selectedSession.getAttribute('data-row-key')
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
     const module = page.getByRole('button', { name, exact: true }).first()
     if (!(await module.isVisible())) await page.getByRole('button', { name: '打开工作台' }).click()
@@ -102,7 +106,8 @@ describe('web e2e: durable teacher workbench', () => {
   async function showConversation(): Promise<void> {
     const workbench = page.getByRole('region', { name: '工作台', exact: true })
     if (!(await workbench.isVisible())) return
-    const currentSession = page.locator('[role="treeitem"][aria-selected="true"]').last()
+    if (currentSessionRowKey === null) throw new Error('The Workbench fixture did not record its conversation row')
+    const currentSession = page.locator(`[data-row-key="${currentSessionRowKey}"]`)
     await currentSession.waitFor({ timeout: 10_000 })
     await currentSession.click()
     await workbench.waitFor({ state: 'hidden', timeout: 10_000 })
@@ -212,6 +217,71 @@ describe('web e2e: durable teacher workbench', () => {
       await captureStableAria(page, '[data-sidebar-root]', scaffold.workspaceCwd),
       MODE,
     )
+  })
+
+  it('switches between Workbench, Plugins, Automation tasks, and the conversation', async () => {
+    onTestFailed(() => saveFailureShot(page, 'web-e2e-workbench-panel-navigation'))
+    const workbench = page.getByRole('region', { name: '工作台', exact: true })
+    const panels = page.getByRole('navigation', { name: '全局面板' })
+    const initial = await scaffold.ctx.teacherWorkbench.read({})
+    const taskId = 'automation-reminder-test' as TeacherDailyTodoId
+    const state = { ...initial.value.state, dailyTodos: [...initial.value.state.dailyTodos, {
+      id: taskId, title: '自动化页面测试提醒', dueAt: '2099-08-18T18:30', completed: false,
+      category: 'today' as const, color: 'blue' as const, createdAt: 1, updatedAt: 1,
+      reminder: {
+        channel: 'weixin' as const, botId: 'automation-test-bot' as TeacherMobileBotId,
+        botLabel: '自动化测试机器人', dueAtUtc: '2099-08-18T10:30:00.000Z',
+        rule: { kind: 'once' as const, minutesBefore: 30 }, configuredAt: 1, lastOccurrenceAt: '',
+      },
+    }] }
+    expect(await scaffold.ctx.teacherWorkbench.write({ expectedRevision: initial.value.revision, state })).toMatchObject({ ok: true })
+    expect(scaffold.ctx.teacherWorkbench.listScheduledReminders()).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: '自动化页面测试提醒' }),
+    ]))
+    onTestFinished(async () => {
+      const current = await scaffold.ctx.teacherWorkbench.read({})
+      await scaffold.ctx.teacherWorkbench.write({ expectedRevision: current.value.revision, state: initial.value.state })
+    })
+    await openModule('日常管理')
+    await panels.getByRole('button', { name: '插件', exact: true }).click()
+    await expect.poll(() => workbench.count()).toBe(0)
+    await page.getByRole('heading', { name: '插件', exact: true }).waitFor()
+    await openModule('日常管理')
+    await panels.getByRole('button', { name: '自动化任务', exact: true }).click()
+    await expect.poll(() => workbench.count()).toBe(0)
+    await page.getByTestId('task-manager-page').waitFor()
+    await page.getByRole('region', { name: '工作台提醒', exact: true }).waitFor()
+    const reminder = page.getByRole('button', { name: '自动化页面测试提醒', exact: true })
+    await reminder.waitFor()
+    await compareOrRefreshGolden(join(SNAPSHOT_DIR, 'automation.expected.md'),
+      await captureStableAria(page, '[data-testid="task-manager-page"]', scaffold.workspaceCwd), MODE)
+    await page.getByRole('searchbox', { name: '搜索任务' }).fill('不匹配的名称')
+    await expect.poll(() => reminder.count()).toBe(0)
+    await page.getByRole('searchbox', { name: '搜索任务' }).fill('自动化测试机器人')
+    await reminder.waitFor()
+    await page.getByRole('searchbox', { name: '搜索任务' }).fill('')
+    await page.getByRole('button', { name: '已结束', exact: true }).click()
+    await expect.poll(() => reminder.count()).toBe(0)
+    await page.getByRole('button', { name: '全部', exact: true }).click()
+    await reminder.waitFor()
+    await page.reload({ waitUntil: 'load' })
+    await panels.getByRole('button', { name: '自动化任务', exact: true }).click()
+    await reminder.waitFor()
+    const current = await scaffold.ctx.teacherWorkbench.read({})
+    await scaffold.ctx.teacherWorkbench.write({ expectedRevision: current.value.revision, state: {
+      ...current.value.state, dailyTodos: current.value.state.dailyTodos.map(item =>
+        item.id === taskId ? { ...item, completed: true } : item),
+    } })
+    await expect.poll(() => reminder.count()).toBe(0)
+    expect((await scaffold.ctx.teacherWorkbench.read({})).value.state.dailyTodos.some(item => item.id === taskId)).toBe(true)
+    expect(await page.getByRole('button', { name: /^定时任务/ }).count()).toBe(0)
+    await page.getByRole('button', { name: '在工作台中管理', exact: true }).click()
+    await workbench.waitFor()
+    await showConversation()
+    await page.locator('[data-composer-card]').waitFor()
+    await openModule('日常管理')
+    await page.getByRole('button', { name: '新会话', exact: true }).click()
+    await expect.poll(() => workbench.count()).toBe(0)
   })
 
   it('persists daily tasks, memos, and dated calendar items', async () => {

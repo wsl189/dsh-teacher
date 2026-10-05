@@ -65,6 +65,14 @@ const MANAGER_NS = 'schedule.manager'
 const PANEL_ID = 'schedules' as MainPanelId
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
+  interface SlotMap {
+    /** Feature-owned task sources displayed with the manager's search and status filter. */
+    'schedule.manager.sources': {
+      kind: 'list'
+      scope: 'root'
+      owner: { search: string; statusFilter: 'all' | 'active' | 'inactive' }
+    }
+  }
   interface LocaleNamespaceMap {
     /** Active Schedule catalog copy. */
     'schedule.catalog': ScheduleCatalogKey
@@ -169,6 +177,7 @@ export function apply(ctx: ClientContext): void {
     name: 'main',
     key: PANEL_ID,
     locale: MANAGER_NS,
+    children: { 'schedule.manager.sources': { kind: 'list', scope: 'root' } },
     inject: (): TaskManagerInjected => ({
       ...detail,
       // The page has no creation form: a new reminder starts in a Session.

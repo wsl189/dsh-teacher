@@ -4,7 +4,7 @@ import clsx from 'clsx'
 import {
   Button, IconClockOutlineRegular, IconCloseOutlineRegular, IconPlusOutlineRegular, IconSearchOutlineRegular, Input,
 } from '@deepseek-ai/dsh-client-ui-primitives'
-import type { HostObservable, InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { HostObservable, InjectFace, PropsLocale, PropsRenderSlots, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import type { ScheduleCatalogEntry, ScheduleId } from '@deepseek-ai/dsh-schedule/client'
 import type { CatalogSnapshot } from './catalog-source.ts'
@@ -28,6 +28,7 @@ export interface TaskManagerInjected extends TaskDetailInjected {
 
 /** Root-scoped task catalog props derived from the framework and injected actions. */
 export type TaskManagerPageProps = PropsRuntime<'main'>
+  & PropsRenderSlots<'schedule.manager.sources'>
   & InjectFace<TaskManagerInjected>
   & PropsLocale<'schedule.manager'>
 
@@ -149,6 +150,8 @@ export function TaskManagerPage(props: TaskManagerPageProps) {
               </Button>}
             </div>
             <div className={css.list}>
+              {props.renderSlot('schedule.manager.sources', { search, statusFilter })}
+              <h2 className={css.sourceHeading}>{t('list.sessions')}</h2>
               {selected === undefined && <CatalogFeedback status={status} populated={rows.length > 0} onRetry={onRetry} t={t} />}
               {status === 'ready' && rows.length === 0 && <div className={css.empty} role="status">
                 <IconClockOutlineRegular size={24} className={css.emptyGlyph} />

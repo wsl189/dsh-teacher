@@ -22,22 +22,21 @@ const emptyState = (): TeacherWorkbenchState => ({
 afterEach(() => { vi.unstubAllGlobals() })
 
 describe('teacher-workbench view store', () => {
-  it('owns disclosure, active-module, and open state without persistence', () => {
+  it('owns disclosure and active-module state while Layout owns the active panel', () => {
     const { store, actions } = createTeacherWorkbenchViewStore().create()
-    expect(store.getSnapshot()).toEqual({ expanded: false, open: false, active: 'daily' })
+    expect(store.getSnapshot()).toEqual({ expanded: false, active: 'daily' })
     actions.setExpanded(true)
     actions.openModule('students')
-    expect(store.getSnapshot()).toEqual({ expanded: true, open: true, active: 'students' })
+    expect(store.getSnapshot()).toEqual({ expanded: true, active: 'students' })
     actions.openModule('scores')
-    actions.close()
-    expect(store.getSnapshot()).toEqual({ expanded: true, open: false, active: 'scores' })
+    expect(store.getSnapshot()).toEqual({ expanded: true, active: 'scores' })
   })
 })
 
 describe('teacher-workbench browser wiring', () => {
   it('registers all seats and forwards their semantic commands', async () => {
     expect(inject).toEqual([
-      'slots', 'locale', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
+      'slots', 'locale', 'layout', 'connection', 'remote', 'remote.ocr', 'remote.speech', 'remote.teacherWorkbench', 'sessions', 'settingsScope',
     ])
     vi.stubGlobal('crypto', {
       randomUUID: vi.fn(() => 'generated-id'),
@@ -95,11 +94,15 @@ describe('teacher-workbench browser wiring', () => {
     const localeDispose = vi.fn()
     const slotDispose = vi.fn()
     const ctx = {
+      layout: { selectPanel: vi.fn() },
       locale: { register: vi.fn(() => localeDispose) },
       remote: {
+        $on: vi.fn(() => () => {}),
         ocr: { layoutLimits, layout: extractLayout },
         speech: { transcribe },
-        teacherWorkbench: { read, write, weather, normalizeTimetable, segmentQuestions },
+        teacherWorkbench: { read, write, weather, normalizeTimetable, segmentQuestions,
+          listScheduledReminders: vi.fn(async () => ({ ok: true, value: [] })),
+        },
       },
       sessions: {
         list: {
@@ -131,7 +134,7 @@ describe('teacher-workbench browser wiring', () => {
 
     apply(ctx as never)
     expect(registrations.map(item => item.entry.name)).toEqual([
-      'sidebar.primary.section', 'shell.overlay', 'settings.general.item',
+      'sidebar.primary.section', 'main', 'schedule.manager.sources', 'settings.general.item',
     ])
     expect(ctx.locale.register).toHaveBeenCalledWith('teacherWorkbench', expect.any(Object))
     expect(ctx.settingsScope.bind.mock.calls).toEqual([
@@ -141,16 +144,16 @@ describe('teacher-workbench browser wiring', () => {
 
     resetListeners[0]!()
     expect(read).not.toHaveBeenCalled()
-    const surfaceEntry = registrations.find(item => item.entry.name === 'shell.overlay')!.entry
+    const sidebarEntry = registrations.find(item => item.entry.name === 'sidebar.primary.section')!.entry
+    const sidebar = (sidebarEntry.inject as () => { openWorkbench: () => void })()
+    sidebar.openWorkbench()
+    expect(ctx.layout.selectPanel).toHaveBeenCalledWith('teacher-workbench')
+    const surfaceEntry = registrations.find(item => item.entry.name === 'main')!.entry
+    expect(surfaceEntry.key).toBe('teacher-workbench')
     const surface = (surfaceEntry.inject as () => Record<string, unknown>)()
     await (surface.setQuestionCuttingReasoningEnabled as (enabled: boolean) => Promise<void>)(false)
     expect(setSetting).toHaveBeenCalledWith('questionSegmentationReasoningEnabled', false)
-    const navigated = vi.fn()
-    const stopNavigation = (surface.subscribeSessionNavigation as (listener: () => void) => () => void)(navigated)
     currentSession = 'session-b'
-    navigationListeners[0]!()
-    expect(navigated).toHaveBeenCalledOnce()
-    stopNavigation()
     expect(navigationListeners).toHaveLength(0)
     await (surface.ensure as () => Promise<unknown>)()
     await (surface.ensure as () => Promise<unknown>)()
