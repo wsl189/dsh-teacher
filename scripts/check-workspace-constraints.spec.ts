@@ -281,6 +281,19 @@ describe('package payload constraints', () => {
       .toEqual([expect.stringContaining('package.json files must be')])
   })
 
+  it('publishes the workbench CAJ tools and notices and rejects omitted or broader selections', () => {
+    const dir = 'packages/host/teacher-workbench'
+    const manifest = JSON.parse(readFileSync(new URL(`../${dir}/package.json`, import.meta.url), 'utf8')) as WorkspaceManifest['manifest']
+    expect(checkWorkspaceManifest({ dir, manifest })).toEqual([])
+    for (const files of [
+      manifest.files!.filter(file => file !== 'third-party/caj2pdf/**'),
+      manifest.files!.map(file => file === 'third-party/caj2pdf/**' ? 'third-party/**' : file),
+    ]) {
+      expect(checkWorkspaceManifest({ dir, manifest: { ...manifest, files } }))
+        .toEqual([expect.stringContaining('package.json files must be')])
+    }
+  })
+
   it.each([
     { exports: { './locale/*.json': './locale/*.json' }, resources: ['locale/*.json'] },
     { exports: { './search/locale/*.json': './resources/search/*.json' }, resources: ['resources/search/*.json'] },

@@ -216,8 +216,8 @@ const packageFileExtras: Readonly<Record<string, readonly string[]>> = {
   '@deepseek-ai/dsh-sandbox-windows-acl': ['lib/runner.js', 'lib/types-*.js', 'assets'],
   '@deepseek-ai/dsh-skill-badge': ['assets'],
   '@deepseek-ai/dsh-skill-ppt-master': ['assets'],
-  // The equation converter ships its source, licenses, and replacement instructions.
-  '@deepseek-ai/dsh-host-teacher-workbench': ['third-party/mathml2omml/**'],
+  // Equation and CAJ conversion assets include their licenses and replacement instructions.
+  '@deepseek-ai/dsh-host-teacher-workbench': ['third-party/mathml2omml/**', 'third-party/caj2pdf/**'],
   '@deepseek-ai/dsh-client-ui-teacher-workbench': ['third-party/katex', 'third-party/stix'],
   '@deepseek-ai/dsh-skill-office': ['assets'],
   // tsdown shares the repository/pack code between the lib entry and the bin
