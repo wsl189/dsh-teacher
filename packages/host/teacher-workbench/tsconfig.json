@@ -36,6 +36,12 @@
       "path": "../../ocr/ocr"
     },
     {
+      "path": "../../document/office-to-pdf"
+    },
+    {
+      "path": "../../subprocess/subprocess"
+    },
+    {
       "path": "../../settings/settings"
     },
     {

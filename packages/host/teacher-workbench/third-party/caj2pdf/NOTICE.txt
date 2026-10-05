@@ -1,0 +1,43 @@
+Standalone CAJ preview tools distributed with DSH Teacher (Windows x64)
+
+The following tools run in a separate, replaceable child process. Their licenses
+are retained alongside this notice and are not replaced by DSH's MIT license.
+
+caj2pdf-qt standalone CLI payload, v0.1.6:
+https://github.com/sainnhe/caj2pdf-qt/releases/tag/v0.1.6
+Corresponding release source, build scripts and patches:
+https://github.com/sainnhe/caj2pdf-qt/tree/v0.1.6
+https://github.com/sainnhe/caj2pdf-qt/archive/refs/tags/v0.1.6.tar.gz
+GPL-3.0 (COPYING.GPL-3)
+
+The release pins caj2pdf at acce7c9ffd919e67b447e7baa8df2ae17b450dd4:
+https://github.com/caj2pdf/caj2pdf/tree/acce7c9ffd919e67b447e7baa8df2ae17b450dd4
+https://github.com/caj2pdf/caj2pdf/archive/acce7c9ffd919e67b447e7baa8df2ae17b450dd4.tar.gz
+GLWTPL (COPYING.GLWTPL); the release applies patches/caj2pdf.diff.
+Its PyInstaller payload includes Python, PyPDF2 and imagesize, whose licenses
+remain applicable. requirements.txt and build-windows.py identify build inputs.
+
+mutool.exe: MuPDF 1.8, copyright Artifex Software and contributors.
+The release Windows build workflow downloads the upstream Windows x64 payload.
+Corresponding source:
+https://github.com/ArtifexSoftware/mupdf/tree/1.8
+https://mupdf.com/downloads/archive/mupdf-1.8-source.tar.gz
+AGPL-3.0 (COPYING.AGPL-3); upstream third-party licenses remain applicable.
+
+libjbigdec.dll / libjbig2codec.dll:
+Copyright 2020-2021 Hin-Tak Leung (htl10@users.sourceforge.net).
+Wrapper source: the pinned caj2pdf lib/ directory above.
+FreeType Project License (COPYING.FTL).
+JBIG2 decoding also uses jbig2dec:
+https://github.com/ArtifexSoftware/jbig2dec
+Its upstream license remains applicable.
+
+Replacement:
+The unpacked executables and DLLs are under
+resources/app/node_modules/@deepseek-ai/dsh-host-teacher-workbench/third-party/caj2pdf/bin/win32-x64/.
+Replace this standalone toolset with compatible builds, or set paperCajCommand
+to an alternative executable and arguments containing {input} and {output}.
+No application rebuild is needed to select another standalone converter.
+Preserve applicable license and corresponding-source obligations when
+redistributing modified tools. The staged archive SHA-256 is
+39ccf21fbe32e5280f4b6c92b6ca0c49e8e88e9c30838b876c57b106bb694c01.

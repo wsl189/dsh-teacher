@@ -4,6 +4,7 @@ import type { SettingsScope } from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { DirectoryFlowOwnerProps } from '@deepseek-ai/dsh-client-ui-workspace/client'
 import type { HostObservable } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ExampleCollectionCommands, ExampleCollectionSnapshot } from './example-collection-controller.ts'
+import type { PaperCollectionCommands, PaperCollectionSnapshot } from './paper-collection-controller.ts'
 import type { TimetableImportCommands, TimetableImportView } from './timetable-import-controller.ts'
 import type {
   OcrExtractResult,
@@ -229,6 +230,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
   timetableImportCommands: TimetableImportCommands
   /** Saved-question commands, including original and Word file reads. */
   exampleCommands: ExampleCollectionCommands
+  /** Original paper uploads, metadata edits, and automatic preview reads. */
+  paperCommands: PaperCollectionCommands
   hooks: {
     /** True while the composed Host directory picker can select an Office destination. */
     saveDirectoryFlow: HostObservable<boolean>
@@ -236,6 +239,8 @@ export interface TeacherWorkbenchInjected extends TeacherWorkbenchCommands {
     timetableImport: HostObservable<TimetableImportView>
     /** Independent SQLite-backed example collection and unsaved description drafts. */
     examples: HostObservable<ExampleCollectionSnapshot>
+    /** Independent paper catalog and unsaved descriptions. */
+    papers: HostObservable<PaperCollectionSnapshot>
     /** Durable workbench object-layer snapshot. */
     workbench: HostObservable<TeacherWorkbenchSnapshot>
     /** Durable teacher identity and analysis settings. */

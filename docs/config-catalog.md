@@ -1523,7 +1523,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-teacher-workbench`
 
 - `inject`: `storageDomain`
-- `source`: [`packages/host/teacher-workbench/src/index.ts:209`](../packages/host/teacher-workbench/src/index.ts)
+- `source`: [`packages/host/teacher-workbench/src/index.ts:216`](../packages/host/teacher-workbench/src/index.ts)
 
 ```ts config-catalog
 /** Host persistence, document-source, question-media, and provider configuration. */
@@ -1544,6 +1544,12 @@ export interface Config extends TeacherExampleCorrectionConfig {
   generatedRoot: string
   /** Maximum decoded bytes retained for one uploaded source document. */
   maxSourceDocumentBytes: number
+  /** CAJ preview executable and arguments with {input}/{output} placeholders; no shell expansion. */
+  paperCajCommand?: string[]
+  /** Deadline for automatic Word/CAJ preview generation. */
+  paperPreviewTimeoutMs?: number
+  /** Maximum complete PDF preview bytes retained per paper file. */
+  maxPaperPreviewBytes?: number
   /** Maximum decoded bytes accepted for one question image. */
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one automatically saved part. */

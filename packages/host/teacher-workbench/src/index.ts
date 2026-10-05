@@ -12,6 +12,13 @@ import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import z from '@deepseek-ai/schemastery'
 import { randomUUID } from 'node:crypto'
 import { TeacherExampleCollection } from './example-collection.ts'
+import { TeacherPaperCollection } from './paper-collection.ts'
+import { renderPaperPreview } from './paper-preview.ts'
+import { defaultPaperCajCommand } from './paper-caj-command.ts'
+import type {
+  TeacherPaper, TeacherPaperCatalog, TeacherPaperFile, TeacherPaperFileRequest, TeacherPaperId,
+  TeacherPaperRequest, TeacherPaperResult, TeacherPaperUpdateRequest, TeacherPaperUploadRequest,
+} from './paper-types.ts'
 import { correctExampleWithAgent, identifyExampleHeadingWithAgent, type TeacherExampleCorrectionConfig, type TeacherExampleCorrectionSource, type TeacherExampleHeadingSource } from './example-correction-agent.ts'
 import type {
   TeacherExample, TeacherExampleCatalog, TeacherExampleDocumentRequest,
@@ -223,6 +230,12 @@ export interface Config extends TeacherExampleCorrectionConfig {
   generatedRoot: string
   /** Maximum decoded bytes retained for one uploaded source document. */
   maxSourceDocumentBytes: number
+  /** CAJ preview executable and arguments with {input}/{output} placeholders; no shell expansion. */
+  paperCajCommand?: string[]
+  /** Deadline for automatic Word/CAJ preview generation. */
+  paperPreviewTimeoutMs?: number
+  /** Maximum complete PDF preview bytes retained per paper file. */
+  maxPaperPreviewBytes?: number
   /** Maximum decoded bytes accepted for one question image. */
   maxQuestionImageBytes: number
   /** Maximum decoded bytes accepted for one automatically saved part. */
@@ -298,6 +311,9 @@ export class TeacherWorkbenchService extends TypertRemoteService {
     sourcesRoot: z.string().default(''),
     generatedRoot: z.string().default(''),
     maxSourceDocumentBytes: z.natural().min(1_024).max(2 * 1024 * 1024 * 1024).default(DEFAULT_SOURCE_DOCUMENT_BYTES),
+    paperCajCommand: z.array(z.string().min(1)).default(defaultPaperCajCommand()),
+    paperPreviewTimeoutMs: z.natural().min(1_000).max(3_600_000).default(120_000),
+    maxPaperPreviewBytes: z.natural().min(1_024).max(2 * 1024 * 1024 * 1024).default(100 * 1024 * 1024),
     maxQuestionImageBytes: z.natural().min(1_024).max(200 * 1024 * 1024).default(DEFAULT_QUESTION_IMAGE_BYTES),
     maxQuestionBatchBytes: z.natural().min(1_024).max(2 * 1024 * 1024 * 1024).default(DEFAULT_QUESTION_BATCH_BYTES),
     maxTimetableSourceCharacters: z.natural().min(1_000).max(1_000_000).default(DEFAULT_TIMETABLE_SOURCE_CHARACTERS),
@@ -346,6 +362,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
 
   private global?: DomainGlobal<TeacherWorkbenchDocument>
   private readonly examples: TeacherExampleCollection
+  private readonly papers: TeacherPaperCollection
   private operationTail: Promise<void> = Promise.resolve()
   private acceptingWrites = true
   private acceptingQuestionWork = true
@@ -441,6 +458,16 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       ),
     )
     this.weatherProvider = new TeacherWeatherProvider(config)
+    this.papers = new TeacherPaperCollection(
+      ctx.storageDomain,
+      () => this.configSource().maxSourceDocumentBytes,
+      () => this.configSource().maxPaperPreviewBytes ?? 100 * 1024 * 1024,
+      (source, signal) => renderPaperPreview(ctx, source, {
+        cajCommand: this.configSource().paperCajCommand ?? defaultPaperCajCommand(),
+        timeoutMs: this.configSource().paperPreviewTimeoutMs ?? 120_000,
+        maxBytes: this.configSource().maxPaperPreviewBytes ?? 100 * 1024 * 1024,
+      }, signal),
+    )
     this.configSource = () => config
     this.reminderRuntime = new TeacherReminderRuntime(
       ctx,
@@ -468,6 +495,7 @@ export class TeacherWorkbenchService extends TypertRemoteService {
       this.timetableAbort.abort(new Error('teacher-workbench: service is disposing'))
       await Promise.allSettled([...this.timetableRuns])
       await this.examples.dispose()
+      await this.papers.dispose()
       await this.reminderRuntime.dispose()
       this.acceptingQuestionWork = false
       const questionAgentParent = await this.questionAgentParent?.catch(() => undefined)
@@ -501,6 +529,92 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('listExamples')
   listExamples(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExampleCatalog>> {
     return this.examples.list()
+  }
+
+  /**
+   * List paper metadata without loading files into the browser.
+   * @param _request - empty catalog request.
+   * @returns paper metadata and reusable tags, without file bytes.
+   */
+  @Remote('listPapers')
+  listPapers(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaperCatalog>> {
+    return this.papers.list()
+  }
+
+  /**
+   * Create a paper directory in numeric creation order.
+   * @param _request - empty directory creation request.
+   * @returns a numbered empty paper directory.
+   */
+  @Remote('createPaper')
+  createPaper(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaper>> {
+    return this.paperChanged(this.papers.create())
+  }
+
+  /**
+   * Save the changed paper metadata fields.
+   * @param request - paper identity and changed name, tags, or description.
+   * @returns committed paper metadata.
+   */
+  @Remote('updatePaper')
+  updatePaper(request: TeacherPaperUpdateRequest): Promise<TeacherPaperResult<TeacherPaper>> {
+    return this.paperChanged(this.papers.update(request))
+  }
+
+  /**
+   * Save a reusable paper tag preset.
+   * @param request - reusable paper tag name.
+   * @returns the normalized preset name after persistence.
+   */
+  @Remote('addPaperTag')
+  addPaperTag(request: { name: string }): Promise<TeacherPaperResult<string>> {
+    return this.paperChanged(this.papers.addTag(request.name))
+  }
+
+  /**
+   * Remove a paper tag preset without altering assigned tags.
+   * @param request - preset name to remove, retaining tags already assigned to papers.
+   * @returns the normalized removed preset name.
+   */
+  @Remote('deletePaperTag')
+  deletePaperTag(request: { name: string }): Promise<TeacherPaperResult<string>> {
+    return this.paperChanged(this.papers.deleteTag(request.name))
+  }
+
+  /**
+   * Remove a paper directory and its retained file payloads.
+   * @param request - paper directory to delete, including all its originals and previews.
+   * @returns deleted paper identity; repeated deletion is idempotent.
+   */
+  @Remote('deletePaper')
+  deletePaper(request: TeacherPaperRequest): Promise<TeacherPaperResult<TeacherPaperId>> {
+    return this.paperChanged(this.papers.delete(request))
+  }
+
+  /**
+   * Save originals independently of automatic preview generation.
+   * @param request - paper and ordered PDF, image, Word, or CAJ originals.
+   * @returns metadata after atomic original-file replacement; tags and description are preserved.
+   */
+  @Remote('uploadPaper')
+  uploadPaper(request: TeacherPaperUploadRequest): Promise<TeacherPaperResult<TeacherPaper>> {
+    return this.paperChanged(this.papers.upload(request))
+  }
+
+  /**
+   * Load a stored original or its automatically generated preview.
+   * @param request - paper, immutable source identity, and original/preview selection.
+   * @returns original bytes or an automatically generated cached preview, retaining the original on failure.
+   */
+  @Remote('readPaperFile')
+  readPaperFile(request: TeacherPaperFileRequest): Promise<TeacherPaperResult<TeacherPaperFile>> {
+    return this.papers.readFile(request)
+  }
+
+  private async paperChanged<T>(pending: Promise<TeacherPaperResult<T>>): Promise<TeacherPaperResult<T>> {
+    const result = await pending
+    if (result.ok) this.ctx.emit('teacherWorkbench/changed')
+    return result
   }
 
   /**

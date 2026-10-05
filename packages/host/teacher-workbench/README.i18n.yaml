@@ -21,8 +21,11 @@
   en: e3035a52d246bbe2
   zh: 8e7c19ddaf4b7661
 /deepseek-ai-dsh-host-teacher-workbench/configuration:
-  en: 3d785421d69948d2
-  zh: 068079ae083ed41b
+  en: 5765160b962e1b4f
+  zh: a1594d88d4659078
+/deepseek-ai-dsh-host-teacher-workbench/configuration/paper-collection:
+  en: 6e1e5c52947ee0f2
+  zh: ca1be392a7b837bb
 /deepseek-ai-dsh-host-teacher-workbench/configuration/example-collection:
   en: a2cf862d047ef5c0
   zh: d6807020ba2bd3ab
@@ -99,8 +102,8 @@
   en: 354f6602bb17c422
   zh: 206c556c6312ccc8
 /deepseek-ai-dsh-host-teacher-workbench/known-limitations-and-deferred-work:
-  en: 5c0476f29438825c
-  zh: 2d600502b44e8a43
+  en: 642de255595a904d
+  zh: bff30f57cf890456
 /deepseek-ai-dsh-host-teacher-workbench/known-limitations-and-deferred-work/dev-note:
   en: 9cba08a1c02bc083
   zh: 8412a1be9467f7b5

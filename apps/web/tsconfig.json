@@ -189,6 +189,7 @@
     "tests/desktop-update.e2e.ts",
     "tests/voice-input.e2e.ts",
     "tests/teacher-workbench.e2e.ts",
+    "tests/paper-collection.e2e.ts",
     "tests/timetable-dense-import.e2e.ts",
     "tests/timetable-agent-fixture.ts",
     "tests/example-correction-fixture.ts",

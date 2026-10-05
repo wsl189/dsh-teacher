@@ -3177,6 +3177,54 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'saved questions and reusable tags without file bytes.',
       },
       {
+        signature: '@Remote(\'listPapers\') listPapers(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaperCatalog>>',
+        description: 'List paper metadata without loading files into the browser.',
+        parameters: [{ name: '_request', description: 'empty catalog request.' }],
+        returns: 'paper metadata and reusable tags, without file bytes.',
+      },
+      {
+        signature: '@Remote(\'createPaper\') createPaper(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaper>>',
+        description: 'Create a paper directory in numeric creation order.',
+        parameters: [{ name: '_request', description: 'empty directory creation request.' }],
+        returns: 'a numbered empty paper directory.',
+      },
+      {
+        signature: '@Remote(\'updatePaper\') updatePaper(request: TeacherPaperUpdateRequest): Promise<TeacherPaperResult<TeacherPaper>>',
+        description: 'Save the changed paper metadata fields.',
+        parameters: [{ name: 'request', description: 'paper identity and changed name, tags, or description.' }],
+        returns: 'committed paper metadata.',
+      },
+      {
+        signature: '@Remote(\'addPaperTag\') addPaperTag(request: { name: string }): Promise<TeacherPaperResult<string>>',
+        description: 'Save a reusable paper tag preset.',
+        parameters: [{ name: 'request', description: 'reusable paper tag name.' }],
+        returns: 'the normalized preset name after persistence.',
+      },
+      {
+        signature: '@Remote(\'deletePaperTag\') deletePaperTag(request: { name: string }): Promise<TeacherPaperResult<string>>',
+        description: 'Remove a paper tag preset without altering assigned tags.',
+        parameters: [{ name: 'request', description: 'preset name to remove, retaining tags already assigned to papers.' }],
+        returns: 'the normalized removed preset name.',
+      },
+      {
+        signature: '@Remote(\'deletePaper\') deletePaper(request: TeacherPaperRequest): Promise<TeacherPaperResult<TeacherPaperId>>',
+        description: 'Remove a paper directory and its retained file payloads.',
+        parameters: [{ name: 'request', description: 'paper directory to delete, including all its originals and previews.' }],
+        returns: 'deleted paper identity; repeated deletion is idempotent.',
+      },
+      {
+        signature: '@Remote(\'uploadPaper\') uploadPaper(request: TeacherPaperUploadRequest): Promise<TeacherPaperResult<TeacherPaper>>',
+        description: 'Save originals independently of automatic preview generation.',
+        parameters: [{ name: 'request', description: 'paper and ordered PDF, image, Word, or CAJ originals.' }],
+        returns: 'metadata after atomic original-file replacement; tags and description are preserved.',
+      },
+      {
+        signature: '@Remote(\'readPaperFile\') readPaperFile(request: TeacherPaperFileRequest): Promise<TeacherPaperResult<TeacherPaperFile>>',
+        description: 'Load a stored original or its automatically generated preview.',
+        parameters: [{ name: 'request', description: 'paper, immutable source identity, and original/preview selection.' }],
+        returns: 'original bytes or an automatically generated cached preview, retaining the original on failure.',
+      },
+      {
         signature: '@Remote(\'createExample\') createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>>',
         description: 'Create one numeric question directory.',
         parameters: [{ name: '_request', description: 'empty creation request.' }],
@@ -8253,6 +8301,58 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   {
     name: 'TeacherNotificationTarget',
     declaration: 'export interface TeacherNotificationTarget {\n    readonly channel: TeacherMobileChannel;\n    readonly botId: TeacherMobileBotId;\n    readonly label: string;\n    readonly connected: boolean;\n}',
+  },
+  {
+    name: 'TeacherPaper',
+    declaration: 'export interface TeacherPaper {\n    readonly id: TeacherPaperId;\n    readonly number: number;\n    readonly name: string;\n    readonly tags: readonly string[];\n    readonly description: string;\n    readonly files: readonly TeacherPaperSource[];\n    readonly revision: number;\n}',
+  },
+  {
+    name: 'TeacherPaperCatalog',
+    declaration: 'export interface TeacherPaperCatalog {\n    readonly papers: readonly TeacherPaper[];\n    readonly tags: readonly string[];\n}',
+  },
+  {
+    name: 'TeacherPaperErrorCode',
+    declaration: 'export type TeacherPaperErrorCode = \'invalid-request\' | \'file-too-large\' | \'not-found\' | \'source-changed\' | \'preview-unavailable\' | \'preview-failed\' | \'storage-failure\' | \'disposed\';',
+  },
+  {
+    name: 'TeacherPaperFile',
+    declaration: 'export interface TeacherPaperFile {\n    readonly name: string;\n    readonly mediaType: string;\n    readonly contentBase64: string;\n}',
+  },
+  {
+    name: 'TeacherPaperFileRequest',
+    declaration: 'export interface TeacherPaperFileRequest extends TeacherPaperRequest {\n    readonly sourceId: TeacherPaperSourceId;\n    readonly kind: \'source\' | \'preview\';\n}',
+  },
+  {
+    name: 'TeacherPaperFormat',
+    declaration: 'export type TeacherPaperFormat = \'pdf\' | \'png\' | \'jpeg\' | \'webp\' | \'gif\' | \'bmp\' | \'docx\' | \'doc\' | \'caj\';',
+  },
+  {
+    name: 'TeacherPaperId',
+    declaration: 'export type TeacherPaperId = Branded<\'TeacherPaperId\'>;',
+  },
+  {
+    name: 'TeacherPaperRequest',
+    declaration: 'export interface TeacherPaperRequest {\n    readonly id: TeacherPaperId;\n}',
+  },
+  {
+    name: 'TeacherPaperResult',
+    declaration: 'export type TeacherPaperResult<T> = {\n    readonly ok: true;\n    readonly value: T;\n} | {\n    readonly ok: false;\n    readonly error: {\n        readonly code: TeacherPaperErrorCode;\n        readonly message: string;\n    };\n};',
+  },
+  {
+    name: 'TeacherPaperSource',
+    declaration: 'export interface TeacherPaperSource {\n    readonly id: TeacherPaperSourceId;\n    readonly name: string;\n    readonly format: TeacherPaperFormat;\n    readonly mediaType: string;\n    readonly bytes: number;\n}',
+  },
+  {
+    name: 'TeacherPaperSourceId',
+    declaration: 'export type TeacherPaperSourceId = Branded<\'TeacherPaperSourceId\'>;',
+  },
+  {
+    name: 'TeacherPaperUpdateRequest',
+    declaration: 'export interface TeacherPaperUpdateRequest extends TeacherPaperRequest {\n    readonly name?: string;\n    readonly tags?: readonly string[];\n    readonly description?: string;\n}',
+  },
+  {
+    name: 'TeacherPaperUploadRequest',
+    declaration: 'export interface TeacherPaperUploadRequest extends TeacherPaperRequest {\n    readonly files: readonly {\n        readonly name: string;\n        readonly format: TeacherPaperFormat;\n        readonly contentBase64: string;\n    }[];\n}',
   },
   {
     name: 'TeacherQuestionAssignment',

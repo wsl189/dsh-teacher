@@ -21,6 +21,7 @@ import {
 } from '../settings.ts'
 import { TeacherWorkbenchController } from './controller.ts'
 import { ExampleCollectionController } from './example-collection-controller.ts'
+import { PaperCollectionController } from './paper-collection-controller.ts'
 import { QuestionCuttingController } from './question-cutting-controller.ts'
 import { TimetableImportController } from './timetable-import-controller.ts'
 import type { TeacherWorkbenchCommands, TeacherWorkbenchInjected, TeacherWorkbenchSettingsInjected } from './contracts.ts'
@@ -104,9 +105,10 @@ export function apply(ctx: ClientContext): void {
   })
   const controller = new TeacherWorkbenchController(ctx.remote.teacherWorkbench)
   const examples = new ExampleCollectionController(ctx.remote.teacherWorkbench)
+  const papers = new PaperCollectionController(ctx.remote.teacherWorkbench)
   ctx.effect(() => {
     const protectDrafts = (event: BeforeUnloadEvent): void => {
-      if (Object.keys(examples.getSnapshot().drafts).length === 0) return
+      if (Object.keys(examples.getSnapshot().drafts).length === 0 && Object.keys(papers.getSnapshot().drafts).length === 0) return
       event.preventDefault()
     }
     window.addEventListener('beforeunload', protectDrafts)
@@ -200,12 +202,14 @@ export function apply(ctx: ClientContext): void {
   ctx.effect(() => async () => {
     timetableImport.dispose()
     await examples.dispose()
+    await papers.dispose()
     await questionCutting.dispose()
     controller.dispose()
     reminderCatalog.dispose()
   }, 'ui-teacher-workbench: object layer and question-cutting queue')
   ctx.on('connection/reset', () => {
     if (examples.getSnapshot().loaded) void examples.commands.refresh()
+    if (papers.getSnapshot().loaded) void papers.commands.refresh()
     if (controller.getSnapshot().status !== 'cold') void controller.resync()
   })
 
@@ -216,10 +220,11 @@ export function apply(ctx: ClientContext): void {
   const surfaceInjected = (): TeacherWorkbenchInjected => ({
     hooks: {
       saveDirectoryFlow, workbench: controller, teacherSettings: settings, questionCuttingSettings,
-      questionCutting, examples, timetableImport,
+      questionCutting, examples, papers, timetableImport,
     },
     timetableImportCommands: timetableImport.commands,
     exampleCommands: examples.commands,
+    paperCommands: papers.commands,
     ensure: () => controller.refresh(),
     setTeacherName: name => settings.set('teacherName', name),
     setWeatherLocation: location => settings.set('weatherLocation', location),

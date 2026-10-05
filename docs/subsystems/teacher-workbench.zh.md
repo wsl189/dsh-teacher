@@ -4,7 +4,7 @@
 
 教师工作台子系统负责持久化教师文档，以及浏览器端和面向模型的 Consumer 共用的 Host 操作。[`ctx.teacherWorkbench`](../../packages/host/teacher-workbench) 向两个表层公开同一份带修订号的状态与试题媒体操作，因此日常管理、课程表、学生名册、成绩分析和试题切割不会维护并行存储。
 
-来源：[`packages/host/teacher-workbench/src/types.ts`](../../packages/host/teacher-workbench/src/types.ts) 与 [Host 包参考](../../packages/host/teacher-workbench/README.zh.md)。
+来源：[`types.ts`](../../packages/host/teacher-workbench/src/types.ts)、[`paper-types.ts`](../../packages/host/teacher-workbench/src/paper-types.ts) 与 [Host 包参考](../../packages/host/teacher-workbench/README.zh.md)。
 
 ## 持久化与文件系统根目录
 
@@ -19,6 +19,8 @@
 ## 操作
 
 典例收集使用独立的 SQLite 路由域，没有名册引用。`TeacherExample` 包含目录顺序、标签、描述、笔迹，以及独立的题目与解析 `TeacherExampleDocument` 元数据；`TeacherExampleCatalog` 不包含文件字节。`TeacherExampleUpdateRequest` 仅修改提交的字段。`TeacherExampleDocumentRequest` 显式选择 `TeacherExampleDocumentKind`；`TeacherExampleUploadRequest.files` 提供该文档的有序片段；上传仅替换其原件并清除旧 Word 文件。`TeacherExampleFileRequest` 选择原件或 Word 产物，以 `TeacherExampleFile` 返回；每项操作返回带判别字段的 `TeacherExampleResult`。`TeacherExampleExportRequest` 提供有序的题目标识和逐题或集中排列的 `TeacherExampleExportLayout`，用于下载仅包含题目与解析原文的 Word。[Host 参考](../../packages/host/teacher-workbench/README.zh.md#example-collection) 定义持久化、重试、原件替换和导出保证。
+
+论文收集使用独立的 SQLite 路由域。`TeacherPaper` 保存创建顺序、自定义目录名称、标签、描述、修订号与有序的 `TeacherPaperSource` 元数据；`TeacherPaperCatalog` 列出论文与可复用标签，不包含文件字节。`TeacherPaperUpdateRequest` 仅修改提交的元数据，`TeacherPaperUploadRequest` 原子替换有序原件并保留这些元数据。`TeacherPaperFileRequest` 标识一个不可变来源，选择原件或预览字节，以 `TeacherPaperFile` 返回；DOC、含不受支持媒体的 DOCX 和 CAJ 会自动生成预览，同时保留原件。`TeacherPaperRequest` 标识已保存论文，每项操作返回带判别字段的 `TeacherPaperResult`，失败时携带 `TeacherPaperErrorCode`。[Host 参考](../../packages/host/teacher-workbench/README.zh.md) 定义存储与转换设置。
 
 Remote 表层包含带修订号的文档读写、天气查询、课程表整理、通知目标发现、上传来源暂存、基于 OCR 的试题分割与裁剪复核、试题媒体浏览与目录修改、图片持久化与分发、临时选集，以及单份或批量文档生成。面向模型的配套包通过语义工具消费这些操作，并负责相应提示词、schema、工具结果与 Session 日志效果。
 
@@ -50,6 +52,62 @@ Host service owning the revisioned workbench document.
  * @returns saved questions and reusable tags without file bytes.
  */
 @Remote('listExamples') listExamples(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExampleCatalog>>
+
+/**
+ * List paper metadata without loading files into the browser.
+ * @param _request - empty catalog request.
+ * @returns paper metadata and reusable tags, without file bytes.
+ */
+@Remote('listPapers') listPapers(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaperCatalog>>
+
+/**
+ * Create a paper directory in numeric creation order.
+ * @param _request - empty directory creation request.
+ * @returns a numbered empty paper directory.
+ */
+@Remote('createPaper') createPaper(_request: Record<never, never>): Promise<TeacherPaperResult<TeacherPaper>>
+
+/**
+ * Save the changed paper metadata fields.
+ * @param request - paper identity and changed name, tags, or description.
+ * @returns committed paper metadata.
+ */
+@Remote('updatePaper') updatePaper(request: TeacherPaperUpdateRequest): Promise<TeacherPaperResult<TeacherPaper>>
+
+/**
+ * Save a reusable paper tag preset.
+ * @param request - reusable paper tag name.
+ * @returns the normalized preset name after persistence.
+ */
+@Remote('addPaperTag') addPaperTag(request: { name: string }): Promise<TeacherPaperResult<string>>
+
+/**
+ * Remove a paper tag preset without altering assigned tags.
+ * @param request - preset name to remove, retaining tags already assigned to papers.
+ * @returns the normalized removed preset name.
+ */
+@Remote('deletePaperTag') deletePaperTag(request: { name: string }): Promise<TeacherPaperResult<string>>
+
+/**
+ * Remove a paper directory and its retained file payloads.
+ * @param request - paper directory to delete, including all its originals and previews.
+ * @returns deleted paper identity; repeated deletion is idempotent.
+ */
+@Remote('deletePaper') deletePaper(request: TeacherPaperRequest): Promise<TeacherPaperResult<TeacherPaperId>>
+
+/**
+ * Save originals independently of automatic preview generation.
+ * @param request - paper and ordered PDF, image, Word, or CAJ originals.
+ * @returns metadata after atomic original-file replacement; tags and description are preserved.
+ */
+@Remote('uploadPaper') uploadPaper(request: TeacherPaperUploadRequest): Promise<TeacherPaperResult<TeacherPaper>>
+
+/**
+ * Load a stored original or its automatically generated preview.
+ * @param request - paper, immutable source identity, and original/preview selection.
+ * @returns original bytes or an automatically generated cached preview, retaining the original on failure.
+ */
+@Remote('readPaperFile') readPaperFile(request: TeacherPaperFileRequest): Promise<TeacherPaperResult<TeacherPaperFile>>
 
 /**
  * Create one numeric question directory.

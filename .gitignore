@@ -40,6 +40,7 @@ apps/web/dist/
 apps/desktop/release/
 .artifacts/
 .dsh-build/
+packages/host/teacher-workbench/third-party/caj2pdf/bin/
 .playwright-mcp/
 .orig
 .worktrees/

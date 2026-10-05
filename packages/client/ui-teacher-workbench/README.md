@@ -49,6 +49,13 @@ While Question Cutting is mounted, the browser rescans the configured student an
 
 Rectangular image erasure samples only an eight-pixel exterior ring around the selection and fills with its median color, so selected dark text cannot turn a light paper background gray.
 
+<a id="paper-collection"></a>
+### Paper collection
+
+Paper Collection appears immediately below Example Collection. Each paper has a customizable directory number, reusable tags, an automatically saved description, and ordered original files. Search matches every whitespace-separated term against the directory name, tags, or description, including unsaved description drafts. PDF and image originals are previewed directly; DOCX is rendered from its original bytes unless it embeds TIFF, EMF, WMF, or EPS images that require a Host-generated PDF preview. DOC and CAJ previews are also generated automatically by the Host while the byte-identical original remains downloadable. PDF pages use twice their default raster resolution for readable expanded previews. Navigation retains drafts, and preview failure does not discard an upload. Paper uploads do not call OCR or a model.
+
+Paper numbers appear in the left directory. The selected paper shows its content first, followed by tags and description. Long previews scroll within the reading pane, and preset tag options can extend beyond the tag card.
+
 <a id="example-collection"></a>
 ### Example collection
 

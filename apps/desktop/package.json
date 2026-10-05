@@ -13,10 +13,10 @@
     "bundle": "tsdown",
     "generate:icon": "tsx scripts/generate-icon.ts",
     "verify:runtime": "node scripts/verify-native-loader.mjs",
-    "package:win": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never",
+    "package:win": "node scripts/stage-paper-preview.mjs && pnpm run generate:icon && electron-builder --config electron-builder.yml --win nsis --x64 --publish never",
     "build": "tsc -b && tsdown",
     "package:win:x64": "pnpm run package:win",
-    "package:win:x64:dir": "pnpm run generate:icon && electron-builder --config electron-builder.yml --win --x64 --dir --publish never"
+    "package:win:x64:dir": "node scripts/stage-paper-preview.mjs && pnpm run generate:icon && electron-builder --config electron-builder.yml --win --x64 --dir --publish never"
   },
   "license": "MIT",
   "dependencies": {

@@ -20,6 +20,7 @@ import { SeatingPlan } from './SeatingPlan.tsx'
 import { Timetable, type TimetableProps } from './Timetable.tsx'
 import { QuestionWorkbench, type QuestionWorkbenchProps } from './QuestionWorkbench.tsx'
 import { ExampleCollection } from './ExampleCollection.tsx'
+import { PaperCollection } from './PaperCollection.tsx'
 import css from './TeacherWorkbench.module.css'
 
 /** Full main-surface component props. */
@@ -38,6 +39,7 @@ const MODULE_LABELS: Record<TeacherWorkbenchModule, TeacherWorkbenchKey> = {
   timetable: 'module.timetable',
   questions: 'module.questions',
   examples: 'module.examples',
+  papers: 'module.papers',
   lesson: 'module.lesson',
   students: 'module.students',
   scores: 'module.scores',
@@ -144,8 +146,8 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
     >
       <div className={css.workbenchShell}>
         <div className={css.workbenchBody}>
-          <main className={clsx(css.workbenchContent, (active === 'questions' || active === 'examples') && css.workbenchContentQuestion)}>
-            {active !== 'questions' && active !== 'daily' && active !== 'examples' && (
+          <main className={clsx(css.workbenchContent, (active === 'questions' || active === 'examples' || active === 'papers') && css.workbenchContentQuestion)}>
+            {active !== 'questions' && active !== 'daily' && active !== 'examples' && active !== 'papers' && (
               <div className={css.contentHeading}>
                 <h1>{props.t(MODULE_LABELS[active])}</h1>
                 {snapshot.status === 'saving' && <span className={css.savingText}>{props.t('saving')}</span>}
@@ -204,24 +206,27 @@ export function WorkbenchSurface(props: WorkbenchSurfaceProps) {
                         useExamples={props.useExamples} exampleCommands={props.exampleCommands}
                         transcribeVoice={props.transcribeVoice} t={props.t}
                       />
-                      : active === 'lesson'
-                        ? <LessonPreparation state={snapshot.document.state} commands={commands} t={props.t} />
-                        : active === 'students'
-                          ? <StudentRoster state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
-                          : active === 'scores'
-                            ? <ScoreAnalysis state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
-                            : active === 'records'
-                              ? <TeachingRecords state={snapshot.document.state} commands={commands} t={props.t} />
-                              : active === 'family'
-                                ? <FamilyCommunication state={snapshot.document.state} commands={commands} t={props.t} />
-                                : active === 'seating'
-                                  ? <SeatingPlan state={snapshot.document.state} commands={commands} t={props.t} />
-                                  : <StructuredRecords
-                                    kind={active === 'classRecords' ? 'class' : active === 'talkRecords' ? 'talk' : 'summary'}
-                                    state={snapshot.document.state}
-                                    commands={commands}
-                                    t={props.t}
-                                  />
+                      : active === 'papers'
+                        ? <ConnectedPaperCollection usePapers={props.usePapers} paperCommands={props.paperCommands}
+                          transcribeVoice={props.transcribeVoice} t={props.t} />
+                        : active === 'lesson'
+                          ? <LessonPreparation state={snapshot.document.state} commands={commands} t={props.t} />
+                          : active === 'students'
+                            ? <StudentRoster state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
+                            : active === 'scores'
+                              ? <ScoreAnalysis state={snapshot.document.state} settings={settings} commands={commands} t={props.t} />
+                              : active === 'records'
+                                ? <TeachingRecords state={snapshot.document.state} commands={commands} t={props.t} />
+                                : active === 'family'
+                                  ? <FamilyCommunication state={snapshot.document.state} commands={commands} t={props.t} />
+                                  : active === 'seating'
+                                    ? <SeatingPlan state={snapshot.document.state} commands={commands} t={props.t} />
+                                    : <StructuredRecords
+                                      kind={active === 'classRecords' ? 'class' : active === 'talkRecords' ? 'talk' : 'summary'}
+                                      state={snapshot.document.state}
+                                      commands={commands}
+                                      t={props.t}
+                                    />
             )}
           </main>
         </div>
@@ -245,4 +250,9 @@ function ConnectedQuestionWorkbench({ useQuestionCutting, ...props }: ConnectedQ
 function ConnectedExampleCollection({ useExamples, exampleCommands, transcribeVoice, t }: Pick<WorkbenchSurfaceProps, 'useExamples' | 'exampleCommands' | 'transcribeVoice' | 't'>) {
   const snapshot = useExamples(state => state)
   return <ExampleCollection snapshot={snapshot} commands={exampleCommands} transcribeVoice={transcribeVoice} t={t} />
+}
+
+function ConnectedPaperCollection({ usePapers, paperCommands, transcribeVoice, t }: Pick<WorkbenchSurfaceProps, 'usePapers' | 'paperCommands' | 'transcribeVoice' | 't'>) {
+  const snapshot = usePapers(state => state)
+  return <PaperCollection snapshot={snapshot} commands={paperCommands} transcribeVoice={transcribeVoice} t={t} />
 }

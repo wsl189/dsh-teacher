@@ -1130,6 +1130,12 @@ ${renderNpmTable(runtimeDeps)}
 ${renderOfficeDistribution(runtimeDeps)}
 ${renderMathmlDistribution(runtimeDeps, manifests)}
 
+## Standalone CAJ preview tools
+
+The Windows x64 desktop package distributes the separate command-line payload from [caj2pdf-qt v0.1.6](https://github.com/sainnhe/caj2pdf-qt/releases/tag/v0.1.6), pinned by archive SHA-256 in [the staging script](apps/desktop/scripts/stage-paper-preview.mjs). The [paper collection decision](.agents/notes/implemented/architecture/2026-10-05-paper-collection.md) describes its automatic preview use. The original uploads remain available independently of this tool.
+
+The [CAJ notice packet](packages/host/teacher-workbench/third-party/caj2pdf/NOTICE.txt) records release sources, patches, and replacement instructions. It contains complete GPL-3.0, AGPL-3.0, GLWTPL, and FreeType Project license texts. The release pins caj2pdf at \`acce7c9ffd919e67b447e7baa8df2ae17b450dd4\` and MuPDF 1.8; its decoding libraries retain their upstream terms. These standalone tools are replaceable in the unpacked application or through \`paperCajCommand\`. Their licenses remain applicable and are not replaced by Harness's MIT license.
+
 pnpm applies local patches to the following packages at install time, so shipped artifacts carry modified copies; each patch file is the complete record of the modification:
 
 ${patchedLines.join('\n')}

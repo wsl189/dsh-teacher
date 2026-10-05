@@ -33,7 +33,7 @@ it('displays every PDF page in reading order while the remaining pages load', as
   const pending = Promise.withResolvers<TeacherQuestionPagePreview[]>()
   vi.mocked(source.renderPagePreviews).mockResolvedValueOnce([page(0)]).mockReturnValueOnce(pending.promise)
   vi.mocked(openQuestionPdfRasterizer).mockResolvedValue(source)
-  render(<ExamplePdfPreview file={file} t={t} />)
+  render(<ExamplePdfPreview file={file} renderScale={2} t={t} />)
   await screen.findByRole('img', { name: '长题.pdf，第 1 页' })
   expect(screen.getByRole('status').textContent).toContain('正在加载预览')
   await act(async () => { pending.resolve([page(1)]) })
@@ -41,6 +41,7 @@ it('displays every PDF page in reading order while the remaining pages load', as
   expect(screen.queryByRole('status')).toBeNull()
   expect(document.querySelector('iframe')).toBeNull()
   expect(source.dispose).toHaveBeenCalledOnce()
+  expect(source.renderPagePreviews.mock.calls.map(([indexes, scale]) => [indexes, scale])).toEqual([[[0], 2], [[1], 2]])
 })
 
 it('clears an incomplete preview and retries the same saved PDF after a failed page', async () => {

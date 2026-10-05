@@ -8,6 +8,7 @@ export type TeacherWorkbenchModule =
   | 'timetable'
   | 'questions'
   | 'examples'
+  | 'papers'
   | 'lesson'
   | 'students'
   | 'scores'

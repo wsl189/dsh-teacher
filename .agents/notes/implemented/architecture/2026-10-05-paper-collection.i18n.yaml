@@ -1,0 +1,22 @@
+# Bilingual-pair consistency record for 2026-10-05-paper-collection.md (docs/i18n/README.md): per heading
+# section, a hash of its English and Chinese blocks outside code blocks and generated regions.
+# After editing either side, bring the other along and re-record with:
+#   pnpm run verify-translation-pairing --write .agents/notes/implemented/architecture/2026-10-05-paper-collection.md
+/agent-note-paper-originals-and-automatic-previews:
+  en: 635b4c81ddcd366e
+  zh: 5be1f01abe66bea8
+/agent-note-paper-originals-and-automatic-previews/problem:
+  en: 5370e61cdb581252
+  zh: 52fdbb9621e72910
+/agent-note-paper-originals-and-automatic-previews/decision:
+  en: d2e49afee2351685
+  zh: e2b2583d1003abc5
+/agent-note-paper-originals-and-automatic-previews/alternatives-considered:
+  en: e6b602fb2e78b9e3
+  zh: afa07405cd43e748
+/agent-note-paper-originals-and-automatic-previews/consequences:
+  en: 36726007aa89ca5d
+  zh: ec94d6035c132d8c
+/agent-note-paper-originals-and-automatic-previews/verification:
+  en: 2cda7ffd50fdfd27
+  zh: 0299d29f87aea77f

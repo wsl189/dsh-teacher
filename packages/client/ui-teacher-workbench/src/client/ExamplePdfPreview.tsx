@@ -8,10 +8,10 @@ import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import css from './ExampleCollection.module.css'
 
 /**
- * @param props - saved PDF bytes and localized preview labels.
+ * @param props - saved PDF bytes, optional raster scale, and localized preview labels.
  * @returns every source page in reading order, with loading and retry states.
  */
-export function ExamplePdfPreview({ file, t }: { file: File; t: TeacherWorkbenchTranslate }) {
+export function ExamplePdfPreview({ file, renderScale, t }: { file: File; renderScale?: number; t: TeacherWorkbenchTranslate }) {
   const [pages, setPages] = useState<readonly TeacherQuestionPagePreview[]>([])
   const [complete, setComplete] = useState(false)
   const [error, setError] = useState(false)
@@ -27,7 +27,7 @@ export function ExamplePdfPreview({ file, t }: { file: File; t: TeacherWorkbench
       try {
         for (let index = 0; index < reader.pageCount; index++) {
           if (!isActive()) return
-          const rendered = await reader.renderPagePreviews([index], window.devicePixelRatio)
+          const rendered = await reader.renderPagePreviews([index], renderScale ?? window.devicePixelRatio)
           if (isActive()) setPages(current => [...current, ...rendered])
         }
       } finally {
@@ -41,7 +41,7 @@ export function ExamplePdfPreview({ file, t }: { file: File; t: TeacherWorkbench
       setError(true)
     })
     return () => { active = false }
-  }, [file, attempt])
+  }, [file, renderScale, attempt])
   return (
     <div className={css.pdfPages}>
       {pages.map(page => (

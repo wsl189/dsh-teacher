@@ -4324,7 +4324,7 @@ export const CLIENT_SLOT_API: readonly ClientSlotEntry[] = [
     ],
     replaceRisk: 'shadows-shipped-ui',
     example: 'return {\n  inject: [\'slots\'],\n  apply(ctx) {\n    ctx.slots.inject(\'teacherWorkbench.saveDirectoryFlow\', () => ctx.slots.register(\n      { name: \'teacherWorkbench.saveDirectoryFlow\' },\n      () => React.createElement(\'div\', null, \'hello\'),\n    ))\n  },\n}',
-    source: 'packages/client/ui-teacher-workbench/src/client/contracts.ts:87',
+    source: 'packages/client/ui-teacher-workbench/src/client/contracts.ts:88',
   },
   {
     key: 'tool.call.images',

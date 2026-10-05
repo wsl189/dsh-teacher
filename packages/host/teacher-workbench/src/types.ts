@@ -36,6 +36,7 @@ export interface TeacherScheduledReminderTask {
 }
 
 export type * from './example-types.ts'
+export type * from './paper-types.ts'
 import type { SessionId } from '@deepseek-ai/dsh-session/types'
 
 /** Opaque class identity. */

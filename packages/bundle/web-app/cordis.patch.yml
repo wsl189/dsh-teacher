@@ -34,6 +34,7 @@
     backend: json
     routes:
       teacher_example_collection: sqlite
+      teacher_paper_collection: sqlite
 
 - id: tools
   config:

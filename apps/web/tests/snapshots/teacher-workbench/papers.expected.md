@@ -1,0 +1,36 @@
+- heading "论文收集" [level=1]
+- paragraph: 论文原件、标签与阅读笔记
+- search:
+  - textbox "搜索论文":
+    - /placeholder: 搜索论文序号、标签或描述
+  - button "开始语音输入"
+  - button "搜索"
+- complementary "论文目录":
+  - text: 论文目录 1
+  - paragraph: 双击序号修改 · 右键更多操作
+  - button "P-01"
+  - button "论文 P-01 的更多操作"
+  - button "添加论文"
+- main:
+  - heading "论文内容" [level=3]
+  - button "更换论文文件"
+  - tablist "论文文件":
+    - tab "研究论文.pdf"
+    - tab "论文图表.png"
+    - tab "课堂研究.docx" [selected]
+  - text: 课堂研究.docx
+  - link "下载原件":
+    - /url: blob:{{webOrigin}}/{{uuid}}
+  - button "放大论文预览"
+  - article:
+    - paragraph: 论文原文：数学课堂研究
+  - heading "论文标签" [level=3]
+  - text: 数学教育
+  - button "取消标签“数学教育”"
+  - button "选择预设标签"
+  - button "添加标签"
+  - heading "论文描述" [level=3]
+  - button "开始语音输入"
+  - textbox "论文描述":
+    - /placeholder: 记录论文主题、研究方法、主要结论或阅读笔记，支持关键词搜索。
+    - text: 课堂观察与几何教学的实证研究
