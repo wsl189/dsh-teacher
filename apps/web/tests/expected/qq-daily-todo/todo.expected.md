@@ -1,0 +1,16 @@
+- region "今日待办":
+  - heading "今日待办" [level=2]
+  - text: 1 项未完成
+  - textbox "新增今日待办":
+    - /placeholder: 添加今天要做的事
+  - button "截止时间"
+  - button "开始语音输入"
+  - button "添加待办" [disabled]
+  - article:
+    - checkbox "切换“对话代办开会”完成状态"
+    - strong: 对话代办开会
+    - text: 截止 2099-10-06 {{clock}}
+    - img "已设置手机提醒"
+    - button "编辑"
+    - button "删除"
+  - text: 共 1 项 · 已完成 0 项

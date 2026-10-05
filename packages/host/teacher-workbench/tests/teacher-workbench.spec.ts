@@ -637,6 +637,47 @@ describe('TeacherWorkbenchService', () => {
     expect((await b.service.read({})).value.state.quickNotes.map(item => item.content)).toEqual(['买牛奶', '联系家长'])
   })
 
+  it('saves a QQ-reminded daily todo requested with the alternative spelling 代办', async () => {
+    const b = await harness()
+    contexts.push(b.ctx)
+    b.ctx.provide('mobileNotifications', {
+      listTargets: async () => [{
+        channel: 'qq', botId: 'qq-todo-regression' as never, label: '测试 QQ 机器人', connected: true,
+      }],
+      send: async () => undefined,
+    } satisfies MobileNotificationGateway)
+    const agent = promptAgent('添加一条代办，明天下午9点。提醒我开会提前10分钟，提醒我用手机QQ。')
+    const data = {
+      title: '开会',
+      dueAt: '2099-10-06T21:00',
+      reminder: {
+        channel: 'qq', botId: 'qq-todo-regression', rule: { kind: 'once', minutesBefore: 10 },
+      },
+    }
+    const invalidColor = await callTool(b.ctx, 'teacher_daily_management', {
+      action: 'save_todo', data: { ...data, color: '待办' },
+    }, agent)
+    expect(invalidColor.isError).toBe(true)
+    expect((await b.service.read({})).value.state.dailyTodos).toEqual([])
+
+    const saved = await callTool(b.ctx, 'teacher_daily_management', { action: 'save_todo', data }, agent)
+    expect(saved.isError).toBe(false)
+    const todoId = (saved.value as { createdIds: string[] }).createdIds[0]!
+    const expected = {
+      id: todoId, title: '开会', category: 'today', color: 'blue', dueAt: data.dueAt,
+      reminder: {
+        channel: 'qq', botId: 'qq-todo-regression', botLabel: '测试 QQ 机器人',
+        rule: { kind: 'once', minutesBefore: 10 },
+      },
+    }
+    const readBack = await callTool(b.ctx, 'teacher_workbench_read', { section: 'daily' })
+    expect(readBack.value).toMatchObject({ dailyTodos: [expected] })
+    await b.ctx.fiber.dispose()
+    const restarted = await harness(b.pool)
+    contexts.push(restarted.ctx)
+    expect((await restarted.service.read({})).value.state.dailyTodos).toMatchObject([expected])
+  })
+
   it('persists agent-created reminders only for notification targets returned by the daily read', async () => {
     const b = await harness()
     contexts.push(b.ctx)
