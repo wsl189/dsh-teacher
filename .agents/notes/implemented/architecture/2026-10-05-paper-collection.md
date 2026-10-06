@@ -14,6 +14,8 @@ Paper Collection owns a separate versioned storage domain and metadata-only cata
 
 The Windows x64 desktop package stages a checksum-pinned standalone CAJ command with its native decoders. Operator settings retain the complete command as argv with explicit input/output placeholders, deadline, and byte limit. Conversion runs without a shell, in a private temporary directory, and never reaches a model or OCR provider.
 
+PDF rasterization uses a version-matched binary resource factory for bundled CMaps, standard fonts, and image decoders. The workbench and document-preview packages share the resource-packaging helper and preserve every resource license in their client artifacts. The workbench's factory supplies independent transferable bytes and disables worker-side resource fetching, so Chinese GBK/CID fonts do not disappear when external CMap URLs are absent. A CDN-backed resource path would make reading depend on network access and a separately maintained parser version.
+
 ## Alternatives considered
 
 **Extend example OCR.** This couples paper originals to generated editable question documents and introduces recognition work that paper reading does not need.
@@ -29,3 +31,5 @@ CAJ compatibility remains limited by the selected converter. Failed previews lea
 ## Verification
 
 The SQLite collection tests cover reopening, original byte identity, shared Word/CAJ previews, concurrent metadata edits, stale-source refusal, upload rejection, and cancellation settlement. The composed Web scenario covers sidebar order, custom numbers, tags, descriptions, PDF/image/DOCX previews, original downloads, reload persistence, search snapshots, and automatic CAJ preview transport. Packaged-runtime verification uses a 15-page research PDF, a thesis page image, a Word manuscript with four TIFF figures, five equations and one table, and a 110-page CAJ thesis; every original download retains its exact bytes.
+
+A Chinese PDF browser regression checks visible glyph pixels, missing-resource warnings, external resource requests, page count, and original download bytes. The reported three-page GBK research paper reproduces missing Chinese text before the resource factory and renders its Chinese body after the fix.

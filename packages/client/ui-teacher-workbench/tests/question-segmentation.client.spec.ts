@@ -10,6 +10,7 @@ import {
   renderQuestionPagePreviews,
   renderQuestionCrops,
 } from '../src/client/question-segmentation.ts'
+import { WorkbenchPdfDataFactory } from '../src/client/pdf-assets.ts'
 
 const pdfMocks = vi.hoisted(() => ({
   destroy: vi.fn(async () => {}),
@@ -37,7 +38,9 @@ describe('readPdfPageCount', () => {
     } as File
 
     await expect(readPdfPageCount(file)).resolves.toBe(4)
-    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ data: Uint8Array.from([1, 2, 3]) })
+    expect(pdfMocks.getDocument).toHaveBeenCalledWith({
+      data: Uint8Array.from([1, 2, 3]), BinaryDataFactory: WorkbenchPdfDataFactory, cMapPacked: true, useWorkerFetch: false,
+    })
     expect(pdfMocks.destroy).toHaveBeenCalledOnce()
     expect((globalThis as { pdfjsWorker?: unknown }).pdfjsWorker).toEqual({
       WorkerMessageHandler: pdfMocks.workerHandler,
@@ -55,7 +58,9 @@ describe('readPdfPageCount', () => {
 
     await expect(readPdfPageCount(file)).resolves.toBe(9)
 
-    expect(pdfMocks.getDocument).toHaveBeenCalledWith({ url: 'blob:large-pdf' })
+    expect(pdfMocks.getDocument).toHaveBeenCalledWith({
+      url: 'blob:large-pdf', BinaryDataFactory: WorkbenchPdfDataFactory, cMapPacked: true, useWorkerFetch: false,
+    })
     expect(createObjectURL).toHaveBeenCalledWith(file)
     expect(revokeObjectURL).toHaveBeenCalledWith('blob:large-pdf')
     createObjectURL.mockRestore()

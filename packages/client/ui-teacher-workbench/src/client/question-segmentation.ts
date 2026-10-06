@@ -12,6 +12,7 @@ import type {
 import * as pdfjs from 'pdfjs-dist'
 import type { PDFDocumentLoadingTask, PDFDocumentProxy } from 'pdfjs-dist'
 import { WorkerMessageHandler } from 'pdfjs-dist/build/pdf.worker.mjs'
+import { WorkbenchPdfDataFactory } from './pdf-assets.ts'
 
 /** One page slice contributing pixels to a detected question. */
 export type QuestionPageRegion = TeacherQuestionPageRegion
@@ -99,7 +100,9 @@ async function openLoadingTask(file: File): Promise<{
     const input: Parameters<PdfJsModule['getDocument']>[0] = source === undefined
       ? { data: new Uint8Array(await file.arrayBuffer()) }
       : { url: source.url }
-    loading = module.getDocument(input)
+    loading = module.getDocument({
+      ...input, BinaryDataFactory: WorkbenchPdfDataFactory, cMapPacked: true, useWorkerFetch: false,
+    })
     const pdf = await loading.promise
     return { loading, pdf, release: () => { source?.release() } }
   } catch (error) {

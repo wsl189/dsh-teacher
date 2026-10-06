@@ -2,13 +2,18 @@ import { clientBundle } from '../tsdown.client.ts'
 import { readFileSync } from 'node:fs'
 import { dirname, resolve } from 'node:path'
 import { createRequire } from 'node:module'
+import { bundledPdfAssets } from '../pdf-assets.build.ts'
 
-const bundle = clientBundle('@deepseek-ai/dsh-client-ui-teacher-workbench', ['lib/types/index.js'])
 const require = createRequire(import.meta.url)
+const pdf = bundledPdfAssets(dirname(require.resolve('pdfjs-dist/package.json')))
+const bundle = clientBundle('@deepseek-ai/dsh-client-ui-teacher-workbench', ['lib/types/index.js'], {
+  clientBanner: () => pdf.licenseBanner,
+})
 const fontStyles = new Set(['mathlive/fonts.css', 'katex/dist/katex.min.css', './fonts/symbols.css'])
 
 export default (options: Parameters<typeof bundle>[0]) => bundle(options).map(config => ({
   ...config,
+  define: { ...config.define, __DSH_WORKBENCH_PDF_ASSETS__: pdf.assets },
   plugins: [{
     name: 'example-equation-fonts',
     resolveId: { order: 'pre' as const, handler(source: string) { return fontStyles.has(source) ? `\0example-equation-fonts:${source}.js` : null } },

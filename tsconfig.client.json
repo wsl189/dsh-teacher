@@ -27,6 +27,7 @@
     "packages/*/*/tests/**/*.client.ts",
     "packages/extensions/ui-cordis/src/css-modules.d.ts",
     "packages/client/tsdown.client.ts",
+    "packages/client/pdf-assets.build.ts",
     "scripts/client-build-environment.ts",
     "scripts/bundle-input-isolation.ts",
     "scripts/*.client.spec.ts",

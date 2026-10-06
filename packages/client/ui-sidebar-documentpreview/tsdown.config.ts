@@ -3,12 +3,14 @@ import { createRequire } from 'node:module'
 import { dirname, join } from 'node:path'
 import { Rolldown, type UserConfig } from 'tsdown'
 import { clientBundle } from '../tsdown.client.ts'
+import { bundledPdfAssets } from '../pdf-assets.build.ts'
 
 const bundle = clientBundle('@deepseek-ai/dsh-client-ui-sidebar-documentpreview', ['lib/types/index.js'], {
-  clientBanner: fileName => fileName.endsWith('client.pdf.js') ? pdfLicenseBanner()
+  clientBanner: fileName => fileName.endsWith('client.pdf.js') ? pdf.licenseBanner
     : fileName.endsWith('client.excel.js') ? excelLicenseBanner() : undefined,
 })
 const require = createRequire(import.meta.url)
+const pdf = bundledPdfAssets(dirname(require.resolve('pdfjs-dist/package.json')))
 const workerSpecifier = 'pdfjs-dist/build/pdf.worker.min.mjs?raw'
 const workerModule = '\0dsh-pdf-worker.mjs'
 
@@ -23,34 +25,6 @@ function excelLicenseBanner(): string {
   const xls = readdirSync(xlsRoot).filter(name => /^(LICENSE|NOTICE)(\.|$)/u.test(name)).sort()
     .map(name => readFileSync(join(xlsRoot, name), 'utf8')).join('\n')
   return ['//! Bundled spreadsheet license notices', ...`${fortune}\n${excel}\n${xml}\n${csv}\n${zip}\n${xls}`.trimEnd().split('\n').map(line => `// ${line}`)].join('\n')
-}
-
-/** License files for PDF.js and the data embedded beside its runtime. */
-function pdfLicenseFiles(root: string): string[] {
-  return ['LICENSE', ...['cmaps', 'standard_fonts', 'wasm'].flatMap(directory =>
-    readdirSync(join(root, directory)).filter(name => name.startsWith('LICENSE')).sort()
-      .map(name => `${directory}/${name}`),
-  )]
-}
-
-/** Keep every bundled PDF.js license visible in the published client artifact. */
-function pdfLicenseBanner(): string {
-  const root = dirname(require.resolve('pdfjs-dist/package.json'))
-  const notice = pdfLicenseFiles(root).map(name =>
-    `${name}\n\n${readFileSync(join(root, name), 'utf8').trimEnd()}`,
-  ).join('\n\n')
-  return ['//! Bundled PDF.js license notices', ...notice.split('\n').map(line => `// ${line}`)].join('\n')
-}
-
-/** Keep font mappings and image decoders in the same artifact as their PDF.js runtime. */
-function pdfAssets(): string {
-  const root = dirname(require.resolve('pdfjs-dist/package.json'))
-  return JSON.stringify(Object.fromEntries([
-    ['cMapUrl', 'cmaps'], ['standardFontDataUrl', 'standard_fonts'], ['wasmUrl', 'wasm'],
-  ].map(([kind, directory]) => [kind, Object.fromEntries(
-    readdirSync(join(root, directory!)).filter(name => !name.startsWith('LICENSE')).sort()
-      .map(name => [name, readFileSync(join(root, directory!, name)).toString('base64')]),
-  )])))
 }
 
 /** The dynamic client factory has no module URL from which to resolve a Worker file. */
@@ -105,6 +79,6 @@ export default (options: Parameters<typeof bundle>[0]): UserConfig[] => bundle(o
       resolve: { ...config.inputOptions?.resolve, mainFields: ['browser', 'module', 'main'], aliasFields: [['browser']] },
     },
     plugins: [config.plugins, pdfWorker, excelWorker],
-    define: { ...config.define, __DSH_PDFJS_ASSETS__: pdfAssets() },
+    define: { ...config.define, __DSH_PDFJS_ASSETS__: pdf.assets },
   } : config,
 )

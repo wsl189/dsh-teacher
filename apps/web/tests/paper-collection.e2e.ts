@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { Document, Packer, Paragraph } from 'docx'
-import { PDFDocument } from 'pdf-lib'
+import { PDFDocument, PDFName, PDFString } from 'pdf-lib'
 import type { Browser, Page } from 'playwright'
 import { chromium } from 'playwright'
 import { afterAll, beforeAll, describe, expect, it, onTestFailed } from 'vitest'
@@ -15,6 +15,27 @@ import { connectFreshWorkspaceZh, saveFailureShot, ZH_BROWSER_LOCALE } from './s
 
 const EXPECTED = fileURLToPath(new URL('./snapshots/teacher-workbench/papers.expected.md', import.meta.url))
 const SEARCH_EXPECTED = fileURLToPath(new URL('./snapshots/teacher-workbench/papers-search.expected.md', import.meta.url))
+
+/** A non-embedded GB1 font needs the packaged CMaps before its Chinese glyphs can be drawn. */
+async function chinesePdf(): Promise<Buffer> {
+  const document = await PDFDocument.create()
+  const context = document.context
+  const descendant = context.register(context.obj({
+    Type: 'Font', Subtype: 'CIDFontType0', BaseFont: 'STSong-Light', DW: 1000,
+    CIDSystemInfo: { Registry: PDFString.of('Adobe'), Ordering: PDFString.of('GB1'), Supplement: 4 },
+    FontDescriptor: {
+      Type: 'FontDescriptor', FontName: 'STSong-Light', Flags: 6, FontBBox: [0, -200, 1000, 900],
+      ItalicAngle: 0, Ascent: 880, Descent: -120, CapHeight: 700, StemV: 80,
+    },
+  }))
+  const font = context.register(context.obj({
+    Type: 'Font', Subtype: 'Type0', BaseFont: 'STSong-Light', Encoding: 'UniGB-UCS2-H', DescendantFonts: [descendant],
+  }))
+  const page = document.addPage([400, 260])
+  page.node.set(PDFName.of('Resources'), context.obj({ Font: { CJK: font } }))
+  page.node.set(PDFName.of('Contents'), context.register(context.stream('BT /CJK 36 Tf 36 150 Td <4e2d65878bba658778147a76> Tj ET')))
+  return Buffer.from(await document.save())
+}
 
 describe('web e2e: paper collection', () => {
   let scaffold: WebScaffold
@@ -139,5 +160,58 @@ describe('web e2e: paper collection', () => {
     expect(await readFile(await source.path())).toEqual(original)
     expect(tripwire.pageErrors).toEqual([])
     expect(tripwire.warnings).toEqual([])
+  }, 60_000)
+
+  it('renders Chinese PDF glyphs without missing CMaps or external font requests', async () => {
+    onTestFailed(() => saveFailureShot(page, 'paper-cjk'))
+    const messages: string[] = []
+    const resources: string[] = []
+    const consoleMessage = (message: { text(): string }): void => { messages.push(message.text()) }
+    const resourceRequest = (request: { url(): string }): void => {
+      if (/cmaps\/|standard_fonts\/|\.bcmap(?:$|\?)|\.pfb(?:$|\?)/u.test(request.url())) resources.push(request.url())
+    }
+    page.on('console', consoleMessage)
+    page.on('request', resourceRequest)
+    try {
+      await openPapers()
+      const root = page.locator('[data-paper-collection]')
+      await root.getByRole('button', { name: '添加论文', exact: true }).first().click()
+      const originalPath = process.env.DSH_PAPER_CJK_FILE
+      const original = originalPath === undefined ? await chinesePdf() : await readFile(originalPath)
+      await root.locator('input[type="file"]').setInputFiles({ name: '中文字体论文.pdf', mimeType: 'application/pdf', buffer: original })
+      const first = root.getByRole('img', { name: /中文字体论文.pdf.*1/ })
+      await first.waitFor({ timeout: 30_000 })
+      const density = await first.evaluate(async (element) => {
+        if (!(element instanceof HTMLImageElement)) throw new Error('Expected a PDF page image')
+        await element.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = element.naturalWidth
+        canvas.height = element.naturalHeight
+        const context = canvas.getContext('2d')!
+        context.drawImage(element, 0, 0)
+        const pixels = context.getImageData(0, 0, canvas.width, canvas.height).data
+        let ink = 0
+        for (let index = 0; index < pixels.length; index += 4) {
+          if (pixels[index]! < 160 && pixels[index + 1]! < 160 && pixels[index + 2]! < 160) ink++
+        }
+        return ink / (canvas.width * canvas.height)
+      })
+      const screenshots = fileURLToPath(new URL('../../../.artifacts', import.meta.url))
+      await mkdir(screenshots, { recursive: true })
+      const png = (await first.getAttribute('src'))!.split(',')[1]!
+      await writeFile(join(screenshots, `paper-cjk-${process.env.DSH_PAPER_CJK_RESULT ?? 'regression'}.png`), Buffer.from(png, 'base64'))
+      expect(density).toBeGreaterThan(0.005)
+      const sourceDocument = await PDFDocument.load(original)
+      await expect.poll(() => root.getByRole('img', { name: /中文字体论文.pdf/ }).count()).toBe(sourceDocument.getPageCount())
+      const download = page.waitForEvent('download')
+      await root.getByRole('link', { name: '下载原件', exact: true }).click()
+      expect(await readFile(await (await download).path())).toEqual(original)
+      expect(messages.filter(message => /CMap|standardFontDataUrl|font.*(?:failed|not found)|Unable to load/iu.test(message))).toEqual([])
+      expect(resources).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      page.off('console', consoleMessage)
+      page.off('request', resourceRequest)
+    }
   }, 60_000)
 })

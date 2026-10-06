@@ -56,6 +56,8 @@ Paper Collection appears immediately below Example Collection. Each paper has a 
 
 Paper numbers appear in the left directory. The selected paper shows its content first, followed by tags and description. Long previews scroll within the reading pane, and preset tag options can extend beyond the tag card.
 
+PDF previews and question cuts carry their PDF.js version's Chinese character maps, standard fonts, and image decoders inside the client artifact. GBK and CID text therefore requires no external resource downloads; non-embedded custom typefaces still use the browser's available font substitutes.
+
 <a id="example-collection"></a>
 ### Example collection
 
