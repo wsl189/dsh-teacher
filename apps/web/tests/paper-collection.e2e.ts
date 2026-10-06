@@ -68,6 +68,16 @@ describe('web e2e: paper collection', () => {
     await page.locator('[data-paper-collection]').waitFor()
   }
 
+  /** Creation selects its new row only after the remote write has completed. */
+  async function addPaper(): Promise<void> {
+    const root = page.locator('[data-paper-collection]')
+    const selected = root.getByRole('complementary', { name: '论文目录' }).locator('button[aria-current="page"]')
+    const previous = await selected.evaluateAll(nodes => nodes[0]?.getAttribute('aria-label') ?? null)
+    await root.getByRole('button', { name: '添加论文', exact: true }).first().click()
+    await expect.poll(() => selected.evaluateAll((nodes, before) =>
+      nodes.length === 1 && nodes[0]!.getAttribute('aria-label') !== before, previous)).toBe(true)
+  }
+
   beforeAll(async () => {
     const document = await PDFDocument.create()
     document.addPage([595, 842]).drawText('Paper original preview')
@@ -190,7 +200,7 @@ describe('web e2e: paper collection', () => {
     try {
       await openPapers()
       const root = page.locator('[data-paper-collection]')
-      await root.getByRole('button', { name: '添加论文', exact: true }).first().click()
+      await addPaper()
       const originalPath = process.env.DSH_PAPER_CJK_FILE
       const original = originalPath === undefined ? await chinesePdf() : await readFile(originalPath)
       await root.locator('input[type="file"]').setInputFiles({ name: '中文字体论文.pdf', mimeType: 'application/pdf', buffer: original })
@@ -238,7 +248,7 @@ describe('web e2e: paper collection', () => {
     try {
       await openPapers()
       const root = page.locator('[data-paper-collection]')
-      await root.getByRole('button', { name: '添加论文', exact: true }).first().click()
+      await addPaper()
       await root.locator('input[type="file"]').setInputFiles({ name: '扫描论文.pdf', mimeType: 'application/pdf', buffer: await scannedPdf() })
       const preview = root.getByRole('img', { name: /扫描论文.pdf.*1/ })
       await preview.waitFor({ timeout: 30_000 })
