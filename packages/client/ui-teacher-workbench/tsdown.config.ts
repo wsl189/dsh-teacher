@@ -13,7 +13,13 @@ const fontStyles = new Set(['mathlive/fonts.css', 'katex/dist/katex.min.css', '.
 
 export default (options: Parameters<typeof bundle>[0]) => bundle(options).map(config => ({
   ...config,
-  define: { ...config.define, __DSH_WORKBENCH_PDF_ASSETS__: pdf.assets },
+  define: {
+    ...config.define,
+    __DSH_WORKBENCH_PDF_ASSETS__: pdf.assets,
+    // Loader factories have no module URL. PDF.js receives decoder bytes from
+    // our resource factory; CJS import.meta.url would otherwise require Node's url.
+    ...config.name?.endsWith('/client') === true ? { 'import.meta.url': 'undefined' } : {},
+  },
   plugins: [{
     name: 'example-equation-fonts',
     resolveId: { order: 'pre' as const, handler(source: string) { return fontStyles.has(source) ? `\0example-equation-fonts:${source}.js` : null } },

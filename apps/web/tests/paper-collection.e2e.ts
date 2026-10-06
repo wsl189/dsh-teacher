@@ -37,6 +37,21 @@ async function chinesePdf(): Promise<Buffer> {
   return Buffer.from(await document.save())
 }
 
+/** Two opposite black squares encoded as a 32 × 32 CCITT Group 4 scan. */
+async function scannedPdf(): Promise<Buffer> {
+  const document = await PDFDocument.create()
+  const context = document.context
+  const image = context.register(context.stream(Buffer.from('NQL/////k1Bf///////wAQAQ', 'base64'), {
+    Type: 'XObject', Subtype: 'Image', Width: 32, Height: 32, BitsPerComponent: 1,
+    ColorSpace: 'DeviceGray', Filter: 'CCITTFaxDecode',
+    DecodeParms: { K: -1, Columns: 32, Rows: 32, BlackIs1: false },
+  }))
+  const page = document.addPage([320, 320])
+  page.node.set(PDFName.of('Resources'), context.obj({ XObject: { Scan: image } }))
+  page.node.set(PDFName.of('Contents'), context.register(context.stream('q 320 0 0 320 0 0 cm /Scan Do Q')))
+  return Buffer.from(await document.save())
+}
+
 describe('web e2e: paper collection', () => {
   let scaffold: WebScaffold
   let browser: Browser
@@ -212,6 +227,43 @@ describe('web e2e: paper collection', () => {
     } finally {
       page.off('console', consoleMessage)
       page.off('request', resourceRequest)
+    }
+  }, 60_000)
+
+  it('renders compressed scans without dropping images in the browser client bundle', async () => {
+    onTestFailed(() => saveFailureShot(page, 'paper-scanned-image'))
+    const messages: string[] = []
+    const consoleMessage = (message: { text(): string }): void => { messages.push(message.text()) }
+    page.on('console', consoleMessage)
+    try {
+      await openPapers()
+      const root = page.locator('[data-paper-collection]')
+      await root.getByRole('button', { name: '添加论文', exact: true }).first().click()
+      await root.locator('input[type="file"]').setInputFiles({ name: '扫描论文.pdf', mimeType: 'application/pdf', buffer: await scannedPdf() })
+      const preview = root.getByRole('img', { name: /扫描论文.pdf.*1/ })
+      await preview.waitFor({ timeout: 30_000 })
+      const pixels = await preview.evaluate(async (element: HTMLImageElement) => {
+        await element.decode()
+        const canvas = document.createElement('canvas')
+        canvas.width = canvas.height = 32
+        const context = canvas.getContext('2d')!
+        context.drawImage(element, 0, 0, 32, 32)
+        const data = context.getImageData(0, 0, 32, 32).data
+        let ink = 0
+        for (let index = 0; index < data.length; index += 4) if (data[index]! < 128) ink++
+        return { ink, quadrants: [[8, 8], [24, 8], [8, 24], [24, 24]].map(([x, y]) => data[(y! * 32 + x!) * 4]!) }
+      })
+      expect(pixels.ink).toBeGreaterThan(450)
+      expect(pixels.ink).toBeLessThan(570)
+      expect(pixels.quadrants[0]).toBe(pixels.quadrants[3])
+      expect(pixels.quadrants[1]).toBe(pixels.quadrants[2])
+      expect(Math.abs(pixels.quadrants[0]! - pixels.quadrants[1]!)).toBeGreaterThan(200)
+      const decoderWarnings = messages.filter(message =>
+        /ignoring XObject|Unable to decode image|instantiateWasm|missed the module table/iu.test(message))
+      expect(decoderWarnings).toEqual([])
+      expect(tripwire.pageErrors).toEqual([])
+    } finally {
+      page.off('console', consoleMessage)
     }
   }, 60_000)
 })
