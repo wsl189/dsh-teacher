@@ -3231,6 +3231,18 @@ export const SERVICE_API: readonly ServiceApiEntry[] = [
         returns: 'a new numeric directory with empty question and explanation documents, tags, and description.',
       },
       {
+        signature: '@Remote(\'addExampleExplanation\') addExampleExplanation(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Add an independently saved solution to a collected question.',
+        parameters: [{ name: 'request', description: 'question receiving the additional explanation.' }],
+        returns: 'committed metadata with the new explanation identity.',
+      },
+      {
+        signature: '@Remote(\'deleteExampleExplanation\') deleteExampleExplanation(request: TeacherExampleExplanationRequest): Promise<TeacherExampleResult<TeacherExample>>',
+        description: 'Remove one explanation\'s files while retaining the question and other solutions.',
+        parameters: [{ name: 'request', description: 'additional explanation identity, or omission to clear the original explanation.' }],
+        returns: 'committed question metadata.',
+      },
+      {
         signature: '@Remote(\'updateExample\') updateExample(request: TeacherExampleUpdateRequest): Promise<TeacherExampleResult<TeacherExample>>',
         description: 'Save collected question metadata.',
         parameters: [{ name: 'request', description: 'question identity and changed metadata fields.' }],
@@ -8152,7 +8164,7 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherExample',
-    declaration: 'export interface TeacherExample {\n    readonly id: TeacherExampleId;\n    readonly number: number;\n    readonly name: string;\n    readonly tags: readonly string[];\n    readonly description: string;\n    readonly handwriting: readonly TeacherExampleStroke[];\n    readonly documents: Readonly<Record<TeacherExampleDocumentKind, TeacherExampleDocument>>;\n    readonly revision: number;\n}',
+    declaration: 'export interface TeacherExample {\n    readonly id: TeacherExampleId;\n    readonly number: number;\n    readonly name: string;\n    readonly tags: readonly string[];\n    readonly description: string;\n    readonly handwriting: readonly TeacherExampleStroke[];\n    readonly documents: Readonly<Record<TeacherExampleDocumentKind, TeacherExampleDocument>>;\n    readonly explanations: readonly TeacherExampleExplanation[];\n    readonly revision: number;\n}',
   },
   {
     name: 'TeacherExampleCatalog',
@@ -8168,11 +8180,23 @@ export const TYPE_API: readonly TypeApiEntry[] = [
   },
   {
     name: 'TeacherExampleDocumentRequest',
-    declaration: 'export interface TeacherExampleDocumentRequest extends TeacherExampleRequest {\n    readonly document: TeacherExampleDocumentKind;\n}',
+    declaration: 'export interface TeacherExampleDocumentRequest extends TeacherExampleRequest {\n    readonly document: TeacherExampleDocumentKind;\n    readonly explanationId?: TeacherExampleExplanationId | undefined;\n}',
   },
   {
     name: 'TeacherExampleErrorCode',
     declaration: 'export type TeacherExampleErrorCode = \'invalid-request\' | \'not-found\' | \'file-too-large\' | \'ocr-unavailable\' | \'ocr-failed\' | \'ocr-truncated\' | \'correction-unavailable\' | \'correction-failed\' | \'correction-invalid\' | \'correction-too-large\' | \'source-changed\' | \'word-changed\' | \'export-not-ready\' | \'storage-failure\' | \'disposed\';',
+  },
+  {
+    name: 'TeacherExampleExplanation',
+    declaration: 'export interface TeacherExampleExplanation {\n    readonly id: TeacherExampleExplanationId;\n    readonly document: TeacherExampleDocument;\n}',
+  },
+  {
+    name: 'TeacherExampleExplanationId',
+    declaration: 'export type TeacherExampleExplanationId = Branded<\'TeacherExampleExplanationId\'>;',
+  },
+  {
+    name: 'TeacherExampleExplanationRequest',
+    declaration: 'export interface TeacherExampleExplanationRequest extends TeacherExampleRequest {\n    readonly explanationId?: TeacherExampleExplanationId | undefined;\n}',
   },
   {
     name: 'TeacherExampleExportLayout',

@@ -257,6 +257,39 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
 }
+.explanationToolbar {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
+  min-width: 0;
+}
+.explanationTabs {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.explanationTabs button {
+  padding: 6px 12px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 7px;
+  background: var(--dsw-alias-bg-layer-1);
+  color: var(--dsw-alias-label-primary);
+  font-size: 13px;
+  font-weight: 400;
+}
+.explanationTabs button[aria-selected='true'] {
+  border-color: var(--dsw-alias-brand-primary);
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-brand-primary);
+  font-weight: 500;
+}
+.explanationTabs button:hover {
+  background: var(--dsw-alias-interactive-bg-hover);
+}
 .panel {
   min-width: 0;
   border: 1px solid var(--dsw-alias-border-l2);
@@ -644,6 +677,8 @@
   min-height: 0;
   overflow: auto;
   padding: 18px;
+  background: var(--dsw-static-neutral-00);
+  color: var(--dsw-static-neutral-1000);
 }
 .wordPage :global(section.example-word) {
   padding: 12px !important;

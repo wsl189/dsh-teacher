@@ -23,7 +23,8 @@ export function ExampleExportDialog({ questions, onExport, onClose, t }: {
   const [failed, setFailed] = useState(false)
   const ready = questions.length > 0 && questions.every(question =>
     question.documents.question.status === 'ready' &&
-    (question.documents.explanation.source === null || question.documents.explanation.status === 'ready'),
+    [question.documents.explanation, ...question.explanations.map(row => row.document)]
+      .every(document => document.source === null || document.status === 'ready'),
   )
   useEffect(() => {
     const element = dialog.current

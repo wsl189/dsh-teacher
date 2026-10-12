@@ -6,6 +6,8 @@ import type { Branded } from '@deepseek-ai/dsh-brand'
 export type TeacherExampleId = Branded<'TeacherExampleId'>
 /** Identity of one uploaded source revision. */
 export type TeacherExampleSourceId = Branded<'TeacherExampleSourceId'>
+/** Identity of an additional solution within one collected question. */
+export type TeacherExampleExplanationId = Branded<'TeacherExampleExplanationId'>
 
 /** One pen stroke in a normalized 0–1 writing area. */
 export interface TeacherExampleStroke {
@@ -32,6 +34,12 @@ export interface TeacherExampleDocument {
   readonly wordRevision: number
 }
 
+/** One additional solution, ordered after the original explanation. */
+export interface TeacherExampleExplanation {
+  readonly id: TeacherExampleExplanationId
+  readonly document: TeacherExampleDocument
+}
+
 /** Searchable question metadata with independent question and explanation documents. */
 export interface TeacherExample {
   readonly id: TeacherExampleId
@@ -42,6 +50,8 @@ export interface TeacherExample {
   readonly description: string
   readonly handwriting: readonly TeacherExampleStroke[]
   readonly documents: Readonly<Record<TeacherExampleDocumentKind, TeacherExampleDocument>>
+  /** Additional solutions retain independent source and Word revisions. */
+  readonly explanations: readonly TeacherExampleExplanation[]
   /** Increases on every successful metadata, source, or OCR write. */
   readonly revision: number
 }
@@ -60,6 +70,13 @@ export interface TeacherExampleRequest {
 /** Explicit question or explanation selection within one saved directory. */
 export interface TeacherExampleDocumentRequest extends TeacherExampleRequest {
   readonly document: TeacherExampleDocumentKind
+  /** Select an additional explanation; omission selects the original explanation. Invalid for a question document. */
+  readonly explanationId?: TeacherExampleExplanationId | undefined
+}
+
+/** Delete one additional solution, or clear the original explanation when its identity is omitted. */
+export interface TeacherExampleExplanationRequest extends TeacherExampleRequest {
+  readonly explanationId?: TeacherExampleExplanationId | undefined
 }
 
 /** Field-specific edits preserve unrelated concurrent edits and OCR completions. */

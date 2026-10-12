@@ -1523,7 +1523,7 @@ export interface Config {
 ## `@deepseek-ai/dsh-host-teacher-workbench`
 
 - `inject`: `storageDomain`
-- `source`: [`packages/host/teacher-workbench/src/index.ts:216`](../packages/host/teacher-workbench/src/index.ts)
+- `source`: [`packages/host/teacher-workbench/src/index.ts:217`](../packages/host/teacher-workbench/src/index.ts)
 
 ```ts config-catalog
 /** Host persistence, document-source, question-media, and provider configuration. */

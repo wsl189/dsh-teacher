@@ -18,6 +18,8 @@ Conversation-uploaded source documents are retained under the private content-ad
 
 ## Operations
 
+`TeacherExampleExplanation` identifies one additional solution by its `TeacherExampleExplanationId` and independent document metadata. `TeacherExample.explanations` preserves their order after `documents.explanation`. `TeacherExampleDocumentRequest.explanationId` selects that solution for uploads, OCR, previews, downloads, or Word edits; it is invalid with `document: 'question'`. `TeacherExampleExplanationRequest` removes an additional solution, or clears the original explanation when the identity is omitted. Both export layouts include all uploaded solutions in their saved order.
+
 Example collection has an independent SQLite-routed domain and no roster references. `TeacherExample` carries directory order, tags, descriptions, pen strokes, and independent question/explanation `TeacherExampleDocument` metadata; `TeacherExampleCatalog` omits all file bytes. `TeacherExampleUpdateRequest` changes only submitted fields. `TeacherExampleDocumentRequest` explicitly selects a `TeacherExampleDocumentKind`; `TeacherExampleUploadRequest.files` supplies the ordered fragments of that document; the upload replaces its original and clears its old Word file. `TeacherExampleFileRequest` selects an original or Word artifact, returned as `TeacherExampleFile`; each operation returns a discriminated `TeacherExampleResult`. `TeacherExampleExportRequest` supplies ordered question identities and a paired/grouped `TeacherExampleExportLayout` for one Word download containing only original questions and explanations. [The Host reference](../../packages/host/teacher-workbench/README.md#example-collection) owns persistence, retry, source replacement, and export guarantees.
 
 Paper collection uses an independent SQLite-routed domain. `TeacherPaper` retains creation order, a custom directory name, tags, description, revision, and ordered `TeacherPaperSource` metadata; `TeacherPaperCatalog` lists papers and reusable tags without file bytes. `TeacherPaperUpdateRequest` changes only submitted metadata, and `TeacherPaperUploadRequest` atomically replaces ordered originals while retaining that metadata. `TeacherPaperFileRequest` identifies one immutable source and selects original or preview bytes, returned as `TeacherPaperFile`; DOC, unsupported DOCX media, and CAJ previews are generated automatically while preserving originals. `TeacherPaperRequest` identifies a stored paper, and each operation returns a discriminated `TeacherPaperResult` with a `TeacherPaperErrorCode` on failure. The [Host reference](../../packages/host/teacher-workbench/README.md) owns storage and conversion settings.
@@ -115,6 +117,20 @@ Host service owning the revisioned workbench document.
  * @returns a new numeric directory with empty question and explanation documents, tags, and description.
  */
 @Remote('createExample') createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Add an independently saved solution to a collected question.
+ * @param request - question receiving the additional explanation.
+ * @returns committed metadata with the new explanation identity.
+ */
+@Remote('addExampleExplanation') addExampleExplanation(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Remove one explanation's files while retaining the question and other solutions.
+ * @param request - additional explanation identity, or omission to clear the original explanation.
+ * @returns committed question metadata.
+ */
+@Remote('deleteExampleExplanation') deleteExampleExplanation(request: TeacherExampleExplanationRequest): Promise<TeacherExampleResult<TeacherExample>>
 
 /**
  * Save collected question metadata.

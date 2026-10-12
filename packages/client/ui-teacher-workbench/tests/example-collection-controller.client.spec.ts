@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import type { TeacherExample, TeacherExampleDocument, TeacherExampleDocumentKind, TeacherExampleId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { TeacherExample, TeacherExampleDocument, TeacherExampleDocumentKind, TeacherExampleExplanationId, TeacherExampleId } from '@deepseek-ai/dsh-api-remotes/client'
 import {
   ExampleCollectionController,
+  exampleDocumentKey,
   type ExampleCollectionRemote,
 } from '../src/client/example-collection-controller.ts'
 
@@ -15,6 +16,7 @@ function question(id = 'one'): TeacherExample {
     handwriting: [],
     documents: { question: { source: null, status: 'empty', ocrError: null, wordRevision: 0 }, explanation: { source: null, status: 'empty', ocrError: null, wordRevision: 0 } },
     revision: 0,
+    explanations: [],
   }
 }
 
@@ -29,6 +31,8 @@ function harness() {
   const remote = {
     listExamples: vi.fn().mockResolvedValue(success({ questions: [row], tags: [] })),
     createExample: vi.fn().mockResolvedValue(success(question('two'))),
+    addExampleExplanation: vi.fn<ExampleCollectionRemote['addExampleExplanation']>(),
+    deleteExampleExplanation: vi.fn<ExampleCollectionRemote['deleteExampleExplanation']>(),
     updateExample: vi.fn<ExampleCollectionRemote['updateExample']>(async request =>
       success({ ...row, ...request, revision: 1 }),
     ),
@@ -54,6 +58,35 @@ afterEach(() => {
 })
 
 describe('example collection drafts and background recognition', () => {
+  it('targets an added solution independently and retains it when deletion fails', async () => {
+    const { row, remote, controller } = harness()
+    await controller.commands.refresh()
+    const explanationId = 'solution-two' as TeacherExampleExplanationId
+    const added: TeacherExample = { ...row, revision: 1, explanations: [{ id: explanationId, document: row.documents.explanation }] }
+    remote.addExampleExplanation.mockResolvedValue(success(added))
+    expect(await controller.commands.addExplanation(row.id)).toBe(explanationId)
+    const pending: TeacherExample = { ...added, revision: 2, explanations: [{ id: explanationId, document: { ...row.documents.explanation, status: 'pending' } }] }
+    remote.uploadExample.mockResolvedValue(success(pending))
+    let finish!: (result: Awaited<ReturnType<ExampleCollectionRemote['recognizeExample']>>) => void
+    remote.recognizeExample.mockImplementation(() => new Promise((resolve) => { finish = resolve }))
+    const upload = controller.commands.upload(row.id, 'explanation', [new File(['source'], 'method.png', { type: 'image/png' })], explanationId)
+    await vi.waitFor(() => { expect(finish).toBeDefined() })
+    expect(controller.getSnapshot().busy.explanation).toEqual({ [exampleDocumentKey(row.id, explanationId)]: 'ocr' })
+    expect(remote.uploadExample).toHaveBeenCalledWith(expect.objectContaining({ id: row.id, document: 'explanation', explanationId }))
+    expect(remote.recognizeExample).toHaveBeenCalledWith({ id: row.id, document: 'explanation', explanationId })
+    const ready: TeacherExample = { ...pending, revision: 3, explanations: [{ id: explanationId, document: { ...pending.explanations[0]!.document, status: 'ready' } }] }
+    finish(success(ready))
+    await upload
+    expect(controller.getSnapshot().busy.explanation).toEqual({})
+    expect(controller.getSnapshot().questions[0]!.documents).toEqual(row.documents)
+    remote.deleteExampleExplanation.mockRejectedValueOnce(new Error('offline'))
+    expect(await controller.commands.deleteExplanation({ id: row.id, explanationId })).toBe(false)
+    expect(controller.getSnapshot().questions[0]).toEqual(ready)
+    remote.deleteExampleExplanation.mockResolvedValue(success({ ...ready, revision: 4, explanations: [] }))
+    expect(await controller.commands.deleteExplanation({ id: row.id, explanationId })).toBe(true)
+    expect(controller.getSnapshot().questions[0]!.explanations).toEqual([])
+    await controller.dispose()
+  })
   it('retains a failed preset deletion for retry and preserves question tags and drafts after success', async () => {
     const { row, remote, controller } = harness()
     remote.listExamples.mockResolvedValue(success({ questions: [{ ...row, tags: ['几何'] }], tags: ['几何', '向量'] }))

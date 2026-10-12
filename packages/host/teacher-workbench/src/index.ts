@@ -25,6 +25,7 @@ import type {
   TeacherExampleExportRequest, TeacherExampleFile, TeacherExampleFileRequest,
   TeacherExampleWordEditor, TeacherExampleWordSaveRequest, TeacherExampleWordSaved,
   TeacherExampleId, TeacherExampleRequest, TeacherExampleResult, TeacherExampleUpdateRequest, TeacherExampleUploadRequest,
+  TeacherExampleExplanationRequest,
 } from './example-types.ts'
 import { relative } from 'node:path'
 import { saveQuestionDocument } from './question-document-save.ts'
@@ -625,6 +626,26 @@ export class TeacherWorkbenchService extends TypertRemoteService {
   @Remote('createExample')
   createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>> {
     return this.examples.create()
+  }
+
+  /**
+   * Add an independently saved solution to a collected question.
+   * @param request - question receiving the additional explanation.
+   * @returns committed metadata with the new explanation identity.
+   */
+  @Remote('addExampleExplanation')
+  addExampleExplanation(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.addExplanation(request)
+  }
+
+  /**
+   * Remove one explanation's files while retaining the question and other solutions.
+   * @param request - additional explanation identity, or omission to clear the original explanation.
+   * @returns committed question metadata.
+   */
+  @Remote('deleteExampleExplanation')
+  deleteExampleExplanation(request: TeacherExampleExplanationRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.examples.deleteExplanation(request)
   }
 
   /**

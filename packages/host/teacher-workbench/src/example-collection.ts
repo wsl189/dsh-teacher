@@ -17,6 +17,8 @@ import type {
   TeacherExampleDocumentKind,
   TeacherExampleDocumentRequest,
   TeacherExampleErrorCode,
+  TeacherExampleExplanationId,
+  TeacherExampleExplanationRequest,
   TeacherExampleExportRequest,
   TeacherExampleFile,
   TeacherExampleFileRequest,
@@ -79,6 +81,9 @@ const recordSchema = z.object({
   handwriting,
   revision: z.number().int().nonnegative(),
   documents: z.object({ question: documentSchema, explanation: documentSchema }),
+  explanations: z.array(z.object({ id: identity<TeacherExampleExplanationId>(), document: documentSchema }))
+    .refine(rows => new Set(rows.map(row => row.id)).size === rows.length)
+    .default([]),
 })
 type ExampleRecord = z.infer<typeof recordSchema>
 type ExampleDocumentRecord = z.infer<typeof documentSchema>
@@ -103,7 +108,9 @@ const updateSchema = z.object({
 const documentRequestSchema = z.object({
   id: identity<TeacherExampleId>(),
   document: z.enum(['question', 'explanation']),
+  explanationId: identity<TeacherExampleExplanationId>().optional(),
 })
+const explanationRequestSchema = documentRequestSchema.omit({ document: true })
 const fileRequestSchema = documentRequestSchema.extend({ kind: z.enum(['source', 'word']) })
 const uploadSchema = documentRequestSchema.extend({
   files: z.array(z.object({ name: fileName, mediaType, contentBase64: z.string().min(1) })),
@@ -129,7 +136,7 @@ export class TeacherExampleCollection {
   private readonly lifetime = new AbortController()
   private readonly recognition: Record<
     TeacherExampleDocumentKind,
-    Map<TeacherExampleId, { readonly preserveText: boolean; readonly result: Promise<TeacherExampleResult<TeacherExample>> }>
+    Map<string, { readonly preserveText: boolean; readonly result: Promise<TeacherExampleResult<TeacherExample>> }>
   > = { question: new Map(), explanation: new Map() }
 
   /**
@@ -181,6 +188,7 @@ export class TeacherExampleCollection {
         description: '',
         handwriting: [],
         documents: { question: emptyDocument(), explanation: emptyDocument() },
+        explanations: [],
         revision: 0,
       }
       await table.put(record.id, record)
@@ -246,6 +254,43 @@ export class TeacherExampleCollection {
   }
 
   /**
+   * Add an empty solution after this question's existing explanations.
+   * @param request - question receiving the additional solution.
+   * @returns committed metadata containing the new stable explanation identity.
+   */
+  addExplanation(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.enqueue(async () => {
+      const parsed = parse(z.object({ id: identity<TeacherExampleId>() }), request)
+      const domain = await this.open()
+      const record = this.requireRecord(domain, parsed.id)
+      const next: ExampleRecord = { ...record, revision: record.revision + 1, explanations: [
+        ...record.explanations, { id: randomUUID() as TeacherExampleExplanationId, document: emptyDocument() },
+      ] }
+      await domain.table('questions').put(next.id, next)
+      return metadata(next)
+    })
+  }
+
+  /**
+   * Remove one solution's original and Word together without changing the question or other solutions.
+   * @param request - additional solution identity, or omission to clear the original explanation.
+   * @returns committed metadata; an unknown additional identity fails without a write.
+   */
+  deleteExplanation(request: TeacherExampleExplanationRequest): Promise<TeacherExampleResult<TeacherExample>> {
+    return this.enqueue(async () => {
+      const parsed = parse(explanationRequestSchema, request)
+      const domain = await this.open()
+      const record = this.requireRecord(domain, parsed.id)
+      const selected = selectDocument(record, { ...parsed, document: 'explanation' })
+      const next = parsed.explanationId === undefined
+        ? replaceDocument(record, { ...parsed, document: 'explanation' }, { ...emptyDocument(), wordRevision: selected.wordRevision + 1 })
+        : { ...record, revision: record.revision + 1, explanations: record.explanations.filter(row => row.id !== parsed.explanationId) }
+      await domain.table('questions').put(next.id, next)
+      return metadata(next)
+    })
+  }
+
+  /**
    * Persist one continuous original before OCR; invalid fragments leave the previous source intact.
    * @param request - ordered images/PDFs belonging to one question or explanation; multiple files become one PDF.
    * @returns the committed question awaiting recognition.
@@ -266,8 +311,8 @@ export class TeacherExampleCollection {
       const file = parsed.files.length === 1 ? first : await mergeSources(
         parsed.files, `${current.name.replace(/[\\/\u0000-\u001f]/gu, '_')}-${parsed.document === 'question' ? '原件' : '解析原件'}.pdf`, maxBytes,
       )
-      const next = replaceDocument(current, parsed.document, {
-        ...current.documents[parsed.document],
+      const next = replaceDocument(current, parsed, {
+        ...selectDocument(current, parsed),
         source: { id: randomUUID() as TeacherExampleSourceId, name: file.name, mediaType: file.mediaType },
         sourceBase64: file.contentBase64,
         word: null,
@@ -303,16 +348,16 @@ export class TeacherExampleCollection {
       const result = await this.enqueue(async () => {
         const domain = await this.open()
         const record = this.requireRecord(domain, parsed.id)
-        const selected = record.documents[parsed.document]
+        const selected = selectDocument(record, parsed)
         if (parsed.kind === 'word' && selected.word !== null) {
           const rebuilt = await normalizeExampleWord(Buffer.from(selected.word.contentBase64, 'base64'))
           const word = {
             ...selected.word,
-            name: exampleWordFileName(record.name, parsed.document),
+            name: exampleWordFileName(record, parsed),
             contentBase64: rebuilt?.toString('base64') ?? selected.word.contentBase64,
           }
           if (rebuilt === undefined) return word
-          await domain.table('questions').put(record.id, replaceDocument(record, parsed.document, {
+          await domain.table('questions').put(record.id, replaceDocument(record, parsed, {
             ...selected,
             word,
             wordRevision: selected.wordRevision + 1,
@@ -340,7 +385,7 @@ export class TeacherExampleCollection {
       if (!file.ok) throw new ExampleError(file.error.code, file.error.message)
       const result = await this.enqueue(async () => {
         const domain = await this.open()
-        const selected = this.requireRecord(domain, request.id).documents[request.document]
+        const selected = selectDocument(this.requireRecord(domain, request.id), request)
         if (selected.source === null || selected.word === null) throw new ExampleError('not-found', 'Example Word is unavailable')
         return { ...readExampleWordEditor(Buffer.from(selected.word.contentBase64, 'base64')), sourceId: selected.source.id, wordRevision: selected.wordRevision }
       })
@@ -357,10 +402,12 @@ export class TeacherExampleCollection {
   saveEditor(request: TeacherExampleWordSaveRequest): Promise<TeacherExampleResult<TeacherExampleWordSaved>> {
     return this.enqueue(async () => {
       if (Buffer.byteLength(JSON.stringify(request)) > this.maxFileBytes()) throw new ExampleError('file-too-large', 'Word edits exceed the document byte limit')
-      const parsed = parse(z.object({ id: identity<TeacherExampleId>(), document: z.enum(['question', 'explanation']), sourceId: identity<TeacherExampleSourceId>(), wordRevision: z.number().int().nonnegative(), paragraphs: exampleWordParagraphsSchema }).strict(), request)
+      const parsed = parse(documentRequestSchema.extend({
+        sourceId: identity<TeacherExampleSourceId>(), wordRevision: z.number().int().nonnegative(), paragraphs: exampleWordParagraphsSchema,
+      }).strict(), request)
       const domain = await this.open()
       const record = this.requireRecord(domain, parsed.id)
-      const selected = record.documents[parsed.document]
+      const selected = selectDocument(record, parsed)
       if (selected.source?.id !== parsed.sourceId || selected.wordRevision !== parsed.wordRevision) throw new ExampleError('word-changed', 'The Word document changed after this editor was opened')
       if (selected.word === null) throw new ExampleError('not-found', 'Example Word is unavailable')
       let bytes: Buffer
@@ -370,9 +417,9 @@ export class TeacherExampleCollection {
         throw new ExampleError('invalid-request', 'The Word edit contains unsupported content or an invalid formula')
       }
       if (bytes.length > this.maxFileBytes()) throw new ExampleError('file-too-large', 'Edited Word exceeds the document byte limit')
-      const next = replaceDocument(record, parsed.document, { ...selected, word: { ...selected.word, contentBase64: bytes.toString('base64') }, wordRevision: selected.wordRevision + 1 })
+      const next = replaceDocument(record, parsed, { ...selected, word: { ...selected.word, contentBase64: bytes.toString('base64') }, wordRevision: selected.wordRevision + 1 })
       const editor = {
-        ...readExampleWordEditor(bytes), sourceId: parsed.sourceId, wordRevision: next.documents[parsed.document].wordRevision,
+        ...readExampleWordEditor(bytes), sourceId: parsed.sourceId, wordRevision: selectDocument(next, parsed).wordRevision,
       }
       await domain.table('questions').put(record.id, next)
       return { question: metadata(next), editor }
@@ -387,9 +434,12 @@ export class TeacherExampleCollection {
   exportWord(request: TeacherExampleExportRequest): Promise<TeacherExampleResult<TeacherExampleFile>> {
     return this.run(async () => {
       const parsed = parse(exportSchema, request)
-      for (const id of parsed.ids) {
-        for (const document of ['question', 'explanation'] as const) await this.prepareWord({ id, document })
-      }
+      const preparation = await this.enqueue(async () => {
+        const domain = await this.open()
+        return parsed.ids.flatMap(id => documentRequests(this.requireRecord(domain, id)))
+      })
+      if (!preparation.ok) throw new ExampleError(preparation.error.code, preparation.error.message)
+      for (const document of preparation.value) await this.prepareWord(document)
       const selected = await this.enqueue(async () => {
         const domain = await this.open()
         return parsed.ids.map(id => this.requireRecord(domain, id))
@@ -399,18 +449,19 @@ export class TeacherExampleCollection {
       const explanations: ExampleWordBlock[] = []
       const paired: ExampleWordBlock[] = []
       for (const record of selected.value) {
-        for (const documentKind of ['question', 'explanation'] as const) {
-          const document = record.documents[documentKind]
-          if (documentKind === 'explanation' && document.source === null) continue
+        let explanationCount = 0
+        for (const request of documentRequests(record)) {
+          const document = selectDocument(record, request)
+          if (request.document === 'explanation' && document.source === null) continue
           if (document.status !== 'ready' || document.word === null) {
             throw new ExampleError('export-not-ready', 'Selected question or explanation needs a completed Word document')
           }
           const block: ExampleWordBlock = {
             bytes: Buffer.from(document.word.contentBase64, 'base64'),
-            blankLinesBefore: documentKind === 'question' && questions.length > 0,
+            blankLinesBefore: request.document === 'question' ? questions.length > 0 : explanationCount++ > 0,
           }
           paired.push(block)
-          if (documentKind === 'question') questions.push(block)
+          if (request.document === 'question') questions.push(block)
           else explanations.push(block)
         }
       }
@@ -437,12 +488,13 @@ export class TeacherExampleCollection {
 
   private async recognizeDocument(request: TeacherExampleDocumentRequest, preserveText: boolean): Promise<TeacherExample> {
     const operations = this.recognition[request.document]
-    let operation = operations.get(request.id)
+    const key = JSON.stringify([request.id, request.explanationId ?? null])
+    let operation = operations.get(key)
     if (operation === undefined) {
       const result = this.run(() => this.recognizeSource(request, preserveText))
       operation = { preserveText, result }
-      operations.set(request.id, operation)
-      void result.finally(() => { operations.delete(request.id) })
+      operations.set(key, operation)
+      void result.finally(() => { operations.delete(key) })
     }
     const result = await operation.result
     if (!result.ok) throw new ExampleError(result.error.code, result.error.message)
@@ -451,12 +503,13 @@ export class TeacherExampleCollection {
   }
 
   private async recognizeSource(
-    { id, document: documentKind }: TeacherExampleDocumentRequest,
+    request: TeacherExampleDocumentRequest,
     preserveText: boolean,
   ): Promise<TeacherExample> {
     const domain = await this.open()
+    const { id, document: documentKind } = request
     const question = this.requireRecord(domain, id)
-    const original = question.documents[documentKind]
+    const original = selectDocument(question, request)
     if (original.source === null || original.sourceBase64 === null)
       throw new ExampleError('not-found', 'Upload an example source first')
     const sourceId = original.source.id
@@ -505,7 +558,7 @@ export class TeacherExampleCollection {
         }
       }
       word = {
-        name: exampleWordFileName(question.name, documentKind),
+        name: exampleWordFileName(question, request),
         mediaType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
         contentBase64: bytes.toString('base64'),
       }
@@ -515,10 +568,10 @@ export class TeacherExampleCollection {
     if (savedWord !== undefined && failure !== null) throw failure
     const result = await this.enqueue(async () => {
       const current = this.requireRecord(domain, id)
-      const selected = current.documents[documentKind]
+      const selected = selectDocument(current, request)
       if (selected.source?.id !== sourceId || selected.wordRevision !== original.wordRevision)
         throw new ExampleError('source-changed', 'Example source or Word revision changed during recognition')
-      const next = replaceDocument(current, documentKind, {
+      const next = replaceDocument(current, request, {
         ...selected,
         word,
         status: word === null ? 'error' : 'ready',
@@ -535,7 +588,7 @@ export class TeacherExampleCollection {
   private async prepareWord(request: TeacherExampleDocumentRequest): Promise<void> {
     const needed = await this.enqueue(async () => {
       const domain = await this.open()
-      const selected = this.requireRecord(domain, request.id).documents[request.document]
+      const selected = selectDocument(this.requireRecord(domain, request.id), request)
       if (selected.word === null) return false
       const bytes = Buffer.from(selected.word.contentBase64, 'base64')
       return exampleWordNeedsImages(bytes) || exampleWordNeedsHeading(bytes)
@@ -582,8 +635,10 @@ export class TeacherExampleCollection {
   }
 }
 
-function exampleWordFileName(name: string, documentKind: TeacherExampleDocumentKind): string {
-  return `${name.replace(/[\\/\u0000-\u001f]/gu, '_')}${documentKind === 'explanation' ? '-解析' : ''}.docx`
+function exampleWordFileName(record: ExampleRecord, request: TeacherExampleDocumentRequest): string {
+  const suffix = request.document === 'question' ? '' : request.explanationId === undefined
+    ? '-解析' : `-解析${record.explanations.findIndex(row => row.id === request.explanationId) + 2}`
+  return `${record.name.replace(/[\\/\u0000-\u001f]/gu, '_')}${suffix}.docx`
 }
 
 function emptyDocument(): ExampleDocumentRecord {
@@ -592,10 +647,32 @@ function emptyDocument(): ExampleDocumentRecord {
 
 function replaceDocument(
   record: ExampleRecord,
-  documentKind: TeacherExampleDocumentKind,
+  request: TeacherExampleDocumentRequest,
   selected: ExampleDocumentRecord,
 ): ExampleRecord {
-  return { ...record, documents: { ...record.documents, [documentKind]: selected }, revision: record.revision + 1 }
+  selectDocument(record, request)
+  if (request.explanationId === undefined) {
+    return { ...record, documents: { ...record.documents, [request.document]: selected }, revision: record.revision + 1 }
+  }
+  return {
+    ...record,
+    explanations: record.explanations.map(row => row.id === request.explanationId ? { ...row, document: selected } : row),
+    revision: record.revision + 1,
+  }
+}
+
+function selectDocument(record: ExampleRecord, request: TeacherExampleDocumentRequest): ExampleDocumentRecord {
+  if (request.explanationId === undefined) return record.documents[request.document]
+  if (request.document !== 'explanation') throw new ExampleError('invalid-request', 'An explanation identity cannot select a question document')
+  const selected = record.explanations.find(row => row.id === request.explanationId)
+  if (selected === undefined) throw new ExampleError('not-found', 'Example explanation does not exist')
+  return selected.document
+}
+
+function documentRequests(record: ExampleRecord): TeacherExampleDocumentRequest[] {
+  return [{ id: record.id, document: 'question' }, { id: record.id, document: 'explanation' },
+    ...record.explanations.map(row => ({ id: record.id, document: 'explanation' as const, explanationId: row.id })),
+  ]
 }
 
 function documentMetadata({ sourceBase64: _sourceBase64, word: _word, ...record }: ExampleDocumentRecord): TeacherExampleDocument {
@@ -609,6 +686,7 @@ function metadata(record: ExampleRecord): TeacherExample {
       question: documentMetadata(record.documents.question),
       explanation: documentMetadata(record.documents.explanation),
     },
+    explanations: record.explanations.map(row => ({ id: row.id, document: documentMetadata(row.document) })),
   })
 }
 

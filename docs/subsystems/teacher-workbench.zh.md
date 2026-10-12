@@ -18,6 +18,8 @@
 
 ## 操作
 
+`TeacherExampleExplanation` 通过 `TeacherExampleExplanationId` 和独立的文档元数据表示一种新增解法。`TeacherExample.explanations` 保留这些解法在 `documents.explanation` 之后的顺序。`TeacherExampleDocumentRequest.explanationId` 选择对应解法用于上传、OCR、预览、下载或 Word 编辑；该字段不能与 `document: 'question'` 一起使用。`TeacherExampleExplanationRequest` 删除新增解法，省略标识时则清空原有解析。两种导出方式都按保存顺序包含所有已上传的解法。
+
 典例收集使用独立的 SQLite 路由域，没有名册引用。`TeacherExample` 包含目录顺序、标签、描述、笔迹，以及独立的题目与解析 `TeacherExampleDocument` 元数据；`TeacherExampleCatalog` 不包含文件字节。`TeacherExampleUpdateRequest` 仅修改提交的字段。`TeacherExampleDocumentRequest` 显式选择 `TeacherExampleDocumentKind`；`TeacherExampleUploadRequest.files` 提供该文档的有序片段；上传仅替换其原件并清除旧 Word 文件。`TeacherExampleFileRequest` 选择原件或 Word 产物，以 `TeacherExampleFile` 返回；每项操作返回带判别字段的 `TeacherExampleResult`。`TeacherExampleExportRequest` 提供有序的题目标识和逐题或集中排列的 `TeacherExampleExportLayout`，用于下载仅包含题目与解析原文的 Word。[Host 参考](../../packages/host/teacher-workbench/README.zh.md#example-collection) 定义持久化、重试、原件替换和导出保证。
 
 论文收集使用独立的 SQLite 路由域。`TeacherPaper` 保存创建顺序、自定义目录名称、标签、描述、修订号与有序的 `TeacherPaperSource` 元数据；`TeacherPaperCatalog` 列出论文与可复用标签，不包含文件字节。`TeacherPaperUpdateRequest` 仅修改提交的元数据，`TeacherPaperUploadRequest` 原子替换有序原件并保留这些元数据。`TeacherPaperFileRequest` 标识一个不可变来源，选择原件或预览字节，以 `TeacherPaperFile` 返回；DOC、含不受支持媒体的 DOCX 和 CAJ 会自动生成预览，同时保留原件。`TeacherPaperRequest` 标识已保存论文，每项操作返回带判别字段的 `TeacherPaperResult`，失败时携带 `TeacherPaperErrorCode`。[Host 参考](../../packages/host/teacher-workbench/README.zh.md) 定义存储与转换设置。
@@ -115,6 +117,20 @@ Host service owning the revisioned workbench document.
  * @returns a new numeric directory with empty question and explanation documents, tags, and description.
  */
 @Remote('createExample') createExample(_request: Record<never, never>): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Add an independently saved solution to a collected question.
+ * @param request - question receiving the additional explanation.
+ * @returns committed metadata with the new explanation identity.
+ */
+@Remote('addExampleExplanation') addExampleExplanation(request: TeacherExampleRequest): Promise<TeacherExampleResult<TeacherExample>>
+
+/**
+ * Remove one explanation's files while retaining the question and other solutions.
+ * @param request - additional explanation identity, or omission to clear the original explanation.
+ * @returns committed question metadata.
+ */
+@Remote('deleteExampleExplanation') deleteExampleExplanation(request: TeacherExampleExplanationRequest): Promise<TeacherExampleResult<TeacherExample>>
 
 /**
  * Save collected question metadata.

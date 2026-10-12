@@ -8,6 +8,8 @@ import type {
   TeacherExampleCatalog,
   TeacherExampleDocumentKind,
   TeacherExampleDocumentRequest,
+  TeacherExampleExplanationId,
+  TeacherExampleExplanationRequest,
   TeacherExampleExportRequest,
   TeacherExampleFile,
   TeacherExampleFileRequest,
@@ -29,6 +31,8 @@ export interface ExampleCollectionRemote {
   saveExampleWordEditor: (request: TeacherExampleWordSaveRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleWordSaved>>>
   listExamples: (request: Record<never, never>) => Promise<RemoteResult<TeacherExampleResult<TeacherExampleCatalog>>>
   createExample: (request: Record<never, never>) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
+  addExampleExplanation: (request: TeacherExampleRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
+  deleteExampleExplanation: (request: TeacherExampleExplanationRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
   updateExample: (request: TeacherExampleUpdateRequest) => Promise<RemoteResult<TeacherExampleResult<TeacherExample>>>
   addExampleTag: (request: { name: string }) => Promise<RemoteResult<TeacherExampleResult<string>>>
   deleteExampleTag: (request: { name: string }) => Promise<RemoteResult<TeacherExampleResult<string>>>
@@ -65,13 +69,17 @@ export interface ExampleCollectionCommands {
   saveEditor: (request: TeacherExampleWordSaveRequest) => Promise<TeacherExampleWordEditor>
   refresh: () => Promise<void>
   create: () => Promise<void>
+  addExplanation: (id: TeacherExampleId) => Promise<TeacherExampleExplanationId | null>
+  deleteExplanation: (request: TeacherExampleExplanationRequest) => Promise<boolean>
   select: (id: TeacherExampleId) => void
   update: (request: TeacherExampleUpdateRequest) => Promise<boolean>
   addTag: (name: string) => Promise<string | null>
   deleteTag: (name: string) => Promise<void>
   delete: (id: TeacherExampleId) => Promise<void>
-  upload: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, files: readonly File[]) => Promise<void>
-  recognize: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind) => Promise<void>
+  upload: (
+    id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, files: readonly File[], explanationId?: TeacherExampleExplanationId,
+  ) => Promise<void>
+  recognize: (id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, explanationId?: TeacherExampleExplanationId) => Promise<void>
   exportWord: (request: TeacherExampleExportRequest) => Promise<TeacherExampleFile>
   readFile: (request: TeacherExampleFileRequest) => Promise<TeacherExampleFile>
   editDraft: (id: TeacherExampleId, patch: Partial<ExampleDraft>) => void
@@ -130,6 +138,21 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
         const record = await unwrap(this.remote.createExample({}))
         this.publish({ questions: [...this.snapshot.questions, record], selectedId: record.id })
       }),
+    addExplanation: async (id) => {
+      const identity = await this.enqueue(async () => {
+        const record = await unwrap(this.remote.addExampleExplanation({ id }))
+        this.accept(record)
+        return record.explanations.at(-1)?.id
+      })
+      return identity ?? null
+    },
+    deleteExplanation: async (request) => {
+      const saved = await this.enqueue(async () => {
+        this.accept(await unwrap(this.remote.deleteExampleExplanation(request)))
+        return true
+      })
+      return saved === true
+    },
     select: (id) => {
       const previous = this.snapshot.selectedId
       if (previous !== null && previous !== id) void this.commands.saveDraft(previous)
@@ -168,9 +191,10 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
           selectedId: this.snapshot.selectedId === id ? (questions[0]?.id ?? null) : this.snapshot.selectedId,
         })
       }),
-    upload: async (id, documentKind, files) => {
-      if (this.snapshot.busy[documentKind][id] !== undefined) return
-      this.setBusy(id, documentKind, 'upload')
+    upload: async (id, documentKind, files, explanationId) => {
+      const key = exampleDocumentKey(id, explanationId)
+      if (this.snapshot.busy[documentKind][key] !== undefined) return
+      this.setBusy(key, documentKind, 'upload')
       const saved = await this.enqueue(async () => {
         if (files.length === 0) throw new CollectionFailure('invalid-request')
         const sources = await Promise.all(files.map(async (file) => {
@@ -182,24 +206,30 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
           this.remote.uploadExample({
             id,
             document: documentKind,
+            ...(explanationId === undefined ? {} : { explanationId }),
             files: sources,
           }),
         )
         this.accept(record)
         return true
       })
-      this.setBusy(id, documentKind, undefined)
-      if (saved) await this.commands.recognize(id, documentKind)
+      this.setBusy(key, documentKind, undefined)
+      if (saved) await this.commands.recognize(id, documentKind, explanationId)
     },
-    recognize: async (id, documentKind) => {
-      if (this.snapshot.busy[documentKind][id] !== undefined) return
-      this.setBusy(id, documentKind, 'ocr')
+    recognize: async (id, documentKind, explanationId) => {
+      const key = exampleDocumentKey(id, explanationId)
+      if (this.snapshot.busy[documentKind][key] !== undefined) return
+      this.setBusy(key, documentKind, 'ocr')
       try {
-        this.accept(await unwrap(this.remote.recognizeExample({ id, document: documentKind })))
+        this.accept(await unwrap(this.remote.recognizeExample({
+          id, document: documentKind, ...(explanationId === undefined ? {} : { explanationId }),
+        })))
       } catch (error) {
-        if (this.snapshot.questions.some(row => row.id === id)) this.publish({ error: failureCode(error) })
+        const retained = this.snapshot.questions.some(row => row.id === id &&
+          (explanationId === undefined || row.explanations.some(solution => solution.id === explanationId)))
+        if (retained) this.publish({ error: failureCode(error) })
       } finally {
-        this.setBusy(id, documentKind, undefined)
+        this.setBusy(key, documentKind, undefined)
       }
     },
     exportWord: request => unwrap(this.remote.exportExamplesWord(request)),
@@ -281,7 +311,7 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
     this.draftTimers.delete(id)
   }
 
-  private setBusy(id: TeacherExampleId, documentKind: TeacherExampleDocumentKind, status: 'upload' | 'ocr' | undefined): void {
+  private setBusy(id: string, documentKind: TeacherExampleDocumentKind, status: 'upload' | 'ocr' | undefined): void {
     const busy = { ...this.snapshot.busy[documentKind] }
     if (status === undefined) Reflect.deleteProperty(busy, id)
     else busy[id] = status
@@ -293,6 +323,16 @@ export class ExampleCollectionController implements HostObservable<ExampleCollec
     this.snapshot = { ...this.snapshot, ...patch }
     notifySubscribers(this.listeners, 'example-collection')
   }
+}
+
+/**
+ * Address background work for one original or additional solution.
+ * @param id - collected question identity.
+ * @param explanationId - additional solution identity; omission selects the original document.
+ * @returns the busy-state key shared by the controller and document panels.
+ */
+export function exampleDocumentKey(id: TeacherExampleId, explanationId?: TeacherExampleExplanationId): string {
+  return explanationId === undefined ? id : JSON.stringify([id, explanationId])
 }
 
 class CollectionFailure extends Error {

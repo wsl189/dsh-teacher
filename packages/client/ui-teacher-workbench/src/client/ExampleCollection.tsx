@@ -23,11 +23,14 @@ import { renderAsync } from 'docx-preview'
 import type {
   TeacherExample,
   TeacherExampleDocumentKind,
+  TeacherExampleDocument,
+  TeacherExampleExplanationId,
   TeacherExampleFile,
   TeacherExampleId,
   TeacherExampleStroke,
 } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ExampleCollectionCommands, ExampleCollectionSnapshot } from './example-collection-controller.ts'
+import { exampleDocumentKey } from './example-collection-controller.ts'
 import type { TeacherWorkbenchKey } from './locales.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { VoiceInputButton } from './SpeechInput.tsx'
@@ -253,11 +256,11 @@ export function ExampleCollection({ snapshot, commands, transcribeVoice, t }: Ex
                   >
                     <FolderOpen size={17} />
                     <span>{question.name}</span>
-                    {(snapshot.busy.question[question.id] ?? snapshot.busy.explanation[question.id]) !== undefined && (
+                    {exampleBusy(question, snapshot) && (
                       <LoaderCircle size={14} className={css.spinner} />
                     )}
-                    {Object.values(question.documents).some(selected => selected.status === 'ready') &&
-                      (snapshot.busy.question[question.id] ?? snapshot.busy.explanation[question.id]) === undefined && (
+                    {[...Object.values(question.documents), ...question.explanations.map(row => row.document)].some(selected => selected.status === 'ready') &&
+                      !exampleBusy(question, snapshot) && (
                       <span className={css.readyDot} aria-label={t('examples.ready')} />
                     )}
                   </button>
@@ -389,6 +392,13 @@ function ExampleEditor({
 }: ExampleCollectionProps & { question: TeacherExample }) {
   const draft = snapshot.drafts[question.id] ?? question
   const descriptionRef = useRef<HTMLTextAreaElement>(null)
+  const [selectedExplanation, setSelectedExplanation] = useState<TeacherExampleExplanationId | null>(null)
+  const [deletingExplanation, setDeletingExplanation] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const active = question.explanations.find(row => row.id === selectedExplanation)
+  const explanationId = active?.id
+  const explanation = active?.document ?? question.documents.explanation
+  const busy = snapshot.busy.explanation[exampleDocumentKey(question.id, explanationId)]
   return (
     <div className={css.detail}>
       <div className={css.documents}>
@@ -399,14 +409,51 @@ function ExampleEditor({
           commands={commands}
           t={t}
         />
+        <div className={css.explanationToolbar}>
+          <div className={css.explanationTabs} role="tablist" aria-label={t('examples.explanations')}>
+            {[null, ...question.explanations.map(row => row.id)].map((id, index) => (
+              <button type="button" role="tab" key={id ?? 'original'} aria-selected={(explanationId ?? null) === id}
+                onClick={() => { setSelectedExplanation(id) }}>
+                {t('examples.explanationNumber', { number: String(index + 1) })}
+              </button>
+            ))}
+          </div>
+          <div className={css.wordActions}>
+            <button type="button" className={css.textButton} disabled={snapshot.pending > 0}
+              onClick={() => { void commands.addExplanation(question.id).then((id) => { if (id !== null) setSelectedExplanation(id) }) }}>
+              <Plus size={15} />{t('examples.addExplanation')}
+            </button>
+            <button type="button" className={css.textButton}
+              disabled={busy !== undefined || snapshot.pending > 0 || (explanationId === undefined && explanation.source === null)}
+              onClick={() => { setDeletingExplanation(true) }}>
+              <Trash2 size={15} />{t('examples.deleteExplanation')}
+            </button>
+          </div>
+        </div>
         <ExampleDocumentPanels
+          key={explanationId ?? 'original'}
           question={question}
           documentKind="explanation"
-          busy={snapshot.busy.explanation[question.id]}
+          explanationId={explanationId}
+          selected={explanation}
+          busy={busy}
           commands={commands}
           t={t}
         />
       </div>
+      {deletingExplanation && <DeleteExampleDialog
+        title={t('examples.deleteExplanation')}
+        hint={t('examples.deleteExplanationHint')}
+        pending={deleting}
+        onClose={() => { if (!deleting) setDeletingExplanation(false) }}
+        onDelete={() => {
+          setDeleting(true)
+          void commands.deleteExplanation({ id: question.id, ...(explanationId === undefined ? {} : { explanationId }) })
+            .then((saved) => { if (saved) { setDeletingExplanation(false); setSelectedExplanation(null) } })
+            .finally(() => { setDeleting(false) })
+        }}
+        t={t}
+      />}
       <section className={clsx(css.panel, css.tagPanel)} aria-label={t('examples.tags')}>
         <div className={css.panelHeading}>
           <h3>
@@ -473,11 +520,15 @@ function ExampleDocumentPanels({
   question,
   documentKind,
   busy,
+  explanationId,
+  selected = question.documents[documentKind],
   commands,
   t,
 }: {
   question: TeacherExample
   documentKind: TeacherExampleDocumentKind
+  explanationId?: TeacherExampleExplanationId | undefined
+  selected?: TeacherExampleDocument
   busy: 'upload' | 'ocr' | undefined
   commands: ExampleCollectionCommands
   t: TeacherWorkbenchTranslate
@@ -485,11 +536,10 @@ function ExampleDocumentPanels({
   const input = useRef<HTMLInputElement>(null)
   const [uploads, setUploads] = useState<readonly File[] | null>(null)
   const [expanded, setExpanded] = useState<'source' | 'word' | null>(null)
-  const selected = question.documents[documentKind]
   const labels = DOCUMENT_LABELS[documentKind]
   const chooseFiles = (files: readonly File[]): void => {
     if (busy !== undefined || files.length === 0) return
-    if (files.length === 1) void commands.upload(question.id, documentKind, files)
+    if (files.length === 1) void commands.upload(question.id, documentKind, files, explanationId)
     else setUploads(files)
   }
   const expand = (kind: 'source' | 'word', disabled: boolean) => (
@@ -560,7 +610,7 @@ function ExampleDocumentPanels({
             <span>{t('examples.uploadHint')}</span>
           </button>
         ) : (
-          <ExampleFilePreview question={question} documentKind={documentKind} kind="source" commands={commands} t={t} />
+          <ExampleFilePreview question={question} documentKind={documentKind} explanationId={explanationId} selected={selected} kind="source" commands={commands} t={t} />
         )}
       </section>
       <section className={css.panel} aria-label={t(labels.word)}>
@@ -575,7 +625,7 @@ function ExampleDocumentPanels({
                 className={css.textButton}
                 disabled={busy !== undefined}
                 title={t('examples.proofreadHint')}
-                onClick={() => { void commands.recognize(question.id, documentKind) }}
+                onClick={() => { void commands.recognize(question.id, documentKind, explanationId) }}
               >
                 {t('examples.proofread')}
               </button>
@@ -590,7 +640,7 @@ function ExampleDocumentPanels({
             <span>{t('examples.backgroundHint')}</span>
           </div>
         ) : selected.status === 'ready' ? (
-          <ExampleFilePreview question={question} documentKind={documentKind} kind="word" commands={commands} t={t} />
+          <ExampleFilePreview question={question} documentKind={documentKind} explanationId={explanationId} selected={selected} kind="word" commands={commands} t={t} />
         ) : (
           <div className={css.emptyPreview}>
             <FileText size={34} />
@@ -606,7 +656,7 @@ function ExampleDocumentPanels({
               <button
                 className={css.secondary}
                 onClick={() => {
-                  void commands.recognize(question.id, documentKind)
+                  void commands.recognize(question.id, documentKind, explanationId)
                 }}
               >
                 {t('examples.recognize')}
@@ -621,7 +671,7 @@ function ExampleDocumentPanels({
           title={t(labels.source)}
           onUpload={(files) => {
             setUploads(null)
-            void commands.upload(question.id, documentKind, files)
+            void commands.upload(question.id, documentKind, files, explanationId)
           }}
           onClose={() => { setUploads(null) }}
           t={t}
@@ -631,6 +681,8 @@ function ExampleDocumentPanels({
         <ExamplePreviewDialog
           question={question}
           documentKind={documentKind}
+          explanationId={explanationId}
+          selected={selected}
           kind={expanded}
           commands={commands}
           onClose={() => { setExpanded(null) }}
@@ -641,9 +693,11 @@ function ExampleDocumentPanels({
   )
 }
 
-function ExamplePreviewDialog({ question, documentKind, kind, commands, onClose, t }: {
+function ExamplePreviewDialog({ question, documentKind, explanationId, selected, kind, commands, onClose, t }: {
   question: TeacherExample
   documentKind: TeacherExampleDocumentKind
+  explanationId?: TeacherExampleExplanationId | undefined
+  selected: TeacherExampleDocument
   kind: 'source' | 'word'
   commands: ExampleCollectionCommands
   onClose: () => void
@@ -676,8 +730,14 @@ function ExamplePreviewDialog({ question, documentKind, kind, commands, onClose,
             <X size={20} />
           </button>
         </header>
-        {kind === 'word' ? <ExampleWordEditor question={question} documentKind={documentKind} commands={commands} t={t} onClose={onClose} closeRequest={closeRequest} /> :
-          <ExampleFilePreview question={question} documentKind={documentKind} kind={kind} commands={commands} t={t} />}
+        {kind === 'word' ? <ExampleWordEditor
+          question={question} documentKind={documentKind} explanationId={explanationId}
+          commands={commands} t={t} onClose={onClose} closeRequest={closeRequest}
+        /> :
+          <ExampleFilePreview
+            question={question} documentKind={documentKind} explanationId={explanationId}
+            selected={selected} kind={kind} commands={commands} t={t}
+          />}
       </div>
     </dialog>
   )
@@ -707,9 +767,13 @@ function ExampleFilePreview({
   commands,
   t,
   heading,
+  explanationId,
+  selected = question.documents[documentKind],
 }: {
   question: TeacherExample
   documentKind: TeacherExampleDocumentKind
+  explanationId?: TeacherExampleExplanationId | undefined
+  selected?: TeacherExampleDocument
   kind: 'source' | 'word'
   commands: ExampleCollectionCommands
   t: TeacherWorkbenchTranslate
@@ -720,7 +784,6 @@ function ExampleFilePreview({
   const [rendered, setRendered] = useState(false)
   const [readAttempt, setReadAttempt] = useState(0)
   const body = useRef<HTMLDivElement>(null)
-  const selected = question.documents[documentKind]
   const labels = DOCUMENT_LABELS[documentKind]
   const sourceId = selected.source?.id
   const wordRevision = kind === 'word' ? selected.wordRevision : 0
@@ -736,7 +799,7 @@ function ExampleFilePreview({
     setError(false)
     setRendered(false)
     void commands
-      .readFile({ id: question.id, document: documentKind, kind })
+      .readFile({ id: question.id, document: documentKind, kind, ...(explanationId === undefined ? {} : { explanationId }) })
       .then(async (data) => {
         if (!active) return
         const bytes = Uint8Array.from(atob(data.contentBase64), character => character.charCodeAt(0))
@@ -768,7 +831,7 @@ function ExampleFilePreview({
       if (url !== undefined) URL.revokeObjectURL(url)
       host?.replaceChildren()
     }
-  }, [commands, question.id, sourceId, wordRevision, kind, documentKind, readAttempt])
+  }, [commands, question.id, sourceId, wordRevision, kind, documentKind, explanationId, readAttempt])
   const download = file === null ? null : (
     <a
       className={heading === undefined ? undefined : css.textButton}
@@ -984,10 +1047,16 @@ function DeleteExampleDialog({
   onClose,
   onDelete,
   t,
+  title = t('examples.delete'),
+  hint = t('examples.deleteHint'),
+  pending = false,
 }: {
   onClose: () => void
   onDelete: () => void
   t: TeacherWorkbenchTranslate
+  title?: string
+  hint?: string
+  pending?: boolean
 }) {
   const dialog = useRef<HTMLDialogElement>(null)
   useEffect(() => {
@@ -998,19 +1067,26 @@ function DeleteExampleDialog({
     }
   }, [])
   return (
-    <dialog ref={dialog} className={css.confirm} aria-label={t('examples.delete')} onCancel={onClose}>
-      <h2>{t('examples.delete')}</h2>
-      <p>{t('examples.deleteHint')}</p>
+    <dialog ref={dialog} className={css.confirm} aria-label={title}
+      onCancel={(event) => { if (pending) event.preventDefault(); else onClose() }}>
+      <h2>{title}</h2>
+      <p>{hint}</p>
       <div className={css.tools}>
-        <button className={css.secondary} autoFocus onClick={onClose}>
+        <button className={css.secondary} autoFocus onClick={onClose} disabled={pending}>
           {t('cancel')}
         </button>
-        <button className={css.primary} onClick={onDelete}>
+        <button className={css.primary} onClick={onDelete} disabled={pending}>
           {t('delete')}
         </button>
       </div>
     </dialog>
   )
+}
+
+function exampleBusy(question: TeacherExample, snapshot: ExampleCollectionSnapshot): boolean {
+  return snapshot.busy.question[question.id] !== undefined ||
+    [undefined, ...question.explanations.map(row => row.id)]
+      .some(id => snapshot.busy.explanation[exampleDocumentKey(question.id, id)] !== undefined)
 }
 
 /**

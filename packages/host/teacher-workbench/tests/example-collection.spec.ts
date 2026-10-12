@@ -4,7 +4,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Context } from '@deepseek-ai/cordis'
 import Storage from '@deepseek-ai/dsh-storage'
-import { DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import { defineDomain, domainTable, DomainFacility } from '@deepseek-ai/dsh-storage-domain'
+import { z } from 'zod'
 import { DOMParser } from '@xmldom/xmldom'
 import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate'
 import { Document, Packer, Paragraph } from 'docx'
@@ -70,7 +71,7 @@ async function seedIllustration(
 ) {
   const question = {
     id: 'illustrated-question' as TeacherExample['id'], number: 1, name: '1', tags: [], description: '',
-    handwriting: [], revision: 0, documents: { question: emptyDocument(), explanation: emptyDocument() },
+    handwriting: [], revision: 0, documents: { question: emptyDocument(), explanation: emptyDocument() }, explanations: [],
   } satisfies TeacherExample
   const domain = await owner.facility.open(teacherExampleDomainSpec)
   await domain.table('questions').put(question.id, question)
@@ -102,6 +103,104 @@ afterEach(async () => {
 })
 
 describe('example collection in SQLite', () => {
+
+  it('keeps multiple solutions independent through edits, both export layouts, deletion, and restart', async () => {
+    const owner = await harness()
+    const question = value(await owner.collection.create())
+    const added = value(await owner.collection.addExplanation({ id: question.id }))
+    const explanationId = added.explanations[0]!.id
+    const requests = [{ id: question.id, document: 'question' as const },
+      { id: question.id, document: 'explanation' as const },
+      { id: question.id, document: 'explanation' as const, explanationId }]
+    const texts = ['题目原文', '因式分解法', '求根公式法']
+    for (const [index, request] of requests.entries()) {
+      value(await owner.collection.upload({ ...request, files: [{ name: `${index}.pdf`, mediaType: 'application/pdf', contentBase64: pdf }] }))
+      owner.extract.mockResolvedValue(ocrResult(texts[index]))
+      value(await owner.collection.recognize(request))
+    }
+    const original = value(await owner.collection.readFile({ ...requests[1]!, kind: 'word' }))
+    const loaded = value(await owner.collection.readEditor(requests[2]!))
+    value(await owner.collection.saveEditor({ ...requests[2]!, sourceId: loaded.sourceId, wordRevision: loaded.wordRevision,
+      paragraphs: loaded.paragraphs.map(paragraph => ({ ...paragraph, lineSpacing: 2 })),
+    }))
+    expect(value(await owner.collection.readFile({ ...requests[1]!, kind: 'word' }))).toEqual(original)
+    expect(value(await owner.collection.readFile({ ...requests[2]!, kind: 'word' })).name).toBe('1-解析2.docx')
+    for (const layout of ['paired', 'grouped'] as const) {
+      const file = value(await owner.collection.exportWord({ ids: [question.id], layout }))
+      const xml = strFromU8(unzipSync(Buffer.from(file.contentBase64, 'base64'))['word/document.xml']!)
+      const text = new DOMParser().parseFromString(xml, 'application/xml').documentElement!.textContent!
+      expect(text).toContain('题目原文')
+      expect(text.indexOf('因式分解法')).toBeGreaterThan(text.indexOf('题目原文'))
+      expect(text.indexOf('求根公式法')).toBeGreaterThan(text.indexOf('因式分解法'))
+    }
+    const catalog = value(await owner.collection.list())
+    expect(JSON.stringify(catalog)).not.toContain('contentBase64')
+    await owner.close()
+    const reopened = await harness(owner.path)
+    expect(value(await reopened.collection.list())).toEqual(catalog)
+    expect(value(await reopened.collection.readEditor(requests[2]!)).paragraphs.every(paragraph => paragraph.lineSpacing === 2)).toBe(true)
+    const cleared = value(await reopened.collection.deleteExplanation({ id: question.id }))
+    expect(cleared.documents.explanation.status).toBe('empty')
+    expect(cleared.documents.question.status).toBe('ready')
+    expect(cleared.explanations[0]!.document.status).toBe('ready')
+    expect(value(await reopened.collection.deleteExplanation({ id: question.id, explanationId })).explanations).toEqual([])
+    expect(await reopened.collection.readFile({ ...requests[2]!, kind: 'source' })).toMatchObject({ ok: false, error: { code: 'not-found' } })
+    expect(await reopened.collection.upload({ ...requests[0]!, explanationId, files: [{ name: 'bad.pdf', mediaType: 'application/pdf', contentBase64: pdf }] }))
+      .toMatchObject({ ok: false, error: { code: 'invalid-request' } })
+  })
+
+  it('recognizes different solutions concurrently and cannot restore a solution deleted during OCR', async () => {
+    const owner = await harness()
+    const question = value(await owner.collection.create())
+    value(await owner.collection.addExplanation({ id: question.id }))
+    const added = value(await owner.collection.addExplanation({ id: question.id }))
+    const [first, second] = added.explanations
+    const a = { id: question.id, document: 'explanation' as const, explanationId: first!.id }
+    const b = { id: question.id, document: 'explanation' as const, explanationId: second!.id }
+    for (const [index, request] of [a, b].entries()) value(await owner.collection.upload({ ...request,
+      files: [{ name: `${index}.pdf`, mediaType: 'application/pdf', contentBase64: pdf }],
+    }))
+    const pending = new Map<string, (result: OcrExtractResult) => void>()
+    owner.extract.mockImplementation(request => new Promise((resolve) => { pending.set(request.name, resolve) }))
+    const recognitionA = owner.collection.recognize(a)
+    const recognitionB = owner.collection.recognize(b)
+    await vi.waitFor(() => { expect(pending.size).toBe(2) })
+    pending.get('1.pdf')!(ocrResult('第二种独立解法'))
+    value(await recognitionB)
+    value(await owner.collection.deleteExplanation({ id: question.id, explanationId: a.explanationId }))
+    pending.get('0.pdf')!(ocrResult('不应恢复的解法'))
+    expect(await recognitionA).toMatchObject({ ok: false, error: { code: 'not-found' } })
+    const record = value(await owner.collection.list()).questions[0]!
+    expect(record.explanations.map(row => row.id)).toEqual([b.explanationId])
+    expect(record.explanations[0]!.document.status).toBe('ready')
+    const word = value(await owner.collection.readFile({ ...b, kind: 'word' }))
+    expect(strFromU8(unzipSync(Buffer.from(word.contentBase64, 'base64'))['word/document.xml']!)).toContain('第二种独立解法')
+  })
+
+  it('opens pre-existing version 2 records without replacing their original explanation files', async () => {
+    const owner = await harness()
+    const legacy = defineDomain({ name: teacherExampleDomainSpec.name, version: 2, tables: {
+      questions: domainTable<TeacherExample['id'], Record<string, unknown>>(z.record(z.string(), z.unknown())),
+      tags: teacherExampleDomainSpec.tables.tags,
+    } })
+    const domain = await owner.facility.open(legacy)
+    const id = 'legacy-example' as TeacherExample['id']
+    await domain.table('questions').put(id, {
+      id, number: 1, name: '旧题', tags: [], description: '保留教学笔记', handwriting: [], revision: 4,
+      documents: { question: emptyDocument(), explanation: { ...emptyDocument(), status: 'pending', sourceBase64: pdf,
+        source: { id: 'legacy-source', name: '旧解析.pdf', mediaType: 'application/pdf' },
+      } },
+    })
+    await domain.close()
+    await owner.close()
+    const reopened = await harness(owner.path)
+    const record = value(await reopened.collection.list()).questions[0]!
+    expect(record).toMatchObject({ id, revision: 4, description: '保留教学笔记', explanations: [], documents: { explanation: { status: 'pending' } } })
+    expect(value(await reopened.collection.readFile({ id, document: 'explanation', kind: 'source' })).contentBase64).toBe(pdf)
+    const additional = value(await reopened.collection.addExplanation({ id }))
+    expect(additional.explanations).toHaveLength(1)
+    expect(additional.documents.explanation).toEqual(record.documents.explanation)
+  })
 
   it('saves manual Word edits through metadata changes and rejects stale editors and late proofreading', async () => {
     const owner = await harness()
@@ -195,7 +294,7 @@ describe('example collection in SQLite', () => {
     const original = await createExampleWord('【题4】（2019人教A版P33）已知 $x>0$，求解。\n（1）求坐标。')
     const domain = await owner.facility.open(teacherExampleDomainSpec)
     await domain.table('questions').put(question.id, {
-      id: question.id, number: 1, name: '1', tags: [], description: '', handwriting: [], revision: 0,
+      id: question.id, number: 1, name: '1', tags: [], description: '', handwriting: [], revision: 0, explanations: [],
       documents: { explanation: emptyDocument(), question: {
         ...emptyDocument(), status: 'ready', wordRevision: 1, sourceBase64: pdf,
         source: { id: 'heading-source' as NonNullable<TeacherExampleDocument['source']>['id'], name: 'original.pdf', mediaType: 'application/pdf' },
@@ -364,7 +463,7 @@ describe('example collection in SQLite', () => {
       const { collection, facility, extract } = await harness()
       const question = {
         id: 'saved-question' as TeacherExample['id'], number: 1, name: '1', tags: [], description: '',
-        handwriting: [], revision: 0, documents: { question: emptyDocument(), explanation: emptyDocument() },
+        handwriting: [], revision: 0, documents: { question: emptyDocument(), explanation: emptyDocument() }, explanations: [],
       } satisfies TeacherExample
       const original = format === 'text' ? await Packer.toBuffer(
         new Document({

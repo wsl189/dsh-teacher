@@ -60,6 +60,10 @@
         - link "下载 Word 文件":
           - /url: blob:{{webOrigin}}/{{uuid}}
           - text: 下载
+      - tablist "题目解法":
+        - tab "解析 1" [selected]
+      - button "添加新解析"
+      - button "删除当前解析"
       - region "题目解析":
         - heading "题目解析" [level=3]
         - button "更换解析"

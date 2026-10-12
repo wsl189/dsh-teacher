@@ -2,7 +2,7 @@
 
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import type { TeacherExample, TeacherExampleDocument, TeacherExampleId } from '@deepseek-ai/dsh-api-remotes/client'
+import type { TeacherExample, TeacherExampleDocument, TeacherExampleExplanationId, TeacherExampleId } from '@deepseek-ai/dsh-api-remotes/client'
 import { ExampleExportDialog } from '../src/client/ExampleExportDialog.tsx'
 import type { ExampleCollectionCommands } from '../src/client/example-collection-controller.ts'
 import type { TeacherWorkbenchTranslate } from '../src/client/shared.tsx'
@@ -12,6 +12,7 @@ const clickDownload = vi.fn<() => void>()
 const t: TeacherWorkbenchTranslate = key => zh[key]
 const source = { id: 'source' as NonNullable<TeacherExampleDocument['source']>['id'], name: 'q.pdf', mediaType: 'application/pdf' as const }
 const question: TeacherExample = {
+  explanations: [],
   id: 'one' as TeacherExampleId, number: 1, name: '1', tags: [], description: '', handwriting: [], revision: 1,
   documents: {
     question: { source, status: 'ready', ocrError: null, wordRevision: 1 },
@@ -53,6 +54,20 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.restoreAllMocks() })
 
 describe('selected question Word exports', () => {
+  it('waits for every uploaded alternative solution while allowing empty solution slots', () => {
+    const alternative = { id: 'solution-two' as TeacherExampleExplanationId,
+      document: { source, status: 'pending' as const, ocrError: null, wordRevision: 0 },
+    }
+    const ready = { ...alternative, document: { ...alternative.document, status: 'ready' as const } }
+    const onExport = vi.fn<ExampleCollectionCommands['exportWord']>()
+    const view = render(<ExampleExportDialog
+      questions={[{ ...question, explanations: [alternative] }]} onExport={onExport} onClose={() => {}} t={t}
+    />)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '导出并下载' }).disabled).toBe(true)
+    view.rerender(<ExampleExportDialog questions={[{ ...question, explanations: [ready, { ...alternative, id: 'empty' as TeacherExampleExplanationId, document: question.documents.explanation }] }]} onExport={onExport} onClose={() => {}} t={t} />)
+    expect(screen.getByRole<HTMLButtonElement>('button', { name: '导出并下载' }).disabled).toBe(false)
+    expect(onExport).not.toHaveBeenCalled()
+  })
   it('keeps the chosen layout after failure and downloads after retry, including questions without explanations', async () => {
     const onExport = vi.fn<ExampleCollectionCommands['exportWord']>()
       .mockRejectedValueOnce(new Error('offline'))

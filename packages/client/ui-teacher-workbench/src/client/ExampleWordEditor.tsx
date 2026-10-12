@@ -7,7 +7,7 @@ import StarterKit from '@tiptap/starter-kit'
 import { TextStyle, FontSize } from '@tiptap/extension-text-style'
 import TextAlign from '@tiptap/extension-text-align'
 import { AlignCenter, AlignLeft, AlignRight, Bold, Italic, Underline, Undo2, Redo2, Sigma, Save, IndentIncrease, IndentDecrease } from 'lucide-react'
-import type { TeacherExample, TeacherExampleDocumentKind, TeacherExampleWordEditor } from '@deepseek-ai/dsh-api-remotes/client'
+import type { TeacherExample, TeacherExampleDocumentKind, TeacherExampleExplanationId, TeacherExampleWordEditor } from '@deepseek-ai/dsh-api-remotes/client'
 import type { ExampleCollectionCommands } from './example-collection-controller.ts'
 import type { TeacherWorkbenchTranslate } from './shared.tsx'
 import { exampleEditorContent, exampleEditorParagraphs, exampleSelectionFont } from './example-word-editor-model.ts'
@@ -30,9 +30,10 @@ const SIZES = [
  * @param props - document identity, persistent commands, close registration, and localized UI text.
  * @returns formatting toolbar, editable paper, formula dialog, and unsaved-change controls.
  */
-export function ExampleWordEditor({ question, documentKind, commands, closeRequest, onClose, t }: {
+export function ExampleWordEditor({ question, documentKind, explanationId, commands, closeRequest, onClose, t }: {
   question: TeacherExample
   documentKind: TeacherExampleDocumentKind
+  explanationId?: TeacherExampleExplanationId | undefined
   commands: ExampleCollectionCommands
   closeRequest: MutableRefObject<() => void>
   onClose: () => void
@@ -55,7 +56,9 @@ export function ExampleWordEditor({ question, documentKind, commands, closeReque
     const isActive = (): boolean => active
     setLoaded(false)
     setError(null)
-    void commands.readEditor({ id: question.id, document: documentKind }).then((saved) => {
+    void commands.readEditor({
+      id: question.id, document: documentKind, ...(explanationId === undefined ? {} : { explanationId }),
+    }).then((saved) => {
       if (!isActive() || host.current === null) return
       base.current = saved
       const instance = new Editor({
@@ -84,7 +87,7 @@ export function ExampleWordEditor({ question, documentKind, commands, closeReque
       setDirty(false)
     }).catch(() => { if (isActive()) setError(t('examples.editor.loadFailed')) })
     return () => { active = false; editor.current?.destroy(); editor.current = null }
-  }, [commands, question.id, documentKind, attempt, t])
+  }, [commands, question.id, documentKind, explanationId, attempt, t])
 
   const save = async (closeAfter = false): Promise<boolean> => {
     const instance = editor.current
@@ -96,7 +99,7 @@ export function ExampleWordEditor({ question, documentKind, commands, closeReque
     instance.setEditable(false, false)
     try {
       const saved = await commands.saveEditor({
-        id: question.id, document: documentKind, sourceId: previous.sourceId,
+        id: question.id, document: documentKind, sourceId: previous.sourceId, ...(explanationId === undefined ? {} : { explanationId }),
         wordRevision: previous.wordRevision, paragraphs: exampleEditorParagraphs(instance.getJSON()),
       })
       if (instance.isDestroyed) return true
